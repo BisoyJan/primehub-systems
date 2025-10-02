@@ -1,7 +1,9 @@
-import { Button } from '@/components/ui/button';
+import { useEffect } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { toast } from 'sonner';
+
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { store, create, index } from '@/routes/ramspecs';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
@@ -11,9 +13,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ArrowLeft, CircleAlert } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
+
 import type { BreadcrumbItem } from '@/types';
+import { store, create, index } from '@/routes/ramspecs';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -23,16 +26,28 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 export default function Create() {
+    const { flash } = usePage<{ flash?: { message?: string; type?: string } }>().props;
+
     const { data, setData, post, errors } = useForm({
         manufacturer: '',
         model: '',
-        capacity_gb: '',
-        size_gb: '',
+        capacity_gb: '' as number | '',
         type: '',
         speed: '',
         form_factor: '',
         voltage: '',
     });
+
+    // show backend flash once on mount
+    useEffect(() => {
+        if (!flash?.message) return;
+
+        if (flash.type === 'error') {
+            toast.error(flash.message);
+        } else {
+            toast.success(flash.message);
+        }
+    }, [flash?.message, flash?.type]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -53,23 +68,6 @@ export default function Create() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-                    {/* 1. Error Alert spans both columns */}
-                    {Object.keys(errors).length > 0 && (
-                        <div className="col-span-2">
-                            <Alert>
-                                <CircleAlert className="h-4 w-4" />
-                                <AlertTitle>Error!</AlertTitle>
-                                <AlertDescription>
-                                    <ul>
-                                        {Object.entries(errors).map(([key, message]) => (
-                                            <li key={key}>{message as string}</li>
-                                        ))}
-                                    </ul>
-                                </AlertDescription>
-                            </Alert>
-                        </div>
-                    )}
-
                     {/* Row 1 */}
                     <div>
                         <Label htmlFor="manufacturer">Manufacturer</Label>
@@ -80,6 +78,7 @@ export default function Create() {
                             value={data.manufacturer}
                             onChange={(e) => setData('manufacturer', e.target.value)}
                         />
+                        {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                     </div>
                     <div>
                         <Label htmlFor="model">Model</Label>
@@ -90,6 +89,7 @@ export default function Create() {
                             value={data.model}
                             onChange={(e) => setData('model', e.target.value)}
                         />
+                        {errors.model && <p className="text-red-600">{errors.model}</p>}
                     </div>
 
                     {/* Row 2 */}
@@ -97,7 +97,7 @@ export default function Create() {
                         <Label htmlFor="capacity_gb">Capacity (GB)</Label>
                         <Select
                             value={data.capacity_gb ? String(data.capacity_gb) : ''}
-                            onValueChange={(val) => setData('capacity_gb', val)}
+                            onValueChange={(val) => setData('capacity_gb', Number(val))}
                         >
                             <SelectTrigger id="capacity_gb" name="capacity_gb">
                                 <SelectValue placeholder="Select capacity" />
@@ -110,6 +110,7 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.capacity_gb && <p className="text-red-600">{errors.capacity_gb}</p>}
                     </div>
                     <div>
                         <Label htmlFor="type">Type</Label>
@@ -128,6 +129,7 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.type && <p className="text-red-600">{errors.type}</p>}
                     </div>
 
                     {/* Row 3 */}
@@ -142,6 +144,7 @@ export default function Create() {
                             value={data.speed}
                             onChange={(e) => setData('speed', e.target.value)}
                         />
+                        {errors.speed && <p className="text-red-600">{errors.speed}</p>}
                     </div>
                     <div>
                         <Label htmlFor="form_factor">Form Factor</Label>
@@ -160,6 +163,7 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.form_factor && <p className="text-red-600">{errors.form_factor}</p>}
                     </div>
 
                     {/* Row 4 */}
@@ -175,6 +179,7 @@ export default function Create() {
                             value={data.voltage}
                             onChange={(e) => setData('voltage', e.target.value)}
                         />
+                        {errors.voltage && <p className="text-red-600">{errors.voltage}</p>}
                     </div>
                     <div className="flex items-end justify-end">
                         <Button type="submit">Add RAM Spec</Button>

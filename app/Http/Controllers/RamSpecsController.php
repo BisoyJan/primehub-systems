@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\RamSpec;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class RamSpecsController extends Controller
 {
@@ -24,9 +25,12 @@ class RamSpecsController extends Controller
             });
         }
 
-        $ramSpecs = $query->paginate(10)->appends(['search' => $search]);
+        $ramspecs = $query
+            ->latest()
+            ->paginate(10)
+            ->appends(['search' => $search]);
         return inertia('RamSpecs/Index', [
-            'ramSpecs' => $ramSpecs,
+            'ramspecs' => $ramspecs,
             'search' => $search,
         ]);
     }
@@ -54,9 +58,19 @@ class RamSpecsController extends Controller
             'voltage' => 'required|numeric|min:0',
         ]);
 
-        RamSpec::create($validated);
-
-        return redirect()->route('ramspecs.index')->with('message', 'RAM specification created successfully.');
+        try {
+            RamSpec::create($validated);
+            return redirect()
+                ->route('ramspecs.index')
+                ->with('message', 'RAM specification created successfully.')
+                ->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('RamSpec Store Error: ' . $e->getMessage());
+            return redirect()
+                ->route('ramspecs.index')
+                ->with('message', 'Failed to create RAM specification.')
+                ->with('type', 'error');
+        }
     }
 
     /**
@@ -70,10 +84,10 @@ class RamSpecsController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(string $ramSpec)
+    public function edit(string $ramspec)
     {
         return inertia('RamSpecs/Edit', [
-            'ramSpec' => RamSpec::findOrFail($ramSpec)
+            'ramspec' => RamSpec::findOrFail($ramspec)
         ]);
 
         //dd(RamSpec::findOrFail($ramspec));
@@ -82,9 +96,9 @@ class RamSpecsController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, RamSpec $ramSpec)
+    public function update(Request $request, RamSpec $ramspec)
     {
-        $request->validate([
+        $validated = $request->validate([
             'manufacturer' => 'required|string|max:255',
             'model' => 'required|string|max:255',
             'capacity_gb' => 'required|integer|min:1',
@@ -94,16 +108,39 @@ class RamSpecsController extends Controller
             'voltage' => 'required|numeric|min:1',
         ]);
 
-        $ramSpec->update($request->all());
-        return redirect()->route('ramspecs.index')->with('message', 'RAM specification updated successfully.');
+        try {
+            $ramspec->update($validated);
+            Log::info('Update request data:', $validated);
+            return redirect()
+                ->route('ramspecs.index')
+                ->with('message', 'RAM specification updated successfully.')
+                ->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('RamSpec Update Error: ' . $e->getMessage());
+            return redirect()
+                ->route('ramspecs.index')
+                ->with('message', 'Failed to update RAM specification.')
+                ->with('type', 'error');
+        }
     }
 
     /**
      * Remove the specified resource from storage.
      */
-    public function destroy(RamSpec $ramSpec)
+    public function destroy(RamSpec $ramspec)
     {
-        $ramSpec->delete();
-        return redirect()->route('ramspecs.index')->with('message', 'RAM specification deleted successfully.');
+        try {
+            $ramspec->delete();
+            return redirect()
+                ->route('ramspecs.index')
+                ->with('message', 'RAM specification deleted successfully.')
+                ->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('RamSpec Delete Error: ' . $e->getMessage());
+            return redirect()
+                ->route('ramspecs.index')
+                ->with('message', 'Failed to delete RAM specification.')
+                ->with('type', 'error');
+        }
     }
 }

@@ -1,7 +1,9 @@
-import { Button } from '@/components/ui/button';
+import { useEffect } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { toast } from "sonner";
+
 import AppLayout from '@/layouts/app-layout';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { update, create, index } from '@/routes/ramspecs';
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,7 +15,9 @@ import {
 } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ArrowLeft, CircleAlert } from 'lucide-react';
+
 import type { BreadcrumbItem } from '@/types';
+import { update, create, index } from '@/routes/ramspecs';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -28,30 +32,43 @@ interface ramSpec {
     model: string;
     capacity_gb: number;
     type: string;
-    speed: string;
+    speed: number;
     form_factor: string;
     voltage: number;
 }
 
 interface Props {
-    ramSpec: ramSpec
+    ramspec: ramSpec
 }
 
-export default function Edit({ ramSpec }: Props) {
+export default function Edit({ ramspec }: Props) {
 
     const { data, setData, put, errors } = useForm({
-        manufacturer: ramSpec.manufacturer,
-        model: ramSpec.model,
-        capacity_gb: ramSpec.capacity_gb,
-        type: ramSpec.type,
-        speed: ramSpec.speed,
-        form_factor: ramSpec.form_factor,
-        voltage: ramSpec.voltage,
+        manufacturer: ramspec.manufacturer,
+        model: ramspec.model,
+        capacity_gb: ramspec.capacity_gb,
+        type: ramspec.type,
+        speed: ramspec.speed,
+        form_factor: ramspec.form_factor,
+        voltage: ramspec.voltage,
     });
+
+    // Get flash message and type from page props
+    const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
+
+    // Show toast when flash message changes
+    useEffect(() => {
+        if (!flash?.message) return;
+        if (flash.type === "error") {
+            toast.error(flash.message);
+        } else {
+            toast.success(flash.message);
+        }
+    }, [flash?.message, flash?.type]);
 
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
-        put(update.url(ramSpec.id));
+        put(update.url(ramspec.id));
     };
 
     return (
@@ -152,10 +169,10 @@ export default function Edit({ ramSpec }: Props) {
                             id="speed"
                             name="speed"
                             type="number"
-                            min={1}
+                            min={1000}
                             placeholder="e.g. 3200"
                             value={data.speed}
-                            onChange={(e) => setData('speed', e.target.value)}
+                            onChange={(e) => setData('speed', Number(e.target.value))}
                         />
                     </div>
                     <div>

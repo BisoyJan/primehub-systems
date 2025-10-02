@@ -1,3 +1,10 @@
+import { useEffect } from "react";
+import { Head, Link, useForm, usePage } from "@inertiajs/react";
+import type { PageProps as InertiaPageProps } from "@inertiajs/core";
+import { toast } from "sonner";
+
+import AppLayout from "@/layouts/app-layout";
+import { Button } from "@/components/ui/button";
 import {
     Table,
     TableBody,
@@ -19,14 +26,9 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import AppLayout from "@/layouts/app-layout";
+
 import { dashboard } from "@/routes";
-import { Head, Link, useForm, usePage } from "@inertiajs/react";
-import type { PageProps as InertiaPageProps } from "@inertiajs/core";
-import { Button } from "@/components/ui/button";
 import { create, edit, destroy, index } from "@/routes/ramspecs";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Bell } from "lucide-react";
 
 const breadcrumbs = [{ title: "RamSpecs", href: dashboard().url }];
 
@@ -48,29 +50,38 @@ interface PaginatedRamSpecs {
 
 interface Props extends InertiaPageProps {
     flash?: { message?: string };
-    ramSpecs: PaginatedRamSpecs;
+    ramspecs: PaginatedRamSpecs;
     search?: string;
 }
 
 export default function Index() {
-    const { flash, ramSpecs, search: initialSearch } = usePage<Props>().props;
-
-    // 1. Initialize form with existing search query (if any)
+    const { ramspecs, search: initialSearch } = usePage<Props>().props;
     const form = useForm({ search: initialSearch || "" });
 
-    // 2. Delete handler remains unchanged
-    const handleDelete = (id: number) => {
-        form.delete(destroy({ ramspec: id }).url, {
-            preserveScroll: true,
-            onSuccess: () => form.reset(),
-        });
-    };
+    const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
 
-    // 3. Search now uses form.get
+    useEffect(() => {
+        if (!flash?.message) return;
+        if (flash.type === "error") {
+            toast.error(flash.message);
+        } else {
+            toast.success(flash.message);
+        }
+    }, [flash?.message, flash?.type]);
+
+
+    // 2. Search handler
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         form.get(index.url(), {
             preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    // 3. Delete handler
+    const handleDelete = (id: number) => {
+        form.delete(destroy({ ramspec: id }).url, {
             preserveScroll: true,
         });
     };
@@ -97,14 +108,6 @@ export default function Index() {
                     <Button>Add Model</Button>
                 </Link>
 
-                {/* Flash Message */}
-                {flash?.message && (
-                    <Alert variant="default" className="my-2">
-                        <Bell className="mr-2" />
-                        <AlertDescription>{flash.message}</AlertDescription>
-                    </Alert>
-                )}
-
                 {/* RAM Specs Table */}
                 <Table>
                     <TableHeader>
@@ -120,7 +123,7 @@ export default function Index() {
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {ramSpecs.data.map((ram) => (
+                        {ramspecs.data.map((ram) => (
                             <TableRow key={ram.id}>
                                 <TableCell className="font-medium">{ram.manufacturer}</TableCell>
                                 <TableCell>{ram.model}</TableCell>
@@ -183,7 +186,7 @@ export default function Index() {
                     </TableFooter>
                 </Table>
 
-                <PaginationNav links={ramSpecs.links} className="mt-4" />
+                <PaginationNav links={ramspecs.links} className="mt-4" />
             </div>
         </AppLayout>
     );
