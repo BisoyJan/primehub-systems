@@ -11,10 +11,11 @@ import {
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import { index } from '@/routes/ramspecs'
+import { index as ramIndex } from '@/routes/ramspecs'
+import { index as diskIndex } from '@/routes/diskspecs'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Folder, LayoutGrid, MemoryStick } from 'lucide-react';
+import { BookOpen, Folder, HardDrive, LayoutGrid, MemoryStick } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -25,8 +26,13 @@ const mainNavItems: NavItem[] = [
     },
     {
         title: 'Ram Specs',
-        href: index.url(),
+        href: ramIndex.url(),
         icon: MemoryStick
+    },
+    {
+        title: 'Disk Specs',
+        href: diskIndex.url(),
+        icon: HardDrive
     }
 ];
 

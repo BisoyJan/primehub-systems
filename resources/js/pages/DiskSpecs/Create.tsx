@@ -16,33 +16,32 @@ import {
 import { ArrowLeft } from 'lucide-react';
 
 import type { BreadcrumbItem } from '@/types';
-import { store, create, index } from '@/routes/ramspecs';
+import { store, create, index } from '@/routes/diskspecs';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
-        title: 'Create a New RAM Specification',
+        title: 'Create a New Disk Specification',
         href: create().url,
     },
 ];
 
 export default function Create() {
+
     const { data, setData, post, errors } = useForm({
         manufacturer: '',
-        model: '',
+        model_number: '',
         capacity_gb: '' as number | '',
-        type: '',
-        speed: '',
-        form_factor: '',
-        voltage: '',
+        interface: '',
+        drive_type: '',
+        sequential_read_mb: '' as number | '',
+        sequential_write_mb: '' as number | '',
     });
 
-    const { flash } = usePage<{ flash?: { message?: string; type?: string } }>().props;
+    const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
 
-    // show backend flash once on mount
     useEffect(() => {
         if (!flash?.message) return;
-
-        if (flash.type === 'error') {
+        if (flash.type === "error") {
             toast.error(flash.message);
         } else {
             toast.success(flash.message);
@@ -56,7 +55,7 @@ export default function Create() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create a New RAM Specification" />
+            <Head title="Create a New Disk Specification" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-8/12">
                 <div className="flex justify-start">
@@ -74,22 +73,22 @@ export default function Create() {
                         <Input
                             id="manufacturer"
                             name="manufacturer"
-                            placeholder="e.g. Corsair"
+                            placeholder="e.g. Samsung"
                             value={data.manufacturer}
                             onChange={(e) => setData('manufacturer', e.target.value)}
                         />
                         {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                     </div>
                     <div>
-                        <Label htmlFor="model">Model</Label>
+                        <Label htmlFor="model_number">Model Number</Label>
                         <Input
-                            id="model"
-                            name="model"
-                            placeholder="e.g. Vengeance LPX"
-                            value={data.model}
-                            onChange={(e) => setData('model', e.target.value)}
+                            id="model_number"
+                            name="model_number"
+                            placeholder="e.g. 980 Pro"
+                            value={data.model_number}
+                            onChange={(e) => setData('model_number', e.target.value)}
                         />
-                        {errors.model && <p className="text-red-600">{errors.model}</p>}
+                        {errors.model_number && <p className="text-red-600">{errors.model_number}</p>}
                     </div>
 
                     {/* Row 2 */}
@@ -103,9 +102,9 @@ export default function Create() {
                                 <SelectValue placeholder="Select capacity" />
                             </SelectTrigger>
                             <SelectContent>
-                                {[4, 8, 16, 32].map((size) => (
+                                {[128, 256, 512, 1024, 2048, 4096].map((size) => (
                                     <SelectItem key={size} value={String(size)}>
-                                        {size} (GB)
+                                        {size} GB
                                     </SelectItem>
                                 ))}
                             </SelectContent>
@@ -113,76 +112,79 @@ export default function Create() {
                         {errors.capacity_gb && <p className="text-red-600">{errors.capacity_gb}</p>}
                     </div>
                     <div>
-                        <Label htmlFor="type">Type</Label>
+                        <Label htmlFor="interface">Interface</Label>
                         <Select
-                            value={data.type}
-                            onValueChange={(val) => setData('type', val)}
+                            value={data.interface}
+                            onValueChange={(val) => setData('interface', val)}
                         >
-                            <SelectTrigger id="type" name="type">
-                                <SelectValue placeholder="e.g. DDR4" />
+                            <SelectTrigger id="interface" name="interface">
+                                <SelectValue placeholder="e.g. SATA III" />
                             </SelectTrigger>
                             <SelectContent>
-                                {['DDR3', 'DDR4', 'DDR5'].map((t) => (
-                                    <SelectItem key={t} value={t}>
-                                        {t}
+                                {['SATA III', 'PCIe 3.0 x4 NVMe', 'PCIe 4.0 x4 NVMe'].map((iface) => (
+                                    <SelectItem key={iface} value={iface}>
+                                        {iface}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.type && <p className="text-red-600">{errors.type}</p>}
+                        {errors.interface && <p className="text-red-600">{errors.interface}</p>}
                     </div>
 
                     {/* Row 3 */}
                     <div>
-                        <Label htmlFor="speed">Speed (MHz)</Label>
-                        <Input
-                            id="speed"
-                            name="speed"
-                            type="number"
-                            min={1}
-                            placeholder="e.g. 3200"
-                            value={data.speed}
-                            onChange={(e) => setData('speed', e.target.value)}
-                        />
-                        {errors.speed && <p className="text-red-600">{errors.speed}</p>}
-                    </div>
-                    <div>
-                        <Label htmlFor="form_factor">Form Factor</Label>
+                        <Label htmlFor="drive_type">Drive Type</Label>
                         <Select
-                            value={data.form_factor}
-                            onValueChange={(val) => setData('form_factor', val)}
+                            value={data.drive_type}
+                            onValueChange={(val) => setData('drive_type', val)}
                         >
-                            <SelectTrigger id="form_factor" name="form_factor">
-                                <SelectValue placeholder="e.g. SO-DIMM" />
+                            <SelectTrigger id="drive_type" name="drive_type">
+                                <SelectValue placeholder="e.g. SSD" />
                             </SelectTrigger>
                             <SelectContent>
-                                {['SO-DIMM', 'DIMM'].map((t) => (
-                                    <SelectItem key={t} value={t}>
-                                        {t}
+                                {['HDD', 'SSD'].map((type) => (
+                                    <SelectItem key={type} value={type}>
+                                        {type}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.form_factor && <p className="text-red-600">{errors.form_factor}</p>}
+                        {errors.drive_type && <p className="text-red-600">{errors.drive_type}</p>}
+                    </div>
+                    <div>
+                        <Label htmlFor="sequential_read_mb">Read Speed (MB/s)</Label>
+                        <Input
+                            id="sequential_read_mb"
+                            name="sequential_read_mb"
+                            type="number"
+                            min={1}
+                            placeholder="e.g. 3500"
+                            value={data.sequential_read_mb}
+                            onChange={(e) => setData('sequential_read_mb', Number(e.target.value))}
+                        />
+                        {errors.sequential_read_mb && (
+                            <p className="text-red-600">{errors.sequential_read_mb}</p>
+                        )}
                     </div>
 
                     {/* Row 4 */}
                     <div>
-                        <Label htmlFor="voltage">Voltage (V)</Label>
+                        <Label htmlFor="sequential_write_mb">Write Speed (MB/s)</Label>
                         <Input
-                            id="voltage"
-                            name="voltage"
+                            id="sequential_write_mb"
+                            name="sequential_write_mb"
                             type="number"
-                            step="0.01"
-                            min={0}
-                            placeholder="e.g. 1.35"
-                            value={data.voltage}
-                            onChange={(e) => setData('voltage', e.target.value)}
+                            min={1}
+                            placeholder="e.g. 2500"
+                            value={data.sequential_write_mb}
+                            onChange={(e) => setData('sequential_write_mb', Number(e.target.value))}
                         />
-                        {errors.voltage && <p className="text-red-600">{errors.voltage}</p>}
+                        {errors.sequential_write_mb && (
+                            <p className="text-red-600">{errors.sequential_write_mb}</p>
+                        )}
                     </div>
                     <div className="flex items-end justify-end">
-                        <Button type="submit">Add RAM Spec</Button>
+                        <Button type="submit">Add Disk Spec</Button>
                     </div>
                 </form>
             </div>

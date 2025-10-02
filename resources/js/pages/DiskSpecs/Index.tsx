@@ -28,34 +28,35 @@ import {
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 
 import { dashboard } from "@/routes";
-import { create, edit, destroy, index } from "@/routes/ramspecs";
+import { create, edit, destroy, index } from "@/routes/diskspecs";
 
-const breadcrumbs = [{ title: "RamSpecs", href: dashboard().url }];
 
-interface RamSpec {
+const breadcrumbs = [{ title: "DiskSpecs", href: dashboard().url }];
+
+interface DiskSpec {
     id: number;
     manufacturer: string;
-    model: string;
+    model_number: string;
     capacity_gb: number;
-    type: string;
-    speed: string;
-    form_factor: string;
-    voltage: number;
+    interface: string;
+    drive_type: string;
+    sequential_read_mb: number;
+    sequential_write_mb: number;
 }
 
-interface PaginatedRamSpecs {
-    data: RamSpec[];
+interface PaginatedDiskSpecs {
+    data: DiskSpec[];
     links: PaginationLink[];
 }
 
 interface Props extends InertiaPageProps {
-    flash?: { message?: string };
-    ramspecs: PaginatedRamSpecs;
+    flash?: { message?: string; type?: string };
+    diskspecs: PaginatedDiskSpecs;
     search?: string;
 }
 
 export default function Index() {
-    const { ramspecs, search: initialSearch } = usePage<Props>().props;
+    const { diskspecs, search: initialSearch } = usePage<Props>().props;
     const form = useForm({ search: initialSearch || "" });
 
     const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
@@ -69,8 +70,6 @@ export default function Index() {
         }
     }, [flash?.message, flash?.type]);
 
-
-    // 2. Search handler
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         form.get(index.url(), {
@@ -79,16 +78,15 @@ export default function Index() {
         });
     };
 
-    // 3. Delete handler
     const handleDelete = (id: number) => {
-        form.delete(destroy({ ramspec: id }).url, {
+        form.delete(destroy({ diskspec: id }).url, {
             preserveScroll: true,
         });
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Ram Specs" />
+            <Head title="Disk Specs" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
                 {/* Search Form */}
@@ -96,7 +94,7 @@ export default function Index() {
                     <input
                         type="text"
                         name="search"
-                        placeholder="Search RAM details..."
+                        placeholder="Search disk details..."
                         value={form.data.search}
                         onChange={(e) => form.setData("search", e.target.value)}
                         className="border rounded px-2 py-1"
@@ -105,37 +103,36 @@ export default function Index() {
                 </form>
 
                 <Link href={create.url()}>
-                    <Button>Add Model</Button>
+                    <Button>Add Disk Spec</Button>
                 </Link>
 
-                {/* RAM Specs Table */}
                 <Table>
                     <TableHeader>
                         <TableRow>
                             <TableHead>ID</TableHead>
                             <TableHead>Manufacturer</TableHead>
-                            <TableHead>Model</TableHead>
-                            <TableHead>Form Factor</TableHead>
-                            <TableHead>Voltage</TableHead>
-                            <TableHead>Type</TableHead>
+                            <TableHead>Model Number</TableHead>
                             <TableHead>Capacity (GB)</TableHead>
-                            <TableHead>Speed</TableHead>
+                            <TableHead>Interface</TableHead>
+                            <TableHead>Drive Type</TableHead>
+                            <TableHead>Read Speed (MB/s)</TableHead>
+                            <TableHead>Write Speed (MB/s)</TableHead>
                             <TableHead>Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {ramspecs.data.map((ram) => (
-                            <TableRow key={ram.id}>
-                                <TableCell>{ram.id}</TableCell>
-                                <TableCell className="font-medium">{ram.manufacturer}</TableCell>
-                                <TableCell>{ram.model}</TableCell>
-                                <TableCell>{ram.form_factor}</TableCell>
-                                <TableCell>{ram.voltage}</TableCell>
-                                <TableCell>{ram.type}</TableCell>
-                                <TableCell>{ram.capacity_gb}</TableCell>
-                                <TableCell>{ram.speed}</TableCell>
+                        {diskspecs.data.map((disk) => (
+                            <TableRow key={disk.id}>
+                                <TableCell>{disk.id}</TableCell>
+                                <TableCell className="font-medium">{disk.manufacturer}</TableCell>
+                                <TableCell>{disk.model_number}</TableCell>
+                                <TableCell>{disk.capacity_gb}</TableCell>
+                                <TableCell>{disk.interface}</TableCell>
+                                <TableCell>{disk.drive_type}</TableCell>
+                                <TableCell>{disk.sequential_read_mb}</TableCell>
+                                <TableCell>{disk.sequential_write_mb}</TableCell>
                                 <TableCell>
-                                    <Link href={edit.url(ram.id)}>
+                                    <Link href={edit.url(disk.id)}>
                                         <Button
                                             variant="outline"
                                             size="sm"
@@ -159,7 +156,7 @@ export default function Index() {
                                                 <AlertDialogDescription>
                                                     Are you sure you want to delete{" "}
                                                     <strong>
-                                                        {ram.manufacturer} {ram.model}
+                                                        {disk.manufacturer} {disk.model_number}
                                                     </strong>
                                                     ? This action cannot be undone.
                                                 </AlertDialogDescription>
@@ -167,7 +164,7 @@ export default function Index() {
                                             <AlertDialogFooter>
                                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                 <AlertDialogAction
-                                                    onClick={() => handleDelete(ram.id)}
+                                                    onClick={() => handleDelete(disk.id)}
                                                     className="bg-red-600 hover:bg-red-700"
                                                 >
                                                     Yes, Delete
@@ -181,14 +178,14 @@ export default function Index() {
                     </TableBody>
                     <TableFooter>
                         <TableRow>
-                            <TableCell colSpan={10} className="text-center">
-                                Ram Specs List
+                            <TableCell colSpan={9} className="text-center">
+                                Disk Specs List
                             </TableCell>
                         </TableRow>
                     </TableFooter>
                 </Table>
 
-                <PaginationNav links={ramspecs.links} className="mt-4" />
+                <PaginationNav links={diskspecs.links} className="mt-4" />
             </div>
         </AppLayout>
     );

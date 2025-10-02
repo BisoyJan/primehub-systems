@@ -110,7 +110,7 @@ class RamSpecsController extends Controller
 
         try {
             $ramspec->update($validated);
-            Log::info('Update request data:', $validated);
+
             return redirect()
                 ->route('ramspecs.index')
                 ->with('message', 'RAM specification updated successfully.')

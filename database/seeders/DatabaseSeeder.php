@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\DiskSpec;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use App\Models\RamSpec;
@@ -27,5 +28,6 @@ class DatabaseSeeder extends Seeder
         );
 
         RamSpec::factory()->count(10)->create();
+        DiskSpec::factory()->count(15)->create();
     }
 }
