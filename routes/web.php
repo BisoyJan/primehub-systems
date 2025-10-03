@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\ProcessorSpecsController;
 use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\RamSpecsController;
+use App\Http\Controllers\MotherboardSpecController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -17,6 +19,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('ramspecs', RamSpecsController::class)
         ->except(['show']);
     Route::resource('diskspecs', DiskSpecsController::class)
+        ->except(['show']);
+    Route::resource('processorspecs', ProcessorSpecsController::class)
+        ->except(['show']);
+    Route::resource('motherboards', MotherboardSpecController::class)
         ->except(['show']);
 });
 

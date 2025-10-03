@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\ProcessorSpec;
 use App\Models\DiskSpec;
 use App\Models\User;
 // use Illuminate\Database\Console\Seeds\WithoutModelEvents;
@@ -27,7 +28,9 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        RamSpec::factory()->count(10)->create();
+        RamSpec::factory()->count(15)->create();
         DiskSpec::factory()->count(15)->create();
+        ProcessorSpec::factory()->count(15)->create();
+        $this->call(MotherboardSpecSeeder::class);
     }
 }

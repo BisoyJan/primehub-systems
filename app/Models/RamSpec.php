@@ -17,4 +17,14 @@ class RamSpec extends Model
         'form_factor',
         'voltage',
     ];
+
+    public function motherboardSpecs()
+    {
+        return $this->belongsToMany(
+            MotherboardSpec::class,
+            'motherboard_spec_ram_spec',
+            'ram_spec_id',
+            'motherboard_spec_id'
+        );
+    }
 }

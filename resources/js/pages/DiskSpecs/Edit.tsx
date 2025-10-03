@@ -13,8 +13,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ArrowLeft, CircleAlert } from 'lucide-react';
+import { ArrowLeft} from 'lucide-react';
 
 import type { BreadcrumbItem } from '@/types';
 import { update, index } from '@/routes/diskspecs';
@@ -83,21 +82,6 @@ export default function Edit({ diskspec }: Props) {
                 </div>
 
                 <form onSubmit={handleUpdate} className="grid grid-cols-2 gap-4">
-                    {Object.keys(errors).length > 0 && (
-                        <div className="col-span-2">
-                            <Alert>
-                                <CircleAlert className="h-4 w-4" />
-                                <AlertTitle>Error!</AlertTitle>
-                                <AlertDescription>
-                                    <ul>
-                                        {Object.entries(errors).map(([field, msg]) => (
-                                            <li key={field}>{msg as string}</li>
-                                        ))}
-                                    </ul>
-                                </AlertDescription>
-                            </Alert>
-                        </div>
-                    )}
 
                     {/* Row 1 */}
                     <div>
@@ -109,6 +93,7 @@ export default function Edit({ diskspec }: Props) {
                             value={data.manufacturer}
                             onChange={(e) => setData('manufacturer', e.target.value)}
                         />
+                         {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                     </div>
                     <div>
                         <Label htmlFor="model_number">Model Number</Label>
@@ -119,6 +104,7 @@ export default function Edit({ diskspec }: Props) {
                             value={data.model_number}
                             onChange={(e) => setData('model_number', e.target.value)}
                         />
+                        {errors.model_number && <p className="text-red-600">{errors.model_number}</p>}
                     </div>
 
                     {/* Row 2 */}
@@ -139,6 +125,7 @@ export default function Edit({ diskspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.capacity_gb && <p className="text-red-600">{errors.capacity_gb}</p>}
                     </div>
                     <div>
                         <Label htmlFor="interface">Interface</Label>
@@ -157,6 +144,7 @@ export default function Edit({ diskspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.interface && <p className="text-red-600">{errors.interface}</p>}
                     </div>
 
                     {/* Row 3 */}
@@ -177,6 +165,7 @@ export default function Edit({ diskspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.drive_type && <p className="text-red-600">{errors.drive_type}</p>}
                     </div>
                     <div>
                         <Label htmlFor="sequential_read_mb">Read Speed (MB/s)</Label>
@@ -189,6 +178,7 @@ export default function Edit({ diskspec }: Props) {
                             value={String(data.sequential_read_mb)}
                             onChange={(e) => setData('sequential_read_mb', Number(e.target.value))}
                         />
+                        {errors.sequential_read_mb && <p className="text-red-600">{errors.sequential_read_mb}</p>}
                     </div>
 
                     {/* Row 4 */}
@@ -203,6 +193,7 @@ export default function Edit({ diskspec }: Props) {
                             value={String(data.sequential_write_mb)}
                             onChange={(e) => setData('sequential_write_mb', Number(e.target.value))}
                         />
+                        {errors.sequential_write_mb && <p className="text-red-600">{errors.sequential_write_mb}</p>}
                     </div>
                     <div className="flex items-end justify-end">
                         <Button type="submit">Edit Disk Spec</Button>
