@@ -41,6 +41,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 interface Option {
     id: number;
     label: string;
+    stock_quantity?: number;
 }
 
 interface Motherboard {
@@ -545,10 +546,20 @@ function MultiPopover({
                         <CommandGroup>
                             {(options ?? []).map(opt => {
                                 const isSelected = (selected ?? []).map(Number).includes(Number(opt.id));
+                                const outOfStock = (opt.stock_quantity ?? 0) < 1; // 👈 check stock
+
                                 return (
-                                    <CommandItem key={opt.id} onSelect={() => onToggle(Number(opt.id))}>
+                                    <CommandItem
+                                        key={opt.id}
+                                        onSelect={() => !outOfStock && onToggle(Number(opt.id))} // 👈 prevent toggle if 0
+                                        disabled={outOfStock} // 👈 disable item
+                                        className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}
+                                    >
                                         <Check className={`mr-2 h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                                        {opt.label}
+                                        <span className="flex-1">{opt.label}</span>
+                                        <span className="text-xs text-gray-500 ml-2">
+                                            ({opt.stock_quantity ?? 0} in stock)
+                                        </span>
                                     </CommandItem>
                                 );
                             })}

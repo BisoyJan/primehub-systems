@@ -44,22 +44,27 @@ class MotherboardSpecController extends Controller
     public function create()
     {
         return Inertia::render('Motherboards/Create', [
-            'ramOptions' => RamSpec::all()
+            'ramOptions' => RamSpec::with('stock')->get()
                 ->map(fn($r) => [
-                    'id'    => $r->id,
-                    'label' => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
-                    'type'  => $r->type,
+                    'id'             => $r->id,
+                    'label'          => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
+                    'type'           => $r->type,
+                    'stock_quantity' => $r->stock?->quantity ?? 0, // 👈 now works
                 ]),
-            'diskOptions'      => DiskSpec::all()
+
+            'diskOptions' => DiskSpec::with('stock')->get()
                 ->map(fn($d) => [
-                    'id'    => $d->id,
-                    'label' => "{$d->manufacturer} {$d->model_number} {$d->capacity_gb}GB"
+                    'id'             => $d->id,
+                    'label'          => "{$d->manufacturer} {$d->model_number} {$d->capacity_gb}GB",
+                    'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
-            'processorOptions' => ProcessorSpec::all()
+
+            'processorOptions' => ProcessorSpec::with('stock')->get()
                 ->map(fn($p) => [
-                    'id'          => $p->id,
-                    'label'       => "{$p->brand} {$p->series} {$p->model_number}",
-                    'socket_type' => $p->socket_type, // 👈 include this
+                    'id'             => $p->id,
+                    'label'          => "{$p->brand} {$p->series} {$p->model_number}",
+                    'socket_type'    => $p->socket_type,
+                    'stock_quantity' => $p->stock?->quantity ?? 0,
                 ]),
         ]);
     }
@@ -93,16 +98,76 @@ class MotherboardSpecController extends Controller
             'processor_spec_ids.*' => 'exists:processor_specs,id',
         ]);
 
+        // ✅ Validate RAM stock and slots
+        $totalSticks = 0;
+        foreach ($request->ram_specs ?? [] as $ramId => $qty) {
+            $ram = RamSpec::with('stock')->find($ramId);
+            if (!$ram || !$ram->stock || $ram->stock->quantity < $qty) {
+                return back()->withErrors([
+                    'ram_specs' => "{$ram->model} does not have enough stock.",
+                ])->withInput();
+            }
+            $totalSticks += $qty;
+        }
+
+        if ($totalSticks > $request->ram_slots) {
+            return back()->withErrors([
+                'ram_specs' => "You selected {$totalSticks} RAM sticks but this motherboard only has {$request->ram_slots} slots.",
+            ])->withInput();
+        }
+
+        // ✅ Validate disks
+        foreach ($request->disk_spec_ids ?? [] as $diskId) {
+            $disk = DiskSpec::with('stock')->find($diskId);
+            if (!$disk || !$disk->stock || $disk->stock->quantity < 1) {
+                return back()->withErrors([
+                    'disk_spec_ids' => "Disk {$disk->model_number} is out of stock.",
+                ])->withInput();
+            }
+        }
+
+        // ✅ Validate processors
+        foreach ($request->processor_spec_ids ?? [] as $cpuId) {
+            $cpu = ProcessorSpec::with('stock')->find($cpuId);
+            if (!$cpu || !$cpu->stock || $cpu->stock->quantity < 1) {
+                return back()->withErrors([
+                    'processor_spec_ids' => "Processor {$cpu->model} is out of stock.",
+                ])->withInput();
+            }
+        }
+
         $mb = MotherboardSpec::create($data);
 
-        $mb->ramSpecs()->sync($data['ram_spec_ids'] ?? []);
+        // attach RAM with quantities
+        $syncData = collect($request->ram_specs)->mapWithKeys(fn($qty, $ramId) => [
+            $ramId => ['quantity' => $qty]
+        ]);
+        $mb->ramSpecs()->sync($syncData);
+
+        // decrement RAM stock
+        foreach ($request->ram_specs ?? [] as $ramId => $qty) {
+            RamSpec::find($ramId)->stock->decrement('quantity', $qty);
+        }
+
+        // attach disks and processors
         $mb->diskSpecs()->sync($data['disk_spec_ids'] ?? []);
         $mb->processorSpecs()->sync($data['processor_spec_ids'] ?? []);
+
+        // decrement disk stock
+        foreach ($request->disk_spec_ids ?? [] as $diskId) {
+            DiskSpec::find($diskId)->stock->decrement('quantity');
+        }
+
+        // decrement processor stock
+        foreach ($request->processor_spec_ids ?? [] as $cpuId) {
+            ProcessorSpec::find($cpuId)->stock->decrement('quantity');
+        }
 
         return redirect()->route('motherboards.index')
             ->with('message', 'Motherboard created')
             ->with('type', 'success');
     }
+
 
     /**
      * GET /motherboards/{motherboard}/edit
@@ -136,17 +201,20 @@ class MotherboardSpecController extends Controller
                     'id'    => $r->id,
                     'label' => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
                     'type'  => $r->type,
+                    'stock_quantity' => $r->stock?->quantity ?? 0,
                 ]),
             'diskOptions' => DiskSpec::all()
                 ->map(fn($d) => [
                     'id'    => $d->id,
-                    'label' => "{$d->manufacturer} {$d->model_number} {$d->capacity_gb}GB"
+                    'label' => "{$d->manufacturer} {$d->model_number} {$d->capacity_gb}GB",
+                    'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
             'processorOptions' => ProcessorSpec::all()
                 ->map(fn($p) => [
                     'id'          => $p->id,
                     'label'       => "{$p->brand} {$p->series} {$p->model_number}",
-                    'socket_type' => $p->socket_type, // 👈 add this
+                    'socket_type' => $p->socket_type,
+                    'stock_quantity' => $p->stock?->quantity ?? 0,
                 ]),
         ]);
     }
@@ -196,13 +264,34 @@ class MotherboardSpecController extends Controller
      */
     public function destroy(MotherboardSpec $motherboard)
     {
+        // ✅ Restore RAM stock
+        foreach ($motherboard->ramSpecs as $ram) {
+            if ($ram->stock) {
+                $ram->stock->increment('quantity', $ram->pivot->quantity);
+            }
+        }
+
+        // ✅ Restore disk stock
+        foreach ($motherboard->diskSpecs as $disk) {
+            if ($disk->stock) {
+                $disk->stock->increment('quantity');
+            }
+        }
+
+        // ✅ Restore processor stock
+        foreach ($motherboard->processorSpecs as $cpu) {
+            if ($cpu->stock) {
+                $cpu->stock->increment('quantity');
+            }
+        }
+
         $motherboard->ramSpecs()->detach();
         $motherboard->diskSpecs()->detach();
         $motherboard->processorSpecs()->detach();
         $motherboard->delete();
 
         return redirect()->route('motherboards.index')
-            ->with('message', 'Motherboard deleted')
+            ->with('message', 'Motherboard deleted and stocks restored')
             ->with('type', 'success');
     }
 }

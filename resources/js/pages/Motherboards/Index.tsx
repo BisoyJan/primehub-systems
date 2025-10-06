@@ -87,6 +87,7 @@ interface Motherboard {
     processorSpecs: ProcessorSpec[];
 }
 
+
 type PageProps = {
     motherboards: { data: Motherboard[]; links: PaginationLink[] };
     flash?: { message?: string; type?: string };
@@ -370,6 +371,6 @@ export default function Index() {
                     <PaginationNav links={motherboards.links} />
                 </div>
             </div>
-        </AppLayout>    
+        </AppLayout>
     );
 }
