@@ -25,6 +25,8 @@ class MotherboardSpecController extends Controller
                 'model'           => $mb->model,
                 'chipset'         => $mb->chipset,
                 'memory_type'     => $mb->memory_type,
+                'form_factor'     => $mb->form_factor,
+                'socket_type'     => $mb->socket_type,
                 // guaranteed arrays:
                 'ramSpecs'        => $mb->ramSpecs->toArray(),
                 'diskSpecs'       => $mb->diskSpecs->toArray(),
@@ -45,7 +47,8 @@ class MotherboardSpecController extends Controller
             'ramOptions' => RamSpec::all()
                 ->map(fn($r) => [
                     'id'    => $r->id,
-                    'label' => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB"
+                    'label' => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
+                    'type'  => $r->type,
                 ]),
             'diskOptions'      => DiskSpec::all()
                 ->map(fn($d) => [
@@ -54,8 +57,9 @@ class MotherboardSpecController extends Controller
                 ]),
             'processorOptions' => ProcessorSpec::all()
                 ->map(fn($p) => [
-                    'id'    => $p->id,
-                    'label' => "{$p->brand} {$p->series} {$p->model_number}"
+                    'id'          => $p->id,
+                    'label'       => "{$p->brand} {$p->series} {$p->model_number}",
+                    'socket_type' => $p->socket_type, // 👈 include this
                 ]),
         ]);
     }
@@ -70,6 +74,7 @@ class MotherboardSpecController extends Controller
             'model'                => 'required|string|max:255',
             'chipset'              => 'required|string|max:255',
             'form_factor'          => 'required|string|max:50',
+            'socket_type'          => 'required|string|max:50',
             'memory_type'          => 'required|string|max:10',
             'ram_slots'            => 'required|integer|min:1',
             'max_ram_capacity_gb'  => 'required|integer|min:1',
@@ -105,21 +110,43 @@ class MotherboardSpecController extends Controller
     public function edit(MotherboardSpec $motherboard)
     {
         return Inertia::render('Motherboards/Edit', [
-            'motherboard'      => $motherboard->load(['ramSpecs', 'diskSpecs', 'processorSpecs']),
+            'motherboard' => [
+                'id'                 => $motherboard->id,
+                'brand'              => $motherboard->brand,
+                'model'              => $motherboard->model,
+                'chipset'            => $motherboard->chipset,
+                'form_factor'        => $motherboard->form_factor,
+                'socket_type'        => $motherboard->socket_type,
+                'memory_type'        => $motherboard->memory_type,
+                'ram_slots'          => $motherboard->ram_slots,
+                'max_ram_capacity_gb' => $motherboard->max_ram_capacity_gb,
+                'max_ram_speed'      => $motherboard->max_ram_speed,
+                'pcie_slots'         => $motherboard->pcie_slots,
+                'm2_slots'           => $motherboard->m2_slots,
+                'sata_ports'         => $motherboard->sata_ports,
+                'usb_ports'          => $motherboard->usb_ports,
+                'ethernet_speed'     => $motherboard->ethernet_speed,
+                'wifi'               => $motherboard->wifi,
+                'ramSpecs'           => $motherboard->ramSpecs()->pluck('id'),
+                'diskSpecs'          => $motherboard->diskSpecs()->pluck('id'),
+                'processorSpecs'     => $motherboard->processorSpecs()->pluck('id'),
+            ],
             'ramOptions' => RamSpec::all()
                 ->map(fn($r) => [
                     'id'    => $r->id,
-                    'label' => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB"
+                    'label' => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
+                    'type'  => $r->type,
                 ]),
-            'diskOptions'      => DiskSpec::all()
+            'diskOptions' => DiskSpec::all()
                 ->map(fn($d) => [
                     'id'    => $d->id,
                     'label' => "{$d->manufacturer} {$d->model_number} {$d->capacity_gb}GB"
                 ]),
             'processorOptions' => ProcessorSpec::all()
                 ->map(fn($p) => [
-                    'id'    => $p->id,
-                    'label' => "{$p->brand} {$p->series} {$p->model_number}"
+                    'id'          => $p->id,
+                    'label'       => "{$p->brand} {$p->series} {$p->model_number}",
+                    'socket_type' => $p->socket_type, // 👈 add this
                 ]),
         ]);
     }
@@ -134,6 +161,7 @@ class MotherboardSpecController extends Controller
             'model'                => 'required|string|max:255',
             'chipset'              => 'required|string|max:255',
             'form_factor'          => 'required|string|max:50',
+            'socket_type'          => 'required|string|max:50',
             'memory_type'          => 'required|string|max:10',
             'ram_slots'            => 'required|integer|min:1',
             'max_ram_capacity_gb'  => 'required|integer|min:1',

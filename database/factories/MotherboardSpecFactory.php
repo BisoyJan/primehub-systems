@@ -26,12 +26,14 @@ class MotherboardSpecFactory extends Factory
             'USB4; USB-C'
         ];
         $ethSpeeds    = ['1 GbE', '2.5 GbE', '10 GbE'];
+        $sockets      = ['LGA1200', 'LGA1700', 'AM4', 'AM5', 'TR4'];
 
         return [
             'brand'               => $this->faker->randomElement($brands),
             'model'               => strtoupper($this->faker->bothify('????-####')),
             'chipset'             => $this->faker->randomElement($chipsets),
             'form_factor'         => $this->faker->randomElement($forms),
+            'socket_type'         => $this->faker->randomElement($sockets),
             'memory_type'         => $this->faker->randomElement($memTypes),
             'ram_slots'           => $this->faker->randomElement([2, 4]),
             'max_ram_capacity_gb' => $this->faker->randomElement([64, 128, 256]),

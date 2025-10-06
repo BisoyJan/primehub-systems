@@ -18,7 +18,6 @@ import {
     DialogTrigger,
     DialogContent,
     DialogTitle,
-    DialogDescription,
     DialogClose,
 } from '@/components/ui/dialog';
 import {
@@ -81,6 +80,8 @@ interface Motherboard {
     model: string;
     chipset: string;
     memory_type: string;
+    form_factor: string;
+    socket_type: string;
     ramSpecs: RamSpec[];
     diskSpecs: DiskSpec[];
     processorSpecs: ProcessorSpec[];
@@ -125,157 +126,250 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Motherboards" />
 
-            {/* Search & Add */}
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                <form onSubmit={handleSearch} className="flex gap-2 mb-2">
-                    <input
-                        type="text"
-                        name="search"
-                        placeholder="Search by model…"
-                        value={form.data.search}
-                        onChange={(e) => form.setData('search', e.target.value)}
-                        className="border rounded px-2 py-1"
-                    />
-                    <Button type="submit">Search</Button>
-                </form>
-                <Link href={motherboardCreate.url()}>
-                    <Button>Add Motherboard</Button>
-                </Link>
+                {/* Header Section */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    {/* Search Form */}
+                    <form onSubmit={handleSearch} className="flex gap-2">
+                        <input
+                            type="text"
+                            name="search"
+                            placeholder="Search by model…"
+                            value={form.data.search}
+                            onChange={(e) => form.setData("search", e.target.value)}
+                            className="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <Button type="submit">Search</Button>
+                    </form>
 
+                    {/* Add Button */}
+                    <Link href={motherboardCreate.url()}>
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                            Add Motherboard
+                        </Button>
+                    </Link>
+                </div>
 
                 {/* Specs Table */}
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Brand</TableHead>
-                            <TableHead>Model</TableHead>
-                            <TableHead>Chipset</TableHead>
-                            <TableHead>Memory</TableHead>
-                            <TableHead>Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Brand</TableHead>
+                                <TableHead>Model</TableHead>
+                                <TableHead>Chipset</TableHead>
+                                <TableHead>Memory</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
 
-                    <TableBody>
-                        {motherboards.data.map((mb) => (
-                            <TableRow key={mb.id}>
-                                <TableCell>{mb.id}</TableCell>
-                                <TableCell>{mb.brand}</TableCell>
-                                <TableCell>{mb.model}</TableCell>
-                                <TableCell>{mb.chipset}</TableCell>
-                                <TableCell>{mb.memory_type}</TableCell>
-                                <TableCell className="space-x-2">
-                                    {/* Edit */}
-                                    <Link href={motherboardEdit.url(mb.id)}>
-                                        <Button size="sm">Edit</Button> {/* TODO when pressing the edit button,the popover for ramSpecs, diskSpecs, processorSpecs is not showing the already selected options. */}
-                                    </Link>
-
-                                    {/* Details Dialog */}
-                                    <Dialog>
-                                        <DialogTrigger asChild>
-                                            <Button variant="outline" size="sm">
-                                                Details
+                        <TableBody>
+                            {motherboards.data.map((mb) => (
+                                <TableRow key={mb.id}>
+                                    <TableCell>{mb.id}</TableCell>
+                                    <TableCell>{mb.brand}</TableCell>
+                                    <TableCell>{mb.model}</TableCell>
+                                    <TableCell>{mb.chipset}</TableCell>
+                                    <TableCell>{mb.memory_type}</TableCell>
+                                    <TableCell className="flex justify-end gap-2">
+                                        {/* Edit */}
+                                        <Link href={motherboardEdit.url(mb.id)}>
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700 text-white"
+                                            >
+                                                Edit
                                             </Button>
-                                        </DialogTrigger>
-                                        <DialogContent className="max-w-lg">
-                                            <DialogTitle>
-                                                {mb.brand} {mb.model} Specs
-                                            </DialogTitle>
-                                            <DialogDescription>
-                                                <section className="mt-4">
-                                                    <h3 className="font-medium">RAM Specs</h3>
-                                                    {mb.ramSpecs?.length ? (
-                                                        <ul className="list-disc ml-5">
-                                                            {mb.ramSpecs.map((r) => (
-                                                                <li key={r.id}>
-                                                                    {r.manufacturer} {r.model} – {r.capacity_gb}GB {r.type} @ {r.speed}
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    ) : (
-                                                        <p className="text-sm text-muted-foreground">No RAM specs available.</p>
-                                                    )}
-                                                </section>
+                                        </Link>
 
-                                                <section className="mt-4">
-                                                    <h3 className="font-medium">Disk Specs</h3>
-                                                    {mb.diskSpecs?.length ? (
-                                                        <ul className="list-disc ml-5">
-                                                            {mb.diskSpecs.map((d) => (
-                                                                <li key={d.id}>
-                                                                    {d.manufacturer} {d.model_number} – {d.capacity_gb}GB {d.drive_type} ({d.interface})
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    ) : (
-                                                        <p className="text-sm text-muted-foreground">No disk specs available.</p>
-                                                    )}
-                                                </section>
+                                        {/* Details Dialog */}
+                                        <Dialog>
+                                            <DialogTrigger asChild>
+                                                <Button variant="outline" size="sm">
+                                                    Details
+                                                </Button>
+                                            </DialogTrigger>
+                                            <DialogContent className="max-w-7xl w-full h-[90vh] flex flex-col">
+                                                <DialogTitle className="text-xl font-semibold">
+                                                    {mb.brand} {mb.model} — Full Specifications
+                                                </DialogTitle>
 
-                                                <section className="mt-4">
-                                                    <h3 className="font-medium">Processor Specs</h3>
-                                                    {mb.processorSpecs?.length ? (
-                                                        <ul className="list-disc ml-5">
-                                                            {mb.processorSpecs.map((p) => (
-                                                                <li key={p.id}>
-                                                                    {p.brand} {p.series} ({p.socket_type})
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    ) : (
-                                                        <p className="text-sm text-muted-foreground">No processor specs available.</p>
-                                                    )}
-                                                </section>
-                                            </DialogDescription>
-                                            <DialogClose asChild>
-                                                <Button className="mt-4">Close</Button>
-                                            </DialogClose>
-                                        </DialogContent>
-                                    </Dialog>
+                                                {/* Scrollable body */}
+                                                <div className="flex-1 overflow-y-auto pr-2 mt-4 space-y-6 text-sm">
+                                                    {/* Motherboard Core Info */}
+                                                    <section>
+                                                        <h3 className="font-semibold text-base mb-2">Motherboard Details</h3>
+                                                        <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                                                            <p><span className="font-medium">Brand:</span> {mb.brand}</p>
+                                                            <p><span className="font-medium">Model:</span> {mb.model}</p>
+                                                            <p><span className="font-medium">Chipset:</span> {mb.chipset}</p>
+                                                            <p><span className="font-medium">Memory Type:</span> {mb.memory_type}</p>
+                                                            <p><span className="font-medium">Form Factor:</span> {mb.form_factor ?? "—"}</p>
+                                                            <p><span className="font-medium">Socket Type:</span> {mb.socket_type ?? "—"}</p>
+                                                        </div>
+                                                    </section>
 
-                                    {/* Delete */}
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="destructive" size="sm">
-                                                Delete
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Are you sure you want to delete {mb.brand} {mb.model}? This
-                                                    action cannot be undone.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction
-                                                    className="bg-red-600 hover:bg-red-700"
-                                                    onClick={() => handleDelete(mb.id)}
+                                                    {/* RAM Specs */}
+                                                    <section>
+                                                        <h3 className="font-semibold text-base mb-2">RAM Specs</h3>
+                                                        {mb.ramSpecs?.length ? (
+                                                            <Table>
+                                                                <TableHeader>
+                                                                    <TableRow>
+                                                                        <TableHead>Manufacturer</TableHead>
+                                                                        <TableHead>Model</TableHead>
+                                                                        <TableHead>Capacity</TableHead>
+                                                                        <TableHead>Type</TableHead>
+                                                                        <TableHead>Speed</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {mb.ramSpecs.map((r) => (
+                                                                        <TableRow key={r.id}>
+                                                                            <TableCell>{r.manufacturer}</TableCell>
+                                                                            <TableCell>{r.model}</TableCell>
+                                                                            <TableCell>{r.capacity_gb} GB</TableCell>
+                                                                            <TableCell>{r.type}</TableCell>
+                                                                            <TableCell>{r.speed}</TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        ) : (
+                                                            <p className="text-muted-foreground">No RAM specs available.</p>
+                                                        )}
+                                                    </section>
+
+                                                    {/* Disk Specs */}
+                                                    <section>
+                                                        <h3 className="font-semibold text-base mb-2">Disk Specs</h3>
+                                                        {mb.diskSpecs?.length ? (
+                                                            <Table>
+                                                                <TableHeader>
+                                                                    <TableRow>
+                                                                        <TableHead>Manufacturer</TableHead>
+                                                                        <TableHead>Model</TableHead>
+                                                                        <TableHead>Capacity</TableHead>
+                                                                        <TableHead>Type</TableHead>
+                                                                        <TableHead>Interface</TableHead>
+                                                                        <TableHead>Read</TableHead>
+                                                                        <TableHead>Write</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {mb.diskSpecs.map((d) => (
+                                                                        <TableRow key={d.id}>
+                                                                            <TableCell>{d.manufacturer}</TableCell>
+                                                                            <TableCell>{d.model_number}</TableCell>
+                                                                            <TableCell>{d.capacity_gb} GB</TableCell>
+                                                                            <TableCell>{d.drive_type}</TableCell>
+                                                                            <TableCell>{d.interface}</TableCell>
+                                                                            <TableCell>{d.sequential_read_mb} MB/s</TableCell>
+                                                                            <TableCell>{d.sequential_write_mb} MB/s</TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        ) : (
+                                                            <p className="text-muted-foreground">No disk specs available.</p>
+                                                        )}
+                                                    </section>
+
+                                                    {/* Processor Specs */}
+                                                    <section>
+                                                        <h3 className="font-semibold text-base mb-2">Processor Specs</h3>
+                                                        {mb.processorSpecs?.length ? (
+                                                            <Table>
+                                                                <TableHeader>
+                                                                    <TableRow>
+                                                                        <TableHead>Brand</TableHead>
+                                                                        <TableHead>Series</TableHead>
+                                                                        <TableHead>Socket</TableHead>
+                                                                        <TableHead>Cores</TableHead>
+                                                                        <TableHead>Threads</TableHead>
+                                                                        <TableHead>Base Clock</TableHead>
+                                                                        <TableHead>Boost Clock</TableHead>
+                                                                        <TableHead>TDP</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {mb.processorSpecs.map((p) => (
+                                                                        <TableRow key={p.id}>
+                                                                            <TableCell>{p.brand}</TableCell>
+                                                                            <TableCell>{p.series}</TableCell>
+                                                                            <TableCell>{p.socket_type}</TableCell>
+                                                                            <TableCell>{p.core_count}</TableCell>
+                                                                            <TableCell>{p.thread_count}</TableCell>
+                                                                            <TableCell>{p.base_clock_ghz} GHz</TableCell>
+                                                                            <TableCell>{p.boost_clock_ghz} GHz</TableCell>
+                                                                            <TableCell>{p.tdp_watts} W</TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        ) : (
+                                                            <p className="text-muted-foreground">No processor specs available.</p>
+                                                        )}
+                                                    </section>
+                                                </div>
+
+                                                {/* Footer */}
+                                                <DialogClose asChild>
+                                                    <Button className="mt-4 self-end">Close</Button>
+                                                </DialogClose>
+                                            </DialogContent>
+                                        </Dialog>
+
+                                        {/* Delete */}
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="destructive"
+                                                    className="bg-red-600 hover:bg-red-700 text-white"
                                                 >
-                                                    Yes, Delete
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                                    Delete
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Are you sure you want to delete {mb.brand} {mb.model}? This action cannot be undone.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        className="bg-red-600 hover:bg-red-700"
+                                                        onClick={() => handleDelete(mb.id)}
+                                                    >
+                                                        Yes, Delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+
+                        <TableFooter>
+                            <TableRow>
+                                <TableCell colSpan={6} className="text-center font-medium">
+                                    Motherboard Specs List
                                 </TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
+                        </TableFooter>
+                    </Table>
+                </div>
 
-                    <TableFooter>
-                        <TableRow>
-                            <TableCell colSpan={6} className="text-center">
-                                Page {motherboards.links.find((l) => l.active)?.label} of{' '}
-                                {motherboards.links.length - 2}
-                            </TableCell>
-                        </TableRow>
-                    </TableFooter>
-                </Table>
-
-                <PaginationNav links={motherboards.links} className="mt-4" />
+                {/* Pagination */}
+                <div className="flex justify-center">
+                    <PaginationNav links={motherboards.links} />
+                </div>
             </div>
-        </AppLayout>
+        </AppLayout>    
     );
 }

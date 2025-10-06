@@ -91,104 +91,118 @@ export default function Index() {
             <Head title="Ram Specs" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                {/* Search Form */}
-                <form onSubmit={handleSearch} className="flex gap-2 mb-2">
-                    <input
-                        type="text"
-                        name="search"
-                        placeholder="Search RAM details..."
-                        value={form.data.search}
-                        onChange={(e) => form.setData("search", e.target.value)}
-                        className="border rounded px-2 py-1"
-                    />
-                    <Button type="submit">Search</Button>
-                </form>
+                {/* Header Section */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    {/* Search Form */}
+                    <form onSubmit={handleSearch} className="flex gap-2">
+                        <input
+                            type="text"
+                            name="search"
+                            placeholder="Search RAM details..."
+                            value={form.data.search}
+                            onChange={(e) => form.setData("search", e.target.value)}
+                            className="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <Button type="submit">Search</Button>
+                    </form>
 
-                <Link href={create.url()}>
-                    <Button>Add Model</Button>
-                </Link>
+                    {/* Add Button */}
+                    <Link href={create.url()}>
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                            Add Model
+                        </Button>
+                    </Link>
+                </div>
 
                 {/* RAM Specs Table */}
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Manufacturer</TableHead>
-                            <TableHead>Model</TableHead>
-                            <TableHead>Form Factor</TableHead>
-                            <TableHead>Voltage</TableHead>
-                            <TableHead>Type</TableHead>
-                            <TableHead>Capacity (GB)</TableHead>
-                            <TableHead>Speed</TableHead>
-                            <TableHead>Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {ramspecs.data.map((ram) => (
-                            <TableRow key={ram.id}>
-                                <TableCell>{ram.id}</TableCell>
-                                <TableCell className="font-medium">{ram.manufacturer}</TableCell>
-                                <TableCell>{ram.model}</TableCell>
-                                <TableCell>{ram.form_factor}</TableCell>
-                                <TableCell>{ram.voltage}</TableCell>
-                                <TableCell>{ram.type}</TableCell>
-                                <TableCell>{ram.capacity_gb}</TableCell>
-                                <TableCell>{ram.speed}</TableCell>
-                                <TableCell>
-                                    <Link href={edit.url(ram.id)}>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="bg-green-600 hover:bg-green-700 text-white mr-2"
-                                        >
-                                            Edit
-                                        </Button>
-                                    </Link>
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Manufacturer</TableHead>
+                                <TableHead>Model</TableHead>
+                                <TableHead>Form Factor</TableHead>
+                                <TableHead>Voltage</TableHead>
+                                <TableHead>Type</TableHead>
+                                <TableHead>Capacity (GB)</TableHead>
+                                <TableHead>Speed</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                            {ramspecs.data.map((ram) => (
+                                <TableRow key={ram.id}>
+                                    <TableCell>{ram.id}</TableCell>
+                                    <TableCell className="font-medium">{ram.manufacturer}</TableCell>
+                                    <TableCell>{ram.model}</TableCell>
+                                    <TableCell>{ram.form_factor}</TableCell>
+                                    <TableCell>{ram.voltage}</TableCell>
+                                    <TableCell>{ram.type}</TableCell>
+                                    <TableCell>{ram.capacity_gb}</TableCell>
+                                    <TableCell>{ram.speed}</TableCell>
+                                    <TableCell className="flex justify-end gap-2">
+                                        <Link href={edit.url(ram.id)}>
                                             <Button
-                                                variant="destructive"
-                                                className="bg-red-600 hover:bg-red-700 text-white"
+                                                variant="outline"
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700 text-white"
                                             >
-                                                Delete
+                                                Edit
                                             </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Are you sure you want to delete{" "}
-                                                    <strong>
-                                                        {ram.manufacturer} {ram.model}
-                                                    </strong>
-                                                    ? This action cannot be undone.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction
-                                                    onClick={() => handleDelete(ram.id)}
-                                                    className="bg-red-600 hover:bg-red-700"
+                                        </Link>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    className="bg-red-600 hover:bg-red-700 text-white"
                                                 >
-                                                    Yes, Delete
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                                    Delete
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Are you sure you want to delete{" "}
+                                                        <strong>
+                                                            {ram.manufacturer} {ram.model}
+                                                        </strong>
+                                                        ? This action cannot be undone.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        onClick={() => handleDelete(ram.id)}
+                                                        className="bg-red-600 hover:bg-red-700"
+                                                    >
+                                                        Yes, Delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+
+                        <TableFooter>
+                            <TableRow>
+                                <TableCell colSpan={10} className="text-center font-medium">
+                                    RAM Specs List
                                 </TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                    <TableFooter>
-                        <TableRow>
-                            <TableCell colSpan={10} className="text-center">
-                                Ram Specs List
-                            </TableCell>
-                        </TableRow>
-                    </TableFooter>
-                </Table>
+                        </TableFooter>
+                    </Table>
+                </div>
 
-                <PaginationNav links={ramspecs.links} className="mt-4" />
+                {/* Pagination */}
+                <div className="flex justify-center">
+                    <PaginationNav links={ramspecs.links} />
+                </div>
             </div>
         </AppLayout>
     );

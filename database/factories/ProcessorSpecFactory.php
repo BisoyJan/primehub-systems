@@ -22,60 +22,56 @@ class ProcessorSpecFactory extends Factory
         $brands = ['Intel', 'AMD'];
 
         $intelSeries = [
-            'Core i3-10100',
-            'Core i3-12100',
-            'Core i5-10400',
-            'Core i5-12400',
-            'Core i7-10700K',
-            'Core i7-12700K',
-            'Core i9-10900K',
-            'Core i9-12900K',
-            'Pentium Gold G6400',
-            'Pentium Gold G7400',
-            'Celeron G5905'
+            'Core i3-10100'   => 'LGA1200',
+            'Core i3-12100'   => 'LGA1700',
+            'Core i5-10400'   => 'LGA1200',
+            'Core i5-12400'   => 'LGA1700',
+            'Core i7-10700K'  => 'LGA1200',
+            'Core i7-12700K'  => 'LGA1700',
+            'Core i9-10900K'  => 'LGA1200',
+            'Core i9-12900K'  => 'LGA1700',
+            'Pentium Gold G6400' => 'LGA1200',
+            'Pentium Gold G7400' => 'LGA1700',
+            'Celeron G5905'   => 'LGA1200',
         ];
 
         $amdSeries = [
-            'Ryzen 3 3100',
-            'Ryzen 3 5300G',
-            'Ryzen 5 3600',
-            'Ryzen 5 5600',
-            'Ryzen 5 5600G',
-            'Ryzen 7 3700X',
-            'Ryzen 7 5800X',
-            'Ryzen 9 3900X',
-            'Ryzen 9 5900X',
-            'Ryzen 9 5950X',
-            'Athlon 3000G',
-            'Athlon 320GE'
+            'Ryzen 3 3100'    => 'AM4',
+            'Ryzen 3 5300G'   => 'AM4',
+            'Ryzen 5 3600'    => 'AM4',
+            'Ryzen 5 5600'    => 'AM4',
+            'Ryzen 5 5600G'   => 'AM4',
+            'Ryzen 7 3700X'   => 'AM4',
+            'Ryzen 7 5800X'   => 'AM4',
+            'Ryzen 9 3900X'   => 'AM4',
+            'Ryzen 9 5900X'   => 'AM4',
+            'Ryzen 9 5950X'   => 'AM4',
+            'Athlon 3000G'    => 'AM4',
+            'Athlon 320GE'    => 'AM4',
+            // If you want AM5/TR4/sTRX4 CPUs, add them here
         ];
 
-        $sockets = [
-            'LGA1151',
-            'LGA1200',
-            'LGA1700',
-            'AM3+',
-            'AM4',
-            'AM5',
-            'TR4',
-            'sTRX4'
-        ];
-
-        $coreCount = $this->faker->numberBetween(2, 16);
-        $threadCount = $coreCount * $this->faker->numberBetween(1, 2);
         $brand = $this->faker->randomElement($brands);
-        $series = $brand === 'Intel'
-            ? $this->faker->randomElement($intelSeries)
-            : $this->faker->randomElement($amdSeries);
+
+        if ($brand === 'Intel') {
+            $series = $this->faker->randomElement(array_keys($intelSeries));
+            $socket = $intelSeries[$series];
+        } else {
+            $series = $this->faker->randomElement(array_keys($amdSeries));
+            $socket = $amdSeries[$series];
+        }
+
+        $coreCount   = $this->faker->numberBetween(2, 16);
+        $threadCount = $coreCount * $this->faker->numberBetween(1, 2);
 
         return [
             'brand'               => $brand,
             'series'              => $series,
-            'socket_type'         => $this->faker->randomElement($sockets),
+            'socket_type'         => $socket, // ✅ always correct now
             'core_count'          => $coreCount,
             'thread_count'        => $threadCount,
-            'base_clock_ghz'  => round($this->faker->randomFloat(2, 2.0, 3.8), 2),
-            'boost_clock_ghz' => round($this->faker->randomFloat(2, 3.5, 5.2), 2),
+            'base_clock_ghz'      => round($this->faker->randomFloat(2, 2.0, 3.8), 2),
+            'boost_clock_ghz'     => round($this->faker->randomFloat(2, 3.5, 5.2), 2),
             'integrated_graphics' => $brand === 'Intel'
                 ? $this->faker->randomElement(['Intel UHD 610', 'Intel UHD 730', 'Intel UHD 770'])
                 : $this->faker->randomElement(['Radeon Vega 3', 'Radeon Vega 7', 'Radeon Vega 8']),

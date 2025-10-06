@@ -35,14 +35,22 @@ interface Option {
     label: string
 }
 
+interface ProcessorOption extends Option {
+    socket_type: string
+}
+
+interface RamOption extends Option {
+    type: string; // DDR3, DDR4, DDR5
+}
+
 type PageProps = {
-    ramOptions: Option[]
+    ramOptions: RamOption[];
     diskOptions: Option[]
-    processorOptions: Option[]
+    processorOptions: ProcessorOption[]
     flash?: { message?: string; type?: string }
 }
 
-// pre-defined choices for your six shadcn selects
+// pre-defined choices for your selects
 const memoryTypes = ['DDR3', 'DDR4', 'DDR5']
 const ramSlotOptions = [1, 2, 4, 6, 8]
 const m2SlotOptions = [0, 1, 2, 3, 4]
@@ -59,6 +67,7 @@ export default function Create() {
         model: '',
         chipset: '',
         form_factor: '',
+        socket_type: '',
         memory_type: '',
         ram_slots: 0,
         max_ram_capacity_gb: 0,
@@ -74,14 +83,53 @@ export default function Create() {
         processor_spec_ids: [] as number[],
     })
 
+    // filter processors by selected socket_type
+    const compatibleProcessors = (processorOptions ?? []).filter(
+        (p) => p.socket_type === form.data.socket_type
+    )
+
+    const compatibleRams = (ramOptions ?? []).filter(
+        (r) => r.type === form.data.memory_type // or data.memory_type in Edit
+    );
+
+    // auto-clear incompatible processors if socket_type changes
     useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === "error") {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
+        const compatible = (processorOptions ?? []).filter(
+            (p) => p.socket_type === form.data.socket_type
+        )
+
+        const stillValid = (form.data.processor_spec_ids ?? []).filter((id) =>
+            compatible.some((p) => p.id === id)
+        )
+
+        if (stillValid.length !== form.data.processor_spec_ids.length) {
+            form.setData('processor_spec_ids', stillValid)
         }
-    }, [flash?.message, flash?.type]);
+    }, [form.data.socket_type, processorOptions, form])
+
+    useEffect(() => {
+        const compatible = (ramOptions ?? []).filter(
+            (r) => r.type === form.data.memory_type
+        )
+
+        const stillValid = (form.data.ram_spec_ids ?? []).filter((id) =>
+            compatible.some((p) => p.id === id)
+        )
+
+        if (stillValid.length !== form.data.ram_spec_ids.length) {
+            form.setData('ram_spec_ids', stillValid)
+        }
+    }, [form.data.memory_type, ramOptions, form])
+
+    // flash messages
+    useEffect(() => {
+        if (!flash?.message) return
+        if (flash.type === 'error') {
+            toast.error(flash.message)
+        } else {
+            toast.success(flash.message)
+        }
+    }, [flash?.message, flash?.type])
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -98,319 +146,332 @@ export default function Create() {
         <AppLayout>
             <Head title="Create Motherboard" />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 ">
+            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
                 <div className="flex justify-start">
                     <Link href={motherboardIndex.url()}>
                         <Button><ArrowLeft /> Return</Button>
                     </Link>
                 </div>
 
+                <form onSubmit={handleSubmit} className="space-y-8">
+                    {/* Core Info */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-2">Core Info</h2>
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* Brand */}
+                            <div>
+                                <Label htmlFor="brand">Brand</Label>
+                                <Input
+                                    id="brand"
+                                    name="brand"
+                                    value={form.data.brand}
+                                    onChange={(e) => form.setData("brand", e.target.value)}
+                                />
+                                {form.errors.brand && <p className="text-red-600">{form.errors.brand}</p>}
+                            </div>
 
-                <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-6">
-                    {/* Brand */}
-                    <div>
-                        <Label htmlFor="brand">Brand</Label>
-                        <Input
-                            id="brand"
-                            name="brand"
-                            value={form.data.brand}
-                            onChange={(e) => form.setData('brand', e.target.value)}
+                            {/* Model */}
+                            <div>
+                                <Label htmlFor="model">Model</Label>
+                                <Input
+                                    id="model"
+                                    name="model"
+                                    value={form.data.model}
+                                    onChange={(e) => form.setData("model", e.target.value)}
+                                />
+                                {form.errors.model && <p className="text-red-600">{form.errors.model}</p>}
+                            </div>
+
+                            {/* Chipset */}
+                            <div>
+                                <Label htmlFor="chipset">Chipset</Label>
+                                <Input
+                                    id="chipset"
+                                    name="chipset"
+                                    value={form.data.chipset}
+                                    onChange={(e) => form.setData("chipset", e.target.value)}
+                                />
+                                {form.errors.chipset && <p className="text-red-600">{form.errors.chipset}</p>}
+                            </div>
+
+                            {/* Form Factor */}
+                            <div>
+                                <Label htmlFor="form_factor">Form Factor</Label>
+                                <Input
+                                    id="form_factor"
+                                    name="form_factor"
+                                    value={form.data.form_factor}
+                                    onChange={(e) => form.setData("form_factor", e.target.value)}
+                                />
+                                {form.errors.form_factor && <p className="text-red-600">{form.errors.form_factor}</p>}
+                            </div>
+
+                            {/* Socket Type */}
+                            <div>
+                                <Label htmlFor="socket_type">Socket Type</Label>
+                                <Select
+                                    onValueChange={(val) => form.setData("socket_type", val)}
+                                    value={form.data.socket_type}
+                                >
+                                    <SelectTrigger id="socket_type" className="w-full">
+                                        <SelectValue placeholder="Select socket type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {["LGA1151", "LGA1200", "LGA1700", "AM3+", "AM4", "AM5", "TR4", "sTRX4"].map(socket => (
+                                            <SelectItem key={socket} value={socket}>{socket}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.socket_type && <p className="text-red-600">{form.errors.socket_type}</p>}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Memory */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-2">Memory</h2>
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* Memory Type */}
+                            <div>
+                                <Label htmlFor="memory_type">Memory Type</Label>
+                                <Select
+                                    value={form.data.memory_type}
+                                    onValueChange={(val) => form.setData("memory_type", val)}
+                                >
+                                    <SelectTrigger id="memory_type" className="w-full">
+                                        <SelectValue placeholder="Select memory type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {memoryTypes.map(type => (
+                                            <SelectItem key={type} value={type}>{type}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.memory_type && <p className="text-red-600">{form.errors.memory_type}</p>}
+                            </div>
+
+                            {/* RAM Slots */}
+                            <div>
+                                <Label htmlFor="ram_slots">RAM Slots</Label>
+                                <Select
+                                    value={String(form.data.ram_slots)}
+                                    onValueChange={(val) => form.setData("ram_slots", Number(val))}
+                                >
+                                    <SelectTrigger id="ram_slots" className="w-full">
+                                        <SelectValue placeholder="Select # of slots" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {ramSlotOptions.map(n => (
+                                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.ram_slots && <p className="text-red-600">{form.errors.ram_slots}</p>}
+                            </div>
+
+                            {/* Max RAM Capacity */}
+                            <div>
+                                <Label htmlFor="max_ram_capacity_gb">Max RAM Capacity (GB)</Label>
+                                <Select
+                                    value={String(form.data.max_ram_capacity_gb)}
+                                    onValueChange={(val) => form.setData("max_ram_capacity_gb", Number(val))}
+                                >
+                                    <SelectTrigger id="max_ram_capacity_gb" className="w-full">
+                                        <SelectValue placeholder="Select capacity" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {maxRamCapacityOptions.map(cap => (
+                                            <SelectItem key={cap} value={String(cap)}>{cap} GB</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.max_ram_capacity_gb && <p className="text-red-600">{form.errors.max_ram_capacity_gb}</p>}
+                            </div>
+
+                            {/* Max RAM Speed */}
+                            <div>
+                                <Label htmlFor="max_ram_speed">Max RAM Speed</Label>
+                                <Input
+                                    id="max_ram_speed"
+                                    name="max_ram_speed"
+                                    value={form.data.max_ram_speed}
+                                    onChange={(e) => form.setData("max_ram_speed", e.target.value)}
+                                />
+                                {form.errors.max_ram_speed && <p className="text-red-600">{form.errors.max_ram_speed}</p>}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Expansion & Storage */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-2">Expansion & Storage</h2>
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* PCIe Slots */}
+                            <div>
+                                <Label htmlFor="pcie_slots">PCIe Slots</Label>
+                                <Input
+                                    id="pcie_slots"
+                                    name="pcie_slots"
+                                    value={form.data.pcie_slots}
+                                    onChange={(e) => form.setData("pcie_slots", e.target.value)}
+                                />
+                                {form.errors.pcie_slots && <p className="text-red-600">{form.errors.pcie_slots}</p>}
+                            </div>
+
+                            {/* M.2 Slots */}
+                            <div>
+                                <Label htmlFor="m2_slots">M.2 Slots</Label>
+                                <Select
+                                    value={String(form.data.m2_slots)}
+                                    onValueChange={(val) => form.setData("m2_slots", Number(val))}
+                                >
+                                    <SelectTrigger id="m2_slots" className="w-full">
+                                        <SelectValue placeholder="Select M.2 slots" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {m2SlotOptions.map(n => (
+                                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.m2_slots && <p className="text-red-600">{form.errors.m2_slots}</p>}
+                            </div>
+
+                            {/* SATA Ports */}
+                            <div>
+                                <Label htmlFor="sata_ports">SATA Ports</Label>
+                                <Select
+                                    value={String(form.data.sata_ports)}
+                                    onValueChange={(val) => form.setData("sata_ports", Number(val))}
+                                >
+                                    <SelectTrigger id="sata_ports" className="w-full">
+                                        <SelectValue placeholder="Select SATA ports" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {sataPortOptions.map(n => (
+                                            <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.sata_ports && <p className="text-red-600">{form.errors.sata_ports}</p>}
+                            </div>
+
+                            {/* USB Ports */}
+                            <div>
+                                <Label htmlFor="usb_ports">USB Ports</Label>
+                                <Input
+                                    id="usb_ports"
+                                    name="usb_ports"
+                                    value={form.data.usb_ports}
+                                    onChange={(e) => form.setData("usb_ports", e.target.value)}
+                                />
+                                {form.errors.usb_ports && <p className="text-red-600">{form.errors.usb_ports}</p>}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Connectivity */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-2">Connectivity</h2>
+                        <div className="grid grid-cols-2 gap-6">
+                            {/* Ethernet Speed */}
+                            <div>
+                                <Label htmlFor="ethernet_speed">Ethernet Speed</Label>
+                                <Select
+                                    value={form.data.ethernet_speed}
+                                    onValueChange={(val) => form.setData("ethernet_speed", val)}
+                                >
+                                    <SelectTrigger id="ethernet_speed" className="w-full">
+                                        <SelectValue placeholder="Select speed" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectGroup>
+                                            <SelectLabel>Speed</SelectLabel>
+                                            {ethernetSpeedOptions.map((speed) => (
+                                                <SelectItem key={speed} value={speed}>
+                                                    {speed}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectGroup>
+                                    </SelectContent>
+                                </Select>
+                                {form.errors.ethernet_speed && (
+                                    <p className="text-red-600">{form.errors.ethernet_speed}</p>
+                                )}
+                            </div>
+
+                            {/* Wi-Fi */}
+                            <div className="flex items-center space-x-2">
+                                <Input
+                                    id="wifi"
+                                    name="wifi"
+                                    type="checkbox"
+                                    checked={form.data.wifi}
+                                    onChange={(e) => form.setData("wifi", e.target.checked)}
+                                />
+                                <Label htmlFor="wifi">Wi-Fi Enabled</Label>
+                                {form.errors.wifi && (
+                                    <p className="text-red-600">{form.errors.wifi}</p>
+                                )}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Compatibility */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-2">Compatibility</h2>
+
+                        {/* Processors */}
+                        {!form.data.socket_type ? (
+                            <p className="text-gray-500">
+                                Select a socket type first to see compatible processors.
+                            </p>
+                        ) : (
+                            <MultiPopover
+                                id="processor_spec_ids"
+                                label="Processors"
+                                options={compatibleProcessors}
+                                selected={form.data.processor_spec_ids}
+                                onToggle={(id) => toggleSelect("processor_spec_ids", id)}
+                                error={form.errors.processor_spec_ids}
+                            />
+                        )}
+
+                        {/* RAM Modules */}
+                        {!form.data.memory_type ? (
+                            <p className="text-gray-500">
+                                Select a memory type first to see compatible RAM Modules.
+                            </p>
+                        ) : (
+                            <MultiPopover
+                                id="ram_spec_ids"
+                                label="RAM Modules"
+                                options={compatibleRams}
+                                selected={(form.data.ram_spec_ids as number[]) ?? []}
+                                onToggle={(id) => toggleSelect("ram_spec_ids", Number(id))}
+                                error={form.errors.ram_spec_ids}
+                            />
+                        )}
+
+                        {/* Disk Drives */}
+                        <MultiPopover
+                            id="disk_spec_ids"
+                            label="Disk Drives"
+                            options={diskOptions}
+                            selected={form.data.disk_spec_ids}
+                            onToggle={(id) => toggleSelect("disk_spec_ids", id)}
+                            error={form.errors.disk_spec_ids}
                         />
-                        {form.errors.brand && (
-                            <p className="text-red-600">{form.errors.brand}</p>
-                        )}
-                    </div>
+                    </section>
 
-                    {/* Model */}
-                    <div>
-                        <Label htmlFor="model">Model</Label>
-                        <Input
-                            id="model"
-                            name="model"
-                            value={form.data.model}
-                            onChange={(e) => form.setData('model', e.target.value)}
-                        />
-                        {form.errors.model && (
-                            <p className="text-red-600">{form.errors.model}</p>
-                        )}
-                    </div>
-
-                    {/* Chipset */}
-                    <div>
-                        <Label htmlFor="chipset">Chipset</Label>
-                        <Input
-                            id="chipset"
-                            name="chipset"
-                            value={form.data.chipset}
-                            onChange={(e) => form.setData('chipset', e.target.value)}
-                        />
-                        {form.errors.chipset && (
-                            <p className="text-red-600">{form.errors.chipset}</p>
-                        )}
-                    </div>
-
-                    {/* Form Factor */}
-                    <div>
-                        <Label htmlFor="form_factor">Form Factor</Label>
-                        <Input
-                            id="form_factor"
-                            name="form_factor"
-                            value={form.data.form_factor}
-                            onChange={(e) => form.setData('form_factor', e.target.value)}
-                        />
-                        {form.errors.form_factor && (
-                            <p className="text-red-600">{form.errors.form_factor}</p>
-                        )}
-                    </div>
-
-                    {/* Memory Type */}
-                    <div>
-                        <Label htmlFor="memory_type">Memory Type</Label>
-                        <Select
-                            value={form.data.memory_type}
-                            onValueChange={val => form.setData('memory_type', val)}
-                        >
-                            <SelectTrigger id="memory_type" className="w-full">
-                                <SelectValue placeholder="Select memory type" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectLabel>Type</SelectLabel>
-                                    {memoryTypes.map(type => (
-                                        <SelectItem key={type} value={type}>
-                                            {type}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
-                        {form.errors.memory_type && (
-                            <p className="text-red-600">{form.errors.memory_type}</p>
-                        )}
-                    </div>
-
-
-                    {/* RAM Slots */}
-                    <div>
-                        <Label htmlFor="ram_slots">RAM Slots</Label>
-                        <Select
-                            value={String(form.data.ram_slots)}
-                            onValueChange={val => form.setData('ram_slots', Number(val))}
-                        >
-                            <SelectTrigger id="ram_slots" className="w-full">
-                                <SelectValue placeholder="Select # of slots" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectLabel>Slots</SelectLabel>
-                                    {ramSlotOptions.map(n => (
-                                        <SelectItem key={n} value={String(n)}>
-                                            {n}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
-                        {form.errors.ram_slots && <p className="text-red-600">{form.errors.ram_slots}</p>}
-                    </div>
-
-
-                    {/* Max RAM Capacity */}
-                    <div>
-                        <Label htmlFor="max_ram_capacity_gb">Max RAM Capacity</Label>
-                        <Select
-                            value={String(form.data.max_ram_capacity_gb)}
-                            onValueChange={val => form.setData('max_ram_capacity_gb', Number(val))}
-                        >
-                            <SelectTrigger id="max_ram_capacity_gb" className="w-full">
-                                <SelectValue placeholder="Select capacity" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectLabel>Capacity</SelectLabel>
-                                    {maxRamCapacityOptions.map(cap => (
-                                        <SelectItem key={cap} value={String(cap)}>
-                                            {cap} GB
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
-                        {form.errors.max_ram_capacity_gb && (
-                            <p className="text-red-600">{form.errors.max_ram_capacity_gb}</p>
-                        )}
-                    </div>
-
-                    {/* Max RAM Speed */}
-                    <div>
-                        <Label htmlFor="max_ram_speed">Max RAM Speed</Label>
-                        <Input
-                            id="max_ram_speed"
-                            name="max_ram_speed"
-                            value={form.data.max_ram_speed}
-                            onChange={(e) => form.setData('max_ram_speed', e.target.value)}
-                        />
-                        {form.errors.max_ram_speed && (
-                            <p className="text-red-600">{form.errors.max_ram_speed}</p>
-                        )}
-                    </div>
-
-                    {/* PCIe Slots */}
-                    <div>
-                        <Label htmlFor="pcie_slots">PCIe Slots</Label>
-                        <Input
-                            id="pcie_slots"
-                            name="pcie_slots"
-                            value={form.data.pcie_slots}
-                            onChange={(e) => form.setData('pcie_slots', e.target.value)}
-                        />
-                        {form.errors.pcie_slots && (
-                            <p className="text-red-600">{form.errors.pcie_slots}</p>
-                        )}
-                    </div>
-
-                    {/* M.2 Slots */}
-                    <div>
-                        <Label htmlFor="m2_slots">M.2 Slots</Label>
-                        <Select
-                            value={String(form.data.m2_slots)}
-                            onValueChange={val => form.setData('m2_slots', Number(val))}
-                        >
-                            <SelectTrigger id="m2_slots" className="w-full">
-                                <SelectValue placeholder="Select M.2 slots" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectLabel>M.2</SelectLabel>
-                                    {m2SlotOptions.map(n => (
-                                        <SelectItem key={n} value={String(n)}>
-                                            {n}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
-                        {form.errors.m2_slots && <p className="text-red-600">{form.errors.m2_slots}</p>}
-                    </div>
-
-
-                    {/* SATA Ports */}
-                    <div>
-                        <Label htmlFor="sata_ports">SATA Ports</Label>
-                        <Select
-                            value={String(form.data.sata_ports)}
-                            onValueChange={val => form.setData('sata_ports', Number(val))}
-                        >
-                            <SelectTrigger id="sata_ports" className="w-full">
-                                <SelectValue placeholder="Select SATA ports" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectLabel>SATA</SelectLabel>
-                                    {sataPortOptions.map(n => (
-                                        <SelectItem key={n} value={String(n)}>
-                                            {n}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
-                        {form.errors.sata_ports && <p className="text-red-600">{form.errors.sata_ports}</p>}
-                    </div>
-
-
-                    {/* USB Ports */}
-                    <div>
-                        <Label htmlFor="usb_ports">USB Ports</Label>
-                        <Input
-                            id="usb_ports"
-                            name="usb_ports"
-                            value={form.data.usb_ports}
-                            onChange={(e) => form.setData('usb_ports', e.target.value)}
-                        />
-                        {form.errors.usb_ports && (
-                            <p className="text-red-600">{form.errors.usb_ports}</p>
-                        )}
-                    </div>
-
-                    {/* Ethernet Speed */}
-                    <div>
-                        <Label htmlFor="ethernet_speed">Ethernet Speed</Label>
-                        <Select
-                            value={form.data.ethernet_speed}
-                            onValueChange={val => form.setData('ethernet_speed', val)}
-                        >
-                            <SelectTrigger id="ethernet_speed" className="w-full">
-                                <SelectValue placeholder="Select speed" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectGroup>
-                                    <SelectLabel>Speed</SelectLabel>
-                                    {ethernetSpeedOptions.map(speed => (
-                                        <SelectItem key={speed} value={speed}>
-                                            {speed}
-                                        </SelectItem>
-                                    ))}
-                                </SelectGroup>
-                            </SelectContent>
-                        </Select>
-                        {form.errors.ethernet_speed && (
-                            <p className="text-red-600">{form.errors.ethernet_speed}</p>
-                        )}
-                    </div>
-
-                    {/* Wi-Fi */}
-                    <div className="flex items-center space-x-2">
-                        <Input
-                            id="wifi"
-                            name="wifi"
-                            type="checkbox"
-                            checked={form.data.wifi}
-                            onChange={(e) => form.setData('wifi', e.target.checked)}
-                        />
-                        <Label htmlFor="wifi">Wi-Fi Enabled</Label>
-                        {form.errors.wifi && (
-                            <p className="text-red-600">{form.errors.wifi}</p>
-                        )}
-                    </div>
-
-                    {/* RAM Modules multi-select */}
-                    <MultiPopover
-                        id="ram_spec_ids"
-                        label="RAM Modules"
-                        options={ramOptions}
-                        selected={form.data.ram_spec_ids}
-                        onToggle={id => toggleSelect('ram_spec_ids', id)}
-                        error={form.errors.ram_spec_ids}
-                    />
-
-                    {/* Disk Drives multi-select */}
-                    <MultiPopover
-                        id="disk_spec_ids"
-                        label="Disk Drives"
-                        options={diskOptions}
-                        selected={form.data.disk_spec_ids}
-                        onToggle={id => toggleSelect('disk_spec_ids', id)}
-                        error={form.errors.disk_spec_ids}
-                    />
-
-                    {/* Processors multi-select */}
-                    <MultiPopover
-                        id="processor_spec_ids"
-                        label="Processors"
-                        options={processorOptions}
-                        selected={form.data.processor_spec_ids}
-                        onToggle={id => toggleSelect('processor_spec_ids', id)}
-                        error={form.errors.processor_spec_ids}
-                    />
-
-                    <div className="col-span-2 flex justify-end">
+                    {/* Submit */}
+                    <div className="flex justify-end">
                         <Button type="submit">Create Motherboard</Button>
                     </div>
                 </form>
             </div>
         </AppLayout>
-    );
+    )
 }
 
 function MultiPopover({
@@ -421,12 +482,12 @@ function MultiPopover({
     onToggle,
     error,
 }: {
-    id: string;
-    label: string;
-    options: Option[];
-    selected: number[];
-    onToggle: (id: number) => void;
-    error?: string;
+    id: string
+    label: string
+    options: Option[]
+    selected: number[]
+    onToggle: (id: number) => void
+    error?: string
 }) {
     return (
         <div className="col-span-2">
@@ -449,16 +510,15 @@ function MultiPopover({
                         <CommandEmpty>No {label.toLowerCase()} found.</CommandEmpty>
                         <CommandGroup>
                             {options.map(opt => {
-                                const isSelected = selected.includes(opt.id);
+                                const isSelected = selected.includes(opt.id)
                                 return (
                                     <CommandItem key={opt.id} onSelect={() => onToggle(opt.id)}>
                                         <Check
-                                            className={`mr-2 h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'
-                                                }`}
+                                            className={`mr-2 h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'}`}
                                         />
                                         {opt.label}
                                     </CommandItem>
-                                );
+                                )
                             })}
                         </CommandGroup>
                     </Command>
@@ -466,5 +526,5 @@ function MultiPopover({
             </Popover>
             {error && <p className="text-red-600">{error}</p>}
         </div>
-    );
+    )
 }

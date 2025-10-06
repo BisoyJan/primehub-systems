@@ -15,6 +15,7 @@ return new class extends Migration
             $table->string('model');
             $table->string('chipset');
             $table->string('form_factor');
+            $table->string('socket_type');
             $table->string('memory_type');
             $table->unsignedTinyInteger('ram_slots');
             $table->unsignedInteger('max_ram_capacity_gb');

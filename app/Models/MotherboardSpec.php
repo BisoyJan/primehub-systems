@@ -13,6 +13,7 @@ class MotherboardSpec extends Model
         'model',
         'chipset',
         'form_factor',
+        'socket_type', 
         'memory_type',
         'ram_slots',
         'max_ram_capacity_gb',

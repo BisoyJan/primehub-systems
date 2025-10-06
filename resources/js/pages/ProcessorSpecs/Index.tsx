@@ -90,104 +90,119 @@ export default function Index() {
             <Head title="Processor Specs" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                {/* Search Form */}
-                <form onSubmit={handleSearch} className="flex gap-2 mb-2">
-                    <input
-                        type="text"
-                        name="search"
-                        placeholder="Search processor series..."
-                        value={form.data.search}
-                        onChange={(e) => form.setData("search", e.target.value)}
-                        className="border rounded px-2 py-1"
-                    />
-                    <Button type="submit">Search</Button>
-                </form>
+                {/* Header Section */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    {/* Search Form */}
+                    <form onSubmit={handleSearch} className="flex gap-2">
+                        <input
+                            type="text"
+                            name="search"
+                            placeholder="Search processor series..."
+                            value={form.data.search}
+                            onChange={(e) => form.setData("search", e.target.value)}
+                            className="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <Button type="submit">Search</Button>
+                    </form>
 
-                <Link href={create.url()}>
-                    <Button>Add Processor</Button>
-                </Link>
+                    {/* Add Button */}
+                    <Link href={create.url()}>
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                            Add Processor
+                        </Button>
+                    </Link>
+                </div>
 
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Brand</TableHead>
-                            <TableHead>Series</TableHead>
-                            <TableHead>Socket</TableHead>
-                            <TableHead>Cores</TableHead>
-                            <TableHead>Threads</TableHead>
-                            <TableHead>Base Clock</TableHead>
-                            <TableHead>Boost Clock</TableHead>
-                            <TableHead>Graphics</TableHead>
-                            <TableHead>TDP (W)</TableHead>
-                            <TableHead>Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {processorspecs.data.map((cpu) => (
-                            <TableRow key={cpu.id}>
-                                <TableCell>{cpu.id}</TableCell>
-                                <TableCell className="font-medium">{cpu.brand}</TableCell>
-                                <TableCell>{cpu.series}</TableCell>
-                                <TableCell>{cpu.socket_type}</TableCell>
-                                <TableCell>{cpu.core_count}</TableCell>
-                                <TableCell>{cpu.thread_count}</TableCell>
-                                <TableCell>{cpu.base_clock_ghz} GHz</TableCell>
-                                <TableCell>{cpu.boost_clock_ghz} GHz</TableCell>
-                                <TableCell>{cpu.integrated_graphics}</TableCell>
-                                <TableCell>{cpu.tdp_watts}</TableCell>
-                                <TableCell>
-                                    <Link href={edit.url(cpu.id)}>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="bg-green-600 hover:bg-green-700 text-white mr-2"
-                                        >
-                                            Edit
-                                        </Button>
-                                    </Link>
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
+                {/* Table Section */}
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Brand</TableHead>
+                                <TableHead>Series</TableHead>
+                                <TableHead>Socket</TableHead>
+                                <TableHead>Cores</TableHead>
+                                <TableHead>Threads</TableHead>
+                                <TableHead>Base Clock</TableHead>
+                                <TableHead>Boost Clock</TableHead>
+                                <TableHead>Graphics</TableHead>
+                                <TableHead>TDP (W)</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                            {processorspecs.data.map((cpu) => (
+                                <TableRow key={cpu.id}>
+                                    <TableCell>{cpu.id}</TableCell>
+                                    <TableCell className="font-medium">{cpu.brand}</TableCell>
+                                    <TableCell>{cpu.series}</TableCell>
+                                    <TableCell>{cpu.socket_type}</TableCell>
+                                    <TableCell>{cpu.core_count}</TableCell>
+                                    <TableCell>{cpu.thread_count}</TableCell>
+                                    <TableCell>{cpu.base_clock_ghz} GHz</TableCell>
+                                    <TableCell>{cpu.boost_clock_ghz} GHz</TableCell>
+                                    <TableCell>{cpu.integrated_graphics}</TableCell>
+                                    <TableCell>{cpu.tdp_watts}</TableCell>
+                                    <TableCell className="flex justify-end gap-2">
+                                        <Link href={edit.url(cpu.id)}>
                                             <Button
-                                                variant="destructive"
-                                                className="bg-red-600 hover:bg-red-700 text-white"
+                                                variant="outline"
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700 text-white"
                                             >
-                                                Delete
+                                                Edit
                                             </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Are you sure you want to delete{" "}
-                                                    <strong>{cpu.brand} {cpu.series}</strong>? This action cannot be undone.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction
-                                                    onClick={() => handleDelete(cpu.id)}
-                                                    className="bg-red-600 hover:bg-red-700"
+                                        </Link>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    className="bg-red-600 hover:bg-red-700 text-white"
                                                 >
-                                                    Yes, Delete
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                                    Delete
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Are you sure you want to delete{" "}
+                                                        <strong>{cpu.brand} {cpu.series}</strong>? This action cannot be undone.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        onClick={() => handleDelete(cpu.id)}
+                                                        className="bg-red-600 hover:bg-red-700"
+                                                    >
+                                                        Yes, Delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+
+                        <TableFooter>
+                            <TableRow>
+                                <TableCell colSpan={11} className="text-center font-medium">
+                                    Processor Specs List
                                 </TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                    <TableFooter>
-                        <TableRow>
-                            <TableCell colSpan={11} className="text-center">
-                                Processor Specs List
-                            </TableCell>
-                        </TableRow>
-                    </TableFooter>
-                </Table>
+                        </TableFooter>
+                    </Table>
+                </div>
 
-                <PaginationNav links={processorspecs.links} className="mt-4" />
+                {/* Pagination */}
+                <div className="flex justify-center">
+                    <PaginationNav links={processorspecs.links} />
+                </div>
             </div>
         </AppLayout>
     );

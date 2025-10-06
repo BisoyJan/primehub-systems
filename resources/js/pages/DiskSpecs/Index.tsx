@@ -89,103 +89,118 @@ export default function Index() {
             <Head title="Disk Specs" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                {/* Search Form */}
-                <form onSubmit={handleSearch} className="flex gap-2 mb-2">
-                    <input
-                        type="text"
-                        name="search"
-                        placeholder="Search disk details..."
-                        value={form.data.search}
-                        onChange={(e) => form.setData("search", e.target.value)}
-                        className="border rounded px-2 py-1"
-                    />
-                    <Button type="submit">Search</Button>
-                </form>
+                {/* Header Section */}
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    {/* Search Form */}
+                    <form onSubmit={handleSearch} className="flex gap-2">
+                        <input
+                            type="text"
+                            name="search"
+                            placeholder="Search disk details..."
+                            value={form.data.search}
+                            onChange={(e) => form.setData("search", e.target.value)}
+                            className="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <Button type="submit">Search</Button>
+                    </form>
 
-                <Link href={create.url()}>
-                    <Button>Add Disk Spec</Button>
-                </Link>
+                    {/* Add Button */}
+                    <Link href={create.url()}>
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                            Add Disk Spec
+                        </Button>
+                    </Link>
+                </div>
 
-                <Table>
-                    <TableHeader>
-                        <TableRow>
-                            <TableHead>ID</TableHead>
-                            <TableHead>Manufacturer</TableHead>
-                            <TableHead>Model Number</TableHead>
-                            <TableHead>Capacity (GB)</TableHead>
-                            <TableHead>Interface</TableHead>
-                            <TableHead>Drive Type</TableHead>
-                            <TableHead>Read Speed (MB/s)</TableHead>
-                            <TableHead>Write Speed (MB/s)</TableHead>
-                            <TableHead>Actions</TableHead>
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {diskspecs.data.map((disk) => (
-                            <TableRow key={disk.id}>
-                                <TableCell>{disk.id}</TableCell>
-                                <TableCell className="font-medium">{disk.manufacturer}</TableCell>
-                                <TableCell>{disk.model_number}</TableCell>
-                                <TableCell>{disk.capacity_gb}</TableCell>
-                                <TableCell>{disk.interface}</TableCell>
-                                <TableCell>{disk.drive_type}</TableCell>
-                                <TableCell>{disk.sequential_read_mb}</TableCell>
-                                <TableCell>{disk.sequential_write_mb}</TableCell>
-                                <TableCell>
-                                    <Link href={edit.url(disk.id)}>
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="bg-green-600 hover:bg-green-700 text-white mr-2"
-                                        >
-                                            Edit
-                                        </Button>
-                                    </Link>
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
+                {/* Table Section */}
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHead>ID</TableHead>
+                                <TableHead>Manufacturer</TableHead>
+                                <TableHead>Model Number</TableHead>
+                                <TableHead>Capacity (GB)</TableHead>
+                                <TableHead>Interface</TableHead>
+                                <TableHead>Drive Type</TableHead>
+                                <TableHead>Read Speed (MB/s)</TableHead>
+                                <TableHead>Write Speed (MB/s)</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+
+                        <TableBody>
+                            {diskspecs.data.map((disk) => (
+                                <TableRow key={disk.id}>
+                                    <TableCell>{disk.id}</TableCell>
+                                    <TableCell className="font-medium">{disk.manufacturer}</TableCell>
+                                    <TableCell>{disk.model_number}</TableCell>
+                                    <TableCell>{disk.capacity_gb}</TableCell>
+                                    <TableCell>{disk.interface}</TableCell>
+                                    <TableCell>{disk.drive_type}</TableCell>
+                                    <TableCell>{disk.sequential_read_mb}</TableCell>
+                                    <TableCell>{disk.sequential_write_mb}</TableCell>
+                                    <TableCell className="flex justify-end gap-2">
+                                        <Link href={edit.url(disk.id)}>
                                             <Button
-                                                variant="destructive"
-                                                className="bg-red-600 hover:bg-red-700 text-white"
+                                                variant="outline"
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700 text-white"
                                             >
-                                                Delete
+                                                Edit
                                             </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent>
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Are you sure you want to delete{" "}
-                                                    <strong>
-                                                        {disk.manufacturer} {disk.model_number}
-                                                    </strong>
-                                                    ? This action cannot be undone.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter>
-                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                <AlertDialogAction
-                                                    onClick={() => handleDelete(disk.id)}
-                                                    className="bg-red-600 hover:bg-red-700"
+                                        </Link>
+                                        <AlertDialog>
+                                            <AlertDialogTrigger asChild>
+                                                <Button
+                                                    variant="destructive"
+                                                    size="sm"
+                                                    className="bg-red-600 hover:bg-red-700 text-white"
                                                 >
-                                                    Yes, Delete
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+                                                    Delete
+                                                </Button>
+                                            </AlertDialogTrigger>
+                                            <AlertDialogContent>
+                                                <AlertDialogHeader>
+                                                    <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
+                                                    <AlertDialogDescription>
+                                                        Are you sure you want to delete{" "}
+                                                        <strong>
+                                                            {disk.manufacturer} {disk.model_number}
+                                                        </strong>
+                                                        ? This action cannot be undone.
+                                                    </AlertDialogDescription>
+                                                </AlertDialogHeader>
+                                                <AlertDialogFooter>
+                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                    <AlertDialogAction
+                                                        onClick={() => handleDelete(disk.id)}
+                                                        className="bg-red-600 hover:bg-red-700"
+                                                    >
+                                                        Yes, Delete
+                                                    </AlertDialogAction>
+                                                </AlertDialogFooter>
+                                            </AlertDialogContent>
+                                        </AlertDialog>
+                                    </TableCell>
+                                </TableRow>
+                            ))}
+                        </TableBody>
+
+                        <TableFooter>
+                            <TableRow>
+                                <TableCell colSpan={9} className="text-center font-medium">
+                                    Disk Specs List
                                 </TableCell>
                             </TableRow>
-                        ))}
-                    </TableBody>
-                    <TableFooter>
-                        <TableRow>
-                            <TableCell colSpan={9} className="text-center">
-                                Disk Specs List
-                            </TableCell>
-                        </TableRow>
-                    </TableFooter>
-                </Table>
+                        </TableFooter>
+                    </Table>
+                </div>
 
-                <PaginationNav links={diskspecs.links} className="mt-4" />
+                {/* Pagination */}
+                <div className="flex justify-center">
+                    <PaginationNav links={diskspecs.links} />
+                </div>
             </div>
         </AppLayout>
     );

@@ -16,13 +16,33 @@ class MotherboardSpecSeeder extends Seeder
             ->count(15)
             ->create()
             ->each(function (MotherboardSpec $mb) {
-                $ramIds  = RamSpec::inRandomOrder()->take(3)->pluck('id');
-                $diskIds = DiskSpec::inRandomOrder()->take(2)->pluck('id');
-                $cpuIds  = ProcessorSpec::inRandomOrder()->take(1)->pluck('id');
+                // ✅ Only pick RAM that matches the motherboard memory_type
+                $ramIds = RamSpec::where('type', $mb->memory_type)
+                    ->inRandomOrder()
+                    ->take(3)
+                    ->pluck('id');
 
-                $mb->ramSpecs()->sync($ramIds);
+                // Disks don’t depend on compatibility
+                $diskIds = DiskSpec::inRandomOrder()
+                    ->take(2)
+                    ->pluck('id');
+
+                // ✅ Only pick processors that match the motherboard socket_type
+                $cpuIds = ProcessorSpec::where('socket_type', $mb->socket_type)
+                    ->inRandomOrder()
+                    ->take(1)
+                    ->pluck('id');
+
+                // Sync relationships
+                if ($ramIds->isNotEmpty()) {
+                    $mb->ramSpecs()->sync($ramIds);
+                }
+
                 $mb->diskSpecs()->sync($diskIds);
-                $mb->processorSpecs()->sync($cpuIds);
+
+                if ($cpuIds->isNotEmpty()) {
+                    $mb->processorSpecs()->sync($cpuIds);
+                }
             });
     }
 }
