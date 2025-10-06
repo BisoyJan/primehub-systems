@@ -131,7 +131,7 @@ export default function Index() {
                                 <TableHead>Read Speed (MB/s)</TableHead>
                                 <TableHead>Write Speed (MB/s)</TableHead>
                                 <TableHead>Stocks</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -146,8 +146,23 @@ export default function Index() {
                                     <TableCell>{disk.drive_type}</TableCell>
                                     <TableCell>{disk.sequential_read_mb}</TableCell>
                                     <TableCell>{disk.sequential_write_mb}</TableCell>
-                                    <TableCell>{disk.stock ? disk.stock.quantity : 0}</TableCell>
-                                    <TableCell className="flex justify-end gap-2">
+                                    <TableCell>
+                                        {disk.stock ? disk.stock.quantity : 0}
+
+                                        {(!disk.stock || disk.stock.quantity < 10) && (
+                                            <span
+                                                className={`
+                                        ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
+                                        ${!disk.stock || disk.stock.quantity === 0
+                                                        ? "bg-red-100 text-red-700"
+                                                        : "bg-yellow-100 text-yellow-700"}
+                                                `}
+                                            >
+                                                {!disk.stock || disk.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                                            </span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="flex justify-center gap-2">
                                         <Link href={edit.url(disk.id)}>
                                             <Button
                                                 variant="outline"

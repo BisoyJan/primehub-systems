@@ -133,7 +133,7 @@ export default function Index() {
                                 <TableHead>Capacity (GB)</TableHead>
                                 <TableHead>Speed</TableHead>
                                 <TableHead>Stock</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -148,8 +148,23 @@ export default function Index() {
                                     <TableCell>{ram.type}</TableCell>
                                     <TableCell>{ram.capacity_gb}</TableCell>
                                     <TableCell>{ram.speed}</TableCell>
-                                    <TableCell>{ram.stock ? ram.stock.quantity : 0}</TableCell>
-                                    <TableCell className="flex justify-end gap-2">
+                                    <TableCell>
+                                        {ram.stock ? ram.stock.quantity : 0}
+
+                                        {(!ram.stock || ram.stock.quantity < 10) && (
+                                            <span
+                                                className={`
+                                        ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
+                                        ${!ram.stock || ram.stock.quantity === 0
+                                                        ? "bg-red-100 text-red-700"
+                                                        : "bg-yellow-100 text-yellow-700"}
+                                                `}
+                                            >
+                                                {!ram.stock || ram.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                                            </span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="flex justify-center gap-2">
                                         <Link href={edit.url(ram.id)}>
                                             <Button
                                                 variant="outline"

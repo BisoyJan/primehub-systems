@@ -161,7 +161,7 @@ export default function Index() {
                                 <TableHead>Model</TableHead>
                                 <TableHead>Chipset</TableHead>
                                 <TableHead>Memory</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -173,7 +173,7 @@ export default function Index() {
                                     <TableCell>{mb.model}</TableCell>
                                     <TableCell>{mb.chipset}</TableCell>
                                     <TableCell>{mb.memory_type}</TableCell>
-                                    <TableCell className="flex justify-end gap-2">
+                                    <TableCell className="flex justify-center gap-2">
                                         {/* Edit */}
                                         <Link href={motherboardEdit.url(mb.id)}>
                                             <Button

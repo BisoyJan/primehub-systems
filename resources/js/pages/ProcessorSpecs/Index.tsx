@@ -134,7 +134,7 @@ export default function Index() {
                                 <TableHead>Graphics</TableHead>
                                 <TableHead>TDP (W)</TableHead>
                                 <TableHead>Stocks</TableHead>
-                                <TableHead className="text-right">Actions</TableHead>
+                                <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
 
@@ -151,8 +151,23 @@ export default function Index() {
                                     <TableCell>{cpu.boost_clock_ghz} GHz</TableCell>
                                     <TableCell>{cpu.integrated_graphics}</TableCell>
                                     <TableCell>{cpu.tdp_watts}</TableCell>
-                                    <TableCell>{cpu.stock ? cpu.stock.quantity : 0}</TableCell>
-                                    <TableCell className="flex justify-end gap-2">
+                                    <TableCell>
+                                        {cpu.stock ? cpu.stock.quantity : 0}
+
+                                        {(!cpu.stock || cpu.stock.quantity < 10) && (
+                                            <span
+                                                className={`
+                                        ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
+                                        ${!cpu.stock || cpu.stock.quantity === 0
+                                                        ? "bg-red-100 text-red-700"
+                                                        : "bg-yellow-100 text-yellow-700"}
+                                                `}
+                                            >
+                                                {!cpu.stock || cpu.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                                            </span>
+                                        )}
+                                    </TableCell>
+                                    <TableCell className="flex justify-center gap-2">
                                         <Link href={edit.url(cpu.id)}>
                                             <Button
                                                 variant="outline"
