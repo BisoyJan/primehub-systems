@@ -49,7 +49,7 @@ class MotherboardSpecController extends Controller
                     'id'             => $r->id,
                     'label'          => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
                     'type'           => $r->type,
-                    'stock_quantity' => $r->stock?->quantity ?? 0, // 👈 now works
+                    'stock_quantity' => $r->stock?->quantity ?? 0,
                 ]),
 
             'diskOptions' => DiskSpec::with('stock')->get()
@@ -264,21 +264,18 @@ class MotherboardSpecController extends Controller
      */
     public function destroy(MotherboardSpec $motherboard)
     {
-        // ✅ Restore RAM stock
         foreach ($motherboard->ramSpecs as $ram) {
             if ($ram->stock) {
                 $ram->stock->increment('quantity', $ram->pivot->quantity);
             }
         }
 
-        // ✅ Restore disk stock
         foreach ($motherboard->diskSpecs as $disk) {
             if ($disk->stock) {
                 $disk->stock->increment('quantity');
             }
         }
 
-        // ✅ Restore processor stock
         foreach ($motherboard->processorSpecs as $cpu) {
             if ($cpu->stock) {
                 $cpu->stock->increment('quantity');
