@@ -29,4 +29,9 @@ class ProcessorSpec extends Model
             'motherboard_spec_id'
         );
     }
+
+    public function stock()
+    {
+        return $this->morphOne(Stock::class, 'stockable');
+    }
 }

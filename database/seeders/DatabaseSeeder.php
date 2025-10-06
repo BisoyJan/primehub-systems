@@ -31,6 +31,11 @@ class DatabaseSeeder extends Seeder
         RamSpec::factory()->count(15)->create();
         DiskSpec::factory()->count(15)->create();
         ProcessorSpec::factory()->count(15)->create();
-        $this->call(MotherboardSpecSeeder::class);
+        $this->call(
+            [
+                StockSeeder::class,
+                MotherboardSpecSeeder::class,
+            ]
+        );
     }
 }

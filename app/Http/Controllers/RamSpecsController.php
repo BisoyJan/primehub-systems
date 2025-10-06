@@ -13,7 +13,7 @@ class RamSpecsController extends Controller
      */
     public function index(Request $request)
     {
-        $query = RamSpec::query();
+        $query = RamSpec::with('stock');
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {

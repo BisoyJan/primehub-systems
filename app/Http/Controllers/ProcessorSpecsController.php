@@ -13,7 +13,7 @@ class ProcessorSpecsController extends Controller
      */
     public function index(Request $request)
     {
-        $query = ProcessorSpec::query();
+        $query = ProcessorSpec::with('stock');
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {

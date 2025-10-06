@@ -42,6 +42,11 @@ interface DiskSpec {
     drive_type: string;
     sequential_read_mb: number;
     sequential_write_mb: number;
+    stock?: Stock | null;
+}
+
+interface Stock {
+    quantity: number;
 }
 
 interface PaginatedDiskSpecs {
@@ -125,6 +130,7 @@ export default function Index() {
                                 <TableHead>Drive Type</TableHead>
                                 <TableHead>Read Speed (MB/s)</TableHead>
                                 <TableHead>Write Speed (MB/s)</TableHead>
+                                <TableHead>Stocks</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -140,6 +146,7 @@ export default function Index() {
                                     <TableCell>{disk.drive_type}</TableCell>
                                     <TableCell>{disk.sequential_read_mb}</TableCell>
                                     <TableCell>{disk.sequential_write_mb}</TableCell>
+                                    <TableCell>{disk.stock ? disk.stock.quantity : 0}</TableCell>
                                     <TableCell className="flex justify-end gap-2">
                                         <Link href={edit.url(disk.id)}>
                                             <Button
@@ -189,7 +196,7 @@ export default function Index() {
 
                         <TableFooter>
                             <TableRow>
-                                <TableCell colSpan={9} className="text-center font-medium">
+                                <TableCell colSpan={10} className="text-center font-medium">
                                     Disk Specs List
                                 </TableCell>
                             </TableRow>

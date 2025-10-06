@@ -43,6 +43,11 @@ interface ProcessorSpec {
     boost_clock_ghz: number;
     integrated_graphics: string;
     tdp_watts: number;
+    stock?: Stock | null;
+}
+
+interface Stock {
+    quantity: number;
 }
 
 interface PaginatedProcessorSpecs {
@@ -128,6 +133,7 @@ export default function Index() {
                                 <TableHead>Boost Clock</TableHead>
                                 <TableHead>Graphics</TableHead>
                                 <TableHead>TDP (W)</TableHead>
+                                <TableHead>Stocks</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -145,6 +151,7 @@ export default function Index() {
                                     <TableCell>{cpu.boost_clock_ghz} GHz</TableCell>
                                     <TableCell>{cpu.integrated_graphics}</TableCell>
                                     <TableCell>{cpu.tdp_watts}</TableCell>
+                                    <TableCell>{cpu.stock ? cpu.stock.quantity : 0}</TableCell>
                                     <TableCell className="flex justify-end gap-2">
                                         <Link href={edit.url(cpu.id)}>
                                             <Button
@@ -191,7 +198,7 @@ export default function Index() {
 
                         <TableFooter>
                             <TableRow>
-                                <TableCell colSpan={11} className="text-center font-medium">
+                                <TableCell colSpan={12} className="text-center font-medium">
                                     Processor Specs List
                                 </TableCell>
                             </TableRow>

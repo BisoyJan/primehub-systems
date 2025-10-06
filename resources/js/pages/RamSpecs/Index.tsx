@@ -41,6 +41,11 @@ interface RamSpec {
     speed: string;
     form_factor: string;
     voltage: number;
+    stock?: Stock | null;
+}
+
+interface Stock {
+    quantity: number;
 }
 
 interface PaginatedRamSpecs {
@@ -127,6 +132,7 @@ export default function Index() {
                                 <TableHead>Type</TableHead>
                                 <TableHead>Capacity (GB)</TableHead>
                                 <TableHead>Speed</TableHead>
+                                <TableHead>Stock</TableHead>
                                 <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -142,6 +148,7 @@ export default function Index() {
                                     <TableCell>{ram.type}</TableCell>
                                     <TableCell>{ram.capacity_gb}</TableCell>
                                     <TableCell>{ram.speed}</TableCell>
+                                    <TableCell>{ram.stock ? ram.stock.quantity : 0}</TableCell>
                                     <TableCell className="flex justify-end gap-2">
                                         <Link href={edit.url(ram.id)}>
                                             <Button

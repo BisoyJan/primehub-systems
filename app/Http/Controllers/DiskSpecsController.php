@@ -13,15 +13,15 @@ class DiskSpecsController extends Controller
      */
     public function index(Request $request)
     {
-        $query = DiskSpec::query();
+        $query = DiskSpec::with('stock');
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('manufacturer', 'like', "%{$search}%")
-                  ->orWhere('model_number', 'like', "%{$search}%")
-                  ->orWhere('interface', 'like', "%{$search}%")
-                  ->orWhere('drive_type', 'like', "%{$search}%")
-                  ->orWhere('capacity_gb', 'like', "%{$search}%");
+                    ->orWhere('model_number', 'like', "%{$search}%")
+                    ->orWhere('interface', 'like', "%{$search}%")
+                    ->orWhere('drive_type', 'like', "%{$search}%")
+                    ->orWhere('capacity_gb', 'like', "%{$search}%");
             });
         }
 
