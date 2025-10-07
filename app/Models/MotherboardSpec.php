@@ -33,7 +33,7 @@ class MotherboardSpec extends Model
             'motherboard_spec_ram_spec',
             'motherboard_spec_id',
             'ram_spec_id'
-        );
+        )->withPivot('quantity')->withTimestamps();
     }
 
     public function diskSpecs()
