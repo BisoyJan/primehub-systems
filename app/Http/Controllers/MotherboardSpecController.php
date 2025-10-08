@@ -61,7 +61,7 @@ class MotherboardSpecController extends Controller
                 ])->toArray(),
             ]);
 
-        return Inertia::render('Motherboards/Index', [
+        return Inertia::render('Computer/Motherboards/Index', [
             'motherboards' => $motherboards,
         ]);
     }
@@ -71,7 +71,7 @@ class MotherboardSpecController extends Controller
      */
     public function create()
     {
-        return Inertia::render('Motherboards/Create', [
+        return Inertia::render('Computer/Motherboards/Create', [
             'ramOptions' => RamSpec::with('stock')->get()
                 ->map(fn($r) => [
                     'id'             => $r->id,
@@ -324,7 +324,7 @@ class MotherboardSpecController extends Controller
      */
     public function edit(MotherboardSpec $motherboard)
     {
-        return Inertia::render('Motherboards/Edit', [
+        return Inertia::render('Computer/Motherboards/Edit', [
             'motherboard' => [
                 'id'                  => $motherboard->id,
                 'brand'               => $motherboard->brand,

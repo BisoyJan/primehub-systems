@@ -30,7 +30,7 @@ class DiskSpecsController extends Controller
             ->paginate(10)
             ->appends(['search' => $search]);
 
-        return inertia('DiskSpecs/Index', [
+        return inertia('Computer/DiskSpecs/Index', [
             'diskspecs' => $diskspecs,
             'search'    => $search,
         ]);
@@ -41,7 +41,7 @@ class DiskSpecsController extends Controller
      */
     public function create()
     {
-        return inertia('DiskSpecs/Create');
+        return inertia('Computer/DiskSpecs/Create');
     }
 
     /**
@@ -81,7 +81,7 @@ class DiskSpecsController extends Controller
      */
     public function edit(string $diskspec)
     {
-        return inertia('DiskSpecs/Edit', [
+        return inertia('Computer/DiskSpecs/Edit', [
             'diskspec' => DiskSpec::findOrFail($diskspec),
         ]);
     }

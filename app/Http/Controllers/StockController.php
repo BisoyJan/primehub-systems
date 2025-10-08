@@ -104,7 +104,7 @@ class StockController extends Controller
         $paginatorArray = $paginated->toArray();
         $links = $paginatorArray['links'] ?? [];
 
-        return \Inertia\Inertia::render('Stocks/Index', [
+        return \Inertia\Inertia::render('Computer/Stocks/Index', [
             'stocks' => [
                 'data'  => $items,
                 'links' => $links,
