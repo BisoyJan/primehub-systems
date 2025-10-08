@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Head, useForm, usePage, router } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { Page as InertiaPage } from '@inertiajs/core';
 import { toast } from 'sonner';
 import { Plus, Trash, Edit, RefreshCw } from 'lucide-react';
@@ -74,6 +74,7 @@ type StocksPayload = {
 type PageProps = {
     stocks?: StocksPayload;
     filterType?: string;
+    search?: string; // initial hydration only; search is client-side now
     flash?: { message?: string; type?: string };
 };
 
@@ -88,8 +89,13 @@ export default function Index() {
     const [rows, setRows] = useState<StockRow[]>(initialStocks);
     const [links, setLinks] = useState<PaginationLink[]>(initialLinks);
     const [loading, setLoading] = useState(false);
+
+    // Server-driven narrow filter by type
     const [filterType, setFilterType] = useState<SpecType | 'all'>(initialFilter);
-    const [queryIds, setQueryIds] = useState<string>('');
+
+    // Frontend-only search term
+    const [search, setSearch] = useState(props.search || '');
+
     const [pollMs, setPollMs] = useState<number | null>(null);
 
     const [open, setOpen] = useState(false);
@@ -126,13 +132,12 @@ export default function Index() {
         setLinks(initialLinks);
     }, [page.props]);
 
+    // Fetch from server when type changes (search is client-side)
     const fetchIndex = useCallback((pageUrl?: string) => {
         setLoading(true);
 
-        const params: Record<string, string | number | string[]> = {};
+        const params: Record<string, string> = {};
         if (filterType !== 'all') params.type = filterType;
-        const ids = queryIds.split(',').map((s) => s.trim()).filter(Boolean);
-        if (ids.length) params['ids[]'] = ids;
 
         const url = pageUrl ?? stocksIndex().url;
 
@@ -147,13 +152,13 @@ export default function Index() {
             },
             onFinish: () => setLoading(false),
         });
-    }, [filterType, queryIds]);
+    }, [filterType]);
 
     useEffect(() => {
-        if (filterType !== initialFilter || queryIds !== '') {
+        if (filterType !== initialFilter) {
             fetchIndex();
         }
-    }, [filterType, queryIds, initialFilter, fetchIndex]);
+    }, [filterType, initialFilter, fetchIndex]);
 
     useEffect(() => {
         if (!pollMs || pollMs <= 0) return;
@@ -237,10 +242,10 @@ export default function Index() {
         }
     }
 
-    // Quick adjust dialog handlers
+    // Quick adjust dialog
     function openQuickAdjust(row: StockRow) {
         setAdjustRow(row);
-        setAdjustDelta('1');
+        setAdjustDelta('-1');
         setAdjustOpen(true);
     }
 
@@ -258,6 +263,7 @@ export default function Index() {
         }, {
             preserveScroll: true,
             onSuccess: () => {
+                toast.success('Adjusted');
                 setAdjustOpen(false);
                 setAdjustRow(null);
                 fetchIndex();
@@ -266,7 +272,7 @@ export default function Index() {
         });
     }
 
-    // Delete confirm dialog handlers
+    // Delete confirm dialog
     function openDeleteConfirm(row: StockRow) {
         setDeleteRow(row);
         setDeleteOpen(true);
@@ -286,9 +292,57 @@ export default function Index() {
         });
     }
 
+    // FRONTEND-ONLY FILTERING
+    function normalize(str?: string | null) {
+        return (str ?? '').toLowerCase().trim();
+    }
+
+    function matchesSearch(row: StockRow, type: SpecType, term: string) {
+        if (!term) return true;
+        const t = normalize(term);
+        const s = row.stockable ?? {};
+
+        if (type === 'ram') {
+            return [s.manufacturer, s.model, s.label]
+                .map(normalize)
+                .some((v) => v.includes(t));
+        }
+
+        if (type === 'disk') {
+            return [s.manufacturer, s.model_number, s.brand, s.model, s.label]
+                .map(normalize)
+                .some((v) => v.includes(t));
+        }
+
+        if (type === 'processor') {
+            return [s.brand, s.series, s.label]
+                .map(normalize)
+                .some((v) => v.includes(t));
+        }
+
+        return true;
+    }
+
+    const displayedRows = useMemo(() => {
+        if (filterType === 'all') {
+            if (!search) return rows;
+            const t = normalize(search);
+            return rows.filter((row) => {
+                const s = row.stockable ?? {};
+                return [s.manufacturer, s.model_number, s.model, s.brand, s.series, s.label]
+                    .map(normalize)
+                    .some((v) => v.includes(t));
+            });
+        }
+
+        return rows
+            .filter((r) => mapTypeFromStockable(r.stockable_type) === filterType)
+            .filter((r) => matchesSearch(r, filterType as SpecType, search));
+    }, [rows, filterType, search]);
+
     const rowCountLabel = useMemo(
-        () => `${rows.length} row${rows.length !== 1 ? 's' : ''}`,
-        [rows]
+        () => `${displayedRows.length} row${displayedRows.length !== 1 ? 's' : ''}`,
+        [displayedRows]
     );
 
     return (
@@ -300,6 +354,7 @@ export default function Index() {
                     <h2 className="text-xl font-semibold">Stock Management</h2>
 
                     <div className="ml-auto flex items-center gap-2">
+                        {/* Type selector */}
                         <Select
                             value={filterType}
                             onValueChange={(v: string) => setFilterType(v as SpecType | 'all')}
@@ -315,12 +370,22 @@ export default function Index() {
                             </SelectContent>
                         </Select>
 
-                        <Input
-                            placeholder="ids, e.g. 1,2,3"
-                            value={queryIds}
-                            onChange={(e) => setQueryIds(e.target.value)}
-                            className="w-52"
-                        />
+                        {/* Frontend-only search visible when a specific type is chosen */}
+                        {filterType !== 'all' && (
+                            <form
+                                onSubmit={(e) => e.preventDefault()}
+                                className="flex gap-2"
+                            >
+                                <Input
+                                    placeholder={`Search ${filterType}...`}
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="w-64"
+                                />
+                                <Button type="button" onClick={() => setSearch('')}>Clear</Button>
+                            </form>
+                        )}
+
                         <Button onClick={() => fetchIndex()}>
                             <RefreshCw size={16} />
                         </Button>
@@ -354,6 +419,7 @@ export default function Index() {
                                     <TableHead>Type</TableHead>
                                     <TableHead>Manufacturer / Brand</TableHead>
                                     <TableHead>Model / Series</TableHead>
+                                    <TableHead>Spec</TableHead>
                                     <TableHead>Quantity</TableHead>
                                     <TableHead>Reserved</TableHead>
                                     <TableHead>Location</TableHead>
@@ -362,7 +428,7 @@ export default function Index() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {rows.map((row) => (
+                                {displayedRows.map((row) => (
                                     <TableRow key={row.id}>
                                         <TableCell>{row.id}</TableCell>
                                         <TableCell>{mapTypeFromStockable(row.stockable_type)}</TableCell>
@@ -374,6 +440,19 @@ export default function Index() {
                                                 row.stockable?.model ??
                                                 row.stockable?.series ??
                                                 '-'}
+                                        </TableCell>
+                                        <TableCell>
+                                            <Link
+                                                href={
+                                                    stocksIndex().url +
+                                                    `?ids[]=${row.stockable_id}&type=${mapTypeFromStockable(
+                                                        row.stockable_type
+                                                    )}`
+                                                }
+                                                className="text-blue-600 hover:underline"
+                                            >
+                                                {getLabel(row)}
+                                            </Link>
                                         </TableCell>
                                         <TableCell>{row.quantity}</TableCell>
                                         <TableCell>{row.reserved}</TableCell>
@@ -395,10 +474,10 @@ export default function Index() {
                                     </TableRow>
                                 ))}
 
-                                {rows.length === 0 && !loading && (
+                                {displayedRows.length === 0 && !loading && (
                                     <TableRow>
                                         <TableCell
-                                            colSpan={9}
+                                            colSpan={10}
                                             className="py-8 text-center text-gray-500"
                                         >
                                             No stocks
@@ -417,6 +496,7 @@ export default function Index() {
                     </div>
                 </div>
 
+                {/* Pagination note: during client-side search, these reflect the unfiltered dataset */}
                 <div className="flex justify-center mt-4">
                     {links && links.length > 0 && <PaginationNav links={links} />}
                 </div>
@@ -526,7 +606,7 @@ export default function Index() {
                     setAdjustOpen(o);
                     if (!o) {
                         setAdjustRow(null);
-                        setAdjustDelta('1');
+                        setAdjustDelta('-1');
                     }
                 }}
             >

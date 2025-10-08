@@ -29,7 +29,7 @@ class RamSpecsController extends Controller
             ->latest()
             ->paginate(10)
             ->appends(['search' => $search]);
-        return inertia('RamSpecs/Index', [
+        return inertia('Computer/RamSpecs/Index', [
             'ramspecs' => $ramspecs,
             'search' => $search,
         ]);
@@ -40,7 +40,7 @@ class RamSpecsController extends Controller
      */
     public function create()
     {
-        return inertia('RamSpecs/Create', []);
+        return inertia('Computer/RamSpecs/Create', []);
     }
 
     /**
@@ -86,7 +86,7 @@ class RamSpecsController extends Controller
      */
     public function edit(string $ramspec)
     {
-        return inertia('RamSpecs/Edit', [
+        return inertia('Computer/RamSpecs/Edit', [
             'ramspec' => RamSpec::findOrFail($ramspec)
         ]);
 

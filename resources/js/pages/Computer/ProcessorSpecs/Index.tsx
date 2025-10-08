@@ -1,5 +1,5 @@
-import { useEffect } from "react";
-import { Head, Link, useForm, usePage } from "@inertiajs/react";
+import { useEffect, useState } from "react";
+import { Head, Link, useForm, usePage, router } from "@inertiajs/react";
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import { toast } from "sonner";
 
@@ -25,10 +25,20 @@ import {
     AlertDialogTitle,
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 
 import { dashboard } from "@/routes";
 import { create, edit, destroy, index } from "@/routes/processorspecs";
+import { store as stocksStore } from "@/routes/stocks";
 
 const breadcrumbs = [{ title: "ProcessorSpecs", href: dashboard().url }];
 
@@ -48,6 +58,9 @@ interface ProcessorSpec {
 
 interface Stock {
     quantity: number;
+    reserved?: number;
+    location?: string | null;
+    notes?: string | null;
 }
 
 interface PaginatedProcessorSpecs {
@@ -89,6 +102,60 @@ export default function Index() {
             preserveScroll: true,
         });
     };
+
+    // Add stock dialog state (autofill from existing stock if present)
+    const [addOpen, setAddOpen] = useState(false);
+    const [targetCpu, setTargetCpu] = useState<ProcessorSpec | null>(null);
+    const [qty, setQty] = useState<string>("1");
+    const [reserved, setReserved] = useState<string>("0");
+    const [location, setLocation] = useState<string>("");
+    const [notes, setNotes] = useState<string>("");
+
+    function openAddStockDialog(cpu: ProcessorSpec) {
+        setTargetCpu(cpu);
+        const current = cpu.stock;
+        setQty(String(current?.quantity ?? 1));
+        setReserved(String(current?.reserved ?? 0));
+        setLocation(current?.location ?? "");
+        setNotes(current?.notes ?? "");
+        setAddOpen(true);
+    }
+
+    function submitAddStock() {
+        if (!targetCpu) return;
+        const quantity = Number(qty);
+        const resv = Number(reserved);
+        if (Number.isNaN(quantity) || quantity < 0) {
+            toast.error("Quantity must be a non-negative number");
+            return;
+        }
+        if (Number.isNaN(resv) || resv < 0) {
+            toast.error("Reserved must be a non-negative number");
+            return;
+        }
+
+        router.post(
+            stocksStore().url,
+            {
+                type: "processor",
+                stockable_id: targetCpu.id,
+                quantity,
+                reserved: resv,
+                location: location || null,
+                notes: notes || null,
+            },
+            {
+                preserveScroll: true,
+                onSuccess: () => {
+                    toast.success("Stock added");
+                    setAddOpen(false);
+                    setTargetCpu(null);
+                    form.get(index.url(), { preserveState: true, preserveScroll: true });
+                },
+                onError: () => toast.error("Failed to add stock"),
+            }
+        );
+    }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -153,17 +220,16 @@ export default function Index() {
                                     <TableCell>{cpu.tdp_watts}</TableCell>
                                     <TableCell>
                                         {cpu.stock ? cpu.stock.quantity : 0}
-
                                         {(!cpu.stock || cpu.stock.quantity < 10) && (
                                             <span
-                                                className={`
-                                        ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
-                                        ${!cpu.stock || cpu.stock.quantity === 0
+                                                className={`ml-2 px-2 py-0.5 rounded-full text-xs font-semibold ${!cpu.stock || cpu.stock.quantity === 0
                                                         ? "bg-red-100 text-red-700"
-                                                        : "bg-yellow-100 text-yellow-700"}
-                                                `}
+                                                        : "bg-yellow-100 text-yellow-700"
+                                                    }`}
                                             >
-                                                {!cpu.stock || cpu.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                                                {!cpu.stock || cpu.stock.quantity === 0
+                                                    ? "Out of Stock"
+                                                    : "Low Stock"}
                                             </span>
                                         )}
                                     </TableCell>
@@ -177,6 +243,18 @@ export default function Index() {
                                                 Edit
                                             </Button>
                                         </Link>
+
+                                        {/* Add stock button */}
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                                            onClick={() => openAddStockDialog(cpu)}
+                                        >
+                                            Add Stock
+                                        </Button>
+
+                                        {/* Delete with confirmation */}
                                         <AlertDialog>
                                             <AlertDialogTrigger asChild>
                                                 <Button
@@ -226,6 +304,81 @@ export default function Index() {
                     <PaginationNav links={processorspecs.links} />
                 </div>
             </div>
+
+            {/* Add Stock Dialog */}
+            <Dialog
+                open={addOpen}
+                onOpenChange={(o) => {
+                    setAddOpen(o);
+                    if (!o) {
+                        setTargetCpu(null);
+                        setQty("1");
+                        setReserved("0");
+                        setLocation("");
+                        setNotes("");
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <h3 className="text-lg font-semibold">Add Stock</h3>
+                        {targetCpu && (
+                            <p className="text-sm text-muted-foreground">
+                                {targetCpu.brand} {targetCpu.series}
+                            </p>
+                        )}
+                    </DialogHeader>
+
+                    <div className="grid grid-cols-1 gap-3 py-2">
+                        <div>
+                            <Label>Quantity</Label>
+                            <Input
+                                type="number"
+                                value={qty}
+                                onChange={(e) => setQty(e.target.value)}
+                                min={0}
+                                placeholder="e.g. 10"
+                            />
+                        </div>
+
+                        <div>
+                            <Label>Reserved</Label>
+                            <Input
+                                type="number"
+                                value={reserved}
+                                onChange={(e) => setReserved(e.target.value)}
+                                min={0}
+                                placeholder="e.g. 0"
+                            />
+                        </div>
+
+                        <div>
+                            <Label>Location</Label>
+                            <Input
+                                value={location}
+                                onChange={(e) => setLocation(e.target.value)}
+                                placeholder="Shelf A-3"
+                            />
+                        </div>
+
+                        <div>
+                            <Label>Notes</Label>
+                            <Input
+                                value={notes}
+                                onChange={(e) => setNotes(e.target.value)}
+                                placeholder="Batch arrival details"
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex gap-2">
+                        <Button variant="outline" onClick={() => setAddOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submitAddStock}>Add</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
