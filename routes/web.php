@@ -4,6 +4,7 @@ use App\Http\Controllers\ProcessorSpecsController;
 use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\RamSpecsController;
 use App\Http\Controllers\MotherboardSpecController;
+use App\Http\Controllers\StockController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -24,6 +25,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->except(['show']);
     Route::resource('motherboards', MotherboardSpecController::class)
         ->except(['show']);
+    Route::resource('stocks', StockController::class);
 });
 
 require __DIR__ . '/settings.php';

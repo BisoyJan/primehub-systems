@@ -8,9 +8,8 @@ use App\Models\DiskSpec;
 use App\Models\ProcessorSpec;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Inertia\Inertia;
 use Illuminate\Validation\ValidationException;
-
+use Inertia\Inertia;
 
 class MotherboardSpecController extends Controller
 {
@@ -30,7 +29,6 @@ class MotherboardSpecController extends Controller
                 'memory_type'     => $mb->memory_type,
                 'form_factor'     => $mb->form_factor,
                 'socket_type'     => $mb->socket_type,
-                // include ramSpecs as full objects expected by frontend (with optional pivot.quantity)
                 'ramSpecs'        => $mb->ramSpecs->map(fn($r) => [
                     'id'           => $r->id,
                     'manufacturer' => $r->manufacturer,
@@ -79,13 +77,14 @@ class MotherboardSpecController extends Controller
                     'id'             => $r->id,
                     'label'          => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
                     'type'           => $r->type,
+                    'capacity_gb'    => $r->capacity_gb, // <-- add this
                     'stock_quantity' => $r->stock?->quantity ?? 0,
                 ]),
 
             'diskOptions' => DiskSpec::with('stock')->get()
                 ->map(fn($d) => [
                     'id'             => $d->id,
-                    'label'          => "{$d->manufacturer} {$d->model_number} {$d->capacity_gb}GB",
+                    'label'          => "{$d->manufacturer} {$d->model_number} - {$d->interface} {$d->capacity_gb}GB",
                     'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
 
@@ -125,87 +124,125 @@ class MotherboardSpecController extends Controller
     }
 
     /**
-     * Attach with stock checks and decrements (for create)
+     * Reserve and decrement stock for given items inside a transaction-safe lock.
+     * items: [specId => qty]
+     * modelClass: RamSpec::class | DiskSpec::class | ProcessorSpec::class
      */
-    protected function createAndAttachWithStock(MotherboardSpec $mb, array $ramSpecs, array $diskSpecs = [])
+    protected function reserveAndDecrement(array $items, string $modelClass, string $label): void
     {
-        // check availability first
-        foreach ($ramSpecs as $id => $qty) {
-            $ram = RamSpec::with('stock')->find($id);
-            if (! $ram || ! $ram->stock || $ram->stock->quantity < $qty) {
-                abort(422, "Not enough stock for RAM #{$id}");
+        $items = collect($items)->mapWithKeys(fn($q, $id) => [(int)$id => (int)$q])->filter()->toArray();
+        if (empty($items)) return;
+
+        foreach ($items as $id => $qty) {
+            $spec = $modelClass::with('stock')->lockForUpdate()->find($id);
+            if (! $spec || ! $spec->stock) {
+                throw ValidationException::withMessages([$label => "{$label} #{$id} not found or missing stock"]);
             }
-        }
-
-        foreach ($diskSpecs as $id => $qty) {
-            $disk = DiskSpec::with('stock')->find($id);
-            if (! $disk || ! $disk->stock || $disk->stock->quantity < $qty) {
-                abort(422, "Not enough stock for Disk #{$id}");
+            if ($spec->stock->quantity < $qty) {
+                throw ValidationException::withMessages([$label => "Not enough stock for {$label} '{$id}' (requested {$qty}, available {$spec->stock->quantity})"]);
             }
-        }
-
-        // attach ram with pivot quantities and decrement stock
-        $mb->ramSpecs()->sync(collect($ramSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
-        foreach ($ramSpecs as $id => $qty) {
-            RamSpec::find($id)->stock->decrement('quantity', $qty);
-        }
-
-        // attach disks (if you track quantities on disk pivot, adapt similarly)
-        $mb->diskSpecs()->sync(array_keys($diskSpecs));
-        foreach ($diskSpecs as $id => $qty) {
-            DiskSpec::find($id)->stock->decrement('quantity', $qty);
+            $spec->stock->decrement('quantity', $qty);
         }
     }
 
     /**
-     * Update existing motherboard with stock diffs (for update)
+     * Update stock diffs for RAM (increment where removed, decrement where added).
+     * newItems: [id => qty]
      */
-    protected function updateWithStockDiffs(MotherboardSpec $mb, array $newRamSpecs, array $newDiskSpecs = [])
+    protected function applyRamStockDiffs(MotherboardSpec $mb, array $newItems): void
     {
+        // existing pivot quantities keyed by ram_spec_id => qty
         $existing = $mb->ramSpecs()->pluck('motherboard_spec_ram_spec.quantity', 'ram_spec_id')
             ->mapWithKeys(fn($v, $k) => [(int)$k => (int)$v])
             ->toArray();
 
-        // restore stock where decreased or removed
+        // restore stock for decreases / removals
         foreach ($existing as $id => $oldQty) {
-            $newQty = $newRamSpecs[$id] ?? 0;
+            $newQty = $newItems[$id] ?? 0;
             if ($newQty < $oldQty) {
-                RamSpec::find($id)->stock->increment('quantity', $oldQty - $newQty);
+                $ram = RamSpec::with('stock')->lockForUpdate()->find($id);
+                if ($ram && $ram->stock) {
+                    $ram->stock->increment('quantity', $oldQty - $newQty);
+                }
             }
         }
 
-        // ensure availability for increases/new additions and decrement
-        foreach ($newRamSpecs as $id => $qty) {
+        // reserve and decrement for increases / new
+        foreach ($newItems as $id => $qty) {
             $oldQty = $existing[$id] ?? 0;
             if ($qty > $oldQty) {
-                $ram = RamSpec::with('stock')->find($id);
-                if (! $ram || ! $ram->stock || $ram->stock->quantity < ($qty - $oldQty)) {
-                    abort(422, "Not enough stock for RAM #{$id}");
+                $ram = RamSpec::with('stock')->lockForUpdate()->find($id);
+                if (! $ram || ! $ram->stock) {
+                    throw ValidationException::withMessages(['RAM' => "RAM #{$id} not found or missing stock"]);
                 }
-                $ram->stock->decrement('quantity', $qty - $oldQty);
+                $needed = $qty - $oldQty;
+                if ($ram->stock->quantity < $needed) {
+                    throw ValidationException::withMessages(['RAM' => "Not enough stock for RAM '{$id}' (needed {$needed}, available {$ram->stock->quantity})"]);
+                }
+                $ram->stock->decrement('quantity', $needed);
             }
         }
 
-        // sync pivot
-        $mb->ramSpecs()->sync(collect($newRamSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
+        // sync pivot with quantities (performed by caller)
+    }
 
-        // Disk handling (presence-based): restore and decrement by presence difference
-        $existingDisks = $mb->diskSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
-        $toRemove = array_diff($existingDisks, array_keys($newDiskSpecs));
-        $toAdd = array_diff(array_keys($newDiskSpecs), $existingDisks);
+    /**
+     * Apply disk presence diffs (presence-based disks). If disk pivot tracks quantity, adapt accordingly.
+     * newItems: [id => qty] (qty used if pivot quantity supported)
+     */
+    protected function applyDiskStockDiffs(MotherboardSpec $mb, array $newItems): void
+    {
+        $existingIds = $mb->diskSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
+        $newIds = array_map('intval', array_keys($newItems));
+
+        $toRemove = array_diff($existingIds, $newIds);
+        $toAdd = array_diff($newIds, $existingIds);
 
         foreach ($toRemove as $id) {
-            DiskSpec::find($id)->stock->increment('quantity', 1);
+            $disk = DiskSpec::with('stock')->lockForUpdate()->find($id);
+            if ($disk && $disk->stock) {
+                $disk->stock->increment('quantity', 1);
+            }
         }
         foreach ($toAdd as $id) {
-            $disk = DiskSpec::with('stock')->find($id);
-            if (! $disk || ! $disk->stock || $disk->stock->quantity < 1) {
-                abort(422, "Not enough stock for Disk #{$id}");
+            $disk = DiskSpec::with('stock')->lockForUpdate()->find($id);
+            if (! $disk || ! $disk->stock) {
+                throw ValidationException::withMessages(['Disk' => "Disk #{$id} not found or missing stock"]);
+            }
+            if ($disk->stock->quantity < 1) {
+                throw ValidationException::withMessages(['Disk' => "Not enough stock for Disk '{$id}'"]);
             }
             $disk->stock->decrement('quantity', 1);
         }
+    }
 
-        $mb->diskSpecs()->sync(array_keys($newDiskSpecs));
+    /**
+     * Apply processor presence diffs (presence-based).
+     * newIds: array of processor ids
+     */
+    protected function applyProcessorStockDiffs(MotherboardSpec $mb, array $newIds): void
+    {
+        $existing = $mb->processorSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
+        $toRemove = array_diff($existing, $newIds);
+        $toAdd = array_diff($newIds, $existing);
+
+        foreach ($toRemove as $id) {
+            $cpu = ProcessorSpec::with('stock')->lockForUpdate()->find($id);
+            if ($cpu && $cpu->stock) {
+                $cpu->stock->increment('quantity', 1);
+            }
+        }
+
+        foreach ($toAdd as $id) {
+            $cpu = ProcessorSpec::with('stock')->lockForUpdate()->find($id);
+            if (! $cpu || ! $cpu->stock) {
+                throw ValidationException::withMessages(['Processor' => "Processor #{$id} not found or missing stock"]);
+            }
+            if ($cpu->stock->quantity < 1) {
+                throw ValidationException::withMessages(['Processor' => "Not enough stock for Processor '{$id}'"]);
+            }
+            $cpu->stock->decrement('quantity', 1);
+        }
     }
 
     /**
@@ -242,45 +279,44 @@ class MotherboardSpecController extends Controller
 
         // allow unused slots: total sticks must be <= ram_slots
         $totalRamSticks = array_sum($ramSpecs);
-        if ($totalRamSticks > (int)$request->input('ram_slots')) {
-            return back()->withErrors([
-                'ram_specs' => "Total RAM sticks ({$totalRamSticks}) exceeds available ram_slots ({$request->ram_slots}).",
-            ])->withInput();
+        $ramSlots = (int) $request->input('ram_slots');
+        if ($totalRamSticks > $ramSlots) {
+            throw ValidationException::withMessages([
+                'ram_specs' => "You selected {$totalRamSticks} RAM sticks, but the motherboard only supports {$ramSlots} slots.",
+            ]);
         }
 
-        /* inside store() after $ramSpecs computed */
+
+        // capacity check: ensure total installed capacity does not exceed motherboard max
         $totalCapacityGb = $this->computeTotalRamCapacity($ramSpecs);
         $maxCapacityGb = (int) ($request->input('max_ram_capacity_gb') ?? 0);
         if ($maxCapacityGb > 0 && $totalCapacityGb > $maxCapacityGb) {
             throw ValidationException::withMessages([
-                'ram_specs' => "Selected modules total {$totalCapacityGb} GB which exceeds motherboard max capacity of {$maxCapacityGb} GB."
+                'ram_specs' => "Selected modules total {$totalCapacityGb} GB which exceeds motherboard max capacity of {$maxCapacityGb} GB.",
             ]);
         }
 
-        DB::beginTransaction();
-        try {
+        // Use transaction with retry attempts to reduce deadlock risk
+        DB::transaction(function () use ($data, $ramSpecs, $diskSpecs) {
             $mb = MotherboardSpec::create($data);
 
-            $this->createAndAttachWithStock($mb, $ramSpecs, $diskSpecs);
+            // reserve/decrement stock for RAM and disks and processors inside transaction with locks
+            $this->reserveAndDecrement($ramSpecs, RamSpec::class, 'RAM');
+            $this->reserveAndDecrement($diskSpecs, DiskSpec::class, 'Disk');
 
-            // processors
-            $mb->processorSpecs()->sync($data['processor_spec_ids'] ?? []);
-            foreach ($data['processor_spec_ids'] ?? [] as $cpuId) {
-                $cpu = ProcessorSpec::find($cpuId);
-                if ($cpu && $cpu->stock) {
-                    $cpu->stock->decrement('quantity', 1);
-                }
-            }
+            // attach ram with pivot quantities and disk presence (adapt if disk pivot has quantities)
+            $mb->ramSpecs()->sync(collect($ramSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
+            $mb->diskSpecs()->sync(array_keys($diskSpecs));
 
-            DB::commit();
+            // processors (presence-based)
+            $procIds = array_map('intval', $data['processor_spec_ids'] ?? []);
+            $this->reserveAndDecrement(array_fill_keys($procIds, 1), ProcessorSpec::class, 'Processor');
+            $mb->processorSpecs()->sync($procIds);
+        }, 3);
 
-            return redirect()->route('motherboards.index')
-                ->with('message', 'Motherboard created')
-                ->with('type', 'success');
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return back()->withErrors(['error' => $e->getMessage()])->withInput();
-        }
+        return redirect()->route('motherboards.index')
+            ->with('message', 'Motherboard created')
+            ->with('type', 'success');
     }
 
     /**
@@ -306,21 +342,26 @@ class MotherboardSpecController extends Controller
                 'usb_ports'           => $motherboard->usb_ports,
                 'ethernet_speed'      => $motherboard->ethernet_speed,
                 'wifi'                => $motherboard->wifi,
-                'ramSpecs'            => $motherboard->ramSpecs()->pluck('id'),
+                // return pivot-aware ramSpecs as array of {id, pivot: {quantity}}
+                'ramSpecs'            => $motherboard->ramSpecs()->get()->map(fn($r) => [
+                    'id' => $r->id,
+                    'pivot' => ['quantity' => $r->pivot->quantity ?? 1],
+                ])->toArray(),
                 'diskSpecs'           => $motherboard->diskSpecs()->pluck('id'),
                 'processorSpecs'      => $motherboard->processorSpecs()->pluck('id'),
             ],
             'ramOptions' => RamSpec::with('stock')->get()
                 ->map(fn($r) => [
-                    'id'    => $r->id,
-                    'label' => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
-                    'type'  => $r->type,
+                    'id'             => $r->id,
+                    'label'          => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
+                    'type'           => $r->type,
+                    'capacity_gb'    => $r->capacity_gb, // <-- add this
                     'stock_quantity' => $r->stock?->quantity ?? 0,
                 ]),
             'diskOptions' => DiskSpec::with('stock')->get()
                 ->map(fn($d) => [
                     'id'    => $d->id,
-                    'label' => "{$d->manufacturer} {$d->model_number} {$d->capacity_gb}GB",
+                    'label' => "{$d->manufacturer} {$d->model_number} {$d->interface} {$d->capacity_gb}GB",
                     'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
             'processorOptions' => ProcessorSpec::with('stock')->get()
@@ -367,56 +408,43 @@ class MotherboardSpecController extends Controller
 
         // allow unused slots: total sticks must be <= ram_slots
         $totalRamSticks = array_sum($newRamSpecs);
-        if ($totalRamSticks > (int)$request->input('ram_slots')) {
-            return back()->withErrors([
-                'error' => "Total RAM sticks ({$totalRamSticks}) exceeds available ram_slots ({$request->ram_slots}).",
-            ])->withInput();
-        }
-
-        /* inside update() after $newRamSpecs computed */
-        $totalCapacityGb = $this->computeTotalRamCapacity($newRamSpecs);
-        $maxCapacityGb = (int) ($request->input('max_ram_capacity_gb') ?? $motherboard->max_ram_capacity_gb ?? 0);
-        if ($maxCapacityGb > 0 && $totalCapacityGb > $maxCapacityGb) {
+        $ramSlots = (int) $request->input('ram_slots');
+        if ($totalRamSticks > $ramSlots) {
             throw ValidationException::withMessages([
-                'ram_specs' => "Selected modules total {$totalCapacityGb} GB which exceeds motherboard max capacity of {$maxCapacityGb} GB."
+                'ram_specs' => "You selected {$totalRamSticks} RAM sticks, but the motherboard only supports {$ramSlots} slots.",
             ]);
         }
 
-        DB::beginTransaction();
-        try {
+        // capacity check: ensure total installed capacity does not exceed motherboard max
+        $totalCapacityGb = $this->computeTotalRamCapacity($newRamSpecs);
+        $maxCapacityGb = (int) ($request->input('max_ram_capacity_gb') ?? $motherboard->max_ram_capacity_gb ?? 0);
+        if ($maxCapacityGb > 0 && $totalCapacityGb > $maxCapacityGb) {
+            throw ValidationException::withMessages(['ram_specs' => "Selected modules total {$totalCapacityGb} GB which exceeds motherboard max capacity of {$maxCapacityGb} GB."]);
+        }
+
+        // Perform update inside transaction with retry attempts
+        DB::transaction(function () use ($motherboard, $data, $newRamSpecs, $newDiskSpecs) {
+            // update core attributes
             $motherboard->update($data);
 
-            $this->updateWithStockDiffs($motherboard, $newRamSpecs, $newDiskSpecs);
+            // apply RAM stock diffs (locks and increments/decrements inside)
+            $this->applyRamStockDiffs($motherboard, $newRamSpecs);
+            // sync pivot quantities
+            $motherboard->ramSpecs()->sync(collect($newRamSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
 
-            // processors: handle presence diffs
-            $existingProcs = $motherboard->processorSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
-            $toRemoveProcs = array_diff($existingProcs, $data['processor_spec_ids'] ?? []);
-            $toAddProcs = array_diff($data['processor_spec_ids'] ?? [], $existingProcs);
+            // apply disk diffs and sync
+            $this->applyDiskStockDiffs($motherboard, $newDiskSpecs);
+            $motherboard->diskSpecs()->sync(array_keys($newDiskSpecs));
 
-            foreach ($toRemoveProcs as $id) {
-                $cpu = ProcessorSpec::find($id);
-                if ($cpu && $cpu->stock) {
-                    $cpu->stock->increment('quantity', 1);
-                }
-            }
-            foreach ($toAddProcs as $id) {
-                $cpu = ProcessorSpec::with('stock')->find($id);
-                if (! $cpu || ! $cpu->stock || $cpu->stock->quantity < 1) {
-                    abort(422, "Not enough stock for Processor #{$id}");
-                }
-                $cpu->stock->decrement('quantity', 1);
-            }
-            $motherboard->processorSpecs()->sync($data['processor_spec_ids'] ?? []);
+            // processors
+            $newProcIds = array_map('intval', $data['processor_spec_ids'] ?? []);
+            $this->applyProcessorStockDiffs($motherboard, $newProcIds);
+            $motherboard->processorSpecs()->sync($newProcIds);
+        }, 3);
 
-            DB::commit();
-
-            return redirect()->route('motherboards.index')
-                ->with('message', 'Motherboard updated')
-                ->with('type', 'success');
-        } catch (\Throwable $e) {
-            DB::rollBack();
-            return back()->withErrors(['error' => $e->getMessage()])->withInput();
-        }
+        return redirect()->route('motherboards.index')
+            ->with('message', 'Motherboard updated')
+            ->with('type', 'success');
     }
 
     /**
@@ -425,24 +453,29 @@ class MotherboardSpecController extends Controller
     public function destroy(MotherboardSpec $motherboard)
     {
         DB::transaction(function () use ($motherboard) {
+            // restore RAM stocks using pivot quantities (guard nulls)
             foreach ($motherboard->ramSpecs as $ram) {
                 if ($ram->stock) {
-                    $ram->stock->increment('quantity', $ram->pivot->quantity ?? 1);
+                    $qty = $ram->pivot->quantity ?? 1;
+                    $ram->stock->increment('quantity', $qty);
                 }
             }
 
+            // restore disk stocks (presence-based)
             foreach ($motherboard->diskSpecs as $disk) {
                 if ($disk->stock) {
                     $disk->stock->increment('quantity', 1);
                 }
             }
 
+            // restore processor stocks
             foreach ($motherboard->processorSpecs as $cpu) {
                 if ($cpu->stock) {
                     $cpu->stock->increment('quantity', 1);
                 }
             }
 
+            // detach relations then delete
             $motherboard->ramSpecs()->detach();
             $motherboard->diskSpecs()->detach();
             $motherboard->processorSpecs()->detach();

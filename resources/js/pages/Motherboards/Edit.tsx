@@ -37,6 +37,9 @@ interface Option {
     id: number;
     label: string;
     stock_quantity?: number;
+    capacity_gb?: number;
+    interface?: string;
+    type?: string;
 }
 
 interface ProcessorOption extends Option {
@@ -45,6 +48,7 @@ interface ProcessorOption extends Option {
 
 interface RamOption extends Option {
     type: string;
+    capacity_gb?: number;
 }
 
 interface Motherboard {
@@ -66,7 +70,7 @@ interface Motherboard {
     wifi: boolean;
     // ramSpecs may be an array of ids or an array of objects depending on server shape
     ramSpecs: Array<number | { id: number; pivot?: { quantity?: number } }>;
-    diskSpecs: Array<number>;
+    diskSpecs: Array<number | { id: number }>;
     processorSpecs: Array<number>;
 }
 
@@ -96,10 +100,7 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
     })();
 
     // initial disk_specs: server likely gives list of disk ids; default qty 1
-    // define a narrow type for incoming disk entries
     type DiskEntry = number | { id: number };
-
-    // initial disk_specs: server likely gives list of disk ids; default qty 1
     const initialDiskSpecs = (() => {
         const out: Record<number, number> = {};
         for (const d of motherboard.diskSpecs ?? []) {
@@ -184,20 +185,58 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
         }
     }, [data.memory_type, ramOptions, data.ram_specs, setData]);
 
+    useEffect(() => {
+        if (data.ram_mode !== 'same') return;
+        const selectedId = Number(Object.keys(data.ram_specs || [])[0]);
+        if (!selectedId) return;
+        const opt = ramOptions.find(r => r.id === selectedId);
+        const capPer = Number(opt?.capacity_gb ?? NaN);
+        const qty = Number(data.ram_slots || 1);
+        const maxCap = Number(data.max_ram_capacity_gb || 0);
+        if (!Number.isNaN(capPer) && maxCap > 0 && (capPer * qty) > maxCap) {
+            toast.error(`Current selection (${opt?.label}) now exceeds motherboard max capacity (${capPer * qty} GB > ${maxCap} GB)`);
+            // optionally clear selection: setData('ram_specs', {})
+        }
+    }, [data.ram_mode, data.ram_slots, data.max_ram_capacity_gb, data.ram_specs, ramOptions]);
+
     function handleUpdate(e: React.FormEvent) {
         e.preventDefault();
-        // client guard
-        if (data.ram_slots > 0 && totalRamSelected !== data.ram_slots) {
-            toast.error(`Please allocate exactly ${data.ram_slots} RAM sticks (selected ${totalRamSelected})`);
+        // client guard: require exact fill if you keep that rule
+        if (data.ram_slots > 0 && totalRamSelected > data.ram_slots) {
+            toast.error(`You selected ${totalRamSelected} RAM sticks, but the motherboard only supports ${data.ram_slots} slots.`);
             return;
         }
+
         put(motherboardUpdate.url(motherboard.id));
     }
 
-    // RAM helpers
+    // RAM helpers (same vs different) - patched: capacity and stock checks, no quantity input in 'same' mode
     function setRamSameSelection(ramId?: number) {
         if (!ramId) return;
-        const qty = data.ram_slots || 1;
+        const qty = Number(data.ram_slots || 1);
+        const opt = ramOptions.find((r) => r.id === ramId);
+        const capacityPerModule = Number(opt?.capacity_gb ?? NaN);
+        const maxCap = Number(data.max_ram_capacity_gb || 0);
+        const totalCap = Number.isNaN(capacityPerModule) ? NaN : capacityPerModule * qty;
+
+        if (Number.isNaN(capacityPerModule)) {
+            toast.error('Selected RAM is missing capacity information; server will validate on save.');
+            return;
+        }
+
+        if (maxCap > 0 && totalCap > maxCap) {
+            toast.error(
+                `Cannot select ${opt?.label ?? `RAM #${ramId}`} for ${qty} slots: ${totalCap} GB exceeds motherboard max of ${maxCap} GB`
+            );
+            return;
+        }
+
+        const available = Number(opt?.stock_quantity ?? 0);
+        if (available < qty) {
+            toast.error(`Not enough stock for ${opt?.label ?? `RAM #${ramId}`} (requested ${qty}, available ${available})`);
+            return;
+        }
+
         setData('ram_specs', { [ramId]: qty });
     }
 
@@ -208,10 +247,18 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
         setData('ram_specs', next);
     }
 
-    // Disk helpers
+    // Disk helpers - same-mode uses m2 + sata slots and shows interface
     function setDiskSameSelection(diskId?: number) {
         if (!diskId) return;
-        const qty = (data.m2_slots || 0) + (data.sata_ports || 0) || 1;
+        const qty = (Number(data.m2_slots || 0) + Number(data.sata_ports || 0)) || 1;
+        const opt = diskOptions.find((d) => d.id === diskId);
+        const available = Number(opt?.stock_quantity ?? 0);
+
+        if (available < qty) {
+            toast.error(`Not enough stock for ${opt?.label ?? `Disk #${diskId}`} (requested ${qty}, available ${available})`);
+            return;
+        }
+
         setData('disk_specs', { [diskId]: qty });
     }
 
@@ -351,11 +398,19 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                                                 <CommandGroup>
                                                     {compatibleRams.map(opt => {
                                                         const outOfStock = (opt.stock_quantity ?? 0) < data.ram_slots;
+                                                        const capPer = Number(opt.capacity_gb ?? 0);
+                                                        const maxCap = Number(data.max_ram_capacity_gb || 0);
+                                                        const totalCap = capPer * (data.ram_slots || 1);
+                                                        const exceedsCapacity = maxCap > 0 && totalCap > maxCap;
+                                                        const disabled = outOfStock || exceedsCapacity;
+
                                                         return (
-                                                            <CommandItem key={opt.id} onSelect={() => !outOfStock && setRamSameSelection(opt.id)} disabled={outOfStock} className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}>
+                                                            <CommandItem key={opt.id} onSelect={() => !disabled && setRamSameSelection(opt.id)} disabled={disabled} className={disabled ? "opacity-50 cursor-not-allowed" : ""}>
                                                                 <Check className={`mr-2 h-4 w-4 ${Object.keys(data.ram_specs).map(Number).includes(opt.id) ? 'opacity-100' : 'opacity-0'}`} />
                                                                 <span className="flex-1">{opt.label}</span>
                                                                 <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
+                                                                {opt.capacity_gb !== undefined && <span className="text-xs text-gray-500 ml-4">• {opt.capacity_gb} GB/module</span>}
+                                                                {exceedsCapacity && <span className="text-xs text-red-600 ml-3">• exceeds max capacity</span>}
                                                             </CommandItem>
                                                         );
                                                     })}
@@ -364,23 +419,7 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                                         </PopoverContent>
                                     </Popover>
 
-                                    {Object.keys(data.ram_specs).length > 0 && (
-                                        <div className="flex items-center gap-2 mt-2">
-                                            <span className="text-sm">Quantity</span>
-                                            <Input
-                                                type="number"
-                                                min={1}
-                                                max={data.ram_slots || 1}
-                                                value={Object.values(data.ram_specs)[0] ?? ''}
-                                                onChange={(e) => {
-                                                    const id = Number(Object.keys(data.ram_specs)[0]);
-                                                    const q = Number(e.target.value || 0);
-                                                    setData('ram_specs', q > 0 ? { [id]: q } : {});
-                                                }}
-                                                className="w-28"
-                                            />
-                                        </div>
-                                    )}
+                                    {/* Quantity input removed while in 'same' mode */}
                                 </>
                             ) : (
                                 <>
@@ -483,10 +522,12 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                                                 <CommandGroup>
                                                     {diskOptions.map(opt => {
                                                         const outOfStock = (opt.stock_quantity ?? 0) < 1;
+                                                        const capInterface = opt.interface;
                                                         return (
                                                             <CommandItem key={opt.id} onSelect={() => !outOfStock && setDiskSameSelection(opt.id)} disabled={outOfStock} className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}>
                                                                 <Check className={`mr-2 h-4 w-4 ${Object.keys(data.disk_specs).map(Number).includes(opt.id) ? 'opacity-100' : 'opacity-0'}`} />
                                                                 <span className="flex-1">{opt.label}</span>
+                                                                {capInterface && <span className="text-xs text-gray-500 ml-2">{capInterface}</span>}
                                                                 <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
                                                             </CommandItem>
                                                         );
@@ -495,6 +536,20 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                                             </Command>
                                         </PopoverContent>
                                     </Popover>
+
+                                    {/* Show chosen disk interface and assigned qty (derived from SATA + M.2 slots) */}
+                                    {Object.keys(data.disk_specs).length > 0 && (() => {
+                                        const id = Number(Object.keys(data.disk_specs)[0]);
+                                        const opt = diskOptions.find(d => d.id === id);
+                                        const qty = data.disk_specs[id] ?? (Number(data.m2_slots || 0) + Number(data.sata_ports || 0) || 1);
+                                        return (
+                                            <div className="mt-2 text-sm">
+                                                <div><span className="font-medium">Selected drive:</span> {opt?.label}</div>
+                                                {opt?.interface && <div><span className="font-medium">Interface:</span> {opt.interface}</div>}
+                                                <div><span className="font-medium">Assigned to bays:</span> {qty}</div>
+                                            </div>
+                                        );
+                                    })()}
                                 </>
                             ) : (
                                 <>
@@ -521,6 +576,7 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                                                         setData('disk_specs', next);
                                                     }} className="w-24" />
                                                     <div className="text-xs text-gray-500">({opt?.stock_quantity ?? 0} in stock)</div>
+                                                    {opt?.interface && <div className="text-xs text-gray-500 ml-3">{opt.interface}</div>}
                                                 </div>
                                             );
                                         })}
@@ -616,10 +672,12 @@ function MultiPopover({
                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
                     </Button>
                 </PopoverTrigger>
+
                 <PopoverContent className="w-full p-0">
                     <Command>
                         <CommandInput placeholder={`Search ${label.toLowerCase()}…`} />
                         <CommandEmpty>No {label.toLowerCase()} found.</CommandEmpty>
+
                         <CommandGroup>
                             {options.map(opt => {
                                 const isSelected = selected.includes(opt.id);
@@ -633,7 +691,8 @@ function MultiPopover({
                                         className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}
                                     >
                                         <Check className={`mr-2 h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                                        <span className="flex-1">{opt.label}</span>
+                                        <span className="flex-1 truncate">{opt.label}</span>
+                                        {opt.interface && <span className="text-xs text-gray-500 ml-2">{opt.interface}</span>}
                                         <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
                                     </CommandItem>
                                 );
@@ -642,6 +701,7 @@ function MultiPopover({
                     </Command>
                 </PopoverContent>
             </Popover>
+
             {error && <p className="text-red-600">{error}</p>}
         </div>
     );

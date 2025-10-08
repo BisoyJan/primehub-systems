@@ -15,6 +15,7 @@ import { index as ramIndex } from '@/routes/ramspecs'
 import { index as diskIndex } from '@/routes/diskspecs'
 import { index as processorIndex } from '@/routes/processorspecs'
 import { index as motherboardsIndex } from '@/routes/motherboards'
+import { index as stocksIndex } from '@/routes/stocks'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
 import { BookOpen, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip } from 'lucide-react';
@@ -45,6 +46,11 @@ const mainNavItems: NavItem[] = [
         title: 'Motherboards',
         href: motherboardsIndex.url(),
         icon: Microchip
+    },
+    {
+        title: 'Stocks',
+        href: stocksIndex.url(),
+        icon: Folder
     }
 ];
 
