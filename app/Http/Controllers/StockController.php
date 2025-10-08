@@ -32,6 +32,8 @@ class StockController extends Controller
      *
      * Returns Inertia page with stocks and convenience metadata for the UI.
      */
+    // Replace the existing index method in app/Http/Controllers/StockController.php with this paginated version.
+
     public function index(Request $request)
     {
         $type    = $request->query('type');       // 'ram' | 'disk' | 'processor' | null
@@ -42,11 +44,12 @@ class StockController extends Controller
 
         // Map external type key to FQCN (kept minimal since frontend gates search client-side)
         $typeMap = [
-            'ram'       => RamSpec::class,
-            'disk'      => DiskSpec::class,
-            'processor' => ProcessorSpec::class,
+            'ram'       => \App\Models\RamSpec::class,
+            'disk'      => \App\Models\DiskSpec::class,
+            'processor' => \App\Models\ProcessorSpec::class,
         ];
 
+        // Optional: filter by type (frontend uses this to narrow dataset; search is client-side now)
         if ($type) {
             if (! isset($typeMap[$type])) {
                 return back()->withErrors(['type' => 'Invalid type']);
@@ -54,6 +57,7 @@ class StockController extends Controller
             $query->where('stockable_type', $typeMap[$type]);
         }
 
+        // Optional: narrow to specific stockable ids (used by table "Spec" links)
         if (! empty($ids)) {
             $query->whereIn('stockable_id', $ids);
         }
@@ -100,7 +104,7 @@ class StockController extends Controller
         $paginatorArray = $paginated->toArray();
         $links = $paginatorArray['links'] ?? [];
 
-        return Inertia::render('Computer/Stocks/Index', [
+        return \Inertia\Inertia::render('Stocks/Index', [
             'stocks' => [
                 'data'  => $items,
                 'links' => $links,

@@ -27,7 +27,7 @@ class ProcessorSpecsController extends Controller
             ->paginate(10)
             ->appends(['search' => $search]);
 
-        return inertia('Computer/ProcessorSpecs/Index', [
+        return inertia('ProcessorSpecs/Index', [
             'processorspecs' => $processorspecs,
             'search'         => $search,
         ]);
@@ -38,7 +38,7 @@ class ProcessorSpecsController extends Controller
      */
     public function create()
     {
-        return inertia('Computer/ProcessorSpecs/Create');
+        return inertia('ProcessorSpecs/Create');
     }
 
     /**
@@ -80,7 +80,7 @@ class ProcessorSpecsController extends Controller
      */
     public function edit(string $processorspec)
     {
-        return inertia('Computer/ProcessorSpecs/Edit', [
+        return inertia('ProcessorSpecs/Edit', [
             'processorspec' => ProcessorSpec::findOrFail($processorspec),
         ]);
     }
