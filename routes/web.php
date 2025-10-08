@@ -25,7 +25,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->except(['show']);
     Route::resource('motherboards', MotherboardSpecController::class)
         ->except(['show']);
+
     Route::resource('stocks', StockController::class);
+    Route::post('stocks/adjust', [StockController::class, 'adjust'])->name('stocks.adjust');
 });
 
 require __DIR__ . '/settings.php';

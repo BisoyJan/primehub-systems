@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Head, useForm, usePage, router } from '@inertiajs/react';
+import type { Page as InertiaPage } from '@inertiajs/core';
 import { toast } from 'sonner';
 import { Plus, Trash, Edit, RefreshCw } from 'lucide-react';
 
@@ -26,8 +27,7 @@ import {
 } from '@/components/ui/table';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
-import stocksAdjust from "@/actions/App/Http/Controllers/StockController";
-import { dashboard } from "@/routes";
+import { dashboard } from '@/routes';
 import {
     index as stocksIndex,
     store as stocksStore,
@@ -35,7 +35,7 @@ import {
     destroy as stocksDestroy,
 } from '@/routes/stocks';
 
-const breadcrumbs = [{ title: "RamSpecs", href: dashboard().url }];
+const breadcrumbs = [{ title: 'Stocks', href: dashboard().url }];
 
 type SpecType = 'ram' | 'disk' | 'processor';
 
@@ -47,7 +47,15 @@ type StockRow = {
     reserved: number;
     location?: string | null;
     notes?: string | null;
-    stockable?: { id?: number; label?: string } | null;
+    stockable?: {
+        id?: number;
+        label?: string;
+        brand?: string;
+        series?: string;
+        manufacturer?: string | null;
+        model_number?: string | null;
+        model?: string | null;
+    } | null;
     created_at?: string | null;
     updated_at?: string | null;
 };
@@ -87,6 +95,15 @@ export default function Index() {
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<StockRow | null>(null);
 
+    // Quick adjust dialog state
+    const [adjustOpen, setAdjustOpen] = useState(false);
+    const [adjustRow, setAdjustRow] = useState<StockRow | null>(null);
+    const [adjustDelta, setAdjustDelta] = useState<string>('-1');
+
+    // Delete confirm dialog state
+    const [deleteOpen, setDeleteOpen] = useState(false);
+    const [deleteRow, setDeleteRow] = useState<StockRow | null>(null);
+
     const { data, setData, reset, processing, errors } = useForm({
         type: 'ram' as SpecType,
         stockable_id: '',
@@ -96,54 +113,53 @@ export default function Index() {
         notes: '',
     });
 
-    // flash toast
+    const typedErrors = errors as Record<string, string | string[] | undefined>;
+
     useEffect(() => {
         if (!props.flash?.message) return;
         if (props.flash.type === 'error') toast.error(props.flash.message);
         else toast.success(props.flash.message);
     }, [props.flash?.message, props.flash?.type]);
 
-    // sync when Inertia provides new props
     useEffect(() => {
         setRows(initialStocks);
         setLinks(initialLinks);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [page.props]);
 
-    function buildIndexParams() {
-        const params: any = {};
-        if (filterType !== 'all') params.type = filterType;
-        const ids = queryIds.split(',').map(s => s.trim()).filter(Boolean);
-        if (ids.length) params['ids[]'] = ids;
-        return params;
-    }
-
-    function fetchIndex(pageUrl?: string) {
+    const fetchIndex = useCallback((pageUrl?: string) => {
         setLoading(true);
-        const params = buildIndexParams();
+
+        const params: Record<string, string | number | string[]> = {};
+        if (filterType !== 'all') params.type = filterType;
+        const ids = queryIds.split(',').map((s) => s.trim()).filter(Boolean);
+        if (ids.length) params['ids[]'] = ids;
+
         const url = pageUrl ?? stocksIndex().url;
+
         router.get(url, params, {
             preserveState: true,
+            preserveScroll: true,
             replace: true,
-            onSuccess: (page) => {
-                const p = page.props as any;
+            onSuccess: (resp: InertiaPage<PageProps>) => {
+                const p = resp.props;
                 setRows(p.stocks?.data ?? []);
                 setLinks(p.stocks?.links ?? []);
             },
             onFinish: () => setLoading(false),
         });
-    }
-
-    useEffect(() => {
-        fetchIndex();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [filterType, queryIds]);
 
     useEffect(() => {
+        if (filterType !== initialFilter || queryIds !== '') {
+            fetchIndex();
+        }
+    }, [filterType, queryIds, initialFilter, fetchIndex]);
+
+    useEffect(() => {
         if (!pollMs || pollMs <= 0) return;
-        const t = window.setInterval(fetchIndex, pollMs);
+        const t = window.setInterval(() => fetchIndex(), pollMs);
         return () => clearInterval(t);
-    }, [pollMs, filterType, queryIds]);
+    }, [pollMs, fetchIndex]);
 
     function mapTypeFromStockable(stockableType: string): SpecType {
         if (!stockableType) return 'ram';
@@ -221,48 +237,59 @@ export default function Index() {
         }
     }
 
-    function confirmDelete(row: StockRow) {
-        if (!confirm('Delete this stock row?')) return;
-        router.delete(stocksDestroy(row.id).url, {
-            preserveScroll: true,
-            onSuccess: () => {
-                toast.success('Deleted');
-                fetchIndex();
-            },
-            onError: () => toast.error('Delete failed'),
-        });
+    // Quick adjust dialog handlers
+    function openQuickAdjust(row: StockRow) {
+        setAdjustRow(row);
+        setAdjustDelta('1');
+        setAdjustOpen(true);
     }
 
-    function quickAdjust(row: StockRow) {
-        const deltaStr = prompt('Delta quantity (use negative to decrement)', '-1');
-        if (!deltaStr) return;
-        const delta = Number(deltaStr);
+    function submitQuickAdjust() {
+        if (!adjustRow) return;
+        const delta = Number(adjustDelta);
         if (Number.isNaN(delta)) {
             toast.error('Invalid number');
             return;
         }
-        router.post(stocksAdjust().url, {
-            type: mapTypeFromStockable(row.stockable_type),
-            stockable_id: row.stockable_id,
+        router.post('/stocks/adjust', {
+            type: mapTypeFromStockable(adjustRow.stockable_type),
+            stockable_id: adjustRow.stockable_id,
             delta,
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('Adjusted');
+                setAdjustOpen(false);
+                setAdjustRow(null);
                 fetchIndex();
             },
             onError: () => toast.error('Adjust failed'),
         });
     }
 
-    // Pagination click handler expecting shadcn links
-    function onPageLinkClick(link: PaginationLink) {
-        if (!link || !link.url) return;
-        // Inertia visit using the provided link URL; preserve current filters
-        fetchIndex(link.url);
+    // Delete confirm dialog handlers
+    function openDeleteConfirm(row: StockRow) {
+        setDeleteRow(row);
+        setDeleteOpen(true);
     }
 
-    const rowCountLabel = useMemo(() => `${rows.length} row${rows.length !== 1 ? 's' : ''}`, [rows]);
+    function submitDelete() {
+        if (!deleteRow) return;
+        router.delete(stocksDestroy(deleteRow.id).url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Deleted');
+                setDeleteOpen(false);
+                setDeleteRow(null);
+                fetchIndex();
+            },
+            onError: () => toast.error('Delete failed'),
+        });
+    }
+
+    const rowCountLabel = useMemo(
+        () => `${rows.length} row${rows.length !== 1 ? 's' : ''}`,
+        [rows]
+    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -273,8 +300,13 @@ export default function Index() {
                     <h2 className="text-xl font-semibold">Stock Management</h2>
 
                     <div className="ml-auto flex items-center gap-2">
-                        <Select value={filterType} onValueChange={(v) => setFilterType(v as any)}>
-                            <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                        <Select
+                            value={filterType}
+                            onValueChange={(v: string) => setFilterType(v as SpecType | 'all')}
+                        >
+                            <SelectTrigger className="w-36">
+                                <SelectValue />
+                            </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All types</SelectItem>
                                 <SelectItem value="ram">RAM</SelectItem>
@@ -283,27 +315,45 @@ export default function Index() {
                             </SelectContent>
                         </Select>
 
-                        <Input placeholder="ids, e.g. 1,2,3" value={queryIds} onChange={(e) => setQueryIds(e.target.value)} className="w-52" />
-                        <Button onClick={() => fetchIndex()}><RefreshCw size={16} /></Button>
-                        <Button onClick={() => { setPollMs(pollMs ? null : 15000); }} variant="outline">{pollMs ? 'Stop Poll' : 'Poll'}</Button>
-                        <Button onClick={openCreate}><Plus size={16} /> Add</Button>
+                        <Input
+                            placeholder="ids, e.g. 1,2,3"
+                            value={queryIds}
+                            onChange={(e) => setQueryIds(e.target.value)}
+                            className="w-52"
+                        />
+                        <Button onClick={() => fetchIndex()}>
+                            <RefreshCw size={16} />
+                        </Button>
+                        <Button
+                            onClick={() => setPollMs(pollMs ? null : 15000)}
+                            variant="outline"
+                        >
+                            {pollMs ? 'Stop Poll' : 'Poll'}
+                        </Button>
+                        <Button onClick={openCreate}>
+                            <Plus size={16} /> Add
+                        </Button>
                     </div>
                 </div>
 
                 <div className="shadow rounded-md overflow-hidden">
                     <div className="p-3 border-b flex items-center justify-between">
-                        <div className="text-sm text-gray-600">{loading ? 'Loading...' : rowCountLabel}</div>
-                        <div className="text-sm text-gray-500">Use Wayfinder routes for server-side filtering</div>
+                        <div className="text-sm text-gray-600">
+                            {loading ? 'Loading...' : rowCountLabel}
+                        </div>
                     </div>
 
                     <div className="overflow-x-auto p-3">
                         <Table>
-                            <TableCaption>Stock items for RAM, Disk and Processor specs</TableCaption>
+                            <TableCaption>
+                                Stock items for RAM, Disk and Processor specs
+                            </TableCaption>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>ID</TableHead>
                                     <TableHead>Type</TableHead>
-                                    <TableHead>Spec</TableHead>
+                                    <TableHead>Manufacturer / Brand</TableHead>
+                                    <TableHead>Model / Series</TableHead>
                                     <TableHead>Quantity</TableHead>
                                     <TableHead>Reserved</TableHead>
                                     <TableHead>Location</TableHead>
@@ -317,9 +367,13 @@ export default function Index() {
                                         <TableCell>{row.id}</TableCell>
                                         <TableCell>{mapTypeFromStockable(row.stockable_type)}</TableCell>
                                         <TableCell>
-                                            <Link href={stocksIndex().url + `?ids[]=${row.stockable_id}&type=${mapTypeFromStockable(row.stockable_type)}`} className="text-blue-600 hover:underline">
-                                                {getLabel(row)}
-                                            </Link>
+                                            {row.stockable?.manufacturer ?? row.stockable?.brand ?? '-'}
+                                        </TableCell>
+                                        <TableCell>
+                                            {row.stockable?.model_number ??
+                                                row.stockable?.model ??
+                                                row.stockable?.series ??
+                                                '-'}
                                         </TableCell>
                                         <TableCell>{row.quantity}</TableCell>
                                         <TableCell>{row.reserved}</TableCell>
@@ -327,9 +381,15 @@ export default function Index() {
                                         <TableCell>{row.notes ?? '-'}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Button variant="ghost" onClick={() => openEdit(row)}><Edit size={14} /></Button>
-                                                <Button variant="ghost" onClick={() => quickAdjust(row)}><Plus size={14} /></Button>
-                                                <Button variant="ghost" onClick={() => confirmDelete(row)}><Trash size={14} /></Button>
+                                                <Button variant="ghost" onClick={() => openEdit(row)}>
+                                                    <Edit size={14} />
+                                                </Button>
+                                                <Button variant="ghost" onClick={() => openQuickAdjust(row)}>
+                                                    <Plus size={14} />
+                                                </Button>
+                                                <Button variant="ghost" onClick={() => openDeleteConfirm(row)}>
+                                                    <Trash size={14} />
+                                                </Button>
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -337,13 +397,18 @@ export default function Index() {
 
                                 {rows.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="py-8 text-center text-gray-500">No stocks</TableCell>
+                                        <TableCell
+                                            colSpan={9}
+                                            className="py-8 text-center text-gray-500"
+                                        >
+                                            No stocks
+                                        </TableCell>
                                     </TableRow>
                                 )}
                             </TableBody>
                             <TableFooter>
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center font-medium">
+                                    <TableCell colSpan={10} className="text-center font-medium">
                                         Stock List
                                     </TableCell>
                                 </TableRow>
@@ -353,23 +418,29 @@ export default function Index() {
                 </div>
 
                 <div className="flex justify-center mt-4">
-                    {links && links.length > 0 && (
-                        <PaginationNav links={links} onLinkClick={(link) => onPageLinkClick(link)} />
-                    )}
+                    {links && links.length > 0 && <PaginationNav links={links} />}
                 </div>
             </div>
 
+            {/* Create/Edit Dialog */}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>
-                        <h3 className="text-lg font-semibold">{editing ? 'Edit Stock' : 'Create Stock'}</h3>
+                        <h3 className="text-lg font-semibold">
+                            {editing ? 'Edit Stock' : 'Create Stock'}
+                        </h3>
                     </DialogHeader>
 
                     <div className="grid grid-cols-1 gap-3 py-2">
                         <div>
                             <Label>Type</Label>
-                            <Select value={data.type} onValueChange={(v) => setData('type', v as SpecType)}>
-                                <SelectTrigger className="w-full"><SelectValue /></SelectTrigger>
+                            <Select
+                                value={data.type}
+                                onValueChange={(v: string) => setData('type', v as SpecType)}
+                            >
+                                <SelectTrigger className="w-full">
+                                    <SelectValue />
+                                </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="ram">RAM</SelectItem>
                                     <SelectItem value="disk">Disk</SelectItem>
@@ -380,36 +451,150 @@ export default function Index() {
 
                         <div>
                             <Label>Spec ID</Label>
-                            <Input value={data.stockable_id} onChange={(e) => setData('stockable_id', e.target.value)} placeholder="Spec id (integer)" />
-                            {errors.stockable_id && <p className="text-red-600 text-sm mt-1">{(errors as any).stockable_id}</p>}
+                            <Input
+                                value={data.stockable_id}
+                                onChange={(e) => setData('stockable_id', e.target.value)}
+                                placeholder="Spec id (integer)"
+                            />
+                            {typedErrors.stockable_id && (
+                                <p className="text-red-600 text-sm mt-1">
+                                    {typedErrors.stockable_id}
+                                </p>
+                            )}
                         </div>
 
                         <div>
                             <Label>Quantity</Label>
-                            <Input type="number" value={String(data.quantity ?? '')} onChange={(e) => setData('quantity', Number(e.target.value))} />
-                            {errors.quantity && <p className="text-red-600 text-sm mt-1">{(errors as any).quantity}</p>}
+                            <Input
+                                type="number"
+                                value={String(data.quantity ?? '')}
+                                onChange={(e) => setData('quantity', Number(e.target.value))}
+                            />
+                            {typedErrors.quantity && (
+                                <p className="text-red-600 text-sm mt-1">
+                                    {typedErrors.quantity}
+                                </p>
+                            )}
                         </div>
 
                         <div>
                             <Label>Reserved</Label>
-                            <Input type="number" value={String(data.reserved ?? '')} onChange={(e) => setData('reserved', Number(e.target.value))} />
-                            {errors.reserved && <p className="text-red-600 text-sm mt-1">{(errors as any).reserved}</p>}
+                            <Input
+                                type="number"
+                                value={String(data.reserved ?? '')}
+                                onChange={(e) => setData('reserved', Number(e.target.value))}
+                            />
+                            {typedErrors.reserved && (
+                                <p className="text-red-600 text-sm mt-1">
+                                    {typedErrors.reserved}
+                                </p>
+                            )}
                         </div>
 
                         <div>
                             <Label>Location</Label>
-                            <Input value={data.location ?? ''} onChange={(e) => setData('location', e.target.value)} />
+                            <Input
+                                value={data.location ?? ''}
+                                onChange={(e) => setData('location', e.target.value)}
+                            />
                         </div>
 
                         <div>
                             <Label>Notes</Label>
-                            <Input value={data.notes ?? ''} onChange={(e) => setData('notes', e.target.value)} />
+                            <Input
+                                value={data.notes ?? ''}
+                                onChange={(e) => setData('notes', e.target.value)}
+                            />
                         </div>
                     </div>
 
                     <DialogFooter className="flex gap-2">
-                        <Button onClick={() => setOpen(false)} variant="outline">Cancel</Button>
-                        <Button onClick={submit} disabled={processing}>{editing ? 'Save' : 'Create'}</Button>
+                        <Button onClick={() => setOpen(false)} variant="outline">
+                            Cancel
+                        </Button>
+                        <Button onClick={submit} disabled={processing}>
+                            {editing ? 'Save' : 'Create'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Quick Adjust Dialog */}
+            <Dialog
+                open={adjustOpen}
+                onOpenChange={(o) => {
+                    setAdjustOpen(o);
+                    if (!o) {
+                        setAdjustRow(null);
+                        setAdjustDelta('1');
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <h3 className="text-lg font-semibold">Adjust Quantity</h3>
+                        {adjustRow && (
+                            <p className="text-sm text-muted-foreground">
+                                {getLabel(adjustRow)} (current qty: {adjustRow.quantity})
+                            </p>
+                        )}
+                    </DialogHeader>
+
+                    <div className="grid gap-3 py-2">
+                        <div>
+                            <Label>Delta</Label>
+                            <Input
+                                type="number"
+                                value={adjustDelta}
+                                onChange={(e) => setAdjustDelta(e.target.value)}
+                                placeholder="Use negative to decrement"
+                            />
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            Example: -1 to decrement, 2 to increment.
+                        </div>
+                    </div>
+
+                    <DialogFooter className="flex gap-2">
+                        <Button variant="outline" onClick={() => setAdjustOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submitQuickAdjust}>Apply</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirm Dialog */}
+            <Dialog
+                open={deleteOpen}
+                onOpenChange={(o) => {
+                    setDeleteOpen(o);
+                    if (!o) {
+                        setDeleteRow(null);
+                    }
+                }}
+            >
+                <DialogContent>
+                    <DialogHeader>
+                        <h3 className="text-lg font-semibold">Confirm Delete</h3>
+                        {deleteRow && (
+                            <p className="text-sm text-muted-foreground">
+                                This will delete stock #{deleteRow.id} — {getLabel(deleteRow)}.
+                            </p>
+                        )}
+                    </DialogHeader>
+
+                    <div className="py-2 text-sm">
+                        This action cannot be undone.
+                    </div>
+
+                    <DialogFooter className="flex gap-2">
+                        <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={submitDelete}>
+                            Delete
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -36,70 +36,88 @@ class StockController extends Controller
 
     public function index(Request $request)
     {
-        $type = $request->query('type');
-        $ids = array_filter(array_map('intval', (array) $request->query('ids', [])));
-        $perPage = (int) $request->query('per_page', 15);
+        $type    = $request->query('type');       // 'ram' | 'disk' | 'processor' | null
+        $ids     = array_filter(array_map('intval', (array) $request->query('ids', [])));
+        $perPage = 15;
 
         $query = Stock::query()->with('stockable');
 
+        // Map external type key to FQCN (kept minimal since frontend gates search client-side)
+        $typeMap = [
+            'ram'       => \App\Models\RamSpec::class,
+            'disk'      => \App\Models\DiskSpec::class,
+            'processor' => \App\Models\ProcessorSpec::class,
+        ];
+
+        // Optional: filter by type (frontend uses this to narrow dataset; search is client-side now)
         if ($type) {
-            if (! isset($this->typeMap[$type])) {
+            if (! isset($typeMap[$type])) {
                 return back()->withErrors(['type' => 'Invalid type']);
             }
-            $query->where('stockable_type', $this->typeMap[$type]);
+            $query->where('stockable_type', $typeMap[$type]);
         }
 
+        // Optional: narrow to specific stockable ids (used by table "Spec" links)
         if (! empty($ids)) {
             $query->whereIn('stockable_id', $ids);
         }
 
-        $paginated = $query->orderBy('id', 'desc')->paginate($perPage)->withQueryString();
+        $paginated = $query->orderBy('id', 'desc')
+            ->paginate($perPage)
+            ->withQueryString();
 
         // normalize items for the UI
-        $items = $paginated->getCollection()->map(function (Stock $s) {
+        $items = $paginated->getCollection()->map(function (\App\Models\Stock $s) {
             $typeKey = $this->mapTypeKey($s->stockable_type);
-            $label = null;
+            $label   = class_basename($s->stockable_type) . ' #' . $s->stockable_id;
+
             if ($s->relationLoaded('stockable') && $s->stockable) {
-                if (isset($s->stockable->label)) $label = $s->stockable->label;
-                elseif (isset($s->stockable->name)) $label = $s->stockable->name;
-                elseif (isset($s->stockable->model)) $label = $s->stockable->model;
-                else $label = class_basename($s->stockable_type) . ' #' . $s->stockable_id;
-            } else {
-                $label = class_basename($s->stockable_type) . ' #' . $s->stockable_id;
+                if (isset($s->stockable->label))      $label = $s->stockable->label;
+                elseif (isset($s->stockable->name))   $label = $s->stockable->name;
+                elseif (isset($s->stockable->model))  $label = $s->stockable->model;
             }
 
             return [
-                'id' => $s->id,
-                'stockable_type' => $s->stockable_type,
-                'stockable_id' => $s->stockable_id,
-                'type' => $typeKey,
-                'quantity' => (int) $s->quantity,
-                'reserved' => (int) $s->reserved,
-                'location' => $s->location,
-                'notes' => $s->notes,
-                'stockable' => ['id' => $s->stockable_id, 'label' => $label],
-                'created_at' => $s->created_at ? $s->created_at->toDateTimeString() : null,
-                'updated_at' => $s->updated_at ? $s->updated_at->toDateTimeString() : null,
+                'id'              => $s->id,
+                'stockable_type'  => $s->stockable_type,
+                'stockable_id'    => $s->stockable_id,
+                'type'            => $typeKey,
+                'quantity'        => (int) $s->quantity,
+                'reserved'        => (int) $s->reserved,
+                'location'        => $s->location,
+                'notes'           => $s->notes,
+                'stockable'       => [
+                    'id'            => $s->stockable_id,
+                    'label'         => $label,
+                    'manufacturer'  => $s->stockable->manufacturer ?? null,
+                    'model_number'  => $s->stockable->model_number ?? null,
+                    'model'         => $s->stockable->model ?? null,
+                    'brand'         => $s->stockable->brand ?? null,
+                    'series'        => $s->stockable->series ?? null,
+                ],
+                'created_at'      => optional($s->created_at)->toDateTimeString(),
+                'updated_at'      => optional($s->updated_at)->toDateTimeString(),
             ];
         })->toArray();
 
-        // Use paginator->toArray() to extract the links structure Laravel provides
+        // extract links from paginator for shadcn pagination
         $paginatorArray = $paginated->toArray();
         $links = $paginatorArray['links'] ?? [];
 
-        return Inertia::render('Stocks/Index', [
-            // Shadcn-style pagination helpers expect { data: [...], links: [...] }
+        return \Inertia\Inertia::render('Stocks/Index', [
             'stocks' => [
-                'data' => $items,
+                'data'  => $items,
                 'links' => $links,
-                'meta' => [
+                'meta'  => [
                     'current_page' => $paginated->currentPage(),
-                    'last_page' => $paginated->lastPage(),
-                    'per_page' => $paginated->perPage(),
-                    'total' => $paginated->total(),
+                    'last_page'    => $paginated->lastPage(),
+                    'per_page'     => $paginated->perPage(),
+                    'total'        => $paginated->total(),
                 ],
             ],
+            // keep the selected type so the frontend can hydrate its initial filter
             'filterType' => $type ?? 'all',
+            // no server-side search anymore (frontend filters client-side)
             'flash' => session('flash') ?? null,
         ]);
     }
