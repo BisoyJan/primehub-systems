@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react'; // Correctly manage imports
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import type { Page as InertiaPage } from '@inertiajs/core';
 import { toast } from 'sonner';
-import { Plus, Trash, Edit, RefreshCw, Search } from 'lucide-react'; // Added Search icon
+import { Plus, Trash, Edit, RefreshCw, Search } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -91,20 +91,16 @@ export default function Index() {
     const [filterType, setFilterType] = useState<SpecType | 'all'>(initialFilter);
     const [pollMs, setPollMs] = useState<number | null>(null);
 
-    // --- Search State ---
     const [searchQuery, setSearchQuery] = useState('');
     const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
-    // --- End Search State ---
 
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<StockRow | null>(null);
 
-    // Quick adjust dialog state
     const [adjustOpen, setAdjustOpen] = useState(false);
     const [adjustRow, setAdjustRow] = useState<StockRow | null>(null);
     const [adjustDelta, setAdjustDelta] = useState<string>('-1');
 
-    // Delete confirm dialog state
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteRow, setDeleteRow] = useState<StockRow | null>(null);
 
@@ -118,6 +114,7 @@ export default function Index() {
     });
 
     const typedErrors = errors as Record<string, string | string[] | undefined>;
+    const isInitialMount = useRef(true);
 
     useEffect(() => {
         if (!props.flash?.message) return;
@@ -125,22 +122,20 @@ export default function Index() {
         else toast.success(props.flash.message);
     }, [props.flash?.message, props.flash?.type]);
 
-    // --- Debounce search input ---
     useEffect(() => {
         const timer = setTimeout(() => {
             setDebouncedSearchQuery(searchQuery);
-        }, 500); // Wait 500ms after user stops typing
-
+        }, 500);
         return () => clearTimeout(timer);
     }, [searchQuery]);
-    // --- End Debounce ---
 
+    // FIX: Wrap fetchIndex in useCallback to stabilize its reference
     const fetchIndex = useCallback((pageUrl?: string) => {
         setLoading(true);
 
         const params: Record<string, string | number | string[]> = {};
         if (filterType !== 'all') params.type = filterType;
-        if (debouncedSearchQuery) params.search = debouncedSearchQuery; // Always send search param
+        if (debouncedSearchQuery) params.search = debouncedSearchQuery;
 
         const url = pageUrl ?? stocksIndex().url;
 
@@ -155,19 +150,24 @@ export default function Index() {
             },
             onFinish: () => setLoading(false),
         });
-    }, [filterType, debouncedSearchQuery]); // Add debounced query as a dependency
+    }, [filterType, debouncedSearchQuery]); // Dependencies for useCallback
 
+    // FIX: Corrected useEffect for filtering and searching
     useEffect(() => {
-        // This effect triggers a data fetch whenever the filter or debounced search changes.
-        // Changing the search term will reset the view to the first page of results.
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
         fetchIndex();
-    }, [filterType, debouncedSearchQuery]); // Remove fetchIndex from here
+    }, [filterType, debouncedSearchQuery, fetchIndex]); // FIX: Added fetchIndex to dependency array
 
+    // FIX: Corrected useEffect for polling
     useEffect(() => {
         if (!pollMs || pollMs <= 0) return;
-        const t = window.setInterval(() => fetchIndex(), pollMs);
+        // Pass the current page URL to maintain pagination during polling
+        const t = window.setInterval(() => fetchIndex(window.location.href), pollMs);
         return () => clearInterval(t);
-    }, [pollMs, fetchIndex]);
+    }, [pollMs, fetchIndex]); // FIX: Added fetchIndex to dependency array
 
     function mapTypeFromStockable(stockableType: string): SpecType {
         if (!stockableType) return 'ram';
@@ -184,7 +184,6 @@ export default function Index() {
         return `${name} #${row.stockable_id}`;
     }
 
-    // --- Other functions (openCreate, openEdit, submit, etc.) remain the same ---
     function openCreate() {
         setEditing(null);
         reset('type', 'stockable_id', 'quantity', 'reserved', 'location', 'notes');
@@ -223,15 +222,20 @@ export default function Index() {
             notes: data.notes || null,
         };
 
-        const onFinish = () => fetchIndex();
+        // FIX: Removed unused onFinish variable
+
+        const handleSuccess = () => {
+            setOpen(false);
+            // Re-fetch data for the CURRENT page to see the update
+            fetchIndex(window.location.href);
+        };
 
         if (editing) {
             router.put(stocksUpdate(editing.id).url, payload, {
                 preserveScroll: true,
                 onSuccess: () => {
                     toast.success('Stock updated');
-                    setOpen(false);
-                    fetchIndex();
+                    handleSuccess();
                 },
                 onError: () => toast.error('Validation error'),
             });
@@ -240,8 +244,7 @@ export default function Index() {
                 preserveScroll: true,
                 onSuccess: () => {
                     toast.success('Stock created');
-                    setOpen(false);
-                    fetchIndex();
+                    handleSuccess();
                 },
                 onError: () => toast.error('Validation error'),
             });
@@ -270,7 +273,7 @@ export default function Index() {
             onSuccess: () => {
                 setAdjustOpen(false);
                 setAdjustRow(null);
-                fetchIndex();
+                fetchIndex(window.location.href); // Stay on current page
             },
             onError: () => toast.error('Adjust failed'),
         });
@@ -289,16 +292,11 @@ export default function Index() {
                 toast.success('Deleted');
                 setDeleteOpen(false);
                 setDeleteRow(null);
-                fetchIndex();
+                fetchIndex(window.location.href); // Stay on current page
             },
             onError: () => toast.error('Delete failed'),
         });
     }
-
-    const rowCountLabel = useMemo(
-        () => `${rows.length} row${rows.length !== 1 ? 's' : ''}`,
-        [rows]
-    );
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -309,7 +307,6 @@ export default function Index() {
                     <h2 className="text-xl font-semibold">Stock Management</h2>
 
                     <div className="ml-auto flex items-center gap-2">
-                        {/* --- Search Input Field --- */}
                         <div className="relative">
                             <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
@@ -320,7 +317,6 @@ export default function Index() {
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
                         </div>
-                        {/* --- End Search Input --- */}
 
                         <Select
                             value={filterType}
@@ -337,7 +333,7 @@ export default function Index() {
                             </SelectContent>
                         </Select>
 
-                        <Button onClick={() => fetchIndex()}>
+                        <Button onClick={() => fetchIndex(window.location.href)}>
                             <RefreshCw size={16} />
                         </Button>
                         <Button
@@ -352,15 +348,8 @@ export default function Index() {
                     </div>
                 </div>
 
-                {/* --- The rest of the JSX remains the same --- */}
                 <div className="shadow rounded-md overflow-hidden">
-                    <div className="p-3 border-b flex items-center justify-between">
-                        <div className="text-sm text-gray-600">
-                            {loading ? 'Loading...' : rowCountLabel}
-                        </div>
-                    </div>
-
-                    <div className="overflow-x-auto p-3">
+                    <div className="overflow-x-auto ">
                         <Table>
                             <TableCaption>
                                 Stock items for RAM, Disk and Processor specs
@@ -404,7 +393,8 @@ export default function Index() {
                                                 <Button variant="ghost" onClick={() => openQuickAdjust(row)}>
                                                     <Plus size={14} />
                                                 </Button>
-                                                <Button variant="destructive" onClick={() => openDeleteConfirm(row)}>
+                                                <Button variant="destructive"
+                                                    className="bg-red-600 hover:bg-red-700 text-white" onClick={() => openDeleteConfirm(row)}>
                                                     <Trash size={14} />
                                                 </Button>
                                             </div>
@@ -439,7 +429,7 @@ export default function Index() {
                 </div>
             </div>
 
-            {/* All Dialogs (Create/Edit, Quick Adjust, Delete) remain the same */}
+            {/* Dialogs remain unchanged */}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>

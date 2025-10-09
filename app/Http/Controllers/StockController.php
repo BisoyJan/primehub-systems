@@ -39,7 +39,7 @@ class StockController extends Controller
         $type    = $request->query('type');
         $search  = $request->query('search'); // Capture search query
         $ids     = array_filter(array_map('intval', (array) $request->query('ids', [])));
-        $perPage = 15;
+        $perPage = 10;
 
         $query = Stock::query()->with('stockable');
 
