@@ -36,38 +36,60 @@ class StockController extends Controller
 
     public function index(Request $request)
     {
-        $type    = $request->query('type');       // 'ram' | 'disk' | 'processor' | null
+        $type    = $request->query('type');
+        $search  = $request->query('search'); // Capture search query
         $ids     = array_filter(array_map('intval', (array) $request->query('ids', [])));
         $perPage = 15;
 
         $query = Stock::query()->with('stockable');
 
-        // Map external type key to FQCN (kept minimal since frontend gates search client-side)
+        // Map external type key to FQCN
         $typeMap = [
-            'ram'       => \App\Models\RamSpec::class,
-            'disk'      => \App\Models\DiskSpec::class,
-            'processor' => \App\Models\ProcessorSpec::class,
+            'ram'       => RamSpec::class,
+            'disk'      => DiskSpec::class,
+            'processor' => ProcessorSpec::class,
         ];
 
-        // Optional: filter by type (frontend uses this to narrow dataset; search is client-side now)
-        if ($type) {
-            if (! isset($typeMap[$type])) {
-                return back()->withErrors(['type' => 'Invalid type']);
-            }
+        // Filter by a specific type if provided
+        if ($type && isset($typeMap[$type])) {
             $query->where('stockable_type', $typeMap[$type]);
         }
 
-        // Optional: narrow to specific stockable ids (used by table "Spec" links)
+        // If a search term is provided, apply search logic
+        if ($search) {
+            // Determine which related models to search within
+            $morphableTypes = ($type && isset($typeMap[$type]))
+                ? [$typeMap[$type]] // Search only in the specified type
+                : '*';              // Search in all possible types
+
+            $query->where(function ($q) use ($search, $morphableTypes) {
+                // Search directly on the `stocks` table columns
+                $q->where('location', 'like', "%{$search}%")
+                    ->orWhere('notes', 'like', "%{$search}%")
+                    // Also search on the related polymorphic 'stockable' tables
+                    ->orWhereHasMorph(
+                        'stockable',
+                        $morphableTypes,
+                        function ($morphQuery) use ($search) {
+                            // These column names are common across your spec models
+                            $morphQuery->where('manufacturer', 'like', "%{$search}%")
+                                ->orWhere('model', 'like', "%{$search}%");
+                        }
+                    );
+            });
+        }
+
+        // Optional: narrow to specific stockable ids
         if (! empty($ids)) {
             $query->whereIn('stockable_id', $ids);
         }
 
         $paginated = $query->orderBy('id', 'desc')
             ->paginate($perPage)
-            ->withQueryString();
+            ->withQueryString(); // IMPORTANT: Keeps search/filter params on pagination links
 
-        // normalize items for the UI
-        $items = $paginated->getCollection()->map(function (\App\Models\Stock $s) {
+        // normalize items for the UI (this part remains the same)
+        $items = $paginated->getCollection()->map(function (Stock $s) {
             $typeKey = $this->mapTypeKey($s->stockable_type);
             $label   = class_basename($s->stockable_type) . ' #' . $s->stockable_id;
 
@@ -90,7 +112,6 @@ class StockController extends Controller
                     'id'            => $s->stockable_id,
                     'label'         => $label,
                     'manufacturer'  => $s->stockable->manufacturer ?? null,
-                    'model_number'  => $s->stockable->model_number ?? null,
                     'model'         => $s->stockable->model ?? null,
                     'brand'         => $s->stockable->brand ?? null,
                     'series'        => $s->stockable->series ?? null,
@@ -100,11 +121,10 @@ class StockController extends Controller
             ];
         })->toArray();
 
-        // extract links from paginator for shadcn pagination
         $paginatorArray = $paginated->toArray();
         $links = $paginatorArray['links'] ?? [];
 
-        return \Inertia\Inertia::render('Computer/Stocks/Index', [
+        return Inertia::render('Computer/Stocks/Index', [
             'stocks' => [
                 'data'  => $items,
                 'links' => $links,
@@ -115,9 +135,7 @@ class StockController extends Controller
                     'total'        => $paginated->total(),
                 ],
             ],
-            // keep the selected type so the frontend can hydrate its initial filter
             'filterType' => $type ?? 'all',
-            // no server-side search anymore (frontend filters client-side)
             'flash' => session('flash') ?? null,
         ]);
     }

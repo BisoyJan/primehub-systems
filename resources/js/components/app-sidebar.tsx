@@ -1,5 +1,6 @@
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
+import { NavComputer } from '@/components/nav-computer-group';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -27,6 +28,9 @@ const mainNavItems: NavItem[] = [
         href: dashboard(),
         icon: LayoutGrid,
     },
+];
+
+const computerNavItems: NavItem[] = [
     {
         title: 'Ram Specs',
         href: ramIndex.url(),
@@ -52,7 +56,7 @@ const mainNavItems: NavItem[] = [
         href: stocksIndex.url(),
         icon: Folder
     }
-];
+]
 
 const footerNavItems: NavItem[] = [
     {
@@ -84,6 +88,7 @@ export function AppSidebar() {
 
             <SidebarContent>
                 <NavMain items={mainNavItems} />
+                <NavComputer items={computerNavItems} />
             </SidebarContent>
 
             <SidebarFooter>

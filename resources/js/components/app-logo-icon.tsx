@@ -2,12 +2,90 @@ import { SVGAttributes } from 'react';
 
 export default function AppLogoIcon(props: SVGAttributes<SVGElement>) {
     return (
-        <svg {...props} viewBox="0 0 40 42" xmlns="http://www.w3.org/2000/svg">
+        <svg
+            {...props}
+            viewBox="0 0 64 64"
+            xmlns="http://www.w3.org/2000/svg"
+            role="img"
+            aria-label="PrimeHub 3D logo"
+        >
+            <defs>
+                <linearGradient id="g_top" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0" stopColor="#4f46e5" />
+                    <stop offset="1" stopColor="#3b82f6" />
+                </linearGradient>
+
+                <linearGradient id="g_front" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0" stopColor="#2563eb" />
+                    <stop offset="1" stopColor="#1e40af" />
+                </linearGradient>
+
+                <linearGradient id="g_side" x1="0" x2="1" y1="0" y2="1">
+                    <stop offset="0" stopColor="#1e3a8a" />
+                    <stop offset="1" stopColor="#0f172a" />
+                </linearGradient>
+
+                <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
+                    <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#000" floodOpacity="0.25" />
+                </filter>
+
+                <filter id="inner" x="-20%" y="-20%" width="140%" height="140%">
+                    <feGaussianBlur stdDeviation="1" result="b" />
+                    <feComposite in="SourceGraphic" in2="b" operator="over" />
+                </filter>
+            </defs>
+
+
+            <g filter="url(#shadow)">
+
+                <path
+                    d="M8 20 L32 8 L56 20 L32 32 Z"
+                    fill="url(#g_top)"
+                    stroke="rgba(0,0,0,0.06)"
+                    strokeWidth="0.5"
+                />
+
+
+                <path
+                    d="M8 20 L8 44 L32 56 L32 32 Z"
+                    fill="url(#g_front)"
+                    stroke="rgba(0,0,0,0.06)"
+                    strokeWidth="0.5"
+                />
+
+
+                <path
+                    d="M56 20 L56 44 L32 56 L32 32 Z"
+                    fill="url(#g_side)"
+                    stroke="rgba(0,0,0,0.06)"
+                    strokeWidth="0.5"
+                />
+            </g>
+
+
             <path
-                fillRule="evenodd"
-                clipRule="evenodd"
-                d="M17.2 5.63325L8.6 0.855469L0 5.63325V32.1434L16.2 41.1434L32.4 32.1434V23.699L40 19.4767V9.85547L31.4 5.07769L22.8 9.85547V18.2999L17.2 21.411V5.63325ZM38 18.2999L32.4 21.411V15.2545L38 12.1434V18.2999ZM36.9409 10.4439L31.4 13.5221L25.8591 10.4439L31.4 7.36561L36.9409 10.4439ZM24.8 18.2999V12.1434L30.4 15.2545V21.411L24.8 18.2999ZM23.8 20.0323L29.3409 23.1105L16.2 30.411L10.6591 27.3328L23.8 20.0323ZM7.6 27.9212L15.2 32.1434V38.2999L2 30.9666V7.92116L7.6 11.0323V27.9212ZM8.6 9.29991L3.05913 6.22165L8.6 3.14339L14.1409 6.22165L8.6 9.29991ZM30.4 24.8101L17.2 32.1434V38.2999L30.4 30.9666V24.8101ZM9.6 11.0323L15.2 7.92117V22.5221L9.6 25.6333V11.0323Z"
+                d="M12 22 L32 12 L52 22 L32 30 Z"
+                fill="rgba(255,255,255,0.08)"
+                filter="url(#inner)"
             />
+
+
+            <path d="M8 20 L32 8 L56 20" fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.6" />
+            <path d="M8 20 L8 44 L32 56" fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="0.6" />
+            <path d="M56 20 L56 44 L32 56" fill="none" stroke="rgba(0,0,0,0.12)" strokeWidth="0.6" />
+
+
+            <g transform="translate(32,32) scale(0.9) translate(-32,-32)">
+                <path
+                    d="M32 20 L40 34 L24 34 Z"
+                    fill="rgba(255,255,255,0.92)"
+                    opacity="0.95"
+                />
+                <path
+                    d="M32 24 L36.5 32 L27.5 32 Z"
+                    fill="rgba(74,74,255,0.12)"
+                />
+            </g>
         </svg>
     );
 }

@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('disk_specs', function (Blueprint $table) {
             $table->id();
             $table->string('manufacturer');
-            $table->string('model_number');
+            $table->string('model');
             $table->unsignedInteger('capacity_gb');
             $table->string('interface');
             $table->string('drive_type');

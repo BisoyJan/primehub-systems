@@ -55,7 +55,7 @@ interface RamSpec {
 interface DiskSpec {
     id: number;
     manufacturer: string;
-    model_number: string;
+    model: string;
     capacity_gb: number;
     interface: string;
     drive_type: string;
@@ -64,8 +64,8 @@ interface DiskSpec {
 }
 interface ProcessorSpec {
     id: number;
-    brand: string;
-    series: string;
+    manufacturer: string;
+    model: string;
     socket_type: string;
     core_count: number;
     thread_count: number;
@@ -76,7 +76,7 @@ interface ProcessorSpec {
 }
 interface Motherboard {
     id: number;
-    brand: string;
+    manufacturer: string;
     model: string;
     chipset: string;
     memory_type: string;
@@ -157,7 +157,7 @@ export default function Index() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>ID</TableHead>
-                                <TableHead>Brand</TableHead>
+                                <TableHead>Manufacturer</TableHead>
                                 <TableHead>Model</TableHead>
                                 <TableHead>Chipset</TableHead>
                                 <TableHead>Memory</TableHead>
@@ -169,7 +169,7 @@ export default function Index() {
                             {motherboards.data.map((mb) => (
                                 <TableRow key={mb.id}>
                                     <TableCell>{mb.id}</TableCell>
-                                    <TableCell>{mb.brand}</TableCell>
+                                    <TableCell>{mb.manufacturer}</TableCell>
                                     <TableCell>{mb.model}</TableCell>
                                     <TableCell>{mb.chipset}</TableCell>
                                     <TableCell>{mb.memory_type}</TableCell>
@@ -194,7 +194,7 @@ export default function Index() {
                                             </DialogTrigger>
                                             <DialogContent className="max-w-7xl w-full h-[90vh] flex flex-col">
                                                 <DialogTitle className="text-xl font-semibold">
-                                                    {mb.brand} {mb.model} — Full Specifications
+                                                    {mb.manufacturer} {mb.model} — Full Specifications
                                                 </DialogTitle>
 
                                                 {/* Scrollable body */}
@@ -203,7 +203,7 @@ export default function Index() {
                                                     <section>
                                                         <h3 className="font-semibold text-base mb-2">Motherboard Details</h3>
                                                         <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                                                            <p><span className="font-medium">Brand:</span> {mb.brand}</p>
+                                                            <p><span className="font-medium">manufacturer:</span> {mb.manufacturer}</p>
                                                             <p><span className="font-medium">Model:</span> {mb.model}</p>
                                                             <p><span className="font-medium">Chipset:</span> {mb.chipset}</p>
                                                             <p><span className="font-medium">Memory Type:</span> {mb.memory_type}</p>
@@ -263,7 +263,7 @@ export default function Index() {
                                                                     {mb.diskSpecs.map((d) => (
                                                                         <TableRow key={d.id}>
                                                                             <TableCell>{d.manufacturer}</TableCell>
-                                                                            <TableCell>{d.model_number}</TableCell>
+                                                                            <TableCell>{d.model}</TableCell>
                                                                             <TableCell>{d.capacity_gb} GB</TableCell>
                                                                             <TableCell>{d.drive_type}</TableCell>
                                                                             <TableCell>{d.interface}</TableCell>
@@ -285,8 +285,8 @@ export default function Index() {
                                                             <Table>
                                                                 <TableHeader>
                                                                     <TableRow>
-                                                                        <TableHead>Brand</TableHead>
-                                                                        <TableHead>Series</TableHead>
+                                                                        <TableHead>manufacturer</TableHead>
+                                                                        <TableHead>model</TableHead>
                                                                         <TableHead>Socket</TableHead>
                                                                         <TableHead>Cores</TableHead>
                                                                         <TableHead>Threads</TableHead>
@@ -298,8 +298,8 @@ export default function Index() {
                                                                 <TableBody>
                                                                     {mb.processorSpecs.map((p) => (
                                                                         <TableRow key={p.id}>
-                                                                            <TableCell>{p.brand}</TableCell>
-                                                                            <TableCell>{p.series}</TableCell>
+                                                                            <TableCell>{p.manufacturer}</TableCell>
+                                                                            <TableCell>{p.model}</TableCell>
                                                                             <TableCell>{p.socket_type}</TableCell>
                                                                             <TableCell>{p.core_count}</TableCell>
                                                                             <TableCell>{p.thread_count}</TableCell>
@@ -337,7 +337,7 @@ export default function Index() {
                                                 <AlertDialogHeader>
                                                     <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
                                                     <AlertDialogDescription>
-                                                        Are you sure you want to delete {mb.brand} {mb.model}? This action cannot be undone.
+                                                        Are you sure you want to delete {mb.manufacturer} {mb.model}? This action cannot be undone.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>

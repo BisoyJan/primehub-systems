@@ -11,7 +11,7 @@ return new class extends Migration
         Schema::create('motherboard_specs', function (Blueprint $table) {
             $table->id();
 
-            $table->string('brand');
+            $table->string('manufacturer');
             $table->string('model');
             $table->string('chipset');
             $table->string('form_factor');

@@ -11,7 +11,7 @@ class MotherboardSpecFactory extends Factory
 
     public function definition(): array
     {
-        $brands       = ['ASUS', 'Gigabyte', 'MSI', 'ASRock'];
+        $manufacturers       = ['ASUS', 'Gigabyte', 'MSI', 'ASRock'];
         $chipsets     = ['B760', 'Z790', 'X670', 'B550', 'Z690'];
         $forms        = ['ATX', 'Micro-ATX', 'Mini-ITX'];
         $memTypes     = ['DDR4', 'DDR5'];
@@ -29,7 +29,7 @@ class MotherboardSpecFactory extends Factory
         $sockets      = ['LGA1200', 'LGA1700', 'AM4', 'AM5', 'TR4'];
 
         return [
-            'brand'               => $this->faker->randomElement($brands),
+            'manufacturer'               => $this->faker->randomElement($manufacturers),
             'model'               => strtoupper($this->faker->bothify('????-####')),
             'chipset'             => $this->faker->randomElement($chipsets),
             'form_factor'         => $this->faker->randomElement($forms),

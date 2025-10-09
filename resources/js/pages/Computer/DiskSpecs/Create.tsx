@@ -29,7 +29,7 @@ export default function Create() {
 
     const { data, setData, post, errors } = useForm({
         manufacturer: '',
-        model_number: '',
+        model: '',
         capacity_gb: '' as number | '',
         interface: '',
         drive_type: '',
@@ -83,15 +83,15 @@ export default function Create() {
                                 {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                             </div>
                             <div>
-                                <Label htmlFor="model_number">Model Number</Label>
+                                <Label htmlFor="model">Model Number</Label>
                                 <Input
-                                    id="model_number"
-                                    name="model_number"
+                                    id="model"
+                                    name="model"
                                     placeholder="e.g. 980 Pro"
-                                    value={data.model_number}
-                                    onChange={(e) => setData("model_number", e.target.value)}
+                                    value={data.model}
+                                    onChange={(e) => setData("model", e.target.value)}
                                 />
-                                {errors.model_number && <p className="text-red-600">{errors.model_number}</p>}
+                                {errors.model && <p className="text-red-600">{errors.model}</p>}
                             </div>
                         </div>
                     </section>

@@ -66,7 +66,7 @@ export default function Create() {
     const { ramOptions, diskOptions, processorOptions, flash } = usePage<PageProps>().props
 
     const form = useForm({
-        brand: '',
+        manufacturer: '',
         model: '',
         chipset: '',
         form_factor: '',
@@ -257,9 +257,9 @@ export default function Create() {
                         <h2 className="text-lg font-semibold mb-2">Core Info</h2>
                         <div className="grid grid-cols-2 gap-6">
                             <div>
-                                <Label htmlFor="brand">Brand</Label>
-                                <Input id="brand" name="brand" value={form.data.brand} onChange={(e) => form.setData('brand', e.target.value)} />
-                                {form.errors.brand && <p className="text-red-600">{form.errors.brand}</p>}
+                                <Label htmlFor="manufacturer">Manufacturer</Label>
+                                <Input id="manufacturer" name="manufacturer" value={form.data.manufacturer} onChange={(e) => form.setData('manufacturer', e.target.value)} />
+                                {form.errors.manufacturer && <p className="text-red-600">{form.errors.manufacturer}</p>}
                             </div>
 
                             <div>

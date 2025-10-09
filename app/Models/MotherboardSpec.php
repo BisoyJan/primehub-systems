@@ -9,7 +9,7 @@ class MotherboardSpec extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'brand',
+        'manufacturer',
         'model',
         'chipset',
         'form_factor',

@@ -23,7 +23,7 @@ class MotherboardSpecController extends Controller
             ->paginate(10)
             ->through(fn($mb) => [
                 'id'              => $mb->id,
-                'brand'           => $mb->brand,
+                'manufacturer'    => $mb->manufacturer,
                 'model'           => $mb->model,
                 'chipset'         => $mb->chipset,
                 'memory_type'     => $mb->memory_type,
@@ -38,10 +38,10 @@ class MotherboardSpecController extends Controller
                     'speed'        => $r->speed ?? null,
                     'quantity'     => $r->pivot->quantity ?? null,
                 ])->toArray(),
-                'diskSpecs'       => $mb->diskSpecs->map(fn($d) => [
+                'diskSpecs'        => $mb->diskSpecs->map(fn($d) => [
                     'id'                   => $d->id,
                     'manufacturer'         => $d->manufacturer,
-                    'model_number'         => $d->model_number,
+                    'model'                => $d->model,
                     'capacity_gb'          => $d->capacity_gb,
                     'drive_type'           => $d->drive_type ?? null,
                     'interface'            => $d->interface ?? null,
@@ -50,8 +50,8 @@ class MotherboardSpecController extends Controller
                 ])->toArray(),
                 'processorSpecs'  => $mb->processorSpecs->map(fn($p) => [
                     'id'             => $p->id,
-                    'brand'          => $p->brand,
-                    'series'         => $p->series,
+                    'manufacturer'   => $p->manufacturer,
+                    'model'          => $p->model,
                     'socket_type'    => $p->socket_type,
                     'core_count'     => $p->core_count ?? null,
                     'thread_count'   => $p->thread_count ?? null,
@@ -84,14 +84,14 @@ class MotherboardSpecController extends Controller
             'diskOptions' => DiskSpec::with('stock')->get()
                 ->map(fn($d) => [
                     'id'             => $d->id,
-                    'label'          => "{$d->manufacturer} {$d->model_number} - {$d->interface} {$d->capacity_gb}GB",
+                    'label'          => "{$d->manufacturer} {$d->model} - {$d->interface} {$d->capacity_gb}GB",
                     'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
 
             'processorOptions' => ProcessorSpec::with('stock')->get()
                 ->map(fn($p) => [
                     'id'             => $p->id,
-                    'label'          => "{$p->brand} {$p->series} {$p->model_number}",
+                    'label'       => "{$p->manufacturer} {$p->model}",
                     'socket_type'    => $p->socket_type,
                     'stock_quantity' => $p->stock?->quantity ?? 0,
                 ]),
@@ -251,7 +251,7 @@ class MotherboardSpecController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'brand'                => 'required|string|max:255',
+            'manufacturer'                => 'required|string|max:255',
             'model'                => 'required|string|max:255',
             'chipset'              => 'required|string|max:255',
             'form_factor'          => 'required|string|max:50',
@@ -327,7 +327,7 @@ class MotherboardSpecController extends Controller
         return Inertia::render('Computer/Motherboards/Edit', [
             'motherboard' => [
                 'id'                  => $motherboard->id,
-                'brand'               => $motherboard->brand,
+                'manufacturer'        => $motherboard->manufacturer,
                 'model'               => $motherboard->model,
                 'chipset'             => $motherboard->chipset,
                 'form_factor'         => $motherboard->form_factor,
@@ -361,13 +361,13 @@ class MotherboardSpecController extends Controller
             'diskOptions' => DiskSpec::with('stock')->get()
                 ->map(fn($d) => [
                     'id'    => $d->id,
-                    'label' => "{$d->manufacturer} {$d->model_number} {$d->interface} {$d->capacity_gb}GB",
+                    'label' => "{$d->manufacturer} {$d->model} {$d->interface} {$d->capacity_gb}GB",
                     'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
             'processorOptions' => ProcessorSpec::with('stock')->get()
                 ->map(fn($p) => [
                     'id'          => $p->id,
-                    'label'       => "{$p->brand} {$p->series} {$p->model_number}",
+                    'label'       => "{$p->manufacturer} {$p->model}",
                     'socket_type' => $p->socket_type,
                     'stock_quantity' => $p->stock?->quantity ?? 0,
                 ]),
@@ -380,7 +380,7 @@ class MotherboardSpecController extends Controller
     public function update(Request $request, MotherboardSpec $motherboard)
     {
         $data = $request->validate([
-            'brand'                => 'required|string|max:255',
+            'manufacturer'                => 'required|string|max:255',
             'model'                => 'required|string|max:255',
             'chipset'              => 'required|string|max:255',
             'form_factor'          => 'required|string|max:50',

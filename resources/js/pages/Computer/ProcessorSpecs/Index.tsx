@@ -34,8 +34,8 @@ const breadcrumbs = [{ title: "ProcessorSpecs", href: dashboard().url }];
 
 interface ProcessorSpec {
     id: number;
-    brand: string;
-    series: string;
+    manufacturer: string;
+    model: string;
     socket_type: string;
     core_count: number;
     thread_count: number;
@@ -102,7 +102,7 @@ export default function Index() {
                         <input
                             type="text"
                             name="search"
-                            placeholder="Search processor series..."
+                            placeholder="Search processor model..."
                             value={form.data.search}
                             onChange={(e) => form.setData("search", e.target.value)}
                             className="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -124,8 +124,8 @@ export default function Index() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>ID</TableHead>
-                                <TableHead>Brand</TableHead>
-                                <TableHead>Series</TableHead>
+                                <TableHead>Manufacturer</TableHead>
+                                <TableHead>Model</TableHead>
                                 <TableHead>Socket</TableHead>
                                 <TableHead>Cores</TableHead>
                                 <TableHead>Threads</TableHead>
@@ -142,8 +142,8 @@ export default function Index() {
                             {processorspecs.data.map((cpu) => (
                                 <TableRow key={cpu.id}>
                                     <TableCell>{cpu.id}</TableCell>
-                                    <TableCell className="font-medium">{cpu.brand}</TableCell>
-                                    <TableCell>{cpu.series}</TableCell>
+                                    <TableCell className="font-medium">{cpu.manufacturer}</TableCell>
+                                    <TableCell>{cpu.model}</TableCell>
                                     <TableCell>{cpu.socket_type}</TableCell>
                                     <TableCell>{cpu.core_count}</TableCell>
                                     <TableCell>{cpu.thread_count}</TableCell>
@@ -192,7 +192,7 @@ export default function Index() {
                                                     <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
                                                     <AlertDialogDescription>
                                                         Are you sure you want to delete{" "}
-                                                        <strong>{cpu.brand} {cpu.series}</strong>? This action cannot be undone.
+                                                        <strong>{cpu.manufacturer} {cpu.model}</strong>? This action cannot be undone.
                                                     </AlertDialogDescription>
                                                 </AlertDialogHeader>
                                                 <AlertDialogFooter>

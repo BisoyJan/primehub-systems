@@ -36,7 +36,7 @@ const breadcrumbs = [{ title: "DiskSpecs", href: dashboard().url }];
 interface DiskSpec {
     id: number;
     manufacturer: string;
-    model_number: string;
+    model: string;
     capacity_gb: number;
     interface: string;
     drive_type: string;
@@ -140,7 +140,7 @@ export default function Index() {
                                 <TableRow key={disk.id}>
                                     <TableCell>{disk.id}</TableCell>
                                     <TableCell className="font-medium">{disk.manufacturer}</TableCell>
-                                    <TableCell>{disk.model_number}</TableCell>
+                                    <TableCell>{disk.model}</TableCell>
                                     <TableCell>{disk.capacity_gb}</TableCell>
                                     <TableCell>{disk.interface}</TableCell>
                                     <TableCell>{disk.drive_type}</TableCell>
@@ -188,7 +188,7 @@ export default function Index() {
                                                     <AlertDialogDescription>
                                                         Are you sure you want to delete{" "}
                                                         <strong>
-                                                            {disk.manufacturer} {disk.model_number}
+                                                            {disk.manufacturer} {disk.model}
                                                         </strong>
                                                         ? This action cannot be undone.
                                                     </AlertDialogDescription>

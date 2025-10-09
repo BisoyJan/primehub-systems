@@ -29,8 +29,8 @@ export default function Create() {
     const { flash } = usePage<{ flash?: { message?: string; type?: string } }>().props;
 
     const { data, setData, post, errors } = useForm({
-        brand: '' as string,
-        series: '',
+        manufacturer: '' as string,
+        model: '',
         socket_type: '',
         core_count: '' as number | '',
         thread_count: '' as number | '',
@@ -40,14 +40,14 @@ export default function Create() {
         tdp_watts: '' as number | '',
     });
 
-    // pick sockets based on selected brand
+    // pick sockets based on selected manufacturer
     const availableSockets = useMemo(() => {
-        return data.brand === 'Intel'
+        return data.manufacturer === 'Intel'
             ? intelSockets
-            : data.brand === 'AMD'
+            : data.manufacturer === 'AMD'
                 ? amdSockets
                 : [...intelSockets, ...amdSockets];
-    }, [data.brand]);
+    }, [data.manufacturer]);
 
     useEffect(() => {
         if (!flash?.message) return;
@@ -77,18 +77,18 @@ export default function Create() {
                 </div>
 
                 <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-                    {/* Brand */}
+                    {/* manufacturer */}
                     <div>
-                        <Label htmlFor="brand">Brand</Label>
+                        <Label htmlFor="manufacturer">manufacturer</Label>
                         <Select
-                            value={data.brand}
+                            value={data.manufacturer}
                             onValueChange={(val) => {
-                                setData('brand', val)
-                                setData('socket_type', '') // reset socket when brand changes
+                                setData('manufacturer', val)
+                                setData('socket_type', '') // reset socket when manufacturer changes
                             }}
                         >
-                            <SelectTrigger id="brand" name="brand">
-                                <SelectValue placeholder="Select brand" />
+                            <SelectTrigger id="manufacturer" name="manufacturer">
+                                <SelectValue placeholder="Select manufacturer" />
                             </SelectTrigger>
                             <SelectContent>
                                 {['Intel', 'AMD'].map((b) => (
@@ -96,20 +96,20 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.brand && <p className="text-red-600">{errors.brand}</p>}
+                        {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                     </div>
 
-                    {/* Series */}
+                    {/* model */}
                     <div>
-                        <Label htmlFor="series">Series</Label>
+                        <Label htmlFor="model">model</Label>
                         <Input
-                            id="series"
-                            name="series"
+                            id="model"
+                            name="model"
                             placeholder="e.g. Core i5-12400"
-                            value={data.series}
-                            onChange={(e) => setData('series', e.target.value)}
+                            value={data.model}
+                            onChange={(e) => setData('model', e.target.value)}
                         />
-                        {errors.series && <p className="text-red-600">{errors.series}</p>}
+                        {errors.model && <p className="text-red-600">{errors.model}</p>}
                     </div>
 
                     {/* Socket Type (dependent) */}

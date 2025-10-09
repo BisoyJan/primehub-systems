@@ -17,8 +17,8 @@ class ProcessorSpecsController extends Controller
 
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('brand', 'like', "%{$search}%")
-                    ->orWhere('series', 'like', "%{$search}%");
+                $q->where('manufacturer', 'like', "%{$search}%")
+                    ->orWhere('model', 'like', "%{$search}%");
             });
         }
 
@@ -47,8 +47,8 @@ class ProcessorSpecsController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'brand'               => 'required|string|max:255',
-            'series'              => 'required|string|max:255',
+            'manufacturer'               => 'required|string|max:255',
+            'model'              => 'required|string|max:255',
             'socket_type'         => 'required|string|max:255',
             'core_count'          => 'required|integer|min:1',
             'thread_count'        => 'required|integer|min:1',
@@ -91,8 +91,8 @@ class ProcessorSpecsController extends Controller
     public function update(Request $request, ProcessorSpec $processorspec)
     {
         $validated = $request->validate([
-            'brand'               => 'required|string|max:255',
-            'series'              => 'required|string|max:255',
+            'manufacturer'               => 'required|string|max:255',
+            'model'              => 'required|string|max:255',
             'socket_type'         => 'required|string|max:255',
             'core_count'          => 'required|integer|min:1',
             'thread_count'        => 'required|integer|min:1',

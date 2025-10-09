@@ -27,8 +27,8 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 interface ProcessorSpec {
     id: number;
-    brand: string;
-    series: string;
+    manufacturer: string;
+    model: string;
     socket_type: string;
     core_count: number;
     thread_count: number;
@@ -46,8 +46,8 @@ export default function Edit({ processorspec }: Props) {
     const { flash } = usePage<{ flash?: { message?: string; type?: string } }>().props;
 
     const { data, setData, put, errors } = useForm({
-        brand: processorspec.brand,
-        series: processorspec.series,
+        manufacturer: processorspec.manufacturer,
+        model: processorspec.model,
         socket_type: processorspec.socket_type,
         core_count: processorspec.core_count,
         thread_count: processorspec.thread_count,
@@ -57,12 +57,12 @@ export default function Edit({ processorspec }: Props) {
         tdp_watts: processorspec.tdp_watts,
     });
 
-    // dynamically choose sockets based on brand
+    // dynamically choose sockets based on manufacturer
     const availableSockets = useMemo(() => {
-        if (data.brand === 'Intel') return intelSockets;
-        if (data.brand === 'AMD') return amdSockets;
+        if (data.manufacturer === 'Intel') return intelSockets;
+        if (data.manufacturer === 'AMD') return amdSockets;
         return [...intelSockets, ...amdSockets];
-    }, [data.brand]);
+    }, [data.manufacturer]);
 
     useEffect(() => {
         if (!flash?.message) return;
@@ -94,18 +94,18 @@ export default function Edit({ processorspec }: Props) {
                 <form onSubmit={handleUpdate} className="grid grid-cols-2 gap-4">
 
 
-                    {/* Row 1: Brand & Series */}
+                    {/* Row 1: manufacturer & model */}
                     <div>
-                        <Label htmlFor="brand">Brand</Label>
+                        <Label htmlFor="manufacturer">manufacturer</Label>
                         <Select
-                            value={data.brand}
+                            value={data.manufacturer}
                             onValueChange={(val) => {
-                                setData('brand', val);
-                                setData('socket_type', ''); // reset socket when brand changes
+                                setData('manufacturer', val);
+                                setData('socket_type', ''); // reset socket when manufacturer changes
                             }}
                         >
-                            <SelectTrigger id="brand" name="brand">
-                                <SelectValue placeholder="Select brand" />
+                            <SelectTrigger id="manufacturer" name="manufacturer">
+                                <SelectValue placeholder="Select manufacturer" />
                             </SelectTrigger>
                             <SelectContent>
                                 {['Intel', 'AMD'].map((b) => (
@@ -113,18 +113,18 @@ export default function Edit({ processorspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.brand && <p className="text-red-600">{errors.brand}</p>}
+                        {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                     </div>
                     <div>
-                        <Label htmlFor="series">Series</Label>
+                        <Label htmlFor="model">model</Label>
                         <Input
-                            id="series"
-                            name="series"
+                            id="model"
+                            name="model"
                             placeholder="e.g. Core i5-12400"
-                            value={data.series}
-                            onChange={(e) => setData('series', e.target.value)}
+                            value={data.model}
+                            onChange={(e) => setData('model', e.target.value)}
                         />
-                        {errors.series && <p className="text-red-600">{errors.series}</p>}
+                        {errors.model && <p className="text-red-600">{errors.model}</p>}
                     </div>
 
                     {/* Row 2: Socket & Cores */}

@@ -18,7 +18,7 @@ class DiskSpecsController extends Controller
         if ($search = $request->input('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('manufacturer', 'like', "%{$search}%")
-                    ->orWhere('model_number', 'like', "%{$search}%")
+                    ->orWhere('model', 'like', "%{$search}%")
                     ->orWhere('interface', 'like', "%{$search}%")
                     ->orWhere('drive_type', 'like', "%{$search}%")
                     ->orWhere('capacity_gb', 'like', "%{$search}%");
@@ -51,7 +51,7 @@ class DiskSpecsController extends Controller
     {
         $validated = $request->validate([
             'manufacturer'         => 'required|string|max:255',
-            'model_number'         => 'required|string|max:255',
+            'model'         => 'required|string|max:255',
             'capacity_gb'          => 'required|integer|min:1',
             'interface'            => 'required|string|max:255',
             'drive_type'           => 'required|string|max:255',
@@ -93,7 +93,7 @@ class DiskSpecsController extends Controller
     {
         $validated = $request->validate([
             'manufacturer'         => 'required|string|max:255',
-            'model_number'         => 'required|string|max:255',
+            'model'         => 'required|string|max:255',
             'capacity_gb'          => 'required|integer|min:1',
             'interface'            => 'required|string|max:255',
             'drive_type'           => 'required|string|max:255',

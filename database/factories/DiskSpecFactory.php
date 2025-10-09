@@ -48,7 +48,7 @@ class DiskSpecFactory extends Factory
 
         return [
             'manufacturer'        => $this->faker->randomElement($manufacturers),
-            'model_number'        => strtoupper($this->faker->bothify('??###??')),
+            'model'        => strtoupper($this->faker->bothify('??###??')),
             'capacity_gb'         => $this->faker->randomElement($capacityOptions),
             'interface'           => $interface,
             'drive_type'          => $driveType,

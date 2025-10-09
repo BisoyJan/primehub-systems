@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
 
             // Core identifiers
-            $table->string('brand'); // e.g. Intel, AMD
-            $table->string('series'); // e.g. Core i5-12400
+            $table->string('manufacturer'); // e.g. Intel, AMD
+            $table->string('model'); // e.g. Core i5-12400
 
             // Compatibility
             $table->string('socket_type'); // e.g. LGA1700

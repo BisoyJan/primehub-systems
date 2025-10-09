@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import type { Page as InertiaPage } from '@inertiajs/core';
 import { toast } from 'sonner';
-import { Plus, Trash, Edit, RefreshCw } from 'lucide-react';
+import { Plus, Trash, Edit, RefreshCw, Search } from 'lucide-react'; // Added Search icon
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -89,8 +89,12 @@ export default function Index() {
     const [links, setLinks] = useState<PaginationLink[]>(initialLinks);
     const [loading, setLoading] = useState(false);
     const [filterType, setFilterType] = useState<SpecType | 'all'>(initialFilter);
-    const [queryIds, setQueryIds] = useState<string>('');
     const [pollMs, setPollMs] = useState<number | null>(null);
+
+    // --- Search State ---
+    const [searchQuery, setSearchQuery] = useState('');
+    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+    // --- End Search State ---
 
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<StockRow | null>(null);
@@ -121,18 +125,22 @@ export default function Index() {
         else toast.success(props.flash.message);
     }, [props.flash?.message, props.flash?.type]);
 
+    // --- Debounce search input ---
     useEffect(() => {
-        setRows(initialStocks);
-        setLinks(initialLinks);
-    }, [page.props]);
+        const timer = setTimeout(() => {
+            setDebouncedSearchQuery(searchQuery);
+        }, 500); // Wait 500ms after user stops typing
+
+        return () => clearTimeout(timer);
+    }, [searchQuery]);
+    // --- End Debounce ---
 
     const fetchIndex = useCallback((pageUrl?: string) => {
         setLoading(true);
 
         const params: Record<string, string | number | string[]> = {};
         if (filterType !== 'all') params.type = filterType;
-        const ids = queryIds.split(',').map((s) => s.trim()).filter(Boolean);
-        if (ids.length) params['ids[]'] = ids;
+        if (debouncedSearchQuery) params.search = debouncedSearchQuery; // Always send search param
 
         const url = pageUrl ?? stocksIndex().url;
 
@@ -147,13 +155,13 @@ export default function Index() {
             },
             onFinish: () => setLoading(false),
         });
-    }, [filterType, queryIds]);
+    }, [filterType, debouncedSearchQuery]); // Add debounced query as a dependency
 
     useEffect(() => {
-        if (filterType !== initialFilter || queryIds !== '') {
-            fetchIndex();
-        }
-    }, [filterType, queryIds, initialFilter, fetchIndex]);
+        // This effect triggers a data fetch whenever the filter or debounced search changes.
+        // Changing the search term will reset the view to the first page of results.
+        fetchIndex();
+    }, [filterType, debouncedSearchQuery]); // Remove fetchIndex from here
 
     useEffect(() => {
         if (!pollMs || pollMs <= 0) return;
@@ -176,6 +184,7 @@ export default function Index() {
         return `${name} #${row.stockable_id}`;
     }
 
+    // --- Other functions (openCreate, openEdit, submit, etc.) remain the same ---
     function openCreate() {
         setEditing(null);
         reset('type', 'stockable_id', 'quantity', 'reserved', 'location', 'notes');
@@ -214,6 +223,8 @@ export default function Index() {
             notes: data.notes || null,
         };
 
+        const onFinish = () => fetchIndex();
+
         if (editing) {
             router.put(stocksUpdate(editing.id).url, payload, {
                 preserveScroll: true,
@@ -237,7 +248,6 @@ export default function Index() {
         }
     }
 
-    // Quick adjust dialog handlers
     function openQuickAdjust(row: StockRow) {
         setAdjustRow(row);
         setAdjustDelta('1');
@@ -266,7 +276,6 @@ export default function Index() {
         });
     }
 
-    // Delete confirm dialog handlers
     function openDeleteConfirm(row: StockRow) {
         setDeleteRow(row);
         setDeleteOpen(true);
@@ -300,6 +309,19 @@ export default function Index() {
                     <h2 className="text-xl font-semibold">Stock Management</h2>
 
                     <div className="ml-auto flex items-center gap-2">
+                        {/* --- Search Input Field --- */}
+                        <div className="relative">
+                            <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                type="search"
+                                placeholder="Search location, notes, model..."
+                                className="pl-8 sm:w-[300px]"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                            />
+                        </div>
+                        {/* --- End Search Input --- */}
+
                         <Select
                             value={filterType}
                             onValueChange={(v: string) => setFilterType(v as SpecType | 'all')}
@@ -315,12 +337,6 @@ export default function Index() {
                             </SelectContent>
                         </Select>
 
-                        <Input
-                            placeholder="ids, e.g. 1,2,3"
-                            value={queryIds}
-                            onChange={(e) => setQueryIds(e.target.value)}
-                            className="w-52"
-                        />
                         <Button onClick={() => fetchIndex()}>
                             <RefreshCw size={16} />
                         </Button>
@@ -336,6 +352,7 @@ export default function Index() {
                     </div>
                 </div>
 
+                {/* --- The rest of the JSX remains the same --- */}
                 <div className="shadow rounded-md overflow-hidden">
                     <div className="p-3 border-b flex items-center justify-between">
                         <div className="text-sm text-gray-600">
@@ -381,13 +398,13 @@ export default function Index() {
                                         <TableCell>{row.notes ?? '-'}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Button variant="ghost" onClick={() => openEdit(row)}>
+                                                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => openEdit(row)}>
                                                     <Edit size={14} />
                                                 </Button>
                                                 <Button variant="ghost" onClick={() => openQuickAdjust(row)}>
                                                     <Plus size={14} />
                                                 </Button>
-                                                <Button variant="ghost" onClick={() => openDeleteConfirm(row)}>
+                                                <Button variant="destructive" onClick={() => openDeleteConfirm(row)}>
                                                     <Trash size={14} />
                                                 </Button>
                                             </div>
@@ -401,7 +418,7 @@ export default function Index() {
                                             colSpan={9}
                                             className="py-8 text-center text-gray-500"
                                         >
-                                            No stocks
+                                            No stock items found
                                         </TableCell>
                                     </TableRow>
                                 )}
@@ -422,7 +439,7 @@ export default function Index() {
                 </div>
             </div>
 
-            {/* Create/Edit Dialog */}
+            {/* All Dialogs (Create/Edit, Quick Adjust, Delete) remain the same */}
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>
                     <DialogHeader>
@@ -519,7 +536,6 @@ export default function Index() {
                 </DialogContent>
             </Dialog>
 
-            {/* Quick Adjust Dialog */}
             <Dialog
                 open={adjustOpen}
                 onOpenChange={(o) => {
@@ -564,7 +580,6 @@ export default function Index() {
                 </DialogContent>
             </Dialog>
 
-            {/* Delete Confirm Dialog */}
             <Dialog
                 open={deleteOpen}
                 onOpenChange={(o) => {
@@ -598,6 +613,7 @@ export default function Index() {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
         </AppLayout>
     );
 }

@@ -53,7 +53,7 @@ interface RamOption extends Option {
 
 interface Motherboard {
     id: number;
-    brand: string;
+    manufacturer: string;
     model: string;
     chipset: string;
     form_factor: string;
@@ -112,7 +112,7 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
     })();
 
     const { data, setData, put, errors } = useForm({
-        brand: motherboard.brand ?? '',
+        manufacturer: motherboard.manufacturer ?? '',
         model: motherboard.model ?? '',
         chipset: motherboard.chipset ?? '',
         form_factor: motherboard.form_factor ?? '',
@@ -286,9 +286,9 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                         <h2 className="text-lg font-semibold mb-2">Core Info</h2>
                         <div className="grid grid-cols-2 gap-6">
                             <div>
-                                <Label htmlFor="brand">Brand</Label>
-                                <Input id="brand" name="brand" value={data.brand} onChange={(e) => setData('brand', e.target.value)} />
-                                {errors.brand && <p className="text-red-600">{errors.brand}</p>}
+                                <Label htmlFor="manufacturer">Manufacturer</Label>
+                                <Input id="manufacturer" name="manufacturer" value={data.manufacturer} onChange={(e) => setData('manufacturer', e.target.value)} />
+                                {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                             </div>
 
                             <div>

@@ -9,8 +9,8 @@ class ProcessorSpec extends Model
 {
     use HasFactory;
     protected $fillable = [
-        'brand',
-        'series',
+        'manufacturer',
+        'model',
         'socket_type',
         'core_count',
         'thread_count',

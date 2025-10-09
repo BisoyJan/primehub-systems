@@ -28,7 +28,7 @@ const breadcrumbs: BreadcrumbItem[] = [
 interface DiskSpec {
     id: number;
     manufacturer: string;
-    model_number: string;
+    model: string;
     capacity_gb: number;
     interface: string;
     drive_type: string;
@@ -44,7 +44,7 @@ export default function Edit({ diskspec }: Props) {
 
     const { data, setData, put, errors } = useForm({
         manufacturer: diskspec.manufacturer,
-        model_number: diskspec.model_number,
+        model: diskspec.model,
         capacity_gb: diskspec.capacity_gb,
         interface: diskspec.interface,
         drive_type: diskspec.drive_type,
@@ -98,15 +98,15 @@ export default function Edit({ diskspec }: Props) {
                                 {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
                             </div>
                             <div>
-                                <Label htmlFor="model_number">Model Number</Label>
+                                <Label htmlFor="model">Model Number</Label>
                                 <Input
-                                    id="model_number"
-                                    name="model_number"
+                                    id="model"
+                                    name="model"
                                     placeholder="e.g. 980 Pro"
-                                    value={data.model_number}
-                                    onChange={(e) => setData("model_number", e.target.value)}
+                                    value={data.model}
+                                    onChange={(e) => setData("model", e.target.value)}
                                 />
-                                {errors.model_number && <p className="text-red-600">{errors.model_number}</p>}
+                                {errors.model && <p className="text-red-600">{errors.model}</p>}
                             </div>
                         </div>
                     </section>

@@ -10,7 +10,7 @@ class DiskSpec extends Model
     use HasFactory;
     protected $fillable = [
         'manufacturer',
-        'model_number',
+        'model',
         'capacity_gb',
         'interface',
         'drive_type',

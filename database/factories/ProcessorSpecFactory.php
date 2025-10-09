@@ -19,9 +19,9 @@ class ProcessorSpecFactory extends Factory
 
     public function definition(): array
     {
-        $brands = ['Intel', 'AMD'];
+        $manufacturers = ['Intel', 'AMD'];
 
-        $intelSeries = [
+        $intelmodel = [
             'Core i3-10100'   => 'LGA1200',
             'Core i3-12100'   => 'LGA1700',
             'Core i5-10400'   => 'LGA1200',
@@ -35,7 +35,7 @@ class ProcessorSpecFactory extends Factory
             'Celeron G5905'   => 'LGA1200',
         ];
 
-        $amdSeries = [
+        $amdmodel = [
             'Ryzen 3 3100'    => 'AM4',
             'Ryzen 3 5300G'   => 'AM4',
             'Ryzen 5 3600'    => 'AM4',
@@ -51,28 +51,28 @@ class ProcessorSpecFactory extends Factory
             // If you want AM5/TR4/sTRX4 CPUs, add them here
         ];
 
-        $brand = $this->faker->randomElement($brands);
+        $manufacturer = $this->faker->randomElement($manufacturers);
 
-        if ($brand === 'Intel') {
-            $series = $this->faker->randomElement(array_keys($intelSeries));
-            $socket = $intelSeries[$series];
+        if ($manufacturer === 'Intel') {
+            $model = $this->faker->randomElement(array_keys($intelmodel));
+            $socket = $intelmodel[$model];
         } else {
-            $series = $this->faker->randomElement(array_keys($amdSeries));
-            $socket = $amdSeries[$series];
+            $model = $this->faker->randomElement(array_keys($amdmodel));
+            $socket = $amdmodel[$model];
         }
 
         $coreCount   = $this->faker->numberBetween(2, 16);
         $threadCount = $coreCount * $this->faker->numberBetween(1, 2);
 
         return [
-            'brand'               => $brand,
-            'series'              => $series,
+            'manufacturer'               => $manufacturer,
+            'model'              => $model,
             'socket_type'         => $socket, // ✅ always correct now
             'core_count'          => $coreCount,
             'thread_count'        => $threadCount,
             'base_clock_ghz'      => round($this->faker->randomFloat(2, 2.0, 3.8), 2),
             'boost_clock_ghz'     => round($this->faker->randomFloat(2, 3.5, 5.2), 2),
-            'integrated_graphics' => $brand === 'Intel'
+            'integrated_graphics' => $manufacturer === 'Intel'
                 ? $this->faker->randomElement(['Intel UHD 610', 'Intel UHD 730', 'Intel UHD 770'])
                 : $this->faker->randomElement(['Radeon Vega 3', 'Radeon Vega 7', 'Radeon Vega 8']),
             'tdp_watts'           => $this->faker->randomElement([35, 65, 95, 105, 125]),
