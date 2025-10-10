@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\MotherboardSpec;
+use App\Models\PcSpec;
 use App\Models\RamSpec;
 use App\Models\DiskSpec;
 use App\Models\ProcessorSpec;
@@ -11,25 +11,23 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
-class MotherboardSpecController extends Controller
+class PcSpecController extends Controller
 {
     /**
      * GET /motherboards
      */
     public function index()
     {
-        $motherboards = MotherboardSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
+        $pcspecs = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
             ->orderBy('id', 'desc')
             ->paginate(10)
-            ->through(fn($mb) => [
-                'id'              => $mb->id,
-                'manufacturer'    => $mb->manufacturer,
-                'model'           => $mb->model,
-                'chipset'         => $mb->chipset,
-                'memory_type'     => $mb->memory_type,
-                'form_factor'     => $mb->form_factor,
-                'socket_type'     => $mb->socket_type,
-                'ramSpecs'        => $mb->ramSpecs->map(fn($r) => [
+            ->through(fn($pc) => [
+                'id'              => $pc->id,
+                'manufacturer'    => $pc->manufacturer,
+                'model'           => $pc->model,
+                'memory_type'     => $pc->memory_type,
+                'form_factor'     => $pc->form_factor,
+                'ramSpecs'        => $pc->ramSpecs->map(fn($r) => [
                     'id'           => $r->id,
                     'manufacturer' => $r->manufacturer,
                     'model'        => $r->model,
@@ -38,7 +36,7 @@ class MotherboardSpecController extends Controller
                     'speed'        => $r->speed ?? null,
                     'quantity'     => $r->pivot->quantity ?? null,
                 ])->toArray(),
-                'diskSpecs'        => $mb->diskSpecs->map(fn($d) => [
+                'diskSpecs'        => $pc->diskSpecs->map(fn($d) => [
                     'id'                   => $d->id,
                     'manufacturer'         => $d->manufacturer,
                     'model'                => $d->model,
@@ -48,7 +46,7 @@ class MotherboardSpecController extends Controller
                     'sequential_read_mb'   => $d->sequential_read_mb ?? null,
                     'sequential_write_mb'  => $d->sequential_write_mb ?? null,
                 ])->toArray(),
-                'processorSpecs'  => $mb->processorSpecs->map(fn($p) => [
+                'processorSpecs'  => $pc->processorSpecs->map(fn($p) => [
                     'id'             => $p->id,
                     'manufacturer'   => $p->manufacturer,
                     'model'          => $p->model,
@@ -61,8 +59,8 @@ class MotherboardSpecController extends Controller
                 ])->toArray(),
             ]);
 
-        return Inertia::render('Computer/Motherboards/Index', [
-            'motherboards' => $motherboards,
+        return Inertia::render('Computer/PcSpecs/Index', [
+            'pcspecs' => $pcspecs,
         ]);
     }
 
@@ -71,13 +69,13 @@ class MotherboardSpecController extends Controller
      */
     public function create()
     {
-        return Inertia::render('Computer/Motherboards/Create', [
+        return Inertia::render('Computer/PcSpecs/Create', [
             'ramOptions' => RamSpec::with('stock')->get()
                 ->map(fn($r) => [
                     'id'             => $r->id,
                     'label'          => "{$r->manufacturer} {$r->model} {$r->capacity_gb}GB",
                     'type'           => $r->type,
-                    'capacity_gb'    => $r->capacity_gb, // <-- add this
+                    'capacity_gb'    => $r->capacity_gb,
                     'stock_quantity' => $r->stock?->quantity ?? 0,
                 ]),
 
@@ -149,10 +147,9 @@ class MotherboardSpecController extends Controller
      * Update stock diffs for RAM (increment where removed, decrement where added).
      * newItems: [id => qty]
      */
-    protected function applyRamStockDiffs(MotherboardSpec $mb, array $newItems): void
+    protected function applyRamStockDiffs(PcSpec $pc, array $newItems): void
     {
-        // existing pivot quantities keyed by ram_spec_id => qty
-        $existing = $mb->ramSpecs()->pluck('motherboard_spec_ram_spec.quantity', 'ram_spec_id')
+        $existing = $pc->ramSpecs()->pluck('pc_spec_ram_spec.quantity', 'ram_spec_id')
             ->mapWithKeys(fn($v, $k) => [(int)$k => (int)$v])
             ->toArray();
 
@@ -190,9 +187,9 @@ class MotherboardSpecController extends Controller
      * Apply disk presence diffs (presence-based disks). If disk pivot tracks quantity, adapt accordingly.
      * newItems: [id => qty] (qty used if pivot quantity supported)
      */
-    protected function applyDiskStockDiffs(MotherboardSpec $mb, array $newItems): void
+    protected function applyDiskStockDiffs(PcSpec $pc, array $newItems): void
     {
-        $existingIds = $mb->diskSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
+        $existingIds = $pc->diskSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
         $newIds = array_map('intval', array_keys($newItems));
 
         $toRemove = array_diff($existingIds, $newIds);
@@ -220,9 +217,9 @@ class MotherboardSpecController extends Controller
      * Apply processor presence diffs (presence-based).
      * newIds: array of processor ids
      */
-    protected function applyProcessorStockDiffs(MotherboardSpec $mb, array $newIds): void
+    protected function applyProcessorStockDiffs(PcSpec $pc, array $newIds): void
     {
-        $existing = $mb->processorSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
+        $existing = $pc->processorSpecs()->pluck('id')->map(fn($v) => (int)$v)->toArray();
         $toRemove = array_diff($existing, $newIds);
         $toAdd = array_diff($newIds, $existing);
 
@@ -252,26 +249,20 @@ class MotherboardSpecController extends Controller
     {
         $data = $request->validate([
             'manufacturer'                => 'required|string|max:255',
-            'model'                => 'required|string|max:255',
-            'chipset'              => 'required|string|max:255',
-            'form_factor'          => 'required|string|max:50',
-            'socket_type'          => 'required|string|max:50',
-            'memory_type'          => 'required|string|max:10',
-            'ram_slots'            => 'required|integer|min:1',
-            'max_ram_capacity_gb'  => 'required|integer|min:1',
-            'max_ram_speed'        => 'required|string|max:50',
-            'pcie_slots'           => 'required|string|max:100',
-            'm2_slots'             => 'required|integer|min:0',
-            'sata_ports'           => 'required|integer|min:0',
-            'usb_ports'            => 'required|string|max:100',
-            'ethernet_speed'       => 'required|string|max:50',
-            'wifi'                 => 'boolean',
-            'ram_mode'             => 'nullable|in:same,different',
-            'ram_specs'            => 'array',
-            'disk_mode'            => 'nullable|in:same,different',
-            'disk_specs'           => 'array',
-            'processor_spec_ids'   => 'array',
-            'processor_spec_ids.*' => 'exists:processor_specs,id',
+            'model'                       => 'required|string|max:255',
+            'form_factor'                 => 'required|string|max:50',
+            'memory_type'                 => 'required|string|max:10',
+            'ram_slots'                   => 'required|integer|min:1',
+            'max_ram_capacity_gb'         => 'required|integer|min:1',
+            'max_ram_speed'               => 'required|string|max:50',
+            'm2_slots'                    => 'required|integer|min:0',
+            'sata_ports'                  => 'required|integer|min:0',
+            'ram_mode'                    => 'nullable|in:same,different',
+            'ram_specs'                   => 'array',
+            'disk_mode'                   => 'nullable|in:same,different',
+            'disk_specs'                  => 'array',
+            'processor_spec_ids'          => 'array',
+            'processor_spec_ids.*'        => 'exists:processor_specs,id',
         ]);
 
         $ramSpecs = $this->validateAndNormalizeSpecs($request->input('ram_specs', []));
@@ -298,57 +289,50 @@ class MotherboardSpecController extends Controller
 
         // Use transaction with retry attempts to reduce deadlock risk
         DB::transaction(function () use ($data, $ramSpecs, $diskSpecs) {
-            $mb = MotherboardSpec::create($data);
+            $pc = PcSpec::create($data);
 
             // reserve/decrement stock for RAM and disks and processors inside transaction with locks
             $this->reserveAndDecrement($ramSpecs, RamSpec::class, 'RAM');
             $this->reserveAndDecrement($diskSpecs, DiskSpec::class, 'Disk');
 
             // attach ram with pivot quantities and disk presence (adapt if disk pivot has quantities)
-            $mb->ramSpecs()->sync(collect($ramSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
-            $mb->diskSpecs()->sync(array_keys($diskSpecs));
+            $pc->ramSpecs()->sync(collect($ramSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
+            $pc->diskSpecs()->sync(array_keys($diskSpecs));
 
             // processors (presence-based)
             $procIds = array_map('intval', $data['processor_spec_ids'] ?? []);
             $this->reserveAndDecrement(array_fill_keys($procIds, 1), ProcessorSpec::class, 'Processor');
-            $mb->processorSpecs()->sync($procIds);
+            $pc->processorSpecs()->sync($procIds);
         }, 3);
 
-        return redirect()->route('motherboards.index')
-            ->with('message', 'Motherboard created')
+        return redirect()->route('pcspecs.index')
+            ->with('message', 'PC Spec created')
             ->with('type', 'success');
     }
 
     /**
      * GET /motherboards/{motherboard}/edit
      */
-    public function edit(MotherboardSpec $motherboard)
+    public function edit(PcSpec $pcspec)
     {
-        return Inertia::render('Computer/Motherboards/Edit', [
-            'motherboard' => [
-                'id'                  => $motherboard->id,
-                'manufacturer'        => $motherboard->manufacturer,
-                'model'               => $motherboard->model,
-                'chipset'             => $motherboard->chipset,
-                'form_factor'         => $motherboard->form_factor,
-                'socket_type'         => $motherboard->socket_type,
-                'memory_type'         => $motherboard->memory_type,
-                'ram_slots'           => $motherboard->ram_slots,
-                'max_ram_capacity_gb' => $motherboard->max_ram_capacity_gb,
-                'max_ram_speed'       => $motherboard->max_ram_speed,
-                'pcie_slots'          => $motherboard->pcie_slots,
-                'm2_slots'            => $motherboard->m2_slots,
-                'sata_ports'          => $motherboard->sata_ports,
-                'usb_ports'           => $motherboard->usb_ports,
-                'ethernet_speed'      => $motherboard->ethernet_speed,
-                'wifi'                => $motherboard->wifi,
-                // return pivot-aware ramSpecs as array of {id, pivot: {quantity}}
-                'ramSpecs'            => $motherboard->ramSpecs()->get()->map(fn($r) => [
+        return Inertia::render('Computer/PcSpecs/Edit', [
+            'pcspec' => [
+                'id'                  => $pcspec->id,
+                'manufacturer'        => $pcspec->manufacturer,
+                'model'               => $pcspec->model,
+                'form_factor'         => $pcspec->form_factor,
+                'memory_type'         => $pcspec->memory_type,
+                'ram_slots'           => $pcspec->ram_slots,
+                'max_ram_capacity_gb' => $pcspec->max_ram_capacity_gb,
+                'max_ram_speed'       => $pcspec->max_ram_speed,
+                'm2_slots'            => $pcspec->m2_slots,
+                'sata_ports'          => $pcspec->sata_ports,
+                'ramSpecs'            => $pcspec->ramSpecs()->get()->map(fn($r) => [
                     'id' => $r->id,
                     'pivot' => ['quantity' => $r->pivot->quantity ?? 1],
                 ])->toArray(),
-                'diskSpecs'           => $motherboard->diskSpecs()->pluck('id'),
-                'processorSpecs'      => $motherboard->processorSpecs()->pluck('id'),
+                'diskSpecs'           => $pcspec->diskSpecs()->pluck('id'),
+                'processorSpecs'      => $pcspec->processorSpecs()->pluck('id'),
             ],
             'ramOptions' => RamSpec::with('stock')->get()
                 ->map(fn($r) => [
@@ -377,30 +361,24 @@ class MotherboardSpecController extends Controller
     /**
      * PUT /motherboards/{motherboard}
      */
-    public function update(Request $request, MotherboardSpec $motherboard)
+    public function update(Request $request, PcSpec $pcspec)
     {
         $data = $request->validate([
             'manufacturer'                => 'required|string|max:255',
-            'model'                => 'required|string|max:255',
-            'chipset'              => 'required|string|max:255',
-            'form_factor'          => 'required|string|max:50',
-            'socket_type'          => 'required|string|max:50',
-            'memory_type'          => 'required|string|max:10',
-            'ram_slots'            => 'required|integer|min:1',
-            'max_ram_capacity_gb'  => 'required|integer|min:1',
-            'max_ram_speed'        => 'required|string|max:50',
-            'pcie_slots'           => 'required|string|max:100',
-            'm2_slots'             => 'required|integer|min:0',
-            'sata_ports'           => 'required|integer|min:0',
-            'usb_ports'            => 'required|string|max:100',
-            'ethernet_speed'       => 'required|string|max:50',
-            'wifi'                 => 'boolean',
-            'ram_mode'             => 'nullable|in:same,different',
-            'ram_specs'            => 'array',
-            'disk_mode'            => 'nullable|in:same,different',
-            'disk_specs'           => 'array',
-            'processor_spec_ids'   => 'array',
-            'processor_spec_ids.*' => 'exists:processor_specs,id',
+            'model'                       => 'required|string|max:255',
+            'form_factor'                 => 'required|string|max:50',
+            'memory_type'                 => 'required|string|max:10',
+            'ram_slots'                   => 'required|integer|min:1',
+            'max_ram_capacity_gb'         => 'required|integer|min:1',
+            'max_ram_speed'               => 'required|string|max:50',
+            'm2_slots'                    => 'required|integer|min:0',
+            'sata_ports'                  => 'required|integer|min:0',
+            'ram_mode'                    => 'nullable|in:same,different',
+            'ram_specs'                   => 'array',
+            'disk_mode'                   => 'nullable|in:same,different',
+            'disk_specs'                  => 'array',
+            'processor_spec_ids'          => 'array',
+            'processor_spec_ids.*'        => 'exists:processor_specs,id',
         ]);
 
         $newRamSpecs = $this->validateAndNormalizeSpecs($request->input('ram_specs', []));
@@ -423,67 +401,58 @@ class MotherboardSpecController extends Controller
         }
 
         // Perform update inside transaction with retry attempts
-        DB::transaction(function () use ($motherboard, $data, $newRamSpecs, $newDiskSpecs) {
-            // update core attributes
-            $motherboard->update($data);
+        DB::transaction(function () use ($pcspec, $data, $newRamSpecs, $newDiskSpecs) {
+            $pcspec->update($data);
 
-            // apply RAM stock diffs (locks and increments/decrements inside)
-            $this->applyRamStockDiffs($motherboard, $newRamSpecs);
-            // sync pivot quantities
-            $motherboard->ramSpecs()->sync(collect($newRamSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
+            $this->applyRamStockDiffs($pcspec, $newRamSpecs);
+            $pcspec->ramSpecs()->sync(collect($newRamSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
 
-            // apply disk diffs and sync
-            $this->applyDiskStockDiffs($motherboard, $newDiskSpecs);
-            $motherboard->diskSpecs()->sync(array_keys($newDiskSpecs));
+            $this->applyDiskStockDiffs($pcspec, $newDiskSpecs);
+            $pcspec->diskSpecs()->sync(array_keys($newDiskSpecs));
 
-            // processors
             $newProcIds = array_map('intval', $data['processor_spec_ids'] ?? []);
-            $this->applyProcessorStockDiffs($motherboard, $newProcIds);
-            $motherboard->processorSpecs()->sync($newProcIds);
+            $this->applyProcessorStockDiffs($pcspec, $newProcIds);
+            $pcspec->processorSpecs()->sync($newProcIds);
         }, 3);
 
-        return redirect()->route('motherboards.index')
-            ->with('message', 'Motherboard updated')
+        return redirect()->route('pcspecs.index')
+            ->with('message', 'PC Spec updated')
             ->with('type', 'success');
     }
 
     /**
      * DELETE /motherboards/{motherboard}
      */
-    public function destroy(MotherboardSpec $motherboard)
+    public function destroy(PcSpec $pcspec)
     {
-        DB::transaction(function () use ($motherboard) {
-            // restore RAM stocks using pivot quantities (guard nulls)
-            foreach ($motherboard->ramSpecs as $ram) {
+        DB::transaction(function () use ($pcspec) {
+            foreach ($pcspec->ramSpecs as $ram) {
                 if ($ram->stock) {
                     $qty = $ram->pivot->quantity ?? 1;
                     $ram->stock->increment('quantity', $qty);
                 }
             }
 
-            // restore disk stocks (presence-based)
-            foreach ($motherboard->diskSpecs as $disk) {
+            foreach ($pcspec->diskSpecs as $disk) {
                 if ($disk->stock) {
                     $disk->stock->increment('quantity', 1);
                 }
             }
 
-            // restore processor stocks
-            foreach ($motherboard->processorSpecs as $cpu) {
+            foreach ($pcspec->processorSpecs as $cpu) {
                 if ($cpu->stock) {
                     $cpu->stock->increment('quantity', 1);
                 }
             }
 
-            // detach relations then delete
-            $motherboard->ramSpecs()->detach();
-            $motherboard->diskSpecs()->detach();
-            $motherboard->processorSpecs()->detach();
-            $motherboard->delete();
+            $pcspec->ramSpecs()->detach();
+            $pcspec->diskSpecs()->detach();
+            $pcspec->processorSpecs()->detach();
+            $pcspec->delete();
         });
 
-        return redirect()->route('motherboards.index')
-            ->with('message', 'Motherboard deleted and stocks restored')
+        return redirect()->route('pcspecs.index')
+            ->with('message', 'PC Spec deleted and stocks restored')
             ->with('type', 'success');
     }
 }

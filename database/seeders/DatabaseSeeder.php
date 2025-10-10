@@ -28,13 +28,13 @@ class DatabaseSeeder extends Seeder
             ]
         );
 
-        RamSpec::factory()->count(250)->create();
-        DiskSpec::factory()->count(250)->create();
-        ProcessorSpec::factory()->count(250)->create();
+        RamSpec::factory()->count(15)->create();
+        DiskSpec::factory()->count(15)->create();
+        ProcessorSpec::factory()->count(15)->create();
         $this->call(
             [
                 StockSeeder::class,
-                MotherboardSpecSeeder::class,
+                PcSpecSeeder::class,
             ]
         );
     }

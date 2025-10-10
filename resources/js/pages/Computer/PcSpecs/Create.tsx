@@ -12,8 +12,8 @@ import {
     SelectTrigger,
     SelectValue,
     SelectContent,
-    SelectGroup,
-    SelectLabel,
+    // SelectGroup,
+    // SelectLabel,
     SelectItem,
 } from '@/components/ui/select'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -26,9 +26,9 @@ import {
 } from '@/components/ui/command'
 
 import {
-    index as motherboardIndex,
-    store as motherboardStore,
-} from '@/routes/motherboards'
+    index as pcSpecIndex,
+    store as pcSpecStore,
+} from '@/routes/pcspecs'
 
 interface Option {
     id: number
@@ -60,7 +60,8 @@ const ramSlotOptions = [1, 2, 4, 6, 8]
 const m2SlotOptions = [1, 2, 3, 4]
 const sataPortOptions = [2, 4, 6, 8]
 const maxRamCapacityOptions = [16, 32, 64, 128, 256]
-const ethernetSpeedOptions = ['1GbE', '2.5GbE', '5GbE', '10GbE']
+const formFactorOptions = ['ATX', 'Micro-ATX', 'Mini-ITX']
+//const ethernetSpeedOptions = ['1GbE', '2.5GbE', '5GbE', '10GbE']
 
 export default function Create() {
     const { ramOptions, diskOptions, processorOptions, flash } = usePage<PageProps>().props
@@ -68,21 +69,13 @@ export default function Create() {
     const form = useForm({
         manufacturer: '',
         model: '',
-        chipset: '',
         form_factor: '',
-        socket_type: '',
         memory_type: '',
         ram_slots: 0,
         max_ram_capacity_gb: 0,
         max_ram_speed: '',
-        pcie_slots: '',
         m2_slots: 0,
         sata_ports: 0,
-        usb_ports: '',
-        ethernet_speed: '',
-        wifi: false,
-
-        // new shape for same/different feature
         ram_mode: 'different' as 'same' | 'different',
         ram_specs: {} as Record<number, number>, // { ramId: qty }
         disk_mode: 'different' as 'same' | 'different',
@@ -92,11 +85,6 @@ export default function Create() {
     })
 
     const [localError, setLocalError] = useState<string | null>(null)
-
-    // compatibility filters
-    const compatibleProcessors = (processorOptions ?? []).filter(
-        (p) => p.socket_type === form.data.socket_type
-    )
 
     const compatibleRams = (ramOptions ?? []).filter(
         (r) => r.type === form.data.memory_type
@@ -109,19 +97,6 @@ export default function Create() {
     )
 
     const remainingRamSlots = form.data.ram_slots - totalRamSelected
-
-    // auto-clear incompatible processors when socket changes
-    useEffect(() => {
-        const compatible = (processorOptions ?? []).filter(
-            (p) => p.socket_type === form.data.socket_type
-        )
-        const stillValid = (form.data.processor_spec_ids ?? []).filter((id) =>
-            compatible.some((p) => p.id === id)
-        )
-        if (stillValid.length !== form.data.processor_spec_ids.length) {
-            form.setData('processor_spec_ids', stillValid)
-        }
-    }, [form.data.socket_type, processorOptions])
 
     // auto-clear incompatible RAM when memory_type changes
     useEffect(() => {
@@ -138,7 +113,7 @@ export default function Create() {
             })
             form.setData('ram_specs', next)
         }
-    }, [form.data.memory_type, ramOptions])
+    }, [form.data.memory_type, ramOptions, form])
 
     // flash messages
     useEffect(() => {
@@ -157,7 +132,7 @@ export default function Create() {
             return;
         }
 
-        form.post(motherboardStore.url())
+        form.post(pcSpecStore.url())
     }
 
     useEffect(() => {
@@ -242,11 +217,10 @@ export default function Create() {
 
     return (
         <AppLayout>
-            <Head title="Create Motherboard" />
-
+            <Head title="Create PC Spec" />
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
                 <div className="flex justify-start">
-                    <Link href={motherboardIndex.url()}>
+                    <Link href={pcSpecIndex.url()}>
                         <Button><ArrowLeft /> Return</Button>
                     </Link>
                 </div>
@@ -269,28 +243,16 @@ export default function Create() {
                             </div>
 
                             <div>
-                                <Label htmlFor="chipset">Chipset</Label>
-                                <Input id="chipset" name="chipset" value={form.data.chipset} onChange={(e) => form.setData('chipset', e.target.value)} />
-                                {form.errors.chipset && <p className="text-red-600">{form.errors.chipset}</p>}
-                            </div>
-
-                            <div>
                                 <Label htmlFor="form_factor">Form Factor</Label>
-                                <Input id="form_factor" name="form_factor" value={form.data.form_factor} onChange={(e) => form.setData('form_factor', e.target.value)} />
-                                {form.errors.form_factor && <p className="text-red-600">{form.errors.form_factor}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="socket_type">Socket Type</Label>
-                                <Select onValueChange={(val) => form.setData('socket_type', val)} value={form.data.socket_type}>
-                                    <SelectTrigger id="socket_type" className="w-full"><SelectValue placeholder="Select socket type" /></SelectTrigger>
+                                <Select value={form.data.form_factor} onValueChange={(val) => form.setData('form_factor', val)}>
+                                    <SelectTrigger id="form_factor" className="w-full"><SelectValue placeholder="Select form factor" /></SelectTrigger>
                                     <SelectContent>
-                                        {["LGA1151", "LGA1200", "LGA1700", "AM3+", "AM4", "AM5", "TR4", "sTRX4"].map(socket => (
-                                            <SelectItem key={socket} value={socket}>{socket}</SelectItem>
+                                        {formFactorOptions.map(ff => (
+                                            <SelectItem key={ff} value={ff}>{ff}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {form.errors.socket_type && <p className="text-red-600">{form.errors.socket_type}</p>}
+                                {form.errors.form_factor && <p className="text-red-600">{form.errors.form_factor}</p>}
                             </div>
                         </div>
                     </section>
@@ -444,12 +406,6 @@ export default function Create() {
                         <h2 className="text-lg font-semibold mb-2">Expansion & Storage</h2>
                         <div className="grid grid-cols-2 gap-6">
                             <div>
-                                <Label htmlFor="pcie_slots">PCIe Slots</Label>
-                                <Input id="pcie_slots" name="pcie_slots" value={form.data.pcie_slots} onChange={(e) => form.setData('pcie_slots', e.target.value)} />
-                                {form.errors.pcie_slots && <p className="text-red-600">{form.errors.pcie_slots}</p>}
-                            </div>
-
-                            <div>
                                 <Label htmlFor="m2_slots">M.2 Slots</Label>
                                 <Select value={String(form.data.m2_slots)} onValueChange={(val) => form.setData('m2_slots', Number(val))}>
                                     <SelectTrigger id="m2_slots" className="w-full"><SelectValue placeholder="Select M.2 slots" /></SelectTrigger>
@@ -465,12 +421,6 @@ export default function Create() {
                                     <SelectContent>{sataPortOptions.map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                                 </Select>
                                 {form.errors.sata_ports && <p className="text-red-600">{form.errors.sata_ports}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="usb_ports">USB Ports</Label>
-                                <Input id="usb_ports" name="usb_ports" value={form.data.usb_ports} onChange={(e) => form.setData('usb_ports', e.target.value)} />
-                                {form.errors.usb_ports && <p className="text-red-600">{form.errors.usb_ports}</p>}
                             </div>
                         </div>
 
@@ -570,51 +520,21 @@ export default function Create() {
                         </div>
                     </section>
 
-                    {/* Connectivity */}
-                    <section>
-                        <h2 className="text-lg font-semibold mb-2">Connectivity</h2>
-                        <div className="grid grid-cols-2 gap-6">
-                            <div>
-                                <Label htmlFor="ethernet_speed">Ethernet Speed</Label>
-                                <Select value={form.data.ethernet_speed} onValueChange={(val) => form.setData('ethernet_speed', val)}>
-                                    <SelectTrigger id="ethernet_speed" className="w-full"><SelectValue placeholder="Select speed" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectGroup>
-                                            <SelectLabel>Speed</SelectLabel>
-                                            {ethernetSpeedOptions.map((speed) => <SelectItem key={speed} value={speed}>{speed}</SelectItem>)}
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                                {form.errors.ethernet_speed && <p className="text-red-600">{form.errors.ethernet_speed}</p>}
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                                <Input id="wifi" name="wifi" type="checkbox" checked={form.data.wifi} onChange={(e) => form.setData('wifi', e.target.checked)} />
-                                <Label htmlFor="wifi">Wi-Fi Enabled</Label>
-                                {form.errors.wifi && <p className="text-red-600">{form.errors.wifi}</p>}
-                            </div>
-                        </div>
-                    </section>
-
                     {/* Compatibility (Processors) */}
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Compatibility</h2>
-                        {!form.data.socket_type ? (
-                            <p className="text-gray-500">Select a socket type first to see compatible processors.</p>
-                        ) : (
-                            <MultiPopover
-                                id="processor_spec_ids"
-                                label="Processors"
-                                options={compatibleProcessors}
-                                selected={form.data.processor_spec_ids}
-                                onToggle={(id) => {
-                                    const list = form.data.processor_spec_ids
-                                    const next = list.includes(id) ? list.filter(i => i !== id) : [...list, id]
-                                    form.setData('processor_spec_ids', next)
-                                }}
-                                error={form.errors.processor_spec_ids as string}
-                            />
-                        )}
+                        <MultiPopover
+                            id="processor_spec_ids"
+                            label="Processors"
+                            options={processorOptions}
+                            selected={form.data.processor_spec_ids}
+                            onToggle={(id) => {
+                                const list = form.data.processor_spec_ids
+                                const next = list.includes(id) ? list.filter(i => i !== id) : [...list, id]
+                                form.setData('processor_spec_ids', next)
+                            }}
+                            error={form.errors.processor_spec_ids as string}
+                        />
                     </section>
 
                     {/* Submit */}

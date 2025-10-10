@@ -3,21 +3,21 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
-use App\Models\MotherboardSpec;
+use App\Models\PcSpec;
 use App\Models\RamSpec;
 use App\Models\DiskSpec;
 use App\Models\ProcessorSpec;
 
-class MotherboardSpecSeeder extends Seeder
+class PcSpecSeeder extends Seeder
 {
     public function run(): void
     {
-        MotherboardSpec::factory()
+        PcSpec::factory()
             ->count(15)
             ->create()
-            ->each(function (MotherboardSpec $mb) {
-                // ✅ Only pick RAM that matches the motherboard memory_type
-                $ramIds = RamSpec::where('type', $mb->memory_type)
+            ->each(function (PcSpec $pc) {
+                // Only pick RAM that matches the motherboard memory_type
+                $ramIds = RamSpec::where('type', $pc->memory_type)
                     ->inRandomOrder()
                     ->take(3)
                     ->pluck('id');
@@ -27,21 +27,20 @@ class MotherboardSpecSeeder extends Seeder
                     ->take(2)
                     ->pluck('id');
 
-                // ✅ Only pick processors that match the motherboard socket_type
-                $cpuIds = ProcessorSpec::where('socket_type', $mb->socket_type)
-                    ->inRandomOrder()
+                // Pick any processor (no socket_type filter)
+                $cpuIds = ProcessorSpec::inRandomOrder()
                     ->take(1)
                     ->pluck('id');
 
                 // Sync relationships
                 if ($ramIds->isNotEmpty()) {
-                    $mb->ramSpecs()->sync($ramIds);
+                    $pc->ramSpecs()->sync($ramIds);
                 }
 
-                $mb->diskSpecs()->sync($diskIds);
+                $pc->diskSpecs()->sync($diskIds);
 
                 if ($cpuIds->isNotEmpty()) {
-                    $mb->processorSpecs()->sync($cpuIds);
+                    $pc->processorSpecs()->sync($cpuIds);
                 }
             });
     }

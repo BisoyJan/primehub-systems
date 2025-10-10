@@ -5,7 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
-class MotherboardSpec extends Model
+class PcSpec extends Model
 {
     use HasFactory;
     protected $fillable = [
@@ -30,8 +30,8 @@ class MotherboardSpec extends Model
     {
         return $this->belongsToMany(
             RamSpec::class,
-            'motherboard_spec_ram_spec',
-            'motherboard_spec_id',
+            'pc_spec_ram_spec',
+            'pc_spec_id',
             'ram_spec_id'
         )->withPivot('quantity')->withTimestamps();
     }
@@ -40,8 +40,8 @@ class MotherboardSpec extends Model
     {
         return $this->belongsToMany(
             DiskSpec::class,
-            'motherboard_spec_disk_spec',
-            'motherboard_spec_id',
+            'pc_spec_disk_spec',
+            'pc_spec_id',
             'disk_spec_id'
         );
     }
@@ -50,8 +50,8 @@ class MotherboardSpec extends Model
     {
         return $this->belongsToMany(
             ProcessorSpec::class,
-            'motherboard_spec_processor_spec',
-            'motherboard_spec_id',
+            'pc_spec_processor_spec',
+            'pc_spec_id',
             'processor_spec_id'
         );
     }

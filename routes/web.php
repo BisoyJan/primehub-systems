@@ -3,7 +3,7 @@
 use App\Http\Controllers\ProcessorSpecsController;
 use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\RamSpecsController;
-use App\Http\Controllers\MotherboardSpecController;
+use App\Http\Controllers\PcSpecController;
 use App\Http\Controllers\StockController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -23,7 +23,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->except(['show']);
     Route::resource('processorspecs', ProcessorSpecsController::class)
         ->except(['show']);
-    Route::resource('motherboards', MotherboardSpecController::class)
+    Route::resource('pcspecs', PcSpecController::class)
         ->except(['show']);
 
     Route::resource('stocks', StockController::class);

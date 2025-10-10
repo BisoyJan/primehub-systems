@@ -12,25 +12,26 @@ import {
     SelectTrigger,
     SelectValue,
     SelectContent,
-    SelectGroup,
-    SelectLabel,
+    // SelectGroup,
+    // SelectLabel,
     SelectItem,
 } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 
 import type { BreadcrumbItem } from '@/types';
-import { index as motherboardIndex, update as motherboardUpdate } from '@/routes/motherboards';
+import { index as pcSpecIndex, update as pcSpecUpdate } from '@/routes/pcspecs';
 
 const memoryTypes = ['DDR3', 'DDR4', 'DDR5'];
 const ramSlotOptions = [1, 2, 4, 6, 8];
 const m2SlotOptions = [1, 2, 3, 4];
 const sataPortOptions = [2, 4, 6, 8];
 const maxRamCapacityOptions = [16, 32, 64, 128, 256];
-const ethernetSpeedOptions = ['1GbE', '2.5GbE', '5GbE', '10GbE'];
+const formFactorOptions = ['ATX', 'Micro-ATX', 'Mini-ITX'];
+//const ethernetSpeedOptions = ['1GbE', '2.5GbE', '5GbE', '10GbE'];
 
 const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Edit a Motherboard Specification', href: motherboardIndex().url },
+    { title: 'Edit a PC Specification', href: pcSpecIndex().url },
 ];
 
 interface Option {
@@ -51,7 +52,7 @@ interface RamOption extends Option {
     capacity_gb?: number;
 }
 
-interface Motherboard {
+interface PcSpec {
     id: number;
     manufacturer: string;
     model: string;
@@ -75,20 +76,20 @@ interface Motherboard {
 }
 
 interface Props {
-    motherboard: Motherboard;
+    pcspec: PcSpec;
     ramOptions: RamOption[];
     diskOptions: Option[];
     processorOptions: ProcessorOption[];
     flash?: { message?: string; type?: string };
 }
 
-export default function Edit({ motherboard, ramOptions, diskOptions, processorOptions, flash }: Props) {
+export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions, flash }: Props) {
     // helper: build initial ram_specs (id => qty) from incoming motherboard data.
     // server may provide ramSpecs as [id, id...] or [{id, pivot:{quantity}}...]
     const initialRamSpecs = (() => {
-        if (!motherboard?.ramSpecs) return {};
+        if (!pcspec?.ramSpecs) return {};
         const out: Record<number, number> = {};
-        for (const item of motherboard.ramSpecs) {
+        for (const item of pcspec.ramSpecs) {
             if (typeof item === 'number') {
                 out[item] = 1; // fallback quantity
             } else if (typeof item === 'object' && item?.id) {
@@ -103,7 +104,7 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
     type DiskEntry = number | { id: number };
     const initialDiskSpecs = (() => {
         const out: Record<number, number> = {};
-        for (const d of motherboard.diskSpecs ?? []) {
+        for (const d of pcspec.diskSpecs ?? []) {
             const entry = d as DiskEntry;
             const id = typeof entry === 'number' ? entry : entry.id;
             out[Number(id)] = 1;
@@ -112,21 +113,21 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
     })();
 
     const { data, setData, put, errors } = useForm({
-        manufacturer: motherboard.manufacturer ?? '',
-        model: motherboard.model ?? '',
-        chipset: motherboard.chipset ?? '',
-        form_factor: motherboard.form_factor ?? '',
-        socket_type: motherboard.socket_type ?? '',
-        memory_type: motherboard.memory_type ?? '',
-        ram_slots: motherboard.ram_slots ?? 0,
-        max_ram_capacity_gb: motherboard.max_ram_capacity_gb ?? 0,
-        max_ram_speed: motherboard.max_ram_speed ?? '',
-        pcie_slots: motherboard.pcie_slots ?? '',
-        m2_slots: motherboard.m2_slots ?? 0,
-        sata_ports: motherboard.sata_ports ?? 0,
-        usb_ports: motherboard.usb_ports ?? '',
-        ethernet_speed: motherboard.ethernet_speed ?? '',
-        wifi: motherboard.wifi ?? false,
+        manufacturer: pcspec.manufacturer ?? '',
+        model: pcspec.model ?? '',
+        // chipset: pcspec.chipset ?? '',
+        form_factor: pcspec.form_factor ?? '',
+        // socket_type: pcspec.socket_type ?? '',
+        memory_type: pcspec.memory_type ?? '',
+        ram_slots: pcspec.ram_slots ?? 0,
+        max_ram_capacity_gb: pcspec.max_ram_capacity_gb ?? 0,
+        max_ram_speed: pcspec.max_ram_speed ?? '',
+        // pcie_slots: pcspec.pcie_slots ?? '',
+        m2_slots: pcspec.m2_slots ?? 0,
+        sata_ports: pcspec.sata_ports ?? 0,
+        // usb_ports: pcspec.usb_ports ?? '',
+        // ethernet_speed: pcspec.ethernet_speed ?? '',
+        // wifi: pcspec.wifi ?? false,
 
         // new same/different shape
         ram_mode: 'different' as 'same' | 'different',
@@ -134,11 +135,10 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
         disk_mode: 'different' as 'same' | 'different',
         disk_specs: initialDiskSpecs as Record<number, number>,
 
-        processor_spec_ids: (motherboard.processorSpecs ?? []).map((p) => Number(p)),
+        processor_spec_ids: (pcspec.processorSpecs ?? []).map((p) => Number(p)),
     });
 
     // compatibility filters
-    const compatibleProcessors = (processorOptions ?? []).filter((p) => p.socket_type === data.socket_type);
     const compatibleRams = (ramOptions ?? []).filter((r) => r.type === data.memory_type);
 
     // derived helpers
@@ -154,21 +154,6 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
         if (flash.type === 'error') toast.error(flash.message);
         else toast.success(flash.message);
     }, [flash?.message, flash?.type]);
-
-    // auto-clear incompatible processors when socket changes
-    useEffect(() => {
-        const compatible = (processorOptions ?? []).filter(
-            (p) => p.socket_type === data.socket_type
-        );
-
-        const stillValid = (data.processor_spec_ids ?? []).filter((id) =>
-            compatible.some((p) => p.id === id)
-        );
-
-        if (stillValid.length !== (data.processor_spec_ids ?? []).length) {
-            setData('processor_spec_ids', stillValid);
-        }
-    }, [data.socket_type, processorOptions, data.processor_spec_ids, setData]);
 
     // auto-prune incompatible ram selections when memory_type changes
     useEffect(() => {
@@ -207,7 +192,7 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
             return;
         }
 
-        put(motherboardUpdate.url(motherboard.id));
+        put(pcSpecUpdate.url(pcspec.id));
     }
 
     // RAM helpers (same vs different) - patched: capacity and stock checks, no quantity input in 'same' mode
@@ -271,11 +256,10 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit Motherboard" />
-
+            <Head title="Edit PC Spec" />
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
                 <div className="flex justify-start">
-                    <Link href={motherboardIndex.url()}>
+                    <Link href={pcSpecIndex.url()}>
                         <Button><ArrowLeft /> Return</Button>
                     </Link>
                 </div>
@@ -298,28 +282,16 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                             </div>
 
                             <div>
-                                <Label htmlFor="chipset">Chipset</Label>
-                                <Input id="chipset" name="chipset" value={data.chipset} onChange={(e) => setData('chipset', e.target.value)} />
-                                {errors.chipset && <p className="text-red-600">{errors.chipset}</p>}
-                            </div>
-
-                            <div>
                                 <Label htmlFor="form_factor">Form Factor</Label>
-                                <Input id="form_factor" name="form_factor" value={data.form_factor} onChange={(e) => setData('form_factor', e.target.value)} />
-                                {errors.form_factor && <p className="text-red-600">{errors.form_factor}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="socket_type">Socket Type</Label>
-                                <Select onValueChange={(val) => setData('socket_type', val)} value={data.socket_type}>
-                                    <SelectTrigger id="socket_type" className="w-full"><SelectValue placeholder="Select socket type" /></SelectTrigger>
+                                <Select value={data.form_factor} onValueChange={(val) => setData('form_factor', val)}>
+                                    <SelectTrigger id="form_factor" className="w-full"><SelectValue placeholder="Select form factor" /></SelectTrigger>
                                     <SelectContent>
-                                        {["LGA1151", "LGA1200", "LGA1700", "AM3+", "AM4", "AM5", "TR4", "sTRX4"].map(socket => (
-                                            <SelectItem key={socket} value={socket}>{socket}</SelectItem>
+                                        {formFactorOptions.map(ff => (
+                                            <SelectItem key={ff} value={ff}>{ff}</SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {errors.socket_type && <p className="text-red-600">{errors.socket_type}</p>}
+                                {errors.form_factor && <p className="text-red-600">{errors.form_factor}</p>}
                             </div>
                         </div>
                     </section>
@@ -460,12 +432,6 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                         <h2 className="text-lg font-semibold mb-2">Expansion & Storage</h2>
                         <div className="grid grid-cols-2 gap-6">
                             <div>
-                                <Label htmlFor="pcie_slots">PCIe Slots</Label>
-                                <Input id="pcie_slots" name="pcie_slots" value={data.pcie_slots} onChange={(e) => setData('pcie_slots', e.target.value)} />
-                                {errors.pcie_slots && <p className="text-red-600">{errors.pcie_slots}</p>}
-                            </div>
-
-                            <div>
                                 <Label htmlFor="m2_slots">M.2 Slots</Label>
                                 <Select value={String(data.m2_slots)} onValueChange={(val) => setData('m2_slots', Number(val))}>
                                     <SelectTrigger id="m2_slots" className="w-full"><SelectValue placeholder="Select M.2 slots" /></SelectTrigger>
@@ -481,12 +447,6 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                                     <SelectContent>{sataPortOptions.map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
                                 </Select>
                                 {errors.sata_ports && <p className="text-red-600">{errors.sata_ports}</p>}
-                            </div>
-
-                            <div>
-                                <Label htmlFor="usb_ports">USB Ports</Label>
-                                <Input id="usb_ports" name="usb_ports" value={data.usb_ports} onChange={(e) => setData('usb_ports', e.target.value)} />
-                                {errors.usb_ports && <p className="text-red-600">{errors.usb_ports}</p>}
                             </div>
                         </div>
 
@@ -586,54 +546,21 @@ export default function Edit({ motherboard, ramOptions, diskOptions, processorOp
                         </div>
                     </section>
 
-                    {/* Connectivity */}
-                    <section>
-                        <h2 className="text-lg font-semibold mb-2">Connectivity</h2>
-                        <div className="grid grid-cols-2 gap-6">
-                            <div>
-                                <Label htmlFor="ethernet_speed">Ethernet Speed</Label>
-                                <Select value={data.ethernet_speed} onValueChange={(val) => setData('ethernet_speed', val)}>
-                                    <SelectTrigger id="ethernet_speed" className="w-full"><SelectValue placeholder="Select speed" /></SelectTrigger>
-                                    <SelectContent>
-                                        <SelectGroup>
-                                            <SelectLabel>Speed</SelectLabel>
-                                            {ethernetSpeedOptions.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
-                                            {data.ethernet_speed && !ethernetSpeedOptions.includes(data.ethernet_speed) && (
-                                                <SelectItem key={'custom-' + data.ethernet_speed} value={data.ethernet_speed}>{data.ethernet_speed}</SelectItem>
-                                            )}
-                                        </SelectGroup>
-                                    </SelectContent>
-                                </Select>
-                                {errors.ethernet_speed && <p className="text-red-600">{errors.ethernet_speed}</p>}
-                            </div>
-
-                            <div className="flex items-center space-x-2">
-                                <Input id="wifi" name="wifi" type="checkbox" checked={data.wifi} onChange={(e) => setData('wifi', e.target.checked)} />
-                                <Label htmlFor="wifi">Wi-Fi Enabled</Label>
-                                {errors.wifi && <p className="text-red-600">{errors.wifi}</p>}
-                            </div>
-                        </div>
-                    </section>
-
                     {/* Compatibility (Processors) */}
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Compatibility</h2>
-                        {!data.socket_type ? (
-                            <p className="text-gray-500">Select a socket type first to see compatible processors.</p>
-                        ) : (
-                            <MultiPopover
-                                id="processor_spec_ids"
-                                label="Processors"
-                                options={compatibleProcessors}
-                                selected={data.processor_spec_ids}
-                                onToggle={(id) => {
-                                    const list = data.processor_spec_ids;
-                                    const next = list.includes(id) ? list.filter(i => i !== id) : [...list, id];
-                                    setData('processor_spec_ids', next);
-                                }}
-                                error={errors.processor_spec_ids as string}
-                            />
-                        )}
+                        <MultiPopover
+                            id="processor_spec_ids"
+                            label="Processors"
+                            options={processorOptions}
+                            selected={data.processor_spec_ids}
+                            onToggle={(id) => {
+                                const list = data.processor_spec_ids;
+                                const next = list.includes(id) ? list.filter(i => i !== id) : [...list, id];
+                                setData('processor_spec_ids', next);
+                            }}
+                            error={errors.processor_spec_ids as string}
+                        />
                     </section>
 
                     {/* Submit */}

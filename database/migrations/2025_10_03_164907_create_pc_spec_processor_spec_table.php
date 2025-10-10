@@ -7,20 +7,20 @@ use Illuminate\Support\Facades\Schema;
 return new class extends Migration {
     public function up(): void
     {
-        Schema::create('motherboard_spec_processor_spec', function (Blueprint $table) {
-            $table->foreignId('motherboard_spec_id')
-                ->constrained('motherboard_specs')
+        Schema::create('pc_spec_processor_spec', function (Blueprint $table) {
+            $table->foreignId('pc_spec_id')
+                ->constrained('pc_specs')
                 ->cascadeOnDelete();
             $table->foreignId('processor_spec_id')
                 ->constrained('processor_specs')
                 ->cascadeOnDelete();
 
-            $table->primary(['motherboard_spec_id', 'processor_spec_id']);
+            $table->primary(['pc_spec_id', 'processor_spec_id']);
         });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('motherboard_spec_processor_spec');
+        Schema::dropIfExists('pc_spec_processor_spec');
     }
 };

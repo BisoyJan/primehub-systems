@@ -15,7 +15,7 @@ import { dashboard } from '@/routes';
 import { index as ramIndex } from '@/routes/ramspecs'
 import { index as diskIndex } from '@/routes/diskspecs'
 import { index as processorIndex } from '@/routes/processorspecs'
-import { index as motherboardsIndex } from '@/routes/motherboards'
+import { index as pcIndex } from '@/routes/pcspecs'
 import { index as stocksIndex } from '@/routes/stocks'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
@@ -47,8 +47,8 @@ const computerNavItems: NavItem[] = [
         icon: CpuIcon
     },
     {
-        title: 'Motherboards',
-        href: motherboardsIndex.url(),
+        title: 'PC Specs',
+        href: pcIndex.url(),
         icon: Microchip
     },
     {
