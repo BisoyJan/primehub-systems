@@ -371,7 +371,10 @@ export default function Index() {
                                 {rows.map((row) => (
                                     <TableRow key={row.id}>
                                         <TableCell>{row.id}</TableCell>
-                                        <TableCell>{mapTypeFromStockable(row.stockable_type)}</TableCell>
+                                        <TableCell>
+                                            {mapTypeFromStockable(row.stockable_type).charAt(0).toUpperCase() +
+                                                mapTypeFromStockable(row.stockable_type).slice(1)}
+                                        </TableCell>
                                         <TableCell>
                                             {row.stockable?.manufacturer ?? row.stockable?.brand ?? '-'}
                                         </TableCell>

@@ -35,6 +35,7 @@ export default function Create() {
         drive_type: '',
         sequential_read_mb: '' as number | '',
         sequential_write_mb: '' as number | '',
+        stock_quantity: 0,
     });
 
     const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
@@ -193,6 +194,26 @@ export default function Create() {
                                 {errors.sequential_write_mb && (
                                     <p className="text-red-600">{errors.sequential_write_mb}</p>
                                 )}
+                            </div>
+                        </div>
+                    </section>
+
+                    {/* Stock Quantity */}
+                    <section>
+                        <h2 className="text-lg font-semibold mb-2">Stock Information</h2>
+                        <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <Label htmlFor="stock_quantity">Initial Stock Quantity</Label>
+                                <Input
+                                    id="stock_quantity"
+                                    name="stock_quantity"
+                                    type="number"
+                                    min={0}
+                                    placeholder="e.g. 100"
+                                    value={data.stock_quantity}
+                                    onChange={(e) => setData("stock_quantity", Number(e.target.value))}
+                                />
+                                {errors.stock_quantity && <p className="text-red-600">{errors.stock_quantity}</p>}
                             </div>
                         </div>
                     </section>

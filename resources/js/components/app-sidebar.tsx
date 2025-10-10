@@ -1,6 +1,7 @@
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavComputer } from '@/components/nav-computer-group';
+import { NavStation } from '@/components/nav-station-group';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -19,7 +20,7 @@ import { index as pcIndex } from '@/routes/pcspecs'
 import { index as stocksIndex } from '@/routes/stocks'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip } from 'lucide-react';
+import { BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -58,6 +59,14 @@ const computerNavItems: NavItem[] = [
     }
 ]
 
+const stationNavItems: NavItem[] = [
+    {
+        title: 'Stations',
+        href: "#",
+        icon: Computer,
+    },
+];
+
 const footerNavItems: NavItem[] = [
     {
         title: 'Repository',
@@ -89,6 +98,7 @@ export function AppSidebar() {
             <SidebarContent>
                 <NavMain items={mainNavItems} />
                 <NavComputer items={computerNavItems} />
+                <NavStation items={stationNavItems} />
             </SidebarContent>
 
             <SidebarFooter>

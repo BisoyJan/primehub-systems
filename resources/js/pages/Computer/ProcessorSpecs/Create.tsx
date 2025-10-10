@@ -38,6 +38,7 @@ export default function Create() {
         boost_clock_ghz: '' as number | '',
         integrated_graphics: '',
         tdp_watts: '' as number | '',
+        stock_quantity: '' as number | '',
     });
 
     // pick sockets based on selected manufacturer
@@ -217,6 +218,22 @@ export default function Create() {
                         />
                         {errors.tdp_watts && <p className="text-red-600">{errors.tdp_watts}</p>}
                     </div>
+
+                    {/* Add this input field for stock quantity */}
+                    <div className="mb-4">
+                        <Label htmlFor="stock_quantity">Initial Stock Quantity</Label>
+                        <Input
+                            id="stock_quantity"
+                            name="stock_quantity"
+                            type="number"
+                            min={0}
+                            placeholder="e.g. 10"
+                            value={data.stock_quantity}
+                            onChange={(e) => setData('stock_quantity', Number(e.target.value))}
+                        />
+                        {errors.stock_quantity && <p className="text-red-600">{errors.stock_quantity}</p>}
+                    </div>
+
                     <div className="flex items-end justify-end">
                         <Button type="submit">Add Processor Spec</Button>
                     </div>

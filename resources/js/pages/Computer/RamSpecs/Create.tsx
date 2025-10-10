@@ -34,6 +34,7 @@ export default function Create() {
         speed: '',
         form_factor: '',
         voltage: '',
+        stock_quantity: 0,
     });
 
     const { flash } = usePage<{ flash?: { message?: string; type?: string } }>().props;
@@ -183,6 +184,28 @@ export default function Create() {
                     </div>
                     <div className="flex items-end justify-end">
                         <Button type="submit">Add RAM Spec</Button>
+                    </div>
+
+                    {/* Add this input field for stock quantity */}
+                    <div className="mb-4">
+                        <Label htmlFor="stock_quantity">
+                            Initial Stock Quantity
+                        </Label>
+                        <Input
+                            type="number"
+                            id="stock_quantity"
+                            name="stock_quantity"
+                            value={data.stock_quantity || 0}
+                            onChange={(e) => setData('stock_quantity', Number(e.target.value))}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            min="0"
+                            required
+                        />
+                        {errors.stock_quantity && (
+                            <div className="text-red-500 text-sm mt-1">
+                                {errors.stock_quantity}
+                            </div>
+                        )}
                     </div>
                 </form>
             </div>

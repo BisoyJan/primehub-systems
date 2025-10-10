@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\DiskSpec;
+use App\Models\Stock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class DiskSpecsController extends Controller
 {
@@ -57,10 +59,26 @@ class DiskSpecsController extends Controller
             'drive_type'           => 'required|string|max:255',
             'sequential_read_mb'   => 'required|integer|min:1',
             'sequential_write_mb'  => 'required|integer|min:1',
+            'stock_quantity'       => 'required|integer|min:0', // Added stock quantity validation
         ]);
 
         try {
-            DiskSpec::create($validated);
+            DB::transaction(function () use ($validated) {
+                // Extract stock_quantity from validated data
+                $stockQuantity = $validated['stock_quantity'];
+                unset($validated['stock_quantity']);
+
+                // Create the disk spec
+                $diskSpec = DiskSpec::create($validated);
+
+                // Create the stock entry
+                Stock::create([
+                    'stockable_type' => DiskSpec::class,
+                    'stockable_id' => $diskSpec->id,
+                    'quantity' => $stockQuantity,
+                    'reserved' => 0,
+                ]);
+            });
 
             return redirect()
                 ->route('diskspecs.index')

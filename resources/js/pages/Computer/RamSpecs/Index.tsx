@@ -92,7 +92,7 @@ export default function Index() {
     <AppLayout breadcrumbs={breadcrumbs}>
       <Head title="Ram Specs" />
 
-      <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
+      <div className="flex h-full flex-1 flex-col gap-3 overflow-x-auto rounded-xl p-3">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <form onSubmit={handleSearch} className="flex gap-2">
             <input

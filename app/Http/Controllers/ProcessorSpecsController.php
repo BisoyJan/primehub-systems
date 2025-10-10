@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\ProcessorSpec;
+use App\Models\Stock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class ProcessorSpecsController extends Controller
 {
@@ -56,10 +58,26 @@ class ProcessorSpecsController extends Controller
             'boost_clock_ghz'     => 'nullable|numeric|min:0',
             'integrated_graphics' => 'nullable|string|max:255',
             'tdp_watts'           => 'nullable|integer|min:1',
+            'stock_quantity'      => 'required|integer|min:0', // Added stock quantity validation
         ]);
 
         try {
-            ProcessorSpec::create($validated);
+            DB::transaction(function () use ($validated) {
+                // Extract stock_quantity from validated data
+                $stockQuantity = $validated['stock_quantity'];
+                unset($validated['stock_quantity']);
+
+                // Create the processor spec
+                $processorSpec = ProcessorSpec::create($validated);
+
+                // Create the stock entry
+                Stock::create([
+                    'stockable_type' => ProcessorSpec::class,
+                    'stockable_id' => $processorSpec->id,
+                    'quantity' => $stockQuantity,
+                    'reserved' => 0,
+                ]);
+            });
 
             return redirect()
                 ->route('processorspecs.index')

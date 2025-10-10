@@ -3,8 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Models\RamSpec;
+use App\Models\Stock;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\DB;
 
 class RamSpecsController extends Controller
 {
@@ -56,10 +58,27 @@ class RamSpecsController extends Controller
             'speed' => 'required|integer|min:1',
             'form_factor' => 'required|string|max:255',
             'voltage' => 'required|numeric|min:0',
+            'stock_quantity' => 'required|integer|min:0', // Added stock quantity validation
         ]);
 
         try {
-            RamSpec::create($validated);
+            DB::transaction(function () use ($validated) {
+                // Extract stock_quantity from validated data
+                $stockQuantity = $validated['stock_quantity'];
+                unset($validated['stock_quantity']);
+
+                // Create the RAM spec
+                $ramSpec = RamSpec::create($validated);
+
+                // Create the stock entry
+                Stock::create([
+                    'stockable_type' => RamSpec::class,
+                    'stockable_id' => $ramSpec->id,
+                    'quantity' => $stockQuantity,
+                    'reserved' => 0,
+                ]);
+            });
+
             return redirect()
                 ->route('ramspecs.index')
                 ->with('message', 'RAM specification created successfully.')
