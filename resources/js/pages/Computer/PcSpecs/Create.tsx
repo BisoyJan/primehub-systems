@@ -12,8 +12,6 @@ import {
     SelectTrigger,
     SelectValue,
     SelectContent,
-    // SelectGroup,
-    // SelectLabel,
     SelectItem,
 } from '@/components/ui/select'
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover'
@@ -34,7 +32,6 @@ interface Option {
     id: number
     label: string
     stock_quantity?: number
-    // optional additional fields returned by backend; safe to reference if present
     capacity_gb?: number
     interface?: string
 }
@@ -80,8 +77,8 @@ export default function Create() {
         ram_specs: {} as Record<number, number>, // { ramId: qty }
         disk_mode: 'different' as 'same' | 'different',
         disk_specs: {} as Record<number, number>, // { diskId: qty }
-
-        processor_spec_ids: [] as number[],
+        processor_spec_id: 0, // Changed from processor_spec_ids array to single value
+        quantity: 1, // Add this field for creating multiple identical PCs
     })
 
     const [localError, setLocalError] = useState<string | null>(null)
@@ -126,10 +123,51 @@ export default function Create() {
         e.preventDefault()
         setLocalError(null)
 
-        // (previous behavior required exact fill; if you want to allow underfill remove this block)
+        // Check for RAM slots limit
         if (form.data.ram_slots > 0 && totalRamSelected > form.data.ram_slots) {
             toast.error(`You selected ${totalRamSelected} RAM sticks, but the motherboard only supports ${form.data.ram_slots} slots.`);
             return;
+        }
+
+        // Verify if there's enough stock for multiple PCs
+        const quantity = form.data.quantity || 1;
+        if (quantity > 1) {
+            // Check RAM stock
+            for (const [idStr, qty] of Object.entries(form.data.ram_specs)) {
+                const id = Number(idStr);
+                const ram = ramOptions.find(r => r.id === id);
+                if (ram) {
+                    const totalNeeded = Number(qty) * quantity;
+                    if ((ram.stock_quantity || 0) < totalNeeded) {
+                        toast.error(`Not enough stock for RAM ${ram.label}: need ${totalNeeded} for ${quantity} PCs, but only have ${ram.stock_quantity || 0} available.`);
+                        return;
+                    }
+                }
+            }
+
+            // Check Disk stock
+            for (const [idStr, qty] of Object.entries(form.data.disk_specs)) {
+                const id = Number(idStr);
+                const disk = diskOptions.find(d => d.id === id);
+                if (disk) {
+                    const totalNeeded = Number(qty) * quantity;
+                    if ((disk.stock_quantity || 0) < totalNeeded) {
+                        toast.error(`Not enough stock for Disk ${disk.label}: need ${totalNeeded} for ${quantity} PCs, but only have ${disk.stock_quantity || 0} available.`);
+                        return;
+                    }
+                }
+            }
+
+            // Check Processor stock (now for single processor)
+            if (form.data.processor_spec_id) {
+                const proc = processorOptions.find(p => p.id === form.data.processor_spec_id);
+                if (proc) {
+                    if ((proc.stock_quantity || 0) < quantity) {
+                        toast.error(`Not enough stock for Processor ${proc.label}: need ${quantity} units, but only have ${proc.stock_quantity || 0} available.`);
+                        return;
+                    }
+                }
+            }
         }
 
         form.post(pcSpecStore.url())
@@ -215,6 +253,65 @@ export default function Create() {
         form.setData('disk_specs', next)
     }
 
+    // Add reactive validation when quantity changes
+    useEffect(() => {
+        // Skip if quantity is 1 (single PC)
+        if (form.data.quantity <= 1) return;
+
+        // Validate stock levels when quantity changes (show warnings)
+        const validateStockForQuantity = () => {
+            const quantity = form.data.quantity || 1;
+            let hasRamWarning = false;
+            let hasDiskWarning = false;
+            let hasProcWarning = false;
+            const warningComponents: string[] = [];
+
+            // Check each component type
+            for (const [idStr, qty] of Object.entries(form.data.ram_specs)) {
+                const id = Number(idStr);
+                const ram = ramOptions.find(r => r.id === id);
+                if (ram) {
+                    const totalNeeded = Number(qty) * quantity;
+                    if ((ram.stock_quantity || 0) < totalNeeded) {
+                        hasRamWarning = true;
+                    }
+                }
+            }
+
+            for (const [idStr, qty] of Object.entries(form.data.disk_specs)) {
+                const id = Number(idStr);
+                const disk = diskOptions.find(d => d.id === id);
+                if (disk) {
+                    const totalNeeded = Number(qty) * quantity;
+                    if ((disk.stock_quantity || 0) < totalNeeded) {
+                        hasDiskWarning = true;
+                    }
+                }
+            }
+
+            // Check processor (now single)
+            if (form.data.processor_spec_id) {
+                const proc = processorOptions.find(p => p.id === form.data.processor_spec_id);
+                if (proc && (proc.stock_quantity || 0) < quantity) {
+                    hasProcWarning = true;
+                }
+            }
+
+            // Build the list of component types that have warnings
+            if (hasRamWarning) warningComponents.push("RAM");
+            if (hasDiskWarning) warningComponents.push("Disk");
+            if (hasProcWarning) warningComponents.push("Processor");
+
+            if (warningComponents.length > 0) {
+                setLocalError(`Warning: Not enough stock for ${warningComponents.join(", ")} to build ${quantity} identical PCs.`);
+            } else {
+                setLocalError(null);
+            }
+        };
+
+        validateStockForQuantity();
+    }, [form.data.quantity, form.data.ram_specs, form.data.disk_specs, form.data.processor_spec_id, ramOptions, diskOptions, processorOptions]);
+
     return (
         <AppLayout>
             <Head title="Create PC Spec" />
@@ -253,6 +350,26 @@ export default function Create() {
                                     </SelectContent>
                                 </Select>
                                 {form.errors.form_factor && <p className="text-red-600">{form.errors.form_factor}</p>}
+                            </div>
+
+                            {/* Add quantity field */}
+                            <div>
+                                <Label htmlFor="quantity">Quantity to create</Label>
+                                <div className="flex items-center gap-2">
+                                    <Input
+                                        id="quantity"
+                                        name="quantity"
+                                        type="number"
+                                        min="1"
+                                        max="100"
+                                        value={form.data.quantity}
+                                        onChange={(e) => form.setData('quantity', parseInt(e.target.value) || 1)}
+                                        className={`w-full ${localError ? 'border-orange-500 focus:ring-orange-500' : ''}`}
+                                    />
+                                    <span className="text-sm text-gray-500 whitespace-nowrap">PCs with identical specs</span>
+                                </div>
+                                {form.errors.quantity && <p className="text-red-600">{form.errors.quantity}</p>}
+                                {localError && <p className="text-orange-500 text-sm mt-1">{localError}</p>}
                             </div>
                         </div>
                     </section>
@@ -520,26 +637,57 @@ export default function Create() {
                         </div>
                     </section>
 
-                    {/* Compatibility (Processors) */}
+                    {/* Compatibility (Processor) - changed to searchable popover */}
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Compatibility</h2>
-                        <MultiPopover
-                            id="processor_spec_ids"
-                            label="Processors"
-                            options={processorOptions}
-                            selected={form.data.processor_spec_ids}
-                            onToggle={(id) => {
-                                const list = form.data.processor_spec_ids
-                                const next = list.includes(id) ? list.filter(i => i !== id) : [...list, id]
-                                form.setData('processor_spec_ids', next)
-                            }}
-                            error={form.errors.processor_spec_ids as string}
-                        />
+                        <div>
+                            <Label htmlFor="processor_spec_id">Processor</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-between">
+                                        {form.data.processor_spec_id
+                                            ? processorOptions.find(p => p.id === form.data.processor_spec_id)?.label
+                                            : 'Select a processor...'}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0">
+                                    <Command>
+                                        <CommandInput placeholder="Search processors..." />
+                                        <CommandEmpty>No processor found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {processorOptions.map(opt => {
+                                                const outOfStock = (opt.stock_quantity || 0) < 1;
+
+                                                return (
+                                                    <CommandItem
+                                                        key={opt.id}
+                                                        onSelect={() => !outOfStock && form.setData('processor_spec_id', opt.id)}
+                                                        disabled={outOfStock}
+                                                        className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}
+                                                    >
+                                                        <Check className={`mr-2 h-4 w-4 ${form.data.processor_spec_id === opt.id ? 'opacity-100' : 'opacity-0'}`} />
+                                                        <span className="flex-1">{opt.label}</span>
+                                                        <span className="text-xs text-gray-500 ml-4">• {opt.socket_type}</span>
+                                                        <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            {form.errors.processor_spec_id && <p className="text-red-600">{form.errors.processor_spec_id}</p>}
+                        </div>
                     </section>
 
                     {/* Submit */}
                     <div className="flex justify-end">
-                        <Button type="submit">Create Motherboard</Button>
+                        <Button type="submit">
+                            {form.data.quantity > 1
+                                ? `Create ${form.data.quantity} PCs`
+                                : "Create PC Spec"}
+                        </Button>
                     </div>
                 </form>
             </div>

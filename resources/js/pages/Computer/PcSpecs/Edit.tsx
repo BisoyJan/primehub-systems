@@ -115,27 +115,21 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
     const { data, setData, put, errors } = useForm({
         manufacturer: pcspec.manufacturer ?? '',
         model: pcspec.model ?? '',
-        // chipset: pcspec.chipset ?? '',
         form_factor: pcspec.form_factor ?? '',
-        // socket_type: pcspec.socket_type ?? '',
         memory_type: pcspec.memory_type ?? '',
         ram_slots: pcspec.ram_slots ?? 0,
         max_ram_capacity_gb: pcspec.max_ram_capacity_gb ?? 0,
         max_ram_speed: pcspec.max_ram_speed ?? '',
-        // pcie_slots: pcspec.pcie_slots ?? '',
         m2_slots: pcspec.m2_slots ?? 0,
         sata_ports: pcspec.sata_ports ?? 0,
-        // usb_ports: pcspec.usb_ports ?? '',
-        // ethernet_speed: pcspec.ethernet_speed ?? '',
-        // wifi: pcspec.wifi ?? false,
-
-        // new same/different shape
         ram_mode: 'different' as 'same' | 'different',
         ram_specs: initialRamSpecs as Record<number, number>,
         disk_mode: 'different' as 'same' | 'different',
         disk_specs: initialDiskSpecs as Record<number, number>,
-
-        processor_spec_ids: (pcspec.processorSpecs ?? []).map((p) => Number(p)),
+        // Change from array to single processor ID, use the first one if available
+        processor_spec_id: pcspec.processorSpecs && pcspec.processorSpecs.length > 0
+            ? Number(pcspec.processorSpecs[0])
+            : 0,
     });
 
     // compatibility filters
@@ -546,21 +540,48 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
                         </div>
                     </section>
 
-                    {/* Compatibility (Processors) */}
+                    {/* Compatibility (Processor) - changed to searchable popover */}
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Compatibility</h2>
-                        <MultiPopover
-                            id="processor_spec_ids"
-                            label="Processors"
-                            options={processorOptions}
-                            selected={data.processor_spec_ids}
-                            onToggle={(id) => {
-                                const list = data.processor_spec_ids;
-                                const next = list.includes(id) ? list.filter(i => i !== id) : [...list, id];
-                                setData('processor_spec_ids', next);
-                            }}
-                            error={errors.processor_spec_ids as string}
-                        />
+                        <div>
+                            <Label htmlFor="processor_spec_id">Processor</Label>
+                            <Popover>
+                                <PopoverTrigger asChild>
+                                    <Button variant="outline" className="w-full justify-between">
+                                        {data.processor_spec_id
+                                            ? processorOptions.find(p => p.id === data.processor_spec_id)?.label
+                                            : 'Select a processor...'}
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0">
+                                    <Command>
+                                        <CommandInput placeholder="Search processors..." />
+                                        <CommandEmpty>No processor found.</CommandEmpty>
+                                        <CommandGroup>
+                                            {processorOptions.map(opt => {
+                                                const outOfStock = (opt.stock_quantity || 0) < 1;
+
+                                                return (
+                                                    <CommandItem
+                                                        key={opt.id}
+                                                        onSelect={() => !outOfStock && setData('processor_spec_id', opt.id)}
+                                                        disabled={outOfStock}
+                                                        className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}
+                                                    >
+                                                        <Check className={`mr-2 h-4 w-4 ${data.processor_spec_id === opt.id ? 'opacity-100' : 'opacity-0'}`} />
+                                                        <span className="flex-1">{opt.label}</span>
+                                                        <span className="text-xs text-gray-500 ml-4">• {opt.socket_type}</span>
+                                                        <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
+                                                    </CommandItem>
+                                                );
+                                            })}
+                                        </CommandGroup>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            {errors.processor_spec_id && <p className="text-red-600">{errors.processor_spec_id}</p>}
+                        </div>
                     </section>
 
                     {/* Submit */}

@@ -261,8 +261,8 @@ class PcSpecController extends Controller
             'ram_specs'                   => 'array',
             'disk_mode'                   => 'nullable|in:same,different',
             'disk_specs'                  => 'array',
-            'processor_spec_ids'          => 'array',
-            'processor_spec_ids.*'        => 'exists:processor_specs,id',
+            'processor_spec_id'           => 'required|exists:processor_specs,id', // Changed from processor_spec_ids
+            'quantity'                    => 'nullable|integer|min:1|max:100',
         ]);
 
         $ramSpecs = $this->validateAndNormalizeSpecs($request->input('ram_specs', []));
@@ -277,7 +277,6 @@ class PcSpecController extends Controller
             ]);
         }
 
-
         // capacity check: ensure total installed capacity does not exceed motherboard max
         $totalCapacityGb = $this->computeTotalRamCapacity($ramSpecs);
         $maxCapacityGb = (int) ($request->input('max_ram_capacity_gb') ?? 0);
@@ -287,27 +286,83 @@ class PcSpecController extends Controller
             ]);
         }
 
+        // Get quantity (default to 1)
+        $quantity = max(1, (int) ($data['quantity'] ?? 1));
+        unset($data['quantity']); // Remove from creation data
+
+        // Check if we have enough stock for multiple PCs
+        $procId = $data['processor_spec_id']; // Changed from processor_spec_ids array
+
+        // First verify we have enough stock for all components × quantity
+        $this->verifyStockForMultiple($ramSpecs, RamSpec::class, 'RAM', $quantity);
+        $this->verifyStockForMultiple($diskSpecs, DiskSpec::class, 'Disk', $quantity);
+        $this->verifyStockForMultiple([$procId => 1], ProcessorSpec::class, 'Processor', $quantity); // Changed to use single ID
+
+        $pcs = [];
+
         // Use transaction with retry attempts to reduce deadlock risk
-        DB::transaction(function () use ($data, $ramSpecs, $diskSpecs) {
-            $pc = PcSpec::create($data);
+        DB::transaction(function () use ($data, $ramSpecs, $diskSpecs, $procId, $quantity, &$pcs) {
+            // Create multiple PCs with the same specifications
+            for ($i = 0; $i < $quantity; $i++) {
+                $pc = PcSpec::create($data);
+                $pcs[] = $pc;
 
-            // reserve/decrement stock for RAM and disks and processors inside transaction with locks
-            $this->reserveAndDecrement($ramSpecs, RamSpec::class, 'RAM');
-            $this->reserveAndDecrement($diskSpecs, DiskSpec::class, 'Disk');
+                // Attach RAM, disk, and processors with pivot data
+                $pc->ramSpecs()->sync(collect($ramSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
+                $pc->diskSpecs()->sync(array_keys($diskSpecs));
+                $pc->processorSpecs()->sync([$procId]); // Changed to use single ID in array
+            }
 
-            // attach ram with pivot quantities and disk presence (adapt if disk pivot has quantities)
-            $pc->ramSpecs()->sync(collect($ramSpecs)->mapWithKeys(fn($q, $id) => [$id => ['quantity' => $q]])->toArray());
-            $pc->diskSpecs()->sync(array_keys($diskSpecs));
-
-            // processors (presence-based)
-            $procIds = array_map('intval', $data['processor_spec_ids'] ?? []);
-            $this->reserveAndDecrement(array_fill_keys($procIds, 1), ProcessorSpec::class, 'Processor');
-            $pc->processorSpecs()->sync($procIds);
+            // Decrement stock all at once after successful creation
+            $this->decrementStockForMultiple($ramSpecs, RamSpec::class, $quantity);
+            $this->decrementStockForMultiple($diskSpecs, DiskSpec::class, $quantity);
+            $this->decrementStockForMultiple([$procId => 1], ProcessorSpec::class, $quantity); // Changed to use single ID
         }, 3);
 
+        $message = $quantity > 1
+            ? "{$quantity} identical PC Specs created successfully"
+            : "PC Spec created successfully";
+
         return redirect()->route('pcspecs.index')
-            ->with('message', 'PC Spec created')
+            ->with('message', $message)
             ->with('type', 'success');
+    }
+
+    /**
+     * Verify if enough stock exists for multiple items
+     */
+    protected function verifyStockForMultiple(array $items, string $modelClass, string $label, int $quantity): void
+    {
+        $items = collect($items)->mapWithKeys(fn($q, $id) => [(int)$id => (int)$q])->filter()->toArray();
+        if (empty($items)) return;
+
+        foreach ($items as $id => $qty) {
+            $spec = $modelClass::with('stock')->find($id);
+            if (!$spec || !$spec->stock) {
+                throw ValidationException::withMessages([$label => "{$label} #{$id} not found or missing stock"]);
+            }
+            $totalNeeded = $qty * $quantity;
+            if ($spec->stock->quantity < $totalNeeded) {
+                throw ValidationException::withMessages([$label => "Not enough stock for {$label} '{$id}' (requested {$totalNeeded} for {$quantity} PCs, available {$spec->stock->quantity})"]);
+            }
+        }
+    }
+
+    /**
+     * Decrement stock for multiple items at once
+     */
+    protected function decrementStockForMultiple(array $items, string $modelClass, int $quantity): void
+    {
+        $items = collect($items)->mapWithKeys(fn($q, $id) => [(int)$id => (int)$q])->filter()->toArray();
+        if (empty($items)) return;
+
+        foreach ($items as $id => $qty) {
+            $spec = $modelClass::with('stock')->lockForUpdate()->find($id);
+            if ($spec && $spec->stock) {
+                $totalToDecrement = $qty * $quantity;
+                $spec->stock->decrement('quantity', $totalToDecrement);
+            }
+        }
     }
 
     /**
@@ -377,8 +432,7 @@ class PcSpecController extends Controller
             'ram_specs'                   => 'array',
             'disk_mode'                   => 'nullable|in:same,different',
             'disk_specs'                  => 'array',
-            'processor_spec_ids'          => 'array',
-            'processor_spec_ids.*'        => 'exists:processor_specs,id',
+            'processor_spec_id'           => 'required|exists:processor_specs,id', // Changed from processor_spec_ids
         ]);
 
         $newRamSpecs = $this->validateAndNormalizeSpecs($request->input('ram_specs', []));
@@ -410,9 +464,10 @@ class PcSpecController extends Controller
             $this->applyDiskStockDiffs($pcspec, $newDiskSpecs);
             $pcspec->diskSpecs()->sync(array_keys($newDiskSpecs));
 
-            $newProcIds = array_map('intval', $data['processor_spec_ids'] ?? []);
-            $this->applyProcessorStockDiffs($pcspec, $newProcIds);
-            $pcspec->processorSpecs()->sync($newProcIds);
+            // Changed from array to single processor
+            $newProcId = $data['processor_spec_id'];
+            $this->applyProcessorStockDiffs($pcspec, [$newProcId]); // Still accepts an array for compatibility
+            $pcspec->processorSpecs()->sync([$newProcId]);
         }, 3);
 
         return redirect()->route('pcspecs.index')
