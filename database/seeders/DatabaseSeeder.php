@@ -9,6 +9,8 @@ use App\Models\User;
 use App\Models\RamSpec;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use App\Models\Site;
+use App\Models\Campaign;
 
 class DatabaseSeeder extends Seeder
 {
@@ -37,5 +39,17 @@ class DatabaseSeeder extends Seeder
                 PcSpecSeeder::class,
             ]
         );
+
+        // Seed unique sites
+        $siteNames = ['PH1-2F', 'PH1-3F', 'PH1-4F', 'PH2', 'PH3'];
+        foreach ($siteNames as $name) {
+            Site::firstOrCreate(['name' => $name]);
+        }
+
+        // Seed unique campaigns
+        $campaignNames = ['Admin', 'All State', 'Helix', 'LG Copier', 'Medicare', 'PSO', 'Real State', 'Sales'];
+        foreach ($campaignNames as $name) {
+            Campaign::firstOrCreate(['name' => $name]);
+        }
     }
 }

@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\ProcessorSpec;
 
 class RamSpec extends Model
 {
@@ -18,13 +19,13 @@ class RamSpec extends Model
         'voltage',
     ];
 
-    public function motherboardSpecs()
+    public function processorSpecs()
     {
         return $this->belongsToMany(
-            MotherboardSpec::class,
-            'motherboard_spec_ram_spec',
+            ProcessorSpec::class,
+            'processor_spec_ram_spec',
             'ram_spec_id',
-            'motherboard_spec_id'
+            'processor_spec_id'
         );
     }
 

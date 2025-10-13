@@ -18,6 +18,7 @@ import { index as diskIndex } from '@/routes/diskspecs'
 import { index as processorIndex } from '@/routes/processorspecs'
 import { index as pcIndex } from '@/routes/pcspecs'
 import { index as stocksIndex } from '@/routes/stocks'
+import { index as stationIndex } from '@/routes/stations'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
 import { BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip } from 'lucide-react';
@@ -62,7 +63,7 @@ const computerNavItems: NavItem[] = [
 const stationNavItems: NavItem[] = [
     {
         title: 'Stations',
-        href: "#",
+        href: stationIndex.url(),
         icon: Computer,
     },
 ];
