@@ -7,11 +7,12 @@ use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::middleware('auth')->group(function () {
-    Route::redirect('settings', '/settings/profile');
+    Route::redirect('settings', '/settings/account');
+    Route::redirect('settings/profile', '/settings/account');
 
-    Route::get('settings/profile', [ProfileController::class, 'edit'])->name('profile.edit');
-    Route::patch('settings/profile', [ProfileController::class, 'update'])->name('profile.update');
-    Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+    Route::get('settings/account', [ProfileController::class, 'edit'])->name('account.edit');
+    Route::patch('settings/account', [ProfileController::class, 'update'])->name('account.update');
+    Route::delete('settings/account', [ProfileController::class, 'destroy'])->name('account.destroy');
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');
 
