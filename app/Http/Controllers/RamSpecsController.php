@@ -10,47 +10,104 @@ use Illuminate\Support\Facades\DB;
 
 class RamSpecsController extends Controller
 {
-    /**
-     * Display a listing of the resource.
-     */
     public function index(Request $request)
     {
-        $query = RamSpec::with('stock');
-
-        if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('manufacturer', 'like', "%{$search}%")
-                    ->orWhere('model', 'like', "%{$search}%")
-                    ->orWhere('type', 'like', "%{$search}%")
-                    ->orWhere('capacity_gb', 'like', "%{$search}%")
-                    ->orWhere('form_factor', 'like', "%{$search}%");
-            });
-        }
-
-        $ramspecs = $query
+        $ramspecs = RamSpec::with('stock')
+            ->search($request->input('search'))
             ->latest()
             ->paginate(10)
-            ->appends(['search' => $search]);
+            ->appends(['search' => $request->input('search')]);
+
         return inertia('Computer/RamSpecs/Index', [
             'ramspecs' => $ramspecs,
-            'search' => $search,
+            'search' => $request->input('search'),
         ]);
     }
 
-    /**
-     * Show the form for creating a new resource.
-     */
     public function create()
     {
-        return inertia('Computer/RamSpecs/Create', []);
+        return inertia('Computer/RamSpecs/Create');
     }
 
-    /**
-     * Store a newly created resource in storage.
-     */
     public function store(Request $request)
     {
-        $validated = $request->validate([
+        $validated = $this->validateRamSpec($request, true);
+
+        try {
+            DB::transaction(function () use ($validated) {
+                $stockQuantity = $validated['stock_quantity'];
+                unset($validated['stock_quantity']);
+
+                $ramSpec = RamSpec::create($validated);
+                $this->createStock($ramSpec, $stockQuantity);
+            });
+
+            return $this->redirectWithFlash('ramspecs.index', 'RAM specification created successfully.');
+        } catch (\Exception $e) {
+            Log::error('RamSpec Store Error: ' . $e->getMessage());
+            return $this->redirectWithFlash('ramspecs.index', 'Failed to create RAM specification.', 'error');
+        }
+    }
+
+    public function edit(string $ramspec)
+    {
+        return inertia('Computer/RamSpecs/Edit', [
+            'ramspec' => RamSpec::findOrFail($ramspec)
+        ]);
+    }
+
+    public function update(Request $request, RamSpec $ramspec)
+    {
+        $validated = $this->validateRamSpec($request);
+
+        try {
+            $ramspec->update($validated);
+            return $this->redirectWithFlash('ramspecs.index', 'RAM specification updated successfully.');
+        } catch (\Exception $e) {
+            Log::error('RamSpec Update Error: ' . $e->getMessage());
+            return $this->redirectWithFlash('ramspecs.index', 'Failed to update RAM specification.', 'error');
+        }
+    }
+
+    public function destroy(RamSpec $ramspec)
+    {
+        // Check if there's stock
+        if ($ramspec->stock && $ramspec->stock->quantity > 0) {
+            return $this->redirectWithFlash(
+                'ramspecs.index',
+                'Cannot delete RAM specification. It has ' . $ramspec->stock->quantity . ' units in stock. Please remove or transfer the stock first.',
+                'error'
+            );
+        }
+
+        // Check if it's being used in any PC specs
+        $pcSpecCount = $ramspec->pcSpecs()->count();
+        if ($pcSpecCount > 0) {
+            return $this->redirectWithFlash(
+                'ramspecs.index',
+                'Cannot delete RAM specification. It is being used in ' . $pcSpecCount . ' PC specification(s).',
+                'error'
+            );
+        }
+
+        try {
+            // Delete the stock record if it exists
+            if ($ramspec->stock) {
+                $ramspec->stock->delete();
+            }
+
+            $ramspec->delete();
+            return $this->redirectWithFlash('ramspecs.index', 'RAM specification deleted successfully.');
+        } catch (\Exception $e) {
+            Log::error('RamSpec Delete Error: ' . $e->getMessage());
+            return $this->redirectWithFlash('ramspecs.index', 'Failed to delete RAM specification.', 'error');
+        }
+    }
+
+    // Private helper methods
+    private function validateRamSpec(Request $request, bool $includeStock = false): array
+    {
+        $rules = [
             'manufacturer' => 'required|string|max:255',
             'model' => 'required|string|max:255',
             'capacity_gb' => 'required|integer|min:1',
@@ -58,108 +115,30 @@ class RamSpecsController extends Controller
             'speed' => 'required|integer|min:1',
             'form_factor' => 'required|string|max:255',
             'voltage' => 'required|numeric|min:0',
-            'stock_quantity' => 'required|integer|min:0', // Added stock quantity validation
-        ]);
+        ];
 
-        try {
-            DB::transaction(function () use ($validated) {
-                // Extract stock_quantity from validated data
-                $stockQuantity = $validated['stock_quantity'];
-                unset($validated['stock_quantity']);
-
-                // Create the RAM spec
-                $ramSpec = RamSpec::create($validated);
-
-                // Create the stock entry
-                Stock::create([
-                    'stockable_type' => RamSpec::class,
-                    'stockable_id' => $ramSpec->id,
-                    'quantity' => $stockQuantity,
-                    'reserved' => 0,
-                ]);
-            });
-
-            return redirect()
-                ->route('ramspecs.index')
-                ->with('message', 'RAM specification created successfully.')
-                ->with('type', 'success');
-        } catch (\Exception $e) {
-            Log::error('RamSpec Store Error: ' . $e->getMessage());
-            return redirect()
-                ->route('ramspecs.index')
-                ->with('message', 'Failed to create RAM specification.')
-                ->with('type', 'error');
+        if ($includeStock) {
+            $rules['stock_quantity'] = 'required|integer|min:0';
         }
+
+        return $request->validate($rules);
     }
 
-    /**
-     * Display the specified resource.
-     */
-    public function show(string $id)
+    private function createStock($model, int $quantity): void
     {
-        //
-    }
-
-    /**
-     * Show the form for editing the specified resource.
-     */
-    public function edit(string $ramspec)
-    {
-        return inertia('Computer/RamSpecs/Edit', [
-            'ramspec' => RamSpec::findOrFail($ramspec)
+        Stock::create([
+            'stockable_type' => get_class($model),
+            'stockable_id' => $model->id,
+            'quantity' => $quantity,
+            'reserved' => 0,
         ]);
-
-        //dd(RamSpec::findOrFail($ramspec));
     }
 
-    /**
-     * Update the specified resource in storage.
-     */
-    public function update(Request $request, RamSpec $ramspec)
+    private function redirectWithFlash(string $route, string $message, string $type = 'success')
     {
-        $validated = $request->validate([
-            'manufacturer' => 'required|string|max:255',
-            'model' => 'required|string|max:255',
-            'capacity_gb' => 'required|integer|min:1',
-            'type' => 'required|string|max:255',
-            'speed' => 'required|integer|min:1',
-            'form_factor' => 'required|string|max:255',
-            'voltage' => 'required|numeric|min:1',
-        ]);
-
-        try {
-            $ramspec->update($validated);
-
-            return redirect()
-                ->route('ramspecs.index')
-                ->with('message', 'RAM specification updated successfully.')
-                ->with('type', 'success');
-        } catch (\Exception $e) {
-            Log::error('RamSpec Update Error: ' . $e->getMessage());
-            return redirect()
-                ->route('ramspecs.index')
-                ->with('message', 'Failed to update RAM specification.')
-                ->with('type', 'error');
-        }
-    }
-
-    /**
-     * Remove the specified resource from storage.
-     */
-    public function destroy(RamSpec $ramspec)
-    {
-        try {
-            $ramspec->delete();
-            return redirect()
-                ->route('ramspecs.index')
-                ->with('message', 'RAM specification deleted successfully.')
-                ->with('type', 'success');
-        } catch (\Exception $e) {
-            Log::error('RamSpec Delete Error: ' . $e->getMessage());
-            return redirect()
-                ->route('ramspecs.index')
-                ->with('message', 'Failed to delete RAM specification.')
-                ->with('type', 'error');
-        }
+        return redirect()
+            ->route($route)
+            ->with('message', $message)
+            ->with('type', $type);
     }
 }

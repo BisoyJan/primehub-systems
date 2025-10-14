@@ -10,92 +10,47 @@ use Illuminate\Support\Facades\DB;
 
 class ProcessorSpecsController extends Controller
 {
-    /**
-     * Display a paginated listing of processor specs.
-     */
     public function index(Request $request)
     {
-        $query = ProcessorSpec::with('stock');
+        $search = $request->input('search');
 
-        if ($search = $request->input('search')) {
-            $query->where(function ($q) use ($search) {
-                $q->where('manufacturer', 'like', "%{$search}%")
-                    ->orWhere('model', 'like', "%{$search}%");
-            });
-        }
-
-        $processorspecs = $query
+        $processorspecs = ProcessorSpec::with('stock')
+            ->search($search)
             ->latest()
             ->paginate(10)
             ->appends(['search' => $search]);
 
         return inertia('Computer/ProcessorSpecs/Index', [
             'processorspecs' => $processorspecs,
-            'search'         => $search,
+            'search' => $search,
         ]);
     }
 
-    /**
-     * Show the form for creating a new processor spec.
-     */
     public function create()
     {
         return inertia('Computer/ProcessorSpecs/Create');
     }
 
-    /**
-     * Store a newly created processor spec.
-     */
     public function store(Request $request)
     {
-        $validated = $request->validate([
-            'manufacturer'               => 'required|string|max:255',
-            'model'              => 'required|string|max:255',
-            'socket_type'         => 'required|string|max:255',
-            'core_count'          => 'required|integer|min:1',
-            'thread_count'        => 'required|integer|min:1',
-            'base_clock_ghz'      => 'required|numeric|min:0',
-            'boost_clock_ghz'     => 'nullable|numeric|min:0',
-            'integrated_graphics' => 'nullable|string|max:255',
-            'tdp_watts'           => 'nullable|integer|min:1',
-            'stock_quantity'      => 'required|integer|min:0', // Added stock quantity validation
-        ]);
+        $validated = $this->validateProcessorSpec($request, true);
 
         try {
             DB::transaction(function () use ($validated) {
-                // Extract stock_quantity from validated data
                 $stockQuantity = $validated['stock_quantity'];
                 unset($validated['stock_quantity']);
 
-                // Create the processor spec
                 $processorSpec = ProcessorSpec::create($validated);
-
-                // Create the stock entry
-                Stock::create([
-                    'stockable_type' => ProcessorSpec::class,
-                    'stockable_id' => $processorSpec->id,
-                    'quantity' => $stockQuantity,
-                    'reserved' => 0,
-                ]);
+                $this->createStock($processorSpec, $stockQuantity);
             });
 
-            return redirect()
-                ->route('processorspecs.index')
-                ->with('message', 'Processor specification created successfully.')
-                ->with('type', 'success');
+            return $this->redirectWithFlash('processorspecs.index', 'Processor specification created successfully.');
         } catch (\Exception $e) {
             Log::error('ProcessorSpec Store Error: ' . $e->getMessage());
-
-            return redirect()
-                ->route('processorspecs.index')
-                ->with('message', 'Failed to create processor specification.')
-                ->with('type', 'error');
+            return $this->redirectWithFlash('processorspecs.index', 'Failed to create processor specification.', 'error');
         }
     }
 
-    /**
-     * Show the form for editing the specified processor spec.
-     */
     public function edit(string $processorspec)
     {
         return inertia('Computer/ProcessorSpecs/Edit', [
@@ -103,60 +58,92 @@ class ProcessorSpecsController extends Controller
         ]);
     }
 
-    /**
-     * Update the specified processor spec.
-     */
     public function update(Request $request, ProcessorSpec $processorspec)
     {
-        $validated = $request->validate([
-            'manufacturer'               => 'required|string|max:255',
-            'model'              => 'required|string|max:255',
-            'socket_type'         => 'required|string|max:255',
-            'core_count'          => 'required|integer|min:1',
-            'thread_count'        => 'required|integer|min:1',
-            'base_clock_ghz'      => 'required|numeric|min:0',
-            'boost_clock_ghz'     => 'nullable|numeric|min:0',
-            'integrated_graphics' => 'nullable|string|max:255',
-            'tdp_watts'           => 'nullable|integer|min:1',
-        ]);
+        $validated = $this->validateProcessorSpec($request);
 
         try {
             $processorspec->update($validated);
             Log::info('ProcessorSpec Updated:', $validated);
-
-            return redirect()
-                ->route('processorspecs.index')
-                ->with('message', 'Processor specification updated successfully.')
-                ->with('type', 'success');
+            return $this->redirectWithFlash('processorspecs.index', 'Processor specification updated successfully.');
         } catch (\Exception $e) {
             Log::error('ProcessorSpec Update Error: ' . $e->getMessage());
-
-            return redirect()
-                ->route('processorspecs.index')
-                ->with('message', 'Failed to update processor specification.')
-                ->with('type', 'error');
+            return $this->redirectWithFlash('processorspecs.index', 'Failed to update processor specification.', 'error');
         }
     }
 
-    /**
-     * Remove the specified processor spec.
-     */
     public function destroy(ProcessorSpec $processorspec)
     {
-        try {
-            $processorspec->delete();
+        // Check if there's stock
+        if ($processorspec->stock && $processorspec->stock->quantity > 0) {
+            return $this->redirectWithFlash(
+                'processorspecs.index',
+                'Cannot delete processor specification. It has ' . $processorspec->stock->quantity . ' units in stock. Please remove or transfer the stock first.',
+                'error'
+            );
+        }
 
-            return redirect()
-                ->route('processorspecs.index')
-                ->with('message', 'Processor specification deleted successfully.')
-                ->with('type', 'success');
+        // Check if it's being used in any PC specs
+        $pcSpecCount = $processorspec->pcSpecs()->count();
+        if ($pcSpecCount > 0) {
+            return $this->redirectWithFlash(
+                'processorspecs.index',
+                'Cannot delete processor specification. It is being used in ' . $pcSpecCount . ' PC specification(s).',
+                'error'
+            );
+        }
+
+        try {
+            // Delete the stock record if it exists
+            if ($processorspec->stock) {
+                $processorspec->stock->delete();
+            }
+
+            $processorspec->delete();
+            return $this->redirectWithFlash('processorspecs.index', 'Processor specification deleted successfully.');
         } catch (\Exception $e) {
             Log::error('ProcessorSpec Delete Error: ' . $e->getMessage());
-
-            return redirect()
-                ->route('processorspecs.index')
-                ->with('message', 'Failed to delete processor specification.')
-                ->with('type', 'error');
+            return $this->redirectWithFlash('processorspecs.index', 'Failed to delete processor specification.', 'error');
         }
+    }
+
+    // Private helper methods
+    private function validateProcessorSpec(Request $request, bool $includeStock = false): array
+    {
+        $rules = [
+            'manufacturer' => 'required|string|max:255',
+            'model' => 'required|string|max:255',
+            'socket_type' => 'required|string|max:255',
+            'core_count' => 'required|integer|min:1',
+            'thread_count' => 'required|integer|min:1',
+            'base_clock_ghz' => 'required|numeric|min:0',
+            'boost_clock_ghz' => 'nullable|numeric|min:0',
+            'integrated_graphics' => 'nullable|string|max:255',
+            'tdp_watts' => 'nullable|integer|min:1',
+        ];
+
+        if ($includeStock) {
+            $rules['stock_quantity'] = 'required|integer|min:0';
+        }
+
+        return $request->validate($rules);
+    }
+
+    private function createStock($model, int $quantity): void
+    {
+        Stock::create([
+            'stockable_type' => get_class($model),
+            'stockable_id' => $model->id,
+            'quantity' => $quantity,
+            'reserved' => 0,
+        ]);
+    }
+
+    private function redirectWithFlash(string $route, string $message, string $type = 'success')
+    {
+        return redirect()
+            ->route($route)
+            ->with('message', $message)
+            ->with('type', $type);
     }
 }

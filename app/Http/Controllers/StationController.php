@@ -14,18 +14,14 @@ class StationController extends Controller
     // Paginated, searchable index
     public function index(Request $request)
     {
-        $search = $request->query('search');
-        $perPage = 10;
-
-        $query = Station::query()->with(['site', 'pcSpec', 'campaign']);
-        if ($search) {
-            $query->where('station_number', 'like', "%{$search}%")
-                ->orWhereHas('site', fn($q) => $q->where('name', 'like', "%{$search}%"))
-                ->orWhereHas('campaign', fn($q) => $q->where('name', 'like', "%{$search}%"));
-        }
-
-        $paginated = $query->orderBy('id', 'desc')
-            ->paginate($perPage)
+        $paginated = Station::query()
+            ->with(['site', 'pcSpec', 'campaign'])
+            ->search($request->query('search'))
+            ->filterBySite($request->query('site'))
+            ->filterByCampaign($request->query('campaign'))
+            ->filterByStatus($request->query('status'))
+            ->orderBy('id', 'desc')
+            ->paginate(10)
             ->withQueryString();
 
         $items = $paginated->getCollection()->map(function (Station $station) {
@@ -36,18 +32,16 @@ class StationController extends Controller
                 'campaign' => $station->campaign?->name,
                 'status' => $station->status,
                 'pc_spec' => $station->pcSpec?->model,
+                'pc_spec_details' => $station->pcSpec?->getFormattedDetails(),
                 'created_at' => optional($station->created_at)->toDateTimeString(),
                 'updated_at' => optional($station->updated_at)->toDateTimeString(),
             ];
         })->toArray();
 
-        $paginatorArray = $paginated->toArray();
-        $links = $paginatorArray['links'] ?? [];
-
         return Inertia::render('Station/Index', [
             'stations' => [
                 'data' => $items,
-                'links' => $links,
+                'links' => $paginated->toArray()['links'] ?? [],
                 'meta' => [
                     'current_page' => $paginated->currentPage(),
                     'last_page' => $paginated->lastPage(),
@@ -55,6 +49,7 @@ class StationController extends Controller
                     'total' => $paginated->total(),
                 ],
             ],
+            'filters' => $this->getFilterOptions(),
             'flash' => session('flash') ?? null,
         ]);
     }
@@ -62,38 +57,18 @@ class StationController extends Controller
     // Show create form
     public function create()
     {
-        $sites = Site::all(['id', 'name']);
-        $campaigns = Campaign::all(['id', 'name']);
-        $pcSpecs = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])->get()->map(function ($pc) {
-            return [
-                'id' => $pc->id,
-                'model' => $pc->model,
-                'ram' => $pc->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
-                'ram_gb' => $pc->ramSpecs->map(fn($ram) => $ram->capacity_gb)->implode(' + '),
-                'disk' => $pc->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
-                'disk_gb' => $pc->diskSpecs->map(fn($disk) => $disk->capacity_gb)->implode(' + '),
-                'processor' => $pc->processorSpecs->pluck('model')->implode(', '),
-            ];
-        });
-        $usedPcSpecIds = Station::pluck('pc_spec_id')->toArray();
         return Inertia::render('Station/Create', [
-            'sites' => $sites,
-            'campaigns' => $campaigns,
-            'pcSpecs' => $pcSpecs,
-            'usedPcSpecIds' => $usedPcSpecIds,
+            'sites' => Site::all(['id', 'name']),
+            'campaigns' => Campaign::all(['id', 'name']),
+            'pcSpecs' => $this->getFormattedPcSpecs(),
+            'usedPcSpecIds' => Station::pluck('pc_spec_id')->toArray(),
         ]);
     }
 
     // Store new station
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'site_id' => 'required|exists:sites,id',
-            'station_number' => 'required|string|max:255',
-            'campaign_id' => 'required|exists:campaigns,id',
-            'status' => 'required|string|max:255',
-            'pc_spec_id' => 'required|exists:pc_specs,id',
-        ]);
+        $data = $this->validateStation($request);
         Station::create($data);
         return redirect()->back()->with('flash', ['message' => 'Station saved', 'type' => 'success']);
     }
@@ -101,39 +76,19 @@ class StationController extends Controller
     // Show edit form
     public function edit(Station $station)
     {
-        $sites = Site::all(['id', 'name']);
-        $campaigns = Campaign::all(['id', 'name']);
-        $pcSpecs = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])->get()->map(function ($pc) {
-            return [
-                'id' => $pc->id,
-                'model' => $pc->model,
-                'ram' => $pc->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
-                'ram_gb' => $pc->ramSpecs->map(fn($ram) => $ram->capacity_gb)->implode(' + '),
-                'disk' => $pc->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
-                'disk_gb' => $pc->diskSpecs->map(fn($disk) => $disk->capacity_gb)->implode(' + '),
-                'processor' => $pc->processorSpecs->pluck('model')->implode(', '),
-            ];
-        });
-        $usedPcSpecIds = Station::pluck('pc_spec_id')->toArray();
         return Inertia::render('Station/Edit', [
             'station' => $station,
-            'sites' => $sites,
-            'campaigns' => $campaigns,
-            'pcSpecs' => $pcSpecs,
-            'usedPcSpecIds' => $usedPcSpecIds,
+            'sites' => Site::all(['id', 'name']),
+            'campaigns' => Campaign::all(['id', 'name']),
+            'pcSpecs' => $this->getFormattedPcSpecs(),
+            'usedPcSpecIds' => Station::pluck('pc_spec_id')->toArray(),
         ]);
     }
 
     // Update station
     public function update(Request $request, Station $station)
     {
-        $data = $request->validate([
-            'site_id' => 'required|exists:sites,id',
-            'station_number' => 'required|string|max:255',
-            'campaign_id' => 'required|exists:campaigns,id',
-            'status' => 'required|string|max:255',
-            'pc_spec_id' => 'required|exists:pc_specs,id',
-        ]);
+        $data = $this->validateStation($request, $station);
         $station->update($data);
         return redirect()->back()->with('flash', ['message' => 'Station updated', 'type' => 'success']);
     }
@@ -143,5 +98,45 @@ class StationController extends Controller
     {
         $station->delete();
         return redirect()->back()->with('flash', ['message' => 'Station deleted', 'type' => 'success']);
+    }
+
+    // Private helper methods
+
+    private function getFilterOptions(): array
+    {
+        return [
+            'sites' => Site::all(['id', 'name']),
+            'campaigns' => Campaign::all(['id', 'name']),
+            'statuses' => Station::select('status')->distinct()->pluck('status'),
+        ];
+    }
+
+    private function getFormattedPcSpecs()
+    {
+        return PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
+            ->get()
+            ->map(fn($pc) => $pc->getFormSelectionData());
+    }
+
+    private function validateStation(Request $request, ?Station $station = null): array
+    {
+        $uniqueRule = $station
+            ? "unique:stations,station_number,{$station->id}"
+            : 'unique:stations,station_number';
+
+        return $request->validate([
+            'site_id' => 'required|exists:sites,id',
+            'station_number' => "required|string|max:255|{$uniqueRule}",
+            'campaign_id' => 'required|exists:campaigns,id',
+            'status' => 'required|string|max:255',
+            'pc_spec_id' => 'required|exists:pc_specs,id',
+        ], [
+            'station_number.unique' => 'The station number has already been used.',
+        ], [
+            'site_id' => 'site',
+            'station_number' => 'station number',
+            'campaign_id' => 'campaign',
+            'pc_spec_id' => 'PC spec',
+        ]);
     }
 }

@@ -480,6 +480,15 @@ class PcSpecController extends Controller
      */
     public function destroy(PcSpec $pcspec)
     {
+        // Check if PC spec is assigned to any station
+        $stationCount = $pcspec->stations()->count();
+        if ($stationCount > 0) {
+            return back()->with([
+                'message' => 'Cannot delete PC specification. It is being used in ' . $stationCount . ' station(s).',
+                'type' => 'error'
+            ]);
+        }
+
         DB::transaction(function () use ($pcspec) {
             foreach ($pcspec->ramSpecs as $ram) {
                 if ($ram->stock) {

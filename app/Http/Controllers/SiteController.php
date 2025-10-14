@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\Site;
 use Illuminate\Http\Request;
-use Illuminate\Http\Response;
 use Inertia\Inertia;
 
 class SiteController extends Controller
@@ -12,34 +11,23 @@ class SiteController extends Controller
     // Display a paginated, searchable listing of sites
     public function index(Request $request)
     {
-        $search = $request->query('search');
-        $perPage = 10;
-
-        $query = Site::query();
-        if ($search) {
-            $query->where('name', 'like', "%{$search}%");
-        }
-
-        $paginated = $query->orderBy('id', 'desc')
-            ->paginate($perPage)
+        $paginated = Site::query()
+            ->search($request->query('search'))
+            ->orderBy('id', 'desc')
+            ->paginate(10)
             ->withQueryString();
 
-        $items = $paginated->getCollection()->map(function (Site $site) {
-            return [
-                'id' => $site->id,
-                'name' => $site->name,
-                'created_at' => optional($site->created_at)->toDateTimeString(),
-                'updated_at' => optional($site->updated_at)->toDateTimeString(),
-            ];
-        })->toArray();
-
-        $paginatorArray = $paginated->toArray();
-        $links = $paginatorArray['links'] ?? [];
+        $items = $paginated->getCollection()->map(fn(Site $site) => [
+            'id' => $site->id,
+            'name' => $site->name,
+            'created_at' => optional($site->created_at)->toDateTimeString(),
+            'updated_at' => optional($site->updated_at)->toDateTimeString(),
+        ])->toArray();
 
         return Inertia::render('Station/Site/Index', [
             'sites' => [
                 'data' => $items,
-                'links' => $links,
+                'links' => $paginated->toArray()['links'] ?? [],
                 'meta' => [
                     'current_page' => $paginated->currentPage(),
                     'last_page' => $paginated->lastPage(),
@@ -60,9 +48,7 @@ class SiteController extends Controller
     // Store a newly created site
     public function store(Request $request)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-        ]);
+        $data = $this->validateSite($request);
         Site::create($data);
         return redirect()->back()->with('flash', ['message' => 'Site saved', 'type' => 'success']);
     }
@@ -84,9 +70,7 @@ class SiteController extends Controller
     // Update the specified site
     public function update(Request $request, Site $site)
     {
-        $data = $request->validate([
-            'name' => 'required|string|max:255',
-        ]);
+        $data = $this->validateSite($request);
         $site->update($data);
         return redirect()->back()->with('flash', ['message' => 'Site updated', 'type' => 'success']);
     }
@@ -96,5 +80,13 @@ class SiteController extends Controller
     {
         $site->delete();
         return redirect()->back()->with('flash', ['message' => 'Site deleted', 'type' => 'success']);
+    }
+
+    // Private helper methods
+    private function validateSite(Request $request): array
+    {
+        return $request->validate([
+            'name' => 'required|string|max:255',
+        ]);
     }
 }

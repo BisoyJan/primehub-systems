@@ -22,8 +22,12 @@ export interface PcSpec {
     model: string;
     ram?: string;
     ram_gb?: number;
+    ram_capacities?: string;
+    ram_ddr?: string;
     disk?: string;
     disk_gb?: number;
+    disk_capacities?: string;
+    disk_type?: string;
     processor?: string;
     [key: string]: unknown;
 }
@@ -52,12 +56,16 @@ export default function PcSpecTable({ pcSpecs, selectedId, onSelect, usedPcSpecI
     const pageSize = 7;
 
     const filteredSpecs = pcSpecs.filter(spec => {
+        // Exclude already assigned PC specs
+        const isNotUsed = !usedPcSpecIds || !usedPcSpecIds.includes(spec.id);
+
         const matchesSearch =
             spec.model.toLowerCase().includes(search.toLowerCase()) ||
             (spec.processor?.toLowerCase().includes(search.toLowerCase()) ?? false);
         const matchesRam = filterRam ? (spec.ram?.toLowerCase().includes(filterRam.toLowerCase()) ?? false) : true;
         const matchesDisk = filterDisk ? (spec.disk?.toLowerCase().includes(filterDisk.toLowerCase()) ?? false) : true;
-        return matchesSearch && matchesRam && matchesDisk;
+
+        return isNotUsed && matchesSearch && matchesRam && matchesDisk;
     });
 
     const paginatedSpecs = filteredSpecs.slice((page - 1) * pageSize, page * pageSize);
@@ -113,21 +121,45 @@ export default function PcSpecTable({ pcSpecs, selectedId, onSelect, usedPcSpecI
                 columns={tableColumns}
                 data={paginatedSpecs}
                 radio
-                rowDisabled={p => !!usedPcSpecIds && usedPcSpecIds.includes(p.id)}
                 rowSelected={p => selectedId === String(p.id)}
                 onRowSelect={p => onSelect(String(p.id))}
             />
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>PC Spec Details</DialogTitle>
                         <DialogDescription>
                             {dialogRow && (
-                                <div className="space-y-2 text-left">
-                                    <div><strong>Model:</strong> {dialogRow.model}</div>
-                                    <div><strong>Processor:</strong> {dialogRow.processor}</div>
-                                    <div><strong>RAM:</strong> {dialogRow.ram} ({dialogRow.ram_gb ?? ''} GB)</div>
-                                    <div><strong>Disk:</strong> {dialogRow.disk} ({dialogRow.disk_gb ?? ''} GB)</div>
+                                <div className="space-y-4 text-left mt-4">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <div className="font-semibold text-foreground mb-1">Model:</div>
+                                            <div className="text-foreground pl-2">{dialogRow.model}</div>
+                                        </div>
+
+                                        <div>
+                                            <div className="font-semibold text-foreground mb-1">Processor:</div>
+                                            <div className="text-foreground pl-2">{dialogRow.processor}</div>
+                                        </div>
+
+                                        <div>
+                                            <div className="font-semibold text-foreground mb-1">
+                                                RAM {dialogRow.ram_ddr ? `(${dialogRow.ram_ddr})` : ''}:
+                                            </div>
+                                            <div className="text-foreground pl-2">
+                                                {dialogRow.ram} ({dialogRow.ram_capacities ?? dialogRow.ram_gb + ' GB'})
+                                            </div>
+                                        </div>
+
+                                        <div>
+                                            <div className="font-semibold text-foreground mb-1">
+                                                Disk {dialogRow.disk_type ? `(${dialogRow.disk_type})` : ''}:
+                                            </div>
+                                            <div className="text-foreground pl-2">
+                                                {dialogRow.disk} ({dialogRow.disk_capacities ?? dialogRow.disk_gb + ' GB'})
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </DialogDescription>

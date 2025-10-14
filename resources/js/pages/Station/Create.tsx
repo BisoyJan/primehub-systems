@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { router, usePage } from "@inertiajs/react";
+import React from "react";
+import { router, usePage, useForm } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -24,29 +24,26 @@ interface PcSpec {
 
 export default function StationCreate() {
     const { sites, campaigns, pcSpecs, usedPcSpecIds } = usePage<{ sites: Site[]; campaigns: Campaign[]; pcSpecs: PcSpec[]; usedPcSpecIds: number[] }>().props;
-    const [siteId, setSiteId] = useState("");
-    const [stationNumber, setStationNumber] = useState("");
-    const [campaignId, setCampaignId] = useState("");
-    const [status, setStatus] = useState("");
-    const [pcSpecId, setPcSpecId] = useState("");
-    const [loading, setLoading] = useState(false);
+
+    const { data, setData, post, processing, errors } = useForm({
+        site_id: "",
+        station_number: "",
+        campaign_id: "",
+        status: "",
+        pc_spec_id: "",
+    });
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        setLoading(true);
-        router.post("/stations", {
-            site_id: siteId,
-            station_number: stationNumber,
-            campaign_id: campaignId,
-            status,
-            pc_spec_id: pcSpecId,
-        }, {
-            onFinish: () => setLoading(false),
+        post("/stations", {
             onSuccess: () => {
                 toast.success("Station created");
                 router.get("/stations");
             },
-            onError: () => toast.error("Validation error"),
+            onError: (errors) => {
+                const firstError = Object.values(errors)[0] as string;
+                toast.error(firstError || "Validation error");
+            },
         });
     };
 
@@ -56,56 +53,69 @@ export default function StationCreate() {
                 <h2 className="text-xxl font-semibold mb-4">Add Station</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <Select value={siteId} onValueChange={setSiteId}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select Site" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {sites.map((s: Site) => (
-                                    <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Input
-                            value={stationNumber}
-                            onChange={e => setStationNumber(e.target.value)}
-                            placeholder="Station Number"
-                            required
-                        />
-                        <Select value={campaignId} onValueChange={setCampaignId}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select Campaign" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {campaigns.map((c: Campaign) => (
-                                    <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        <Select value={status} onValueChange={setStatus}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Select Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="Admin">Admin</SelectItem>
-                                <SelectItem value="Occupied">Occupied</SelectItem>
-                                <SelectItem value="Vacant">Vacant</SelectItem>
-                                <SelectItem value="No PC">No PC</SelectItem>
-                            </SelectContent>
-                        </Select>
+                        <div>
+                            <Select value={data.site_id} onValueChange={(val) => setData("site_id", val)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select Site" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {sites.map((s: Site) => (
+                                        <SelectItem key={s.id} value={String(s.id)}>{s.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.site_id && <p className="text-red-600 text-sm mt-1">{errors.site_id}</p>}
+                        </div>
+                        <div>
+                            <Input
+                                value={data.station_number}
+                                onChange={e => setData("station_number", e.target.value)}
+                                placeholder="Station Number"
+                                required
+                            />
+                            {errors.station_number && <p className="text-red-600 text-sm mt-1">{errors.station_number}</p>}
+                        </div>
+                        <div>
+                            <Select value={data.campaign_id} onValueChange={(val) => setData("campaign_id", val)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select Campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {campaigns.map((c: Campaign) => (
+                                        <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.campaign_id && <p className="text-red-600 text-sm mt-1">{errors.campaign_id}</p>}
+                        </div>
+                        <div>
+                            <Select value={data.status} onValueChange={(val) => setData("status", val)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Admin">Admin</SelectItem>
+                                    <SelectItem value="Occupied">Occupied</SelectItem>
+                                    <SelectItem value="Vacant">Vacant</SelectItem>
+                                    <SelectItem value="No PC">No PC</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {errors.status && <p className="text-red-600 text-sm mt-1">{errors.status}</p>}
+                        </div>
                     </div>
                     <div>
                         <label className="block font-medium mb-2">Select PC Spec</label>
                         <PcSpecTable
                             pcSpecs={pcSpecs}
-                            selectedId={pcSpecId}
-                            onSelect={setPcSpecId}
+                            selectedId={data.pc_spec_id}
+                            onSelect={(id) => setData("pc_spec_id", id)}
                             usedPcSpecIds={usedPcSpecIds}
                         />
+                        {errors.pc_spec_id && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_id}</p>}
                     </div>
                     <div className="flex gap-2 mt-4">
-                        <Button type="submit" disabled={loading}>
-                            {loading ? "Saving..." : "Save"}
+                        <Button type="submit" disabled={processing}>
+                            {processing ? "Saving..." : "Save"}
                         </Button>
                         <Button variant="outline" type="button" onClick={() => router.get("/stations")}>Cancel</Button>
                     </div>

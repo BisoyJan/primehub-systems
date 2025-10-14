@@ -157,41 +157,44 @@ export default function Index() {
                         <TableHeader>
                             <TableRow>
                                 <TableHead>ID</TableHead>
+                                <TableHead>Manufacturer</TableHead>
+                                <TableHead>Model</TableHead>
                                 <TableHead>Processor</TableHead>
                                 <TableHead>RAM (GB)</TableHead>
                                 <TableHead>Storage Type</TableHead>
                                 <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
-
                         <TableBody>
-                            {pcspecs.data.map((mb) => {
+                            {pcspecs.data.map((pc) => {
                                 // Get first processor
-                                const proc = mb.processorSpecs?.[0];
+                                const proc = pc.processorSpecs?.[0];
                                 const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
 
                                 // Total RAM GB
-                                const totalRamGb = mb.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
+                                const totalRamGb = pc.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
 
                                 // Storage Type: show SSD if any disk is SSD, else HDD if any disk is HDD, else —
                                 let storageType = '—';
-                                if (mb.diskSpecs?.length) {
-                                    const hasSSD = mb.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('SSD'));
-                                    const hasHDD = mb.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('HDD'));
+                                if (pc.diskSpecs?.length) {
+                                    const hasSSD = pc.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('SSD'));
+                                    const hasHDD = pc.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('HDD'));
                                     if (hasSSD && hasHDD) storageType = 'SSD + HDD';
                                     else if (hasSSD) storageType = 'SSD';
                                     else if (hasHDD) storageType = 'HDD';
                                 }
 
                                 return (
-                                    <TableRow key={mb.id}>
-                                        <TableCell>{mb.id}</TableCell>
+                                    <TableRow key={pc.id}>
+                                        <TableCell>{pc.id}</TableCell>
+                                        <TableCell>{pc.manufacturer}</TableCell>
+                                        <TableCell>{pc.model}</TableCell>
                                         <TableCell>{procLabel}</TableCell>
                                         <TableCell>{totalRamGb || 0}</TableCell>
                                         <TableCell>{storageType}</TableCell>
                                         <TableCell className="flex justify-center gap-2">
                                             {/* Edit */}
-                                            <Link href={pcSpecEdit.url(mb.id)}>
+                                            <Link href={pcSpecEdit.url(pc.id)}>
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
@@ -210,7 +213,7 @@ export default function Index() {
                                                 </DialogTrigger>
                                                 <DialogContent className="max-w-7xl w-full h-[90vh] flex flex-col">
                                                     <DialogTitle className="text-xl font-semibold">
-                                                        {mb.manufacturer} {mb.model} — Full Specifications
+                                                        {pc.manufacturer} {pc.model} — Full Specifications
                                                     </DialogTitle>
 
                                                     {/* Scrollable body */}
@@ -219,17 +222,17 @@ export default function Index() {
                                                         <section>
                                                             <h3 className="font-semibold text-base mb-2">PC Spec Details</h3>
                                                             <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                                                                <p><span className="font-medium">Manufacturer:</span> {mb.manufacturer}</p>
-                                                                <p><span className="font-medium">Model:</span> {mb.model}</p>
-                                                                <p><span className="font-medium">Memory Type:</span> {mb.memory_type}</p>
-                                                                <p><span className="font-medium">Form Factor:</span> {mb.form_factor ?? "—"}</p>
+                                                                <p><span className="font-medium">Manufacturer:</span> {pc.manufacturer}</p>
+                                                                <p><span className="font-medium">Model:</span> {pc.model}</p>
+                                                                <p><span className="font-medium">Memory Type:</span> {pc.memory_type}</p>
+                                                                <p><span className="font-medium">Form Factor:</span> {pc.form_factor ?? "—"}</p>
                                                             </div>
                                                         </section>
 
                                                         {/* RAM Specs */}
                                                         <section>
                                                             <h3 className="font-semibold text-base mb-2">RAM Specs</h3>
-                                                            {mb.ramSpecs?.length ? (
+                                                            {pc.ramSpecs?.length ? (
                                                                 <Table>
                                                                     <TableHeader>
                                                                         <TableRow>
@@ -241,7 +244,7 @@ export default function Index() {
                                                                         </TableRow>
                                                                     </TableHeader>
                                                                     <TableBody>
-                                                                        {mb.ramSpecs.map((r) => (
+                                                                        {pc.ramSpecs.map((r) => (
                                                                             <TableRow key={r.id}>
                                                                                 <TableCell>{r.manufacturer}</TableCell>
                                                                                 <TableCell>{r.model}</TableCell>
@@ -260,7 +263,7 @@ export default function Index() {
                                                         {/* Disk Specs */}
                                                         <section>
                                                             <h3 className="font-semibold text-base mb-2">Disk Specs</h3>
-                                                            {mb.diskSpecs?.length ? (
+                                                            {pc.diskSpecs?.length ? (
                                                                 <Table>
                                                                     <TableHeader>
                                                                         <TableRow>
@@ -274,7 +277,7 @@ export default function Index() {
                                                                         </TableRow>
                                                                     </TableHeader>
                                                                     <TableBody>
-                                                                        {mb.diskSpecs.map((d) => (
+                                                                        {pc.diskSpecs.map((d) => (
                                                                             <TableRow key={d.id}>
                                                                                 <TableCell>{d.manufacturer}</TableCell>
                                                                                 <TableCell>{d.model}</TableCell>
@@ -295,7 +298,7 @@ export default function Index() {
                                                         {/* Processor Specs */}
                                                         <section>
                                                             <h3 className="font-semibold text-base mb-2">Processor Specs</h3>
-                                                            {mb.processorSpecs?.length ? (
+                                                            {pc.processorSpecs?.length ? (
                                                                 <Table>
                                                                     <TableHeader>
                                                                         <TableRow>
@@ -310,7 +313,7 @@ export default function Index() {
                                                                         </TableRow>
                                                                     </TableHeader>
                                                                     <TableBody>
-                                                                        {mb.processorSpecs.map((p) => (
+                                                                        {pc.processorSpecs.map((p) => (
                                                                             <TableRow key={p.id}>
                                                                                 <TableCell>{p.manufacturer}</TableCell>
                                                                                 <TableCell>{p.model}</TableCell>
@@ -351,14 +354,14 @@ export default function Index() {
                                                     <AlertDialogHeader>
                                                         <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
                                                         <AlertDialogDescription>
-                                                            Are you sure you want to delete {mb.manufacturer} {mb.model}? This action cannot be undone.
+                                                            Are you sure you want to delete {pc.manufacturer} {pc.model}? This action cannot be undone.
                                                         </AlertDialogDescription>
                                                     </AlertDialogHeader>
                                                     <AlertDialogFooter>
                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                         <AlertDialogAction
                                                             className="bg-red-600 hover:bg-red-700"
-                                                            onClick={() => handleDelete(mb.id)}
+                                                            onClick={() => handleDelete(pc.id)}
                                                         >
                                                             Yes, Delete
                                                         </AlertDialogAction>
@@ -373,7 +376,7 @@ export default function Index() {
 
                         <TableFooter>
                             <TableRow>
-                                <TableCell colSpan={5} className="text-center font-medium">
+                                <TableCell colSpan={7} className="text-center font-medium">
                                     PC Specs List
                                 </TableCell>
                             </TableRow>

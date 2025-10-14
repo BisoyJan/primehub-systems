@@ -4,10 +4,13 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use App\Models\PcSpec;
+use App\Traits\HasSpecSearch;
 
 class ProcessorSpec extends Model
 {
-    use HasFactory;
+    use HasFactory, HasSpecSearch;
+
     protected $fillable = [
         'manufacturer',
         'model',
@@ -20,13 +23,23 @@ class ProcessorSpec extends Model
         'tdp_watts',
     ];
 
-    public function motherboardSpecs()
+    public function pcSpecs()
     {
         return $this->belongsToMany(
-            MotherboardSpec::class,
-            'motherboard_spec_processor_spec',
+            PcSpec::class,
+            'pc_spec_processor_spec',
             'processor_spec_id',
-            'motherboard_spec_id'
+            'pc_spec_id'
+        );
+    }
+
+    public function processorSpecs()
+    {
+        return $this->belongsToMany(
+            ProcessorSpec::class,
+            'processor_spec_processor_spec',
+            'processor_spec_id',
+            'processor_spec_id'
         );
     }
 
