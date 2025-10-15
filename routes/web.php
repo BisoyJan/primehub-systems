@@ -30,6 +30,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->except(['show']);
     Route::resource('sites', SiteController::class)
         ->except(['show']);
+    Route::post('stations/bulk', [StationController::class, 'storeBulk'])
+        ->name('stations.bulk');
     Route::resource('stations', StationController::class)
         ->except(['show']);
     Route::resource('campaigns', CampaignController::class)

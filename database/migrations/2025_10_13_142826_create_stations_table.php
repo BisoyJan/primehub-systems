@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('station_number');
             $table->foreignId('campaign_id')->constrained('campaigns')->onDelete('cascade');
             $table->string('status');
-            $table->foreignId('pc_spec_id')->constrained('pc_specs')->onDelete('cascade');
+            $table->foreignId('pc_spec_id')->nullable()->constrained('pc_specs')->onDelete('cascade');
             $table->timestamps();
         });
     }

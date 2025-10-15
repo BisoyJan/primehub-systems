@@ -85,7 +85,7 @@ export default function StationEdit() {
                         <div>
                             <Input
                                 value={data.station_number}
-                                onChange={e => setData("station_number", e.target.value)}
+                                onChange={e => setData("station_number", e.target.value.toUpperCase())}
                                 placeholder="Station Number"
                                 required
                             />
@@ -120,7 +120,23 @@ export default function StationEdit() {
                         </div>
                     </div>
                     <div>
-                        <label className="block font-medium mb-2">Select PC Spec</label>
+                        <div className="flex items-center justify-between mb-2">
+                            <label className="block font-medium">Select PC Spec (Optional)</label>
+                            {data.pc_spec_id && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => setData("pc_spec_id", "")}
+                                    className="text-xs"
+                                >
+                                    Clear Selection
+                                </Button>
+                            )}
+                        </div>
+                        <p className="text-xs text-gray-500 mb-2">
+                            💡 Leave blank to keep station without PC spec
+                        </p>
                         <PcSpecTable
                             pcSpecs={pcSpecs}
                             selectedId={data.pc_spec_id}

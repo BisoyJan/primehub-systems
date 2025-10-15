@@ -120,23 +120,11 @@ export default function StationIndex() {
         });
     };
 
-
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                <div className="flex items-center gap-3 mb-4">
+                <div className="flex items-center gap-3 mb-2">
                     <h2 className="text-xl font-semibold">Station Management</h2>
-                    <div className="ml-auto flex items-center gap-2">
-                        <Button onClick={() => router.get('/stations/create')}>
-                            Add Station
-                        </Button>
-                        <Button onClick={() => router.get('/sites')}>
-                            Site Management
-                        </Button>
-                        <Button onClick={() => router.get('/campaigns')}>
-                            Campaign Management
-                        </Button>
-                    </div>
                 </div>
 
                 {/* Filters */}
@@ -197,6 +185,16 @@ export default function StationIndex() {
                             Clear Filters
                         </Button>
                     )}
+
+                    <Button onClick={() => router.get('/stations/create')}>
+                        Add Station
+                    </Button>
+                    <Button onClick={() => router.get('/sites')}>
+                        Site Management
+                    </Button>
+                    <Button onClick={() => router.get('/campaigns')}>
+                        Campaign Management
+                    </Button>
                 </div>
 
                 {/* Results Count */}

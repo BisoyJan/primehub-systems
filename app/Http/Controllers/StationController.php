@@ -8,6 +8,7 @@ use App\Models\PcSpec;
 use App\Models\Campaign;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use App\Utils\StationNumberUtil;
 
 class StationController extends Controller
 {
@@ -69,8 +70,152 @@ class StationController extends Controller
     public function store(Request $request)
     {
         $data = $this->validateStation($request);
+
+        // Convert any letters in station_number to uppercase
+        $data['station_number'] = $this->normalizeStationNumber($data['station_number']);
+
         Station::create($data);
         return redirect()->back()->with('flash', ['message' => 'Station saved', 'type' => 'success']);
+    }
+
+    // Store multiple stations at once
+    public function storeBulk(Request $request)
+    {
+        $validated = $request->validate([
+            'site_id' => 'required|exists:sites,id',
+            'starting_number' => 'required|string|max:255',
+            'campaign_id' => 'required|exists:campaigns,id',
+            'status' => 'required|string|max:255',
+            'pc_spec_id' => 'nullable|exists:pc_specs,id',
+            'quantity' => 'required|integer|min:1|max:100',
+            'increment_type' => 'required|in:number,letter,both',
+        ], [], [
+            'site_id' => 'site',
+            'starting_number' => 'starting station number',
+            'campaign_id' => 'campaign',
+            'pc_spec_id' => 'PC spec',
+            'increment_type' => 'increment type',
+        ]);
+
+        $quantity = (int) $validated['quantity'];
+        $startingNumber = $this->normalizeStationNumber($validated['starting_number']);
+        $incrementType = $validated['increment_type'];
+        $createdStations = [];
+        $existingNumbers = [];
+
+        // Extract parts from starting number (e.g., "PC-1A" -> prefix="PC-", number=1, letter="A")
+        preg_match(StationNumberUtil::REGEX_PATTERN, $startingNumber, $matches);
+
+        if (count($matches) < 3) {
+            // No numeric part found, use sequential numeric suffixes
+            $stationNumbers = $this->generateSimpleSequence($startingNumber, $quantity);
+        } else {
+            $prefix = $matches[1];
+            $numPart = (int) $matches[2];
+            $letterPart = $matches[3] ?? '';
+            $suffix = $matches[4] ?? '';
+            $numLength = strlen($matches[2]);
+
+            $stationNumbers = $this->generateStationNumbers(
+                $prefix,
+                $numPart,
+                $letterPart,
+                $suffix,
+                $numLength,
+                $quantity,
+                $incrementType
+            );
+        }
+
+        // Check for duplicates
+        foreach ($stationNumbers as $stationNumber) {
+            if (Station::where('station_number', $stationNumber)->exists()) {
+                $existingNumbers[] = $stationNumber;
+            } else {
+                $createdStations[] = [
+                    'site_id' => $validated['site_id'],
+                    'station_number' => $stationNumber,
+                    'campaign_id' => $validated['campaign_id'],
+                    'status' => $validated['status'],
+                    'pc_spec_id' => $validated['pc_spec_id'],
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+            }
+        }
+
+        // If there are existing numbers, return error
+        if (!empty($existingNumbers)) {
+            return redirect()->back()
+                ->withErrors(['starting_number' => 'The following station numbers already exist: ' . implode(', ', array_slice($existingNumbers, 0, 5)) . (count($existingNumbers) > 5 ? '...' : '')])
+                ->withInput();
+        }
+        // Bulk insert all stations using Eloquent create()
+        foreach ($createdStations as $stationData) {
+            Station::create($stationData);
+        }
+
+        return redirect()->back()->with('flash', [
+            'message' => "Successfully created {$quantity} station(s)",
+            'type' => 'success'
+        ]);
+    }
+
+    // Generate station numbers based on increment type
+    private function generateStationNumbers(
+        string $prefix,
+        int $numPart,
+        string $letterPart,
+        string $suffix,
+        int $numLength,
+        int $quantity,
+        string $incrementType
+    ): array {
+        $numbers = [];
+
+        for ($i = 0; $i < $quantity; $i++) {
+            $newNum = $numPart;
+            $newLetter = $letterPart;
+
+            if ($incrementType === 'number') {
+                // Increment only the number part
+                $newNum = $numPart + $i;
+            } elseif ($incrementType === 'letter' && $letterPart !== '') {
+                // Increment only the letter part
+                $isUpper = $letterPart === strtoupper($letterPart);
+                $baseCharCode = $isUpper ? ord('A') : ord('a');
+                $currentCharCode = ord($letterPart);
+                $offset = $currentCharCode - $baseCharCode;
+                $newCharCode = $baseCharCode + (($offset + $i) % 26);
+                $newLetter = chr($newCharCode);
+            } elseif ($incrementType === 'both') {
+                // Increment both number and letter
+                $newNum = $numPart + $i;
+                if ($letterPart !== '') {
+                    $isUpper = $letterPart === strtoupper($letterPart);
+                    $baseCharCode = $isUpper ? ord('A') : ord('a');
+                    $currentCharCode = ord($letterPart);
+                    $offset = $currentCharCode - $baseCharCode;
+                    $newCharCode = $baseCharCode + (($offset + $i) % 26);
+                    $newLetter = chr($newCharCode);
+                }
+            }
+
+            $paddedNum = str_pad($newNum, $numLength, '0', STR_PAD_LEFT);
+            $numbers[] = $prefix . $paddedNum . $newLetter . $suffix;
+        }
+
+        return $numbers;
+    }
+
+    // Generate simple sequence for numbers without patterns
+    private function generateSimpleSequence(string $base, int $quantity): array
+    {
+        $numbers = [];
+        for ($i = 1; $i <= $quantity; $i++) {
+            $numbers[] = $base . $i;
+        }
+        return $numbers;
     }
 
     // Show edit form
@@ -89,6 +234,10 @@ class StationController extends Controller
     public function update(Request $request, Station $station)
     {
         $data = $this->validateStation($request, $station);
+
+        // Convert any letters in station_number to uppercase
+        $data['station_number'] = $this->normalizeStationNumber($data['station_number']);
+
         $station->update($data);
         return redirect()->back()->with('flash', ['message' => 'Station updated', 'type' => 'success']);
     }
@@ -101,6 +250,15 @@ class StationController extends Controller
     }
 
     // Private helper methods
+
+    /**
+     * Normalize station number by converting all letters to uppercase
+     * Examples: "pc-1a" -> "PC-1A", "st-001b" -> "ST-001B"
+     */
+    private function normalizeStationNumber(string $stationNumber): string
+    {
+        return strtoupper($stationNumber);
+    }
 
     private function getFilterOptions(): array
     {
@@ -129,7 +287,7 @@ class StationController extends Controller
             'station_number' => "required|string|max:255|{$uniqueRule}",
             'campaign_id' => 'required|exists:campaigns,id',
             'status' => 'required|string|max:255',
-            'pc_spec_id' => 'required|exists:pc_specs,id',
+            'pc_spec_id' => 'nullable|exists:pc_specs,id',
         ], [
             'station_number.unique' => 'The station number has already been used.',
         ], [
