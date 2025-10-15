@@ -123,7 +123,7 @@ class DatabaseSeeder extends Seeder
             [
                 StockSeeder::class,
                 PcSpecSeeder::class,
-                StationSeeder::class,
+                //StationSeeder::class,
             ]
         );
     }

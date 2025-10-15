@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { router, usePage, useForm } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
@@ -28,6 +28,8 @@ export default function StationCreate() {
     const { sites, campaigns, pcSpecs, usedPcSpecIds } = usePage<{ sites: Site[]; campaigns: Campaign[]; pcSpecs: PcSpec[]; usedPcSpecIds: number[] }>().props;
 
     const [bulkMode, setBulkMode] = useState(false);
+    const [showNoSpecWarning, setShowNoSpecWarning] = useState(false);
+    const [showSpecSelectedInfo, setShowSpecSelectedInfo] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         site_id: "",
@@ -39,6 +41,20 @@ export default function StationCreate() {
         starting_number: "",
         increment_type: "number", // "number", "letter", or "both"
     });
+
+    // Auto-hide messages after 6 seconds when PC spec selection changes
+    useEffect(() => {
+        const hasSpec = !!data.pc_spec_id;
+        setShowNoSpecWarning(!hasSpec);
+        setShowSpecSelectedInfo(hasSpec);
+
+        const timer = setTimeout(() => {
+            setShowNoSpecWarning(false);
+            setShowSpecSelectedInfo(false);
+        }, 4000);
+
+        return () => clearTimeout(timer);
+    }, [data.pc_spec_id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -262,15 +278,29 @@ export default function StationCreate() {
                             {data.pc_spec_id && (
                                 <Button
                                     type="button"
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
                                     onClick={() => setData("pc_spec_id", "")}
-                                    className="text-xs"
+                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                                 >
-                                    Clear Selection
+                                    ✕ Remove PC Spec
                                 </Button>
                             )}
                         </div>
+                        {!data.pc_spec_id && showNoSpecWarning && (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3 transition-opacity duration-300">
+                                <p className="text-sm text-yellow-800">
+                                    ⚠️ No PC spec selected - Station will be saved without a PC specification
+                                </p>
+                            </div>
+                        )}
+                        {data.pc_spec_id && showSpecSelectedInfo && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3 transition-opacity duration-300">
+                                <p className="text-sm text-blue-800">
+                                    ✓ PC spec selected - Click "Remove PC Spec" above to deselect
+                                </p>
+                            </div>
+                        )}
                         <p className="text-xs text-gray-500 mb-2">
                             💡 Leave blank to create stations without PC specs (useful for reserving station numbers or "No PC" status)
                         </p>
