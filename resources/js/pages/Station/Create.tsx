@@ -118,7 +118,7 @@ export default function StationCreate() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="max-w-xxl mx-auto mt-8">
+            <div className="max-w-xxl mx-auto mt-4">
                 <div className="flex items-center justify-between mb-4">
                     <h2 className="text-xxl font-semibold">Add Station</h2>
                     <div className="flex items-center space-x-2">
@@ -282,7 +282,7 @@ export default function StationCreate() {
                         />
                         {errors.pc_spec_id && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_id}</p>}
                     </div>
-                    <div className="flex gap-2 mt-4">
+                    <div className="flex gap-2 mt-4 mb-4">
                         <Button type="submit" disabled={processing}>
                             {processing ? "Saving..." : bulkMode ? `Create ${data.quantity} Station(s)` : "Save"}
                         </Button>

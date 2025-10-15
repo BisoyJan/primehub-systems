@@ -105,12 +105,7 @@ class DatabaseSeeder extends Seeder
             );
         }
 
-        $this->call(
-            [
-                StockSeeder::class,
-                PcSpecSeeder::class,
-            ]
-        );
+
 
         // Seed unique sites
         $siteNames = ['PH1-2F', 'PH1-3F', 'PH1-4F', 'PH2', 'PH3'];
@@ -123,5 +118,13 @@ class DatabaseSeeder extends Seeder
         foreach ($campaignNames as $name) {
             Campaign::firstOrCreate(['name' => $name]);
         }
+
+        $this->call(
+            [
+                StockSeeder::class,
+                PcSpecSeeder::class,
+                StationSeeder::class,
+            ]
+        );
     }
 }

@@ -11,10 +11,17 @@ export interface PaginationLink {
 interface Props {
     links: PaginationLink[];
     className?: string;
+    onPageChange?: (page: number) => void;
 }
 
-export default function PaginationNav({ links, className = "" }: Props) {
+export default function PaginationNav({ links, className = "", onPageChange }: Props) {
     if (!links || links.length === 0) return null;
+
+    const getPageNumber = (url: string | null): number | null => {
+        if (!url) return null;
+        const match = url.match(/([?&])page=(\d+)/);
+        return match ? parseInt(match[2], 10) : 1;
+    };
 
     const renderLink = (link: PaginationLink, key: React.Key) => {
         const isEllipsis = link.label === "..." || link.label === "…";
@@ -41,16 +48,30 @@ export default function PaginationNav({ links, className = "" }: Props) {
         }
 
         if (enabled && link.url) {
-            return (
-                <Link
-                    key={key}
-                    href={link.url}
-                    className={`${base} ${active ? activeClasses : normalClasses}`}
-                    preserveScroll
-                    aria-current={active ? "page" : undefined}
-                    dangerouslySetInnerHTML={{ __html: link.label }}
-                />
-            );
+            if (onPageChange) {
+                const pageNum = getPageNumber(link.url);
+                return (
+                    <button
+                        key={key}
+                        type="button"
+                        className={`${base} ${active ? activeClasses : normalClasses}`}
+                        aria-current={active ? "page" : undefined}
+                        onClick={() => pageNum && onPageChange(pageNum)}
+                        dangerouslySetInnerHTML={{ __html: link.label }}
+                    />
+                );
+            } else {
+                return (
+                    <Link
+                        key={key}
+                        href={link.url}
+                        className={`${base} ${active ? activeClasses : normalClasses}`}
+                        preserveScroll
+                        aria-current={active ? "page" : undefined}
+                        dangerouslySetInnerHTML={{ __html: link.label }}
+                    />
+                );
+            }
         }
 
         return (

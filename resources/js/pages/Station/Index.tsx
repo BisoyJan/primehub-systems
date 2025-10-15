@@ -79,6 +79,7 @@ export default function StationIndex() {
     const [siteFilter, setSiteFilter] = useState("all");
     const [campaignFilter, setCampaignFilter] = useState("all");
     const [statusFilter, setStatusFilter] = useState("all");
+    const [page, setPage] = useState(stations.meta.current_page || 1);
     const [pcSpecDialogOpen, setPcSpecDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<Station['pc_spec_details'] | null>(null);
 
@@ -95,11 +96,12 @@ export default function StationIndex() {
     }, [search]);
 
     useEffect(() => {
-        const params: Record<string, string> = {};
+        const params: Record<string, string | number> = {};
         if (debouncedSearch) params.search = debouncedSearch;
         if (siteFilter && siteFilter !== "all") params.site = siteFilter;
         if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
         if (statusFilter && statusFilter !== "all") params.status = statusFilter;
+        params.page = page;
 
         setLoading(true);
         router.get("/stations", params, {
@@ -108,7 +110,7 @@ export default function StationIndex() {
             replace: true,
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, siteFilter, campaignFilter, statusFilter]);
+    }, [debouncedSearch, siteFilter, campaignFilter, statusFilter, page]);
 
     const handleDelete = (stationId: number) => {
         setLoading(true);
@@ -118,6 +120,10 @@ export default function StationIndex() {
             onSuccess: () => toast.success("Station deleted successfully"),
             onError: () => toast.error("Failed to delete station"),
         });
+    };
+    // Handle pagination link click
+    const handlePageChange = (newPage: number) => {
+        setPage(newPage);
     };
 
     return (

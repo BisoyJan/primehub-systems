@@ -74,6 +74,11 @@ class StationController extends Controller
         // Convert any letters in station_number to uppercase
         $data['station_number'] = $this->normalizeStationNumber($data['station_number']);
 
+        // Convert empty pc_spec_id to null
+        if (empty($data['pc_spec_id'])) {
+            $data['pc_spec_id'] = null;
+        }
+
         Station::create($data);
         return redirect()->back()->with('flash', ['message' => 'Station saved', 'type' => 'success']);
     }
@@ -237,6 +242,11 @@ class StationController extends Controller
 
         // Convert any letters in station_number to uppercase
         $data['station_number'] = $this->normalizeStationNumber($data['station_number']);
+
+        // Convert empty pc_spec_id to null
+        if (empty($data['pc_spec_id'])) {
+            $data['pc_spec_id'] = null;
+        }
 
         $station->update($data);
         return redirect()->back()->with('flash', ['message' => 'Station updated', 'type' => 'success']);

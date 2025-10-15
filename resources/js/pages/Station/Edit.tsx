@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { router, usePage, useForm } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
@@ -40,6 +40,8 @@ interface StationEditProps {
 
 export default function StationEdit() {
     const { station, sites, campaigns, pcSpecs, usedPcSpecIds } = usePage<StationEditProps>().props;
+    const [showNoSpecWarning, setShowNoSpecWarning] = useState(false);
+    const [showSpecSelectedInfo, setShowSpecSelectedInfo] = useState(false);
 
     const { data, setData, put, processing, errors } = useForm({
         site_id: String(station.site_id),
@@ -48,6 +50,20 @@ export default function StationEdit() {
         status: station.status,
         pc_spec_id: String(station.pc_spec_id),
     });
+
+    // Auto-hide messages after 6 seconds when PC spec selection changes
+    useEffect(() => {
+        const hasSpec = !!data.pc_spec_id;
+        setShowNoSpecWarning(!hasSpec);
+        setShowSpecSelectedInfo(hasSpec);
+
+        const timer = setTimeout(() => {
+            setShowNoSpecWarning(false);
+            setShowSpecSelectedInfo(false);
+        }, 4000);
+
+        return () => clearTimeout(timer);
+    }, [data.pc_spec_id]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -125,17 +141,31 @@ export default function StationEdit() {
                             {data.pc_spec_id && (
                                 <Button
                                     type="button"
-                                    variant="ghost"
+                                    variant="outline"
                                     size="sm"
                                     onClick={() => setData("pc_spec_id", "")}
-                                    className="text-xs"
+                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                                 >
-                                    Clear Selection
+                                    ✕ Remove PC Spec
                                 </Button>
                             )}
                         </div>
+                        {!data.pc_spec_id && showNoSpecWarning && (
+                            <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3 transition-opacity duration-300">
+                                <p className="text-sm text-yellow-800">
+                                    ⚠️ No PC spec selected - Station will be saved without a PC specification
+                                </p>
+                            </div>
+                        )}
+                        {data.pc_spec_id && showSpecSelectedInfo && (
+                            <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3 transition-opacity duration-300">
+                                <p className="text-sm text-blue-800">
+                                    ✓ PC spec selected - Click "Remove PC Spec" above to deselect
+                                </p>
+                            </div>
+                        )}
                         <p className="text-xs text-gray-500 mb-2">
-                            💡 Leave blank to keep station without PC spec
+                            💡 You can deselect the PC spec by clicking the "Remove PC Spec" button above
                         </p>
                         <PcSpecTable
                             pcSpecs={pcSpecs}
