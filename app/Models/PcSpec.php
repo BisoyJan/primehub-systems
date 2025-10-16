@@ -24,6 +24,7 @@ class PcSpec extends Model
         'usb_ports',
         'ethernet_speed',
         'wifi',
+        'issue',
     ];
 
     public function ramSpecs()

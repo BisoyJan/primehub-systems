@@ -27,6 +27,7 @@ class PcSpecController extends Controller
                 'model'           => $pc->model,
                 'memory_type'     => $pc->memory_type,
                 'form_factor'     => $pc->form_factor,
+                'issue'           => $pc->issue,
                 'ramSpecs'        => $pc->ramSpecs->map(fn($r) => [
                     'id'           => $r->id,
                     'manufacturer' => $r->manufacturer,
@@ -432,7 +433,7 @@ class PcSpecController extends Controller
             'ram_specs'                   => 'array',
             'disk_mode'                   => 'nullable|in:same,different',
             'disk_specs'                  => 'array',
-            'processor_spec_id'           => 'required|exists:processor_specs,id', // Changed from processor_spec_ids
+            'processor_spec_id'           => 'required|exists:processor_specs,id',
         ]);
 
         $newRamSpecs = $this->validateAndNormalizeSpecs($request->input('ram_specs', []));
@@ -473,6 +474,24 @@ class PcSpecController extends Controller
         return redirect()->route('pcspecs.index')
             ->with('message', 'PC Spec updated')
             ->with('type', 'success');
+    }
+
+    /**
+     * PATCH /pcspecs/{pcspec}/issue
+     * Update only the issue field
+     */
+    public function updateIssue(Request $request, PcSpec $pcspec)
+    {
+        $data = $request->validate([
+            'issue' => 'nullable|string',
+        ]);
+
+        $pcspec->update($data);
+
+        return back()->with([
+            'message' => 'Issue updated successfully',
+            'type' => 'success'
+        ]);
     }
 
     /**

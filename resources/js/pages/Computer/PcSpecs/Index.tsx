@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { useEffect, useState } from 'react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
@@ -19,6 +19,8 @@ import {
     DialogContent,
     DialogTitle,
     DialogClose,
+    DialogHeader,
+    DialogDescription,
 } from '@/components/ui/dialog';
 import {
     AlertDialog,
@@ -31,6 +33,8 @@ import {
     AlertDialogCancel,
     AlertDialogAction,
 } from '@/components/ui/alert-dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
 import {
@@ -82,6 +86,7 @@ interface PcSpec {
     memory_type: string;
     form_factor: string;
     socket_type: string;
+    issue?: string | null;
     ramSpecs: RamSpec[];
     diskSpecs: DiskSpec[];
     processorSpecs: ProcessorSpec[];
@@ -98,6 +103,9 @@ export default function Index() {
     const { pcspecs, flash, search: initialSearch } =
         usePage<PageProps>().props;
     const form = useForm({ search: initialSearch || '' });
+    const [issueDialogOpen, setIssueDialogOpen] = useState(false);
+    const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
+    const [issueText, setIssueText] = useState('');
 
     useEffect(() => {
         if (!flash?.message) return;
@@ -120,6 +128,29 @@ export default function Index() {
         form.delete(
             pcSpecDestroy({ pcspec: id }).url, {
             preserveScroll: true,
+        });
+    }
+
+    function handleOpenIssueDialog(pcSpec: PcSpec) {
+        setSelectedPcSpec(pcSpec);
+        setIssueText(pcSpec.issue || '');
+        setIssueDialogOpen(true);
+    }
+
+    function handleSaveIssue() {
+        if (!selectedPcSpec) return;
+
+        router.patch(`/pcspecs/${selectedPcSpec.id}/issue`, {
+            issue: issueText || null,
+        }, {
+            preserveScroll: true,
+            onSuccess: () => {
+                toast.success('Issue updated successfully');
+                setIssueDialogOpen(false);
+            },
+            onError: () => {
+                toast.error('Failed to update issue');
+            },
         });
     }
 
@@ -162,6 +193,7 @@ export default function Index() {
                                 <TableHead>Processor</TableHead>
                                 <TableHead>RAM (GB)</TableHead>
                                 <TableHead>Storage Type</TableHead>
+                                <TableHead>Issue</TableHead>
                                 <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
@@ -192,6 +224,25 @@ export default function Index() {
                                         <TableCell>{procLabel}</TableCell>
                                         <TableCell>{totalRamGb || 0}</TableCell>
                                         <TableCell>{storageType}</TableCell>
+                                        <TableCell>
+                                            <div className="flex items-center gap-2">
+                                                {pc.issue ? (
+                                                    <span className="text-xs text-red-600 font-medium truncate max-w-[200px]" title={pc.issue}>
+                                                        ⚠️ {pc.issue}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No issue</span>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleOpenIssueDialog(pc)}
+                                                    className="h-7 px-2 text-xs"
+                                                >
+                                                    {pc.issue ? 'Edit' : 'Add'}
+                                                </Button>
+                                            </div>
+                                        </TableCell>
                                         <TableCell className="flex justify-center gap-2">
                                             {/* Edit */}
                                             <Link href={pcSpecEdit.url(pc.id)}>
@@ -376,7 +427,7 @@ export default function Index() {
 
                         <TableFooter>
                             <TableRow>
-                                <TableCell colSpan={7} className="text-center font-medium">
+                                <TableCell colSpan={8} className="text-center font-medium">
                                     PC Specs List
                                 </TableCell>
                             </TableRow>
@@ -388,6 +439,46 @@ export default function Index() {
                 <div className="flex justify-center">
                     <PaginationNav links={pcspecs.links} />
                 </div>
+
+                {/* Issue Dialog */}
+                <Dialog open={issueDialogOpen} onOpenChange={setIssueDialogOpen}>
+                    <DialogContent className="max-w-md">
+                        <DialogHeader>
+                            <DialogTitle>Manage Issue Note</DialogTitle>
+                            <DialogDescription>
+                                {selectedPcSpec && (
+                                    <span className="text-sm">
+                                        {selectedPcSpec.manufacturer} {selectedPcSpec.model}
+                                    </span>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="issue">Issue Details</Label>
+                                <Textarea
+                                    id="issue"
+                                    placeholder="Describe any issues with this PC spec..."
+                                    value={issueText}
+                                    onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setIssueText(e.target.value)}
+                                    rows={5}
+                                    className="resize-none"
+                                />
+                                <p className="text-xs text-gray-500">
+                                    Leave empty to remove the issue note.
+                                </p>
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-2">
+                            <Button variant="outline" onClick={() => setIssueDialogOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button onClick={handleSaveIssue}>
+                                Save Issue
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

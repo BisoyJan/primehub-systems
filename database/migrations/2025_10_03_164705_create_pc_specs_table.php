@@ -20,6 +20,7 @@ return new class extends Migration
             $table->string('max_ram_speed');
             $table->unsignedTinyInteger('m2_slots');
             $table->unsignedTinyInteger('sata_ports');
+            $table->text('issue')->nullable();
 
             $table->timestamps();
         });

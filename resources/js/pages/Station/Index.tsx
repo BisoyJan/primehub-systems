@@ -124,78 +124,84 @@ export default function StationIndex() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-3">
                     <h2 className="text-xl font-semibold">Station Management</h2>
                 </div>
 
                 {/* Filters */}
-                <div className="flex items-center gap-3 mb-2">
-                    <Input
-                        type="search"
-                        placeholder="Search site, station #, campaign..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="w-64"
-                    />
-                    <Select value={siteFilter} onValueChange={setSiteFilter}>
-                        <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Filter by Site" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Sites</SelectItem>
-                            {filters.sites.map((site) => (
-                                <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                <div className="flex flex-col gap-3">
+                    {/* Input and Select Filters - 2 columns on mobile, row on desktop */}
+                    <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3">
+                        <Input
+                            type="search"
+                            placeholder="Search site, station #, campaign..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="col-span-2 sm:w-64"
+                        />
+                        <Select value={siteFilter} onValueChange={setSiteFilter}>
+                            <SelectTrigger className="sm:w-48">
+                                <SelectValue placeholder="Filter by Site" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Sites</SelectItem>
+                                {filters.sites.map((site) => (
+                                    <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
 
-                    <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                        <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Filter by Campaign" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Campaigns</SelectItem>
-                            {filters.campaigns.map((campaign) => (
-                                <SelectItem key={campaign.id} value={String(campaign.id)}>{campaign.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                        <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                            <SelectTrigger className="sm:w-48">
+                                <SelectValue placeholder="Filter by Campaign" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Campaigns</SelectItem>
+                                {filters.campaigns.map((campaign) => (
+                                    <SelectItem key={campaign.id} value={String(campaign.id)}>{campaign.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
 
-                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                        <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Filter by Status" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Statuses</SelectItem>
-                            {filters.statuses.map((status) => (
-                                <SelectItem key={status} value={status}>{status}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className="sm:w-48">
+                                <SelectValue placeholder="Filter by Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Statuses</SelectItem>
+                                {filters.statuses.map((status) => (
+                                    <SelectItem key={status} value={status}>{status}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
 
-                    {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && (
-                        <Button
-                            variant="outline"
-                            onClick={() => {
-                                setSearch("");
-                                setSiteFilter("all");
-                                setCampaignFilter("all");
-                                setStatusFilter("all");
-                            }}
-                        >
-                            Clear Filters
+                    {/* Action Buttons - stay in a row */}
+                    <div className="flex flex-wrap gap-3">
+                        {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && (
+                            <Button
+                                variant="outline"
+                                onClick={() => {
+                                    setSearch("");
+                                    setSiteFilter("all");
+                                    setCampaignFilter("all");
+                                    setStatusFilter("all");
+                                }}
+                            >
+                                Clear Filters
+                            </Button>
+                        )}
+
+                        <Button onClick={() => router.get('/stations/create')}>
+                            Add Station
                         </Button>
-                    )}
-
-                    <Button onClick={() => router.get('/stations/create')}>
-                        Add Station
-                    </Button>
-                    <Button onClick={() => router.get('/sites')}>
-                        Site Management
-                    </Button>
-                    <Button onClick={() => router.get('/campaigns')}>
-                        Campaign Management
-                    </Button>
+                        <Button onClick={() => router.get('/sites')}>
+                            Site Management
+                        </Button>
+                        <Button onClick={() => router.get('/campaigns')}>
+                            Campaign Management
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Results Count */}

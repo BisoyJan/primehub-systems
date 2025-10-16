@@ -26,6 +26,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->except(['show']);
     Route::resource('processorspecs', ProcessorSpecsController::class)
         ->except(['show']);
+    Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])
+        ->name('pcspecs.updateIssue');
     Route::resource('pcspecs', PcSpecController::class)
         ->except(['show']);
     Route::resource('sites', SiteController::class)
