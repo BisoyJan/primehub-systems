@@ -13,6 +13,7 @@ class Station extends Model
         'station_number',
         'campaign_id',
         'status',
+        'monitor_type',
         'pc_spec_id',
     ];
 

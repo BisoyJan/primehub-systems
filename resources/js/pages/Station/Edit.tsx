@@ -28,6 +28,7 @@ interface StationEditProps {
         station_number: string;
         campaign_id: number;
         status: string;
+        monitor_type: string;
         pc_spec_id: number;
     };
     sites: Site[];
@@ -48,6 +49,7 @@ export default function StationEdit() {
         station_number: station.station_number,
         campaign_id: String(station.campaign_id),
         status: station.status,
+        monitor_type: station.monitor_type || 'single',
         pc_spec_id: String(station.pc_spec_id),
     });
 
@@ -133,6 +135,18 @@ export default function StationEdit() {
                                 </SelectContent>
                             </Select>
                             {errors.status && <p className="text-red-600 text-sm mt-1">{errors.status}</p>}
+                        </div>
+                        <div>
+                            <Select value={data.monitor_type} onValueChange={(val) => setData("monitor_type", val)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select Monitor Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="single">Single Monitor</SelectItem>
+                                    <SelectItem value="dual">Dual Monitor</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {errors.monitor_type && <p className="text-red-600 text-sm mt-1">{errors.monitor_type}</p>}
                         </div>
                     </div>
                     <div>

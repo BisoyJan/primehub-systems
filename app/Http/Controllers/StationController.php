@@ -32,6 +32,7 @@ class StationController extends Controller
                 'station_number' => $station->station_number,
                 'campaign' => $station->campaign?->name,
                 'status' => $station->status,
+                'monitor_type' => $station->monitor_type,
                 'pc_spec' => $station->pcSpec?->model,
                 'pc_spec_details' => $station->pcSpec?->getFormattedDetails(),
                 'created_at' => optional($station->created_at)->toDateTimeString(),
@@ -91,6 +92,7 @@ class StationController extends Controller
             'starting_number' => 'required|string|max:255',
             'campaign_id' => 'required|exists:campaigns,id',
             'status' => 'required|string|max:255',
+            'monitor_type' => 'required|in:single,dual',
             'pc_spec_id' => 'nullable|exists:pc_specs,id',
             'quantity' => 'required|integer|min:1|max:100',
             'increment_type' => 'required|in:number,letter,both',
@@ -98,6 +100,7 @@ class StationController extends Controller
             'site_id' => 'site',
             'starting_number' => 'starting station number',
             'campaign_id' => 'campaign',
+            'monitor_type' => 'monitor type',
             'pc_spec_id' => 'PC spec',
             'increment_type' => 'increment type',
         ]);
@@ -142,6 +145,7 @@ class StationController extends Controller
                     'station_number' => $stationNumber,
                     'campaign_id' => $validated['campaign_id'],
                     'status' => $validated['status'],
+                    'monitor_type' => $validated['monitor_type'],
                     'pc_spec_id' => $validated['pc_spec_id'],
                     'created_at' => now(),
                     'updated_at' => now(),
@@ -297,6 +301,7 @@ class StationController extends Controller
             'station_number' => "required|string|max:255|{$uniqueRule}",
             'campaign_id' => 'required|exists:campaigns,id',
             'status' => 'required|string|max:255',
+            'monitor_type' => 'required|in:single,dual',
             'pc_spec_id' => 'nullable|exists:pc_specs,id',
         ], [
             'station_number.unique' => 'The station number has already been used.',
@@ -304,6 +309,7 @@ class StationController extends Controller
             'site_id' => 'site',
             'station_number' => 'station number',
             'campaign_id' => 'campaign',
+            'monitor_type' => 'monitor type',
             'pc_spec_id' => 'PC spec',
         ]);
     }

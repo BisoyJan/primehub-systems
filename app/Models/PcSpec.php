@@ -79,6 +79,7 @@ class PcSpec extends Model
             'disk_capacities' => $this->diskSpecs->map(fn($disk) => $disk->capacity_gb . ' GB')->implode(' + '),
             'disk_type' => $this->getFormattedDiskType(),
             'processor' => $this->processorSpecs->pluck('model')->implode(', '),
+            'issue' => $this->issue,
         ];
     }
 

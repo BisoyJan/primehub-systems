@@ -36,6 +36,7 @@ export default function StationCreate() {
         station_number: "",
         campaign_id: "",
         status: "",
+        monitor_type: "single",
         pc_spec_id: "",
         quantity: "1",
         starting_number: "",
@@ -258,6 +259,19 @@ export default function StationCreate() {
                                 </SelectContent>
                             </Select>
                             {errors.status && <p className="text-red-600 text-sm mt-1">{errors.status}</p>}
+                        </div>
+                        <div>
+                            <Label>Monitor Type</Label>
+                            <Select value={data.monitor_type} onValueChange={(val) => setData("monitor_type", val)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Select Monitor Type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="single">Single Monitor</SelectItem>
+                                    <SelectItem value="dual">Dual Monitor</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {errors.monitor_type && <p className="text-red-600 text-sm mt-1">{errors.monitor_type}</p>}
                         </div>
                     </div>
 
