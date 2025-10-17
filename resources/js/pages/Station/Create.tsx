@@ -38,6 +38,7 @@ export default function StationCreate() {
         status: "",
         monitor_type: "single",
         pc_spec_id: "",
+        pc_spec_ids: [] as string[], // For bulk mode
         quantity: "1",
         starting_number: "",
         increment_type: "number", // "number", "letter", or "both"
@@ -45,7 +46,9 @@ export default function StationCreate() {
 
     // Auto-hide messages after 6 seconds when PC spec selection changes
     useEffect(() => {
-        const hasSpec = !!data.pc_spec_id;
+        const hasSpec = bulkMode
+            ? data.pc_spec_ids.length > 0
+            : !!data.pc_spec_id;
         setShowNoSpecWarning(!hasSpec);
         setShowSpecSelectedInfo(hasSpec);
 
@@ -55,7 +58,7 @@ export default function StationCreate() {
         }, 4000);
 
         return () => clearTimeout(timer);
-    }, [data.pc_spec_id]);
+    }, [data.pc_spec_id, data.pc_spec_ids, bulkMode]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -288,43 +291,77 @@ export default function StationCreate() {
 
                     <div>
                         <div className="flex items-center justify-between mb-2">
-                            <label className="block font-medium">Select PC Spec (Optional)</label>
-                            {data.pc_spec_id && (
+                            <label className="block font-medium">
+                                Select PC Spec{bulkMode ? 's' : ''} (Optional)
+                                {bulkMode && <span className="text-sm text-gray-500 ml-2">({data.pc_spec_ids.length} selected)</span>}
+                            </label>
+                            {((!bulkMode && data.pc_spec_id) || (bulkMode && data.pc_spec_ids.length > 0)) && (
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setData("pc_spec_id", "")}
+                                    onClick={() => {
+                                        if (bulkMode) {
+                                            setData("pc_spec_ids", []);
+                                        } else {
+                                            setData("pc_spec_id", "");
+                                        }
+                                    }}
                                     className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
                                 >
-                                    ✕ Remove PC Spec
+                                    ✕ Clear Selection{bulkMode ? 's' : ''}
                                 </Button>
                             )}
                         </div>
-                        {!data.pc_spec_id && showNoSpecWarning && (
+                        {((bulkMode && data.pc_spec_ids.length === 0) || (!bulkMode && !data.pc_spec_id)) && showNoSpecWarning && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3 transition-opacity duration-300">
                                 <p className="text-sm text-yellow-800">
-                                    ⚠️ No PC spec selected - Station will be saved without a PC specification
+                                    ⚠️ No PC spec{bulkMode ? 's' : ''} selected - Station{bulkMode ? 's' : ''} will be saved without PC specifications
                                 </p>
                             </div>
                         )}
-                        {data.pc_spec_id && showSpecSelectedInfo && (
+                        {((bulkMode && data.pc_spec_ids.length > 0) || (!bulkMode && data.pc_spec_id)) && showSpecSelectedInfo && (
                             <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3 transition-opacity duration-300">
                                 <p className="text-sm text-blue-800">
-                                    ✓ PC spec selected - Click "Remove PC Spec" above to deselect
+                                    ✓ {bulkMode ? `${data.pc_spec_ids.length} PC spec(s)` : 'PC spec'} selected
+                                    {bulkMode && data.pc_spec_ids.length < parseInt(data.quantity) && (
+                                        <span className="ml-2 text-amber-700">
+                                            (Note: {parseInt(data.quantity) - data.pc_spec_ids.length} station(s) will have no PC spec)
+                                        </span>
+                                    )}
                                 </p>
                             </div>
                         )}
                         <p className="text-xs text-gray-500 mb-2">
-                            💡 Leave blank to create stations without PC specs (useful for reserving station numbers or "No PC" status)
+                            💡 {bulkMode
+                                ? `Select up to ${data.quantity} PC specs (one per station). You can select fewer - remaining stations will have no PC spec.`
+                                : 'Leave blank to create stations without PC specs (useful for reserving station numbers or "No PC" status)'}
                         </p>
                         <PcSpecTable
                             pcSpecs={pcSpecs}
-                            selectedId={data.pc_spec_id}
-                            onSelect={(id) => setData("pc_spec_id", id)}
+                            selectedId={bulkMode ? undefined : data.pc_spec_id}
+                            selectedIds={bulkMode ? data.pc_spec_ids : undefined}
+                            multiSelect={bulkMode}
+                            maxSelections={bulkMode ? parseInt(data.quantity) || 1 : undefined}
+                            onSelect={(id) => {
+                                if (bulkMode) {
+                                    const currentIds = data.pc_spec_ids;
+                                    const maxSelections = parseInt(data.quantity) || 1;
+                                    if (currentIds.includes(id)) {
+                                        // Deselect
+                                        setData("pc_spec_ids", currentIds.filter(i => i !== id));
+                                    } else if (currentIds.length < maxSelections) {
+                                        // Select (if under limit)
+                                        setData("pc_spec_ids", [...currentIds, id]);
+                                    }
+                                } else {
+                                    setData("pc_spec_id", id);
+                                }
+                            }}
                             usedPcSpecIds={usedPcSpecIds}
                         />
                         {errors.pc_spec_id && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_id}</p>}
+                        {errors.pc_spec_ids && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_ids}</p>}
                     </div>
                     <div className="flex gap-2 mt-4 mb-4">
                         <Button type="submit" disabled={processing}>

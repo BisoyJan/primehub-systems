@@ -8,6 +8,7 @@ use App\Http\Controllers\PcSpecController;
 use App\Http\Controllers\StationController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\SiteController;
+use App\Http\Controllers\AccountController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -41,6 +42,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('stocks', StockController::class);
     Route::post('stocks/adjust', [StockController::class, 'adjust'])
         ->name('stocks.adjust');
+    Route::resource('accounts', AccountController::class)
+        ->except(['show']);
 });
 
 require __DIR__ . '/settings.php';

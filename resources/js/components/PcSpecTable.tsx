@@ -34,7 +34,10 @@ export interface PcSpec {
 
 interface PcSpecTableProps {
     pcSpecs: PcSpec[];
-    selectedId: string;
+    selectedId?: string;
+    selectedIds?: string[];
+    multiSelect?: boolean;
+    maxSelections?: number;
     onSelect: (id: string) => void;
     usedPcSpecIds?: number[];
 }
@@ -46,7 +49,15 @@ const columns: DataTableColumn<PcSpec>[] = [
     { accessor: "disk", header: "Disk", cell: (value, row) => `${row.disk} (${row.disk_gb ?? ''} GB)` },
 ];
 
-export default function PcSpecTable({ pcSpecs, selectedId, onSelect, usedPcSpecIds }: PcSpecTableProps) {
+export default function PcSpecTable({
+    pcSpecs,
+    selectedId,
+    selectedIds = [],
+    multiSelect = false,
+    maxSelections,
+    onSelect,
+    usedPcSpecIds
+}: PcSpecTableProps) {
     const [dialogOpen, setDialogOpen] = React.useState(false);
     const [dialogRow, setDialogRow] = React.useState<PcSpec | null>(null);
     const [search, setSearch] = React.useState("");
@@ -117,11 +128,21 @@ export default function PcSpecTable({ pcSpecs, selectedId, onSelect, usedPcSpecI
                     className="border rounded px-2 py-1 w-32"
                 />
             </div>
+            {multiSelect && maxSelections && (
+                <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                    Selected: {selectedIds.length} / {maxSelections}
+                    {selectedIds.length >= maxSelections && <span className="ml-2 font-medium">(Max reached)</span>}
+                </div>
+            )}
             <DataTable
                 columns={tableColumns}
                 data={paginatedSpecs}
-                radio
-                rowSelected={p => selectedId === String(p.id)}
+                radio={!multiSelect}
+                checkbox={multiSelect}
+                rowSelected={p => multiSelect
+                    ? selectedIds.includes(String(p.id))
+                    : selectedId === String(p.id)
+                }
                 onRowSelect={p => onSelect(String(p.id))}
             />
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>

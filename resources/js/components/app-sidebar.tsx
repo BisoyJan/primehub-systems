@@ -2,6 +2,7 @@ import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
 import { NavComputer } from '@/components/nav-computer-group';
 import { NavStation } from '@/components/nav-station-group';
+import { NavAccount } from '@/components/nav-account-group';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -21,7 +22,7 @@ import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip } from 'lucide-react';
+import { BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, User } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -68,6 +69,14 @@ const stationNavItems: NavItem[] = [
     },
 ];
 
+const accountNavItems: NavItem[] = [
+    {
+        title: 'Accounts',
+        href: '/accounts',
+        icon: User,
+    },
+];
+
 const footerNavItems: NavItem[] = [
     {
         title: 'Repository',
@@ -100,6 +109,7 @@ export function AppSidebar() {
                 <NavMain items={mainNavItems} />
                 <NavComputer items={computerNavItems} />
                 <NavStation items={stationNavItems} />
+                <NavAccount items={accountNavItems} />
             </SidebarContent>
 
             <SidebarFooter>

@@ -94,6 +94,8 @@ class StationController extends Controller
             'status' => 'required|string|max:255',
             'monitor_type' => 'required|in:single,dual',
             'pc_spec_id' => 'nullable|exists:pc_specs,id',
+            'pc_spec_ids' => 'nullable|array',
+            'pc_spec_ids.*' => 'exists:pc_specs,id',
             'quantity' => 'required|integer|min:1|max:100',
             'increment_type' => 'required|in:number,letter,both',
         ], [], [
@@ -102,6 +104,7 @@ class StationController extends Controller
             'campaign_id' => 'campaign',
             'monitor_type' => 'monitor type',
             'pc_spec_id' => 'PC spec',
+            'pc_spec_ids' => 'PC specs',
             'increment_type' => 'increment type',
         ]);
 
@@ -135,18 +138,31 @@ class StationController extends Controller
             );
         }
 
+        // Use pc_spec_ids array if provided, otherwise fall back to single pc_spec_id
+        $pcSpecIds = isset($validated['pc_spec_ids']) && is_array($validated['pc_spec_ids'])
+            ? $validated['pc_spec_ids']
+            : [];
+
         // Check for duplicates
-        foreach ($stationNumbers as $stationNumber) {
+        foreach ($stationNumbers as $index => $stationNumber) {
             if (Station::where('station_number', $stationNumber)->exists()) {
                 $existingNumbers[] = $stationNumber;
             } else {
+                // Assign PC spec from array (if available), or use single pc_spec_id, or null
+                $pcSpecId = null;
+                if (!empty($pcSpecIds) && isset($pcSpecIds[$index])) {
+                    $pcSpecId = $pcSpecIds[$index];
+                } elseif (isset($validated['pc_spec_id'])) {
+                    $pcSpecId = $validated['pc_spec_id'];
+                }
+
                 $createdStations[] = [
                     'site_id' => $validated['site_id'],
                     'station_number' => $stationNumber,
                     'campaign_id' => $validated['campaign_id'],
                     'status' => $validated['status'],
                     'monitor_type' => $validated['monitor_type'],
-                    'pc_spec_id' => $validated['pc_spec_id'],
+                    'pc_spec_id' => $pcSpecId,
                     'created_at' => now(),
                     'updated_at' => now(),
                 ];

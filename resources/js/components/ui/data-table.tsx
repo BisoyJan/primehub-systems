@@ -14,14 +14,19 @@ export interface DataTableProps<T> {
     rowSelected?: (row: T) => boolean;
     onRowSelect?: (row: T) => void;
     radio?: boolean;
+    checkbox?: boolean;
+    multiSelect?: boolean;
 }
 
-export function DataTable<T extends { id: number }>({ columns, data, rowDisabled, rowSelected, onRowSelect, radio }: DataTableProps<T>) {
+export function DataTable<T extends { id: number }>({ columns, data, rowDisabled, rowSelected, onRowSelect, radio, checkbox, multiSelect }: DataTableProps<T>) {
+    const showSelector = radio || checkbox || multiSelect;
+    const useCheckbox = checkbox || multiSelect;
+
     return (
         <Table>
             <TableHeader>
                 <TableRow>
-                    {radio && <TableHead>Select</TableHead>}
+                    {showSelector && <TableHead>Select</TableHead>}
                     {columns.map(col => (
                         <TableHead key={String(col.accessor)}>{col.header}</TableHead>
                     ))}
@@ -33,11 +38,11 @@ export function DataTable<T extends { id: number }>({ columns, data, rowDisabled
                     const selected = rowSelected?.(row);
                     return (
                         <TableRow key={row.id} className={disabled ? "bg-gray-100 text-gray-400" : selected ? "bg-gray-800" : ""}>
-                            {radio && (
+                            {showSelector && (
                                 <TableCell className="text-center">
                                     <input
-                                        type="radio"
-                                        name="datatable-radio"
+                                        type={useCheckbox ? "checkbox" : "radio"}
+                                        name={useCheckbox ? undefined : "datatable-radio"}
                                         checked={selected}
                                         onChange={() => !disabled && onRowSelect?.(row)}
                                         disabled={disabled}
