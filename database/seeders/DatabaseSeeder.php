@@ -35,7 +35,7 @@ class DatabaseSeeder extends Seeder
             DiskSpecSeeder::class,
             StockSeeder::class,
             PcSpecSeeder::class,
-            //StationSeeder::class,
+            StationSeeder::class,
         ]);
     }
 }

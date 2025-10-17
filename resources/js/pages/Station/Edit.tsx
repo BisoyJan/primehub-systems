@@ -83,11 +83,12 @@ export default function StationEdit() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="max-w-xxl mx-auto mt-8">
-                <h2 className="text-xxl font-semibold mb-4">Edit Station</h2>
+            <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6">
+                <h2 className="text-xl md:text-2xl font-semibold mb-4">Edit Station</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
+                            <label className="block text-sm font-medium mb-1">Site</label>
                             <Select value={data.site_id} onValueChange={(val) => setData("site_id", val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Site" />
@@ -101,6 +102,7 @@ export default function StationEdit() {
                             {errors.site_id && <p className="text-red-600 text-sm mt-1">{errors.site_id}</p>}
                         </div>
                         <div>
+                            <label className="block text-sm font-medium mb-1">Station Number</label>
                             <Input
                                 value={data.station_number}
                                 onChange={e => setData("station_number", e.target.value.toUpperCase())}
@@ -110,6 +112,7 @@ export default function StationEdit() {
                             {errors.station_number && <p className="text-red-600 text-sm mt-1">{errors.station_number}</p>}
                         </div>
                         <div>
+                            <label className="block text-sm font-medium mb-1">Campaign</label>
                             <Select value={data.campaign_id} onValueChange={(val) => setData("campaign_id", val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Campaign" />
@@ -123,6 +126,7 @@ export default function StationEdit() {
                             {errors.campaign_id && <p className="text-red-600 text-sm mt-1">{errors.campaign_id}</p>}
                         </div>
                         <div>
+                            <label className="block text-sm font-medium mb-1">Status</label>
                             <Select value={data.status} onValueChange={(val) => setData("status", val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Status" />
@@ -137,6 +141,7 @@ export default function StationEdit() {
                             {errors.status && <p className="text-red-600 text-sm mt-1">{errors.status}</p>}
                         </div>
                         <div>
+                            <label className="block text-sm font-medium mb-1">Monitor Type</label>
                             <Select value={data.monitor_type} onValueChange={(val) => setData("monitor_type", val)}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="Select Monitor Type" />
@@ -150,15 +155,15 @@ export default function StationEdit() {
                         </div>
                     </div>
                     <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="block font-medium">Select PC Spec (Optional)</label>
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-2">
+                            <label className="block font-medium text-sm sm:text-base">Select PC Spec (Optional)</label>
                             {data.pc_spec_id && (
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
                                     onClick={() => setData("pc_spec_id", "")}
-                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
                                 >
                                     ✕ Remove PC Spec
                                 </Button>
@@ -166,19 +171,19 @@ export default function StationEdit() {
                         </div>
                         {!data.pc_spec_id && showNoSpecWarning && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3 transition-opacity duration-300">
-                                <p className="text-sm text-yellow-800">
+                                <p className="text-xs sm:text-sm text-yellow-800 break-words">
                                     ⚠️ No PC spec selected - Station will be saved without a PC specification
                                 </p>
                             </div>
                         )}
                         {data.pc_spec_id && showSpecSelectedInfo && (
                             <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3 transition-opacity duration-300">
-                                <p className="text-sm text-blue-800">
+                                <p className="text-xs sm:text-sm text-blue-800 break-words">
                                     ✓ PC spec selected - Click "Remove PC Spec" above to deselect
                                 </p>
                             </div>
                         )}
-                        <p className="text-xs text-gray-500 mb-2">
+                        <p className="text-xs text-gray-500 mb-2 break-words">
                             💡 You can deselect the PC spec by clicking the "Remove PC Spec" button above
                         </p>
                         <PcSpecTable
@@ -189,11 +194,11 @@ export default function StationEdit() {
                         />
                         {errors.pc_spec_id && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_id}</p>}
                     </div>
-                    <div className="flex gap-2 mt-4">
-                        <Button type="submit" disabled={processing}>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-4">
+                        <Button type="submit" disabled={processing} className="w-full sm:w-auto">
                             {processing ? "Saving..." : "Save"}
                         </Button>
-                        <Button variant="outline" type="button" onClick={() => router.get("/stations")}>Cancel</Button>
+                        <Button variant="outline" type="button" onClick={() => router.get("/stations")} className="w-full sm:w-auto">Cancel</Button>
                     </div>
                 </form>
             </div>

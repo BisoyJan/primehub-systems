@@ -93,10 +93,12 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Disk Specs" />
 
-            <div className="flex h-full flex-1 flex-col gap-3 overflow-x-auto rounded-xl p-3">
+            <div className="flex h-full flex-1 flex-col gap-3 rounded-xl p-3 md:p-6">
                 {/* Header Section */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                    {/* Search Form */}
+                <div className="flex flex-col gap-3">
+                    <h2 className="text-lg md:text-xl font-semibold">Disk Specs Management</h2>
+
+                    {/* Search Form - full width on mobile */}
                     <form onSubmit={handleSearch} className="flex gap-2">
                         <input
                             type="text"
@@ -104,122 +106,229 @@ export default function Index() {
                             placeholder="Search disk details..."
                             value={form.data.search}
                             onChange={(e) => form.setData("search", e.target.value)}
-                            className="border rounded px-3 py-2 text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="border rounded px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
-                        <Button type="submit">Search</Button>
+                        <Button type="submit" className="shrink-0">Search</Button>
                     </form>
 
-                    {/* Add Button */}
-                    <Link href={create.url()}>
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white">
+                    {/* Add Button - full width on mobile */}
+                    <Link href={create.url()} className="w-full sm:w-auto sm:self-end">
+                        <Button className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto">
                             Add Disk Spec
                         </Button>
                     </Link>
                 </div>
 
-                {/* Table Section */}
-                <div className="overflow-x-auto">
-                    <Table>
-                        <TableHeader>
-                            <TableRow>
-                                <TableHead>ID</TableHead>
-                                <TableHead>Manufacturer</TableHead>
-                                <TableHead>Model Number</TableHead>
-                                <TableHead>Capacity (GB)</TableHead>
-                                <TableHead>Interface</TableHead>
-                                <TableHead>Drive Type</TableHead>
-                                <TableHead>Read Speed (MB/s)</TableHead>
-                                <TableHead>Write Speed (MB/s)</TableHead>
-                                <TableHead>Stocks</TableHead>
-                                <TableHead className="text-center">Actions</TableHead>
-                            </TableRow>
-                        </TableHeader>
+                {/* Desktop Table - hidden on mobile */}
+                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                    <TableHead>Manufacturer</TableHead>
+                                    <TableHead>Model Number</TableHead>
+                                    <TableHead>Capacity (GB)</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Interface</TableHead>
+                                    <TableHead>Drive Type</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Read Speed (MB/s)</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Write Speed (MB/s)</TableHead>
+                                    <TableHead>Stocks</TableHead>
+                                    <TableHead className="text-center">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
 
-                        <TableBody>
-                            {diskspecs.data.map((disk) => (
-                                <TableRow key={disk.id}>
-                                    <TableCell>{disk.id}</TableCell>
-                                    <TableCell className="font-medium">{disk.manufacturer}</TableCell>
-                                    <TableCell>{disk.model}</TableCell>
-                                    <TableCell>{disk.capacity_gb}</TableCell>
-                                    <TableCell>{disk.interface}</TableCell>
-                                    <TableCell>{disk.drive_type}</TableCell>
-                                    <TableCell>{disk.sequential_read_mb}</TableCell>
-                                    <TableCell>{disk.sequential_write_mb}</TableCell>
-                                    <TableCell>
-                                        {disk.stock ? disk.stock.quantity : 0}
+                            <TableBody>
+                                {diskspecs.data.map((disk) => (
+                                    <TableRow key={disk.id}>
+                                        <TableCell className="hidden lg:table-cell">{disk.id}</TableCell>
+                                        <TableCell className="font-medium">{disk.manufacturer}</TableCell>
+                                        <TableCell>{disk.model}</TableCell>
+                                        <TableCell>{disk.capacity_gb}</TableCell>
+                                        <TableCell className="hidden xl:table-cell">{disk.interface}</TableCell>
+                                        <TableCell>{disk.drive_type}</TableCell>
+                                        <TableCell className="hidden xl:table-cell">{disk.sequential_read_mb}</TableCell>
+                                        <TableCell className="hidden xl:table-cell">{disk.sequential_write_mb}</TableCell>
+                                        <TableCell>
+                                            {disk.stock ? disk.stock.quantity : 0}
 
-                                        {(!disk.stock || disk.stock.quantity < 10) && (
-                                            <span
-                                                className={`
+                                            {(!disk.stock || disk.stock.quantity < 10) && (
+                                                <span
+                                                    className={`
                                         ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
                                         ${!disk.stock || disk.stock.quantity === 0
-                                                        ? "bg-red-100 text-red-700"
-                                                        : "bg-yellow-100 text-yellow-700"}
+                                                            ? "bg-red-100 text-red-700"
+                                                            : "bg-yellow-100 text-yellow-700"}
                                                 `}
-                                            >
-                                                {!disk.stock || disk.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
-                                            </span>
-                                        )}
-                                    </TableCell>
-                                    <TableCell className="flex justify-center gap-2">
-                                        <Link href={edit.url(disk.id)}>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="bg-green-600 hover:bg-green-700 text-white"
-                                            >
-                                                Edit
-                                            </Button>
-                                        </Link>
-                                        <AlertDialog>
-                                            <AlertDialogTrigger asChild>
-                                                <Button
-                                                    variant="destructive"
-                                                    size="sm"
-                                                    className="bg-red-600 hover:bg-red-700 text-white"
                                                 >
-                                                    Delete
+                                                    {!disk.stock || disk.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                                                </span>
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="flex justify-center gap-2">
+                                            <Link href={edit.url(disk.id)}>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="bg-green-600 hover:bg-green-700 text-white"
+                                                >
+                                                    Edit
                                                 </Button>
-                                            </AlertDialogTrigger>
-                                            <AlertDialogContent>
-                                                <AlertDialogHeader>
-                                                    <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
-                                                    <AlertDialogDescription>
-                                                        Are you sure you want to delete{" "}
-                                                        <strong>
-                                                            {disk.manufacturer} {disk.model}
-                                                        </strong>
-                                                        ? This action cannot be undone.
-                                                    </AlertDialogDescription>
-                                                </AlertDialogHeader>
-                                                <AlertDialogFooter>
-                                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                    <AlertDialogAction
-                                                        onClick={() => handleDelete(disk.id)}
-                                                        className="bg-red-600 hover:bg-red-700"
+                                            </Link>
+                                            <AlertDialog>
+                                                <AlertDialogTrigger asChild>
+                                                    <Button
+                                                        variant="destructive"
+                                                        size="sm"
+                                                        className="bg-red-600 hover:bg-red-700 text-white"
                                                     >
-                                                        Yes, Delete
-                                                    </AlertDialogAction>
-                                                </AlertDialogFooter>
-                                            </AlertDialogContent>
-                                        </AlertDialog>
+                                                        Delete
+                                                    </Button>
+                                                </AlertDialogTrigger>
+                                                <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
+                                                    <AlertDialogHeader>
+                                                        <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
+                                                        <AlertDialogDescription>
+                                                            Are you sure you want to delete{" "}
+                                                            <strong>
+                                                                {disk.manufacturer} {disk.model}
+                                                            </strong>
+                                                            ? This action cannot be undone.
+                                                        </AlertDialogDescription>
+                                                    </AlertDialogHeader>
+                                                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                        <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                                        <AlertDialogAction
+                                                            onClick={() => handleDelete(disk.id)}
+                                                            className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                                        >
+                                                            Yes, Delete
+                                                        </AlertDialogAction>
+                                                    </AlertDialogFooter>
+                                                </AlertDialogContent>
+                                            </AlertDialog>
+                                        </TableCell>
+                                    </TableRow>
+                                ))}
+                            </TableBody>
+
+                            <TableFooter>
+                                <TableRow>
+                                    <TableCell colSpan={10} className="text-center font-medium">
+                                        Disk Specs List
                                     </TableCell>
                                 </TableRow>
-                            ))}
-                        </TableBody>
-
-                        <TableFooter>
-                            <TableRow>
-                                <TableCell colSpan={10} className="text-center font-medium">
-                                    Disk Specs List
-                                </TableCell>
-                            </TableRow>
-                        </TableFooter>
-                    </Table>
+                            </TableFooter>
+                        </Table>
+                    </div>
                 </div>
 
-                {/* Pagination */}
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                    {diskspecs.data.map((disk) => (
+                        <div key={disk.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                            {/* Header */}
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="text-xs text-muted-foreground">Manufacturer</div>
+                                    <div className="font-semibold text-lg">{disk.manufacturer}</div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs text-muted-foreground">Stock</div>
+                                    <div className="font-medium">{disk.stock ? disk.stock.quantity : 0}</div>
+                                    {(!disk.stock || disk.stock.quantity < 10) && (
+                                        <span
+                                            className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${!disk.stock || disk.stock.quantity === 0
+                                                    ? "bg-red-100 text-red-700"
+                                                    : "bg-yellow-100 text-yellow-700"
+                                                }`}
+                                        >
+                                            {!disk.stock || disk.stock.quantity === 0 ? "Out" : "Low"}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Details */}
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Model:</span>
+                                    <span className="font-medium">{disk.model}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Capacity:</span>
+                                    <span className="font-medium">{disk.capacity_gb} GB</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Drive Type:</span>
+                                    <span className="font-medium">{disk.drive_type}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Interface:</span>
+                                    <span className="font-medium">{disk.interface}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Read Speed:</span>
+                                    <span className="font-medium">{disk.sequential_read_mb} MB/s</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Write Speed:</span>
+                                    <span className="font-medium">{disk.sequential_write_mb} MB/s</span>
+                                </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex gap-2 pt-2 border-t">
+                                <Link href={edit.url(disk.id)} className="flex-1">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="bg-green-600 hover:bg-green-700 text-white w-full"
+                                    >
+                                        Edit
+                                    </Button>
+                                </Link>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button
+                                            variant="destructive"
+                                            size="sm"
+                                            className="bg-red-600 hover:bg-red-700 text-white flex-1"
+                                        >
+                                            Delete
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Are you sure you want to delete{" "}
+                                                <strong>
+                                                    {disk.manufacturer} {disk.model}
+                                                </strong>
+                                                ? This action cannot be undone.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={() => handleDelete(disk.id)}
+                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                            >
+                                                Yes, Delete
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                        </div>
+                    ))}
+                    {diskspecs.data.length === 0 && (
+                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                            No disk specs found
+                        </div>
+                    )}
+                </div>                {/* Pagination */}
                 <div className="flex justify-center">
                     <PaginationNav links={diskspecs.links} />
                 </div>

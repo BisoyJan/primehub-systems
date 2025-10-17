@@ -105,27 +105,28 @@ export default function PcSpecTable({
 
     return (
         <div className="space-y-2">
-            <div className="flex gap-2 mb-2">
+            {/* Filter Inputs - responsive layout */}
+            <div className="flex flex-col sm:flex-row gap-2 mb-2">
                 <Input
                     type="search"
                     value={search}
                     onChange={e => { setSearch(e.target.value); setPage(1); }}
                     placeholder="Search model or processor..."
-                    className="border rounded px-2 py-1 w-48"
+                    className="border rounded px-2 py-1 w-full sm:w-48"
                 />
                 <Input
                     type="search"
                     value={filterRam}
                     onChange={e => { setFilterRam(e.target.value); setPage(1); }}
                     placeholder="Filter RAM..."
-                    className="border rounded px-2 py-1 w-32"
+                    className="border rounded px-2 py-1 w-full sm:w-32"
                 />
                 <Input
                     type="search"
                     value={filterDisk}
                     onChange={e => { setFilterDisk(e.target.value); setPage(1); }}
                     placeholder="Filter Disk..."
-                    className="border rounded px-2 py-1 w-32"
+                    className="border rounded px-2 py-1 w-full sm:w-32"
                 />
             </div>
             {multiSelect && maxSelections && (
@@ -134,19 +135,109 @@ export default function PcSpecTable({
                     {selectedIds.length >= maxSelections && <span className="ml-2 font-medium">(Max reached)</span>}
                 </div>
             )}
-            <DataTable
-                columns={tableColumns}
-                data={paginatedSpecs}
-                radio={!multiSelect}
-                checkbox={multiSelect}
-                rowSelected={p => multiSelect
-                    ? selectedIds.includes(String(p.id))
-                    : selectedId === String(p.id)
-                }
-                onRowSelect={p => onSelect(String(p.id))}
-            />
+
+            {/* Desktop Table View - hidden on mobile */}
+            <div className="hidden md:block">
+                <DataTable
+                    columns={tableColumns}
+                    data={paginatedSpecs}
+                    radio={!multiSelect}
+                    checkbox={multiSelect}
+                    rowSelected={p => multiSelect
+                        ? selectedIds.includes(String(p.id))
+                        : selectedId === String(p.id)
+                    }
+                    onRowSelect={p => onSelect(String(p.id))}
+                />
+            </div>
+
+            {/* Mobile Card View */}
+            <div className="md:hidden space-y-3">
+                {paginatedSpecs.length === 0 ? (
+                    <div className="py-8 text-center text-gray-500 border rounded-lg bg-card">
+                        No PC specs found
+                    </div>
+                ) : (
+                    paginatedSpecs.map((spec) => {
+                        const isSelected = multiSelect
+                            ? selectedIds.includes(String(spec.id))
+                            : selectedId === String(spec.id);
+
+                        return (
+                            <div
+                                key={spec.id}
+                                onClick={() => onSelect(String(spec.id))}
+                                className={`border rounded-lg p-4 shadow-sm space-y-3 cursor-pointer transition-all ${isSelected
+                                        ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
+                                        : 'bg-card hover:bg-gray-50 dark:hover:bg-gray-800'
+                                    }`}
+                            >
+                                <div className="flex items-start gap-3">
+                                    {multiSelect ? (
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            onChange={() => onSelect(String(spec.id))}
+                                            className="mt-1 h-4 w-4 rounded border-gray-300"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    ) : (
+                                        <input
+                                            type="radio"
+                                            checked={isSelected}
+                                            onChange={() => onSelect(String(spec.id))}
+                                            className="mt-1 h-4 w-4"
+                                            onClick={(e) => e.stopPropagation()}
+                                        />
+                                    )}
+                                    <div className="flex-1">
+                                        <div className={`font-semibold text-base mb-2 ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
+                                            {spec.model}
+                                        </div>
+                                        <div className="space-y-1.5 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className={isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}>Processor:</span>
+                                                <span className={`font-medium text-right break-words max-w-[60%] ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
+                                                    {spec.processor}
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className={isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}>RAM:</span>
+                                                <span className={`font-medium ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
+                                                    {spec.ram} ({spec.ram_gb ?? ''} GB)
+                                                </span>
+                                            </div>
+                                            <div className="flex justify-between">
+                                                <span className={isSelected ? 'text-blue-700 dark:text-blue-300' : 'text-muted-foreground'}>Disk:</span>
+                                                <span className={`font-medium ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
+                                                    {spec.disk} ({spec.disk_gb ?? ''} GB)
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            className={`underline text-sm mt-2 ${isSelected
+                                                    ? 'text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200'
+                                                    : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                                                }`}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setDialogRow(spec);
+                                                setDialogOpen(true);
+                                            }}
+                                        >
+                                            View Details
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        );
+                    })
+                )}
+            </div>
+
             <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-                <DialogContent className="max-w-2xl">
+                <DialogContent className="max-w-[90vw] sm:max-w-2xl">
                     <DialogHeader>
                         <DialogTitle>PC Spec Details</DialogTitle>
                         <DialogDescription>
@@ -155,19 +246,19 @@ export default function PcSpecTable({
                                     <div className="space-y-3">
                                         <div>
                                             <div className="font-semibold text-foreground mb-1">Model:</div>
-                                            <div className="text-foreground pl-2">{dialogRow.model}</div>
+                                            <div className="text-foreground pl-2 break-words">{dialogRow.model}</div>
                                         </div>
 
                                         <div>
                                             <div className="font-semibold text-foreground mb-1">Processor:</div>
-                                            <div className="text-foreground pl-2">{dialogRow.processor}</div>
+                                            <div className="text-foreground pl-2 break-words">{dialogRow.processor}</div>
                                         </div>
 
                                         <div>
                                             <div className="font-semibold text-foreground mb-1">
                                                 RAM {dialogRow.ram_ddr ? `(${dialogRow.ram_ddr})` : ''}:
                                             </div>
-                                            <div className="text-foreground pl-2">
+                                            <div className="text-foreground pl-2 break-words">
                                                 {dialogRow.ram} ({dialogRow.ram_capacities ?? dialogRow.ram_gb + ' GB'})
                                             </div>
                                         </div>
@@ -176,7 +267,7 @@ export default function PcSpecTable({
                                             <div className="font-semibold text-foreground mb-1">
                                                 Disk {dialogRow.disk_type ? `(${dialogRow.disk_type})` : ''}:
                                             </div>
-                                            <div className="text-foreground pl-2">
+                                            <div className="text-foreground pl-2 break-words">
                                                 {dialogRow.disk} ({dialogRow.disk_capacities ?? dialogRow.disk_gb + ' GB'})
                                             </div>
                                         </div>
@@ -189,7 +280,7 @@ export default function PcSpecTable({
             </Dialog>
             <div className="flex justify-center items-center mt-2">
                 <Pagination>
-                    <PaginationContent>
+                    <PaginationContent className="flex-wrap gap-1">
                         <PaginationItem>
                             <PaginationPrevious
                                 href="#"
@@ -198,7 +289,7 @@ export default function PcSpecTable({
                             />
                         </PaginationItem>
                         {[...Array(totalPages)].map((_, i) => (
-                            <PaginationItem key={i}>
+                            <PaginationItem key={i} className="hidden sm:inline-block">
                                 <PaginationLink
                                     href="#"
                                     isActive={page === i + 1}
@@ -208,6 +299,12 @@ export default function PcSpecTable({
                                 </PaginationLink>
                             </PaginationItem>
                         ))}
+                        {/* Mobile: Show current page */}
+                        <PaginationItem className="sm:hidden">
+                            <span className="px-3 py-2 text-sm">
+                                Page {page} of {totalPages || 1}
+                            </span>
+                        </PaginationItem>
                         <PaginationItem>
                             <PaginationNext
                                 href="#"

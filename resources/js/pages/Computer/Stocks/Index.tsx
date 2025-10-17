@@ -302,17 +302,17 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stocks" />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                <div className="flex items-center gap-3 mb-4">
-                    <h2 className="text-xl font-semibold">Stock Management</h2>
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 md:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+                    <h2 className="text-lg md:text-xl font-semibold">Stock Management</h2>
 
-                    <div className="ml-auto flex items-center gap-2">
-                        <div className="relative">
+                    <div className="flex flex-col sm:flex-row sm:ml-auto items-stretch sm:items-center gap-2 w-full sm:w-auto">
+                        <div className="relative flex-1 sm:flex-initial">
                             <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
                             <Input
                                 type="search"
                                 placeholder="Search location, notes, model..."
-                                className="pl-8 sm:w-[300px]"
+                                className="pl-8 w-full sm:w-[300px]"
                                 value={searchQuery}
                                 onChange={(e) => setSearchQuery(e.target.value)}
                             />
@@ -322,7 +322,7 @@ export default function Index() {
                             value={filterType}
                             onValueChange={(v: string) => setFilterType(v as SpecType | 'all')}
                         >
-                            <SelectTrigger className="w-36">
+                            <SelectTrigger className="w-full sm:w-36">
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -333,44 +333,48 @@ export default function Index() {
                             </SelectContent>
                         </Select>
 
-                        <Button onClick={() => fetchIndex(window.location.href)}>
-                            <RefreshCw size={16} />
-                        </Button>
-                        <Button
-                            onClick={() => setPollMs(pollMs ? null : 15000)}
-                            variant="outline"
-                        >
-                            {pollMs ? 'Stop Poll' : 'Poll'}
-                        </Button>
-                        <Button onClick={openCreate}>
-                            <Plus size={16} /> Add
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button onClick={() => fetchIndex(window.location.href)} className="flex-1 sm:flex-initial">
+                                <RefreshCw size={16} />
+                            </Button>
+                            <Button
+                                onClick={() => setPollMs(pollMs ? null : 15000)}
+                                variant="outline"
+                                className="flex-1 sm:flex-initial"
+                            >
+                                {pollMs ? 'Stop Poll' : 'Poll'}
+                            </Button>
+                            <Button onClick={openCreate} className="flex-1 sm:flex-initial">
+                                <Plus size={16} /> <span className="ml-1">Add</span>
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto ">
+                {/* Desktop Table */}
+                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                    <div className="overflow-x-auto">
                         <Table>
                             <TableCaption>
                                 Stock items for RAM, Disk and Processor specs
                             </TableCaption>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>ID</TableHead>
+                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>Type</TableHead>
                                     <TableHead>Manufacturer / Brand</TableHead>
                                     <TableHead>Model / Series</TableHead>
                                     <TableHead>Quantity</TableHead>
-                                    <TableHead>Reserved</TableHead>
-                                    <TableHead>Location</TableHead>
-                                    <TableHead>Notes</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Reserved</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Location</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Notes</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {rows.map((row) => (
                                     <TableRow key={row.id}>
-                                        <TableCell>{row.id}</TableCell>
+                                        <TableCell className="hidden lg:table-cell">{row.id}</TableCell>
                                         <TableCell>
                                             {mapTypeFromStockable(row.stockable_type).charAt(0).toUpperCase() +
                                                 mapTypeFromStockable(row.stockable_type).slice(1)}
@@ -385,9 +389,9 @@ export default function Index() {
                                                 '-'}
                                         </TableCell>
                                         <TableCell>{row.quantity}</TableCell>
-                                        <TableCell>{row.reserved}</TableCell>
-                                        <TableCell>{row.location ?? '-'}</TableCell>
-                                        <TableCell>{row.notes ?? '-'}</TableCell>
+                                        <TableCell className="hidden xl:table-cell">{row.reserved}</TableCell>
+                                        <TableCell className="hidden xl:table-cell">{row.location ?? '-'}</TableCell>
+                                        <TableCell className="hidden xl:table-cell">{row.notes ?? '-'}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => openEdit(row)}>
@@ -427,14 +431,86 @@ export default function Index() {
                     </div>
                 </div>
 
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                    {rows.map((row) => (
+                        <div key={row.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="text-xs text-muted-foreground">Type</div>
+                                    <div className="font-semibold text-lg">
+                                        {mapTypeFromStockable(row.stockable_type).charAt(0).toUpperCase() +
+                                            mapTypeFromStockable(row.stockable_type).slice(1)}
+                                    </div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs text-muted-foreground">Quantity</div>
+                                    <div className="font-medium text-lg">{row.quantity}</div>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Manufacturer:</span>
+                                    <span className="font-medium break-words text-right max-w-[60%]">
+                                        {row.stockable?.manufacturer ?? row.stockable?.brand ?? '-'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Model:</span>
+                                    <span className="font-medium break-words text-right max-w-[60%]">
+                                        {row.stockable?.model_number ??
+                                            row.stockable?.model ??
+                                            row.stockable?.series ??
+                                            '-'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Reserved:</span>
+                                    <span className="font-medium">{row.reserved}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Location:</span>
+                                    <span className="font-medium">{row.location ?? '-'}</span>
+                                </div>
+                                {row.notes && (
+                                    <div className="pt-2 border-t">
+                                        <div className="text-xs text-muted-foreground mb-1">Notes:</div>
+                                        <div className="text-sm">{row.notes}</div>
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex gap-2 pt-2 border-t">
+                                <Button className="bg-green-600 hover:bg-green-700 text-white flex-1" onClick={() => openEdit(row)}>
+                                    <Edit size={14} className="mr-1" /> Edit
+                                </Button>
+                                <Button variant="ghost" onClick={() => openQuickAdjust(row)} className="flex-1">
+                                    <Plus size={14} className="mr-1" /> Adjust
+                                </Button>
+                                <Button variant="destructive"
+                                    className="bg-red-600 hover:bg-red-700 text-white flex-1" onClick={() => openDeleteConfirm(row)}>
+                                    <Trash size={14} className="mr-1" /> Delete
+                                </Button>
+                            </div>
+                        </div>
+                    ))}
+
+                    {rows.length === 0 && !loading && (
+                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                            No stock items found
+                        </div>
+                    )}
+                </div>
+
                 <div className="flex justify-center mt-4">
                     {links && links.length > 0 && <PaginationNav links={links} />}
                 </div>
             </div>
 
-            {/* Dialogs remain unchanged */}
+            {/* Dialogs - made responsive */}
             <Dialog open={open} onOpenChange={setOpen}>
-                <DialogContent>
+                <DialogContent className="max-w-[90vw] sm:max-w-lg">
                     <DialogHeader>
                         <h3 className="text-lg font-semibold">
                             {editing ? 'Edit Stock' : 'Create Stock'}
@@ -518,11 +594,11 @@ export default function Index() {
                         </div>
                     </div>
 
-                    <DialogFooter className="flex gap-2">
-                        <Button onClick={() => setOpen(false)} variant="outline">
+                    <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                        <Button onClick={() => setOpen(false)} variant="outline" className="w-full sm:w-auto">
                             Cancel
                         </Button>
-                        <Button onClick={submit} disabled={processing}>
+                        <Button onClick={submit} disabled={processing} className="w-full sm:w-auto">
                             {editing ? 'Save' : 'Create'}
                         </Button>
                     </DialogFooter>
@@ -539,7 +615,7 @@ export default function Index() {
                     }
                 }}
             >
-                <DialogContent>
+                <DialogContent className="max-w-[90vw] sm:max-w-lg">
                     <DialogHeader>
                         <h3 className="text-lg font-semibold">Adjust Quantity</h3>
                         {adjustRow && (
@@ -564,11 +640,11 @@ export default function Index() {
                         </div>
                     </div>
 
-                    <DialogFooter className="flex gap-2">
-                        <Button variant="outline" onClick={() => setAdjustOpen(false)}>
+                    <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                        <Button variant="outline" onClick={() => setAdjustOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
-                        <Button onClick={submitQuickAdjust}>Apply</Button>
+                        <Button onClick={submitQuickAdjust} className="w-full sm:w-auto">Apply</Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
@@ -582,7 +658,7 @@ export default function Index() {
                     }
                 }}
             >
-                <DialogContent>
+                <DialogContent className="max-w-[90vw] sm:max-w-lg">
                     <DialogHeader>
                         <h3 className="text-lg font-semibold">Confirm Delete</h3>
                         {deleteRow && (
@@ -596,11 +672,11 @@ export default function Index() {
                         This action cannot be undone.
                     </div>
 
-                    <DialogFooter className="flex gap-2">
-                        <Button variant="outline" onClick={() => setDeleteOpen(false)}>
+                    <DialogFooter className="flex flex-col sm:flex-row gap-2">
+                        <Button variant="outline" onClick={() => setDeleteOpen(false)} className="w-full sm:w-auto">
                             Cancel
                         </Button>
-                        <Button variant="destructive" onClick={submitDelete}>
+                        <Button variant="destructive" onClick={submitDelete} className="w-full sm:w-auto">
                             Delete
                         </Button>
                     </DialogFooter>

@@ -153,24 +153,28 @@ export default function StationIndex() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 md:p-6">
                 <div className="flex items-center gap-3">
-                    <h2 className="text-xl font-semibold">Station Management</h2>
+                    <h2 className="text-lg md:text-xl font-semibold">Station Management</h2>
                 </div>
 
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
-                    {/* Input and Select Filters - 2 columns on mobile, row on desktop */}
-                    <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3">
+                    {/* Search Input - full width on mobile */}
+                    <div className="w-full">
                         <Input
                             type="search"
                             placeholder="Search site, station #, campaign..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="col-span-2 sm:w-64"
+                            className="w-full"
                         />
+                    </div>
+
+                    {/* Select Filters - stacked on mobile, row on desktop */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <Select value={siteFilter} onValueChange={setSiteFilter}>
-                            <SelectTrigger className="sm:w-48">
+                            <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Site" />
                             </SelectTrigger>
                             <SelectContent>
@@ -182,7 +186,7 @@ export default function StationIndex() {
                         </Select>
 
                         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                            <SelectTrigger className="sm:w-48">
+                            <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Campaign" />
                             </SelectTrigger>
                             <SelectContent>
@@ -194,7 +198,7 @@ export default function StationIndex() {
                         </Select>
 
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="sm:w-48">
+                            <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -214,21 +218,22 @@ export default function StationIndex() {
                                     setCampaignFilter("all");
                                     setStatusFilter("all");
                                 }}
+                                className="w-full sm:w-auto"
                             >
                                 Clear Filters
                             </Button>
                         )}
                     </div>
 
-                    {/* Action Buttons - stay in a row */}
-                    <div className="flex flex-wrap gap-3 justify-end">
-                        <Button onClick={() => router.get('/stations/create')}>
+                    {/* Action Buttons - stacked on mobile, row on desktop */}
+                    <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
+                        <Button onClick={() => router.get('/stations/create')} className="w-full sm:w-auto">
                             Add Station
                         </Button>
-                        <Button onClick={() => router.get('/sites')}>
+                        <Button onClick={() => router.get('/sites')} className="w-full sm:w-auto">
                             Site Management
                         </Button>
-                        <Button onClick={() => router.get('/campaigns')}>
+                        <Button onClick={() => router.get('/campaigns')} className="w-full sm:w-auto">
                             Campaign Management
                         </Button>
                     </div>
@@ -240,31 +245,32 @@ export default function StationIndex() {
                     {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && ' (filtered)'}
                 </div>
 
-                <div className="shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto ">
+                {/* Desktop Table View - hidden on mobile */}
+                <div className="hidden md:block shadow rounded-md overflow-hidden">
+                    <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    <TableHead>ID</TableHead>
+                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>Site</TableHead>
                                     <TableHead>Station #</TableHead>
                                     <TableHead>Campaign</TableHead>
                                     <TableHead>Status</TableHead>
-                                    <TableHead>Monitor</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Monitor</TableHead>
                                     <TableHead>PC Spec</TableHead>
-                                    <TableHead>PC Issue</TableHead>
+                                    <TableHead className="hidden xl:table-cell">PC Issue</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {stations.data.map((station) => (
                                     <TableRow key={station.id}>
-                                        <TableCell>{station.id}</TableCell>
+                                        <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
                                         <TableCell>{station.site}</TableCell>
                                         <TableCell>{station.station_number}</TableCell>
                                         <TableCell>{station.campaign}</TableCell>
                                         <TableCell>{station.status}</TableCell>
-                                        <TableCell>
+                                        <TableCell className="hidden xl:table-cell">
                                             <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
                                                 {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
                                             </span>
@@ -288,7 +294,7 @@ export default function StationIndex() {
                                                 )}
                                             </div>
                                         </TableCell>
-                                        <TableCell>
+                                        <TableCell className="hidden xl:table-cell">
                                             {station.pc_spec_details ? (
                                                 <div className="flex items-center gap-2">
                                                     {station.pc_spec_details.issue ? (
@@ -360,6 +366,136 @@ export default function StationIndex() {
                         </Table>
                     </div>
                 </div>
+
+                {/* Mobile Card View - visible only on mobile */}
+                <div className="md:hidden space-y-4">
+                    {stations.data.map((station) => (
+                        <div key={station.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                            {/* Header with Station Number and Status */}
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="text-xs text-muted-foreground">Station</div>
+                                    <div className="font-semibold text-lg">{station.station_number}</div>
+                                </div>
+                                <div className="text-right">
+                                    <div className="text-xs text-muted-foreground">Status</div>
+                                    <div className="font-medium">{station.status}</div>
+                                </div>
+                            </div>
+
+                            {/* Station Details */}
+                            <div className="space-y-2 text-sm">
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Site:</span>
+                                    <span className="font-medium">{station.site}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Campaign:</span>
+                                    <span className="font-medium">{station.campaign}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-muted-foreground">Monitor:</span>
+                                    <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : 'font-medium'}>
+                                        {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
+                                    </span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-muted-foreground">PC Spec:</span>
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium">{station.pc_spec}</span>
+                                        {station.pc_spec_details && (
+                                            <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setSelectedPcSpec(station.pc_spec_details || null);
+                                                    setPcSpecDialogOpen(true);
+                                                }}
+                                                className="h-7 w-7 p-0"
+                                                title="View PC Spec Details"
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* PC Issue Section */}
+                                {station.pc_spec_details && (
+                                    <div className="pt-2 border-t">
+                                        <div className="flex justify-between items-start gap-2">
+                                            <span className="text-muted-foreground">PC Issue:</span>
+                                            <div className="flex items-center gap-2 flex-1 justify-end">
+                                                {station.pc_spec_details.issue ? (
+                                                    <>
+                                                        <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                                                        <span className="text-xs text-red-600 font-medium truncate max-w-[120px]" title={station.pc_spec_details.issue}>
+                                                            {station.pc_spec_details.issue}
+                                                        </span>
+                                                    </>
+                                                ) : (
+                                                    <span className="text-xs text-gray-400">No issue</span>
+                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => handleOpenIssueDialog(station.pc_spec_details)}
+                                                    className="h-7 px-2 text-xs"
+                                                >
+                                                    {station.pc_spec_details.issue ? 'Edit' : 'Add'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-2 pt-2 border-t">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => router.get(`/stations/${station.id}/edit`)}
+                                    disabled={loading}
+                                    className="flex-1"
+                                >
+                                    Edit
+                                </Button>
+                                <AlertDialog>
+                                    <AlertDialogTrigger asChild>
+                                        <Button variant="destructive" size="sm" disabled={loading} className="flex-1">
+                                            Delete
+                                        </Button>
+                                    </AlertDialogTrigger>
+                                    <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
+                                        <AlertDialogHeader>
+                                            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                            <AlertDialogDescription>
+                                                Are you sure you want to delete station{" "}
+                                                <strong>"{station.station_number}"</strong>?
+                                                This action cannot be undone.
+                                            </AlertDialogDescription>
+                                        </AlertDialogHeader>
+                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                            <AlertDialogAction
+                                                onClick={() => handleDelete(station.id)}
+                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                            >
+                                                Yes, Delete
+                                            </AlertDialogAction>
+                                        </AlertDialogFooter>
+                                    </AlertDialogContent>
+                                </AlertDialog>
+                            </div>
+                        </div>
+                    ))}
+                    {stations.data.length === 0 && !loading && (
+                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                            No stations found
+                        </div>
+                    )}
+                </div>
                 <div className="flex justify-center mt-4">
                     {stations.links && stations.links.length > 0 && (
                         <PaginationNav links={stations.links} />
@@ -368,7 +504,7 @@ export default function StationIndex() {
 
                 {/* PC Spec Details Dialog */}
                 <Dialog open={pcSpecDialogOpen} onOpenChange={setPcSpecDialogOpen}>
-                    <DialogContent className="max-w-2xl">
+                    <DialogContent className="max-w-[90vw] sm:max-w-2xl">
                         <DialogHeader>
                             <DialogTitle>PC Specification Details</DialogTitle>
                             <DialogDescription>
@@ -377,24 +513,24 @@ export default function StationIndex() {
                                         <div className="space-y-3">
                                             <div>
                                                 <div className="font-semibold text-foreground mb-1">Model:</div>
-                                                <div className="text-foreground pl-2">{selectedPcSpec.model}</div>
+                                                <div className="text-foreground pl-2 break-words">{selectedPcSpec.model}</div>
                                             </div>
 
                                             <div>
                                                 <div className="font-semibold text-foreground mb-1">Processor:</div>
-                                                <div className="text-foreground pl-2">{selectedPcSpec.processor}</div>
+                                                <div className="text-foreground pl-2 break-words">{selectedPcSpec.processor}</div>
                                             </div>
 
                                             <div>
                                                 <div className="font-semibold text-foreground mb-1">RAM ({selectedPcSpec.ram_ddr}):</div>
-                                                <div className="text-foreground pl-2">
+                                                <div className="text-foreground pl-2 break-words">
                                                     {selectedPcSpec.ram} ({selectedPcSpec.ram_capacities})
                                                 </div>
                                             </div>
 
                                             <div>
                                                 <div className="font-semibold text-foreground mb-1">Disk ({selectedPcSpec.disk_type}):</div>
-                                                <div className="text-foreground pl-2">
+                                                <div className="text-foreground pl-2 break-words">
                                                     {selectedPcSpec.disk} ({selectedPcSpec.disk_capacities})
                                                 </div>
                                             </div>
@@ -410,12 +546,12 @@ export default function StationIndex() {
 
                 {/* Issue Management Dialog */}
                 <Dialog open={issueDialogOpen} onOpenChange={setIssueDialogOpen}>
-                    <DialogContent className="max-w-md">
+                    <DialogContent className="max-w-[90vw] sm:max-w-md">
                         <DialogHeader>
                             <DialogTitle>Manage PC Spec Issue</DialogTitle>
                             <DialogDescription>
                                 {selectedPcSpec && (
-                                    <span className="text-sm">
+                                    <span className="text-sm break-words">
                                         {selectedPcSpec.model}
                                     </span>
                                 )}
@@ -437,11 +573,11 @@ export default function StationIndex() {
                                 </p>
                             </div>
                         </div>
-                        <div className="flex justify-end gap-2">
-                            <Button variant="outline" onClick={() => setIssueDialogOpen(false)}>
+                        <div className="flex flex-col sm:flex-row justify-end gap-2">
+                            <Button variant="outline" onClick={() => setIssueDialogOpen(false)} className="w-full sm:w-auto">
                                 Cancel
                             </Button>
-                            <Button onClick={handleSaveIssue}>
+                            <Button onClick={handleSaveIssue} className="w-full sm:w-auto">
                                 Save Issue
                             </Button>
                         </div>

@@ -138,16 +138,16 @@ export default function StationCreate() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="max-w-xxl mx-auto mt-4">
-                <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xxl font-semibold">Add Station</h2>
+            <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
+                    <h2 className="text-xl md:text-2xl font-semibold">Add Station</h2>
                     <div className="flex items-center space-x-2">
                         <Checkbox
                             id="bulk-mode"
                             checked={bulkMode}
                             onCheckedChange={(checked) => setBulkMode(checked as boolean)}
                         />
-                        <Label htmlFor="bulk-mode" className="cursor-pointer">
+                        <Label htmlFor="bulk-mode" className="cursor-pointer text-sm sm:text-base">
                             Create Multiple Stations
                         </Label>
                     </div>
@@ -192,7 +192,7 @@ export default function StationCreate() {
                                         required
                                     />
                                     <p className="text-xs text-gray-500 mt-1">
-                                        💡 Supports: <code className="bg-gray-100 px-1 rounded">PC-1A</code>, <code className="bg-gray-100 px-1 rounded">ST-001</code>, <code className="bg-gray-100 px-1 rounded">WS-10B</code>, etc.
+                                        💡 Supports: <code className="bg-gray-100 px-1 rounded text-xs">PC-1A</code>, <code className="bg-gray-100 px-1 rounded text-xs">ST-001</code>, <code className="bg-gray-100 px-1 rounded text-xs">WS-10B</code>, etc.
                                     </p>
                                     {errors.starting_number && <p className="text-red-600 text-sm mt-1">{errors.starting_number}</p>}
                                 </div>
@@ -224,9 +224,9 @@ export default function StationCreate() {
                                     <div className="mt-2 p-3 bg-amber-50 border border-amber-200 rounded-md">
                                         <p className="text-xs text-amber-900 font-medium mb-1">📋 Increment Examples:</p>
                                         <ul className="text-xs text-amber-800 space-y-0.5">
-                                            <li><strong>Number Only:</strong> Use when stations are in same row/section (PC-1A → PC-2A → PC-3A)</li>
-                                            <li><strong>Letter Only:</strong> Use when stations share same number (PC-1A → PC-1B → PC-1C)</li>
-                                            <li><strong>Both:</strong> Use for diagonal or combined patterns (PC-1A → PC-2B → PC-3C)</li>
+                                            <li className="break-words"><strong>Number Only:</strong> Use when stations are in same row/section (PC-1A → PC-2A → PC-3A)</li>
+                                            <li className="break-words"><strong>Letter Only:</strong> Use when stations share same number (PC-1A → PC-1B → PC-1C)</li>
+                                            <li className="break-words"><strong>Both:</strong> Use for diagonal or combined patterns (PC-1A → PC-2B → PC-3C)</li>
                                         </ul>
                                     </div>
                                     {errors.increment_type && <p className="text-red-600 text-sm mt-1">{errors.increment_type}</p>}
@@ -279,10 +279,10 @@ export default function StationCreate() {
                     </div>
 
                     {bulkMode && (
-                        <div className="bg-blue-50 border border-blue-200 rounded p-4">
-                            <p className="text-sm text-blue-800">
+                        <div className="bg-blue-50 border border-blue-200 rounded p-3 sm:p-4">
+                            <p className="text-xs sm:text-sm text-blue-800 break-words">
                                 <strong>Preview:</strong> This will create {data.quantity || 0} station(s) with numbers:
-                                <span className="font-mono ml-2">
+                                <span className="font-mono ml-2 block sm:inline mt-1 sm:mt-0">
                                     {generatePreview() || "[Enter starting number]"}
                                 </span>
                             </p>
@@ -290,8 +290,8 @@ export default function StationCreate() {
                     )}
 
                     <div>
-                        <div className="flex items-center justify-between mb-2">
-                            <label className="block font-medium">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-2">
+                            <label className="block font-medium text-sm sm:text-base">
                                 Select PC Spec{bulkMode ? 's' : ''} (Optional)
                                 {bulkMode && <span className="text-sm text-gray-500 ml-2">({data.pc_spec_ids.length} selected)</span>}
                             </label>
@@ -307,7 +307,7 @@ export default function StationCreate() {
                                             setData("pc_spec_id", "");
                                         }
                                     }}
-                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50"
+                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
                                 >
                                     ✕ Clear Selection{bulkMode ? 's' : ''}
                                 </Button>
@@ -315,24 +315,24 @@ export default function StationCreate() {
                         </div>
                         {((bulkMode && data.pc_spec_ids.length === 0) || (!bulkMode && !data.pc_spec_id)) && showNoSpecWarning && (
                             <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3 mb-3 transition-opacity duration-300">
-                                <p className="text-sm text-yellow-800">
+                                <p className="text-xs sm:text-sm text-yellow-800 break-words">
                                     ⚠️ No PC spec{bulkMode ? 's' : ''} selected - Station{bulkMode ? 's' : ''} will be saved without PC specifications
                                 </p>
                             </div>
                         )}
                         {((bulkMode && data.pc_spec_ids.length > 0) || (!bulkMode && data.pc_spec_id)) && showSpecSelectedInfo && (
                             <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-3 transition-opacity duration-300">
-                                <p className="text-sm text-blue-800">
+                                <p className="text-xs sm:text-sm text-blue-800 break-words">
                                     ✓ {bulkMode ? `${data.pc_spec_ids.length} PC spec(s)` : 'PC spec'} selected
                                     {bulkMode && data.pc_spec_ids.length < parseInt(data.quantity) && (
-                                        <span className="ml-2 text-amber-700">
+                                        <span className="ml-2 text-amber-700 block sm:inline mt-1 sm:mt-0">
                                             (Note: {parseInt(data.quantity) - data.pc_spec_ids.length} station(s) will have no PC spec)
                                         </span>
                                     )}
                                 </p>
                             </div>
                         )}
-                        <p className="text-xs text-gray-500 mb-2">
+                        <p className="text-xs text-gray-500 mb-2 break-words">
                             💡 {bulkMode
                                 ? `Select up to ${data.quantity} PC specs (one per station). You can select fewer - remaining stations will have no PC spec.`
                                 : 'Leave blank to create stations without PC specs (useful for reserving station numbers or "No PC" status)'}
@@ -363,11 +363,11 @@ export default function StationCreate() {
                         {errors.pc_spec_id && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_id}</p>}
                         {errors.pc_spec_ids && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_ids}</p>}
                     </div>
-                    <div className="flex gap-2 mt-4 mb-4">
-                        <Button type="submit" disabled={processing}>
+                    <div className="flex flex-col sm:flex-row gap-2 mt-4 mb-4">
+                        <Button type="submit" disabled={processing} className="w-full sm:w-auto">
                             {processing ? "Saving..." : bulkMode ? `Create ${data.quantity} Station(s)` : "Save"}
                         </Button>
-                        <Button variant="outline" type="button" onClick={() => router.get("/stations")}>Cancel</Button>
+                        <Button variant="outline" type="button" onClick={() => router.get("/stations")} className="w-full sm:w-auto">Cancel</Button>
                     </div>
                 </form>
             </div>
