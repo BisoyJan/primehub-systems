@@ -27,7 +27,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
-import { Eye, AlertTriangle } from "lucide-react";
+import { Eye, AlertTriangle, Plus } from "lucide-react";
+import { transferPage } from '@/routes/pc-transfers';
 
 const breadcrumbs = [{ title: "Stations", href: "/stations" }];
 
@@ -41,6 +42,7 @@ interface Station {
     pc_spec: string;
     pc_spec_details?: {
         id: number;
+        pc_number?: string | null;
         model: string;
         processor: string;
         ram: string;
@@ -277,19 +279,39 @@ export default function StationIndex() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <span>{station.pc_spec}</span>
-                                                {station.pc_spec_details && (
+                                                {station.pc_spec_details ? (
+                                                    <>
+                                                        <div>
+                                                            <span>{station.pc_spec}</span>
+                                                            {station.pc_spec_details.pc_number && (
+                                                                <div className="text-xs text-blue-600 mt-0.5">
+                                                                    PC: {station.pc_spec_details.pc_number}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => {
+                                                                setSelectedPcSpec(station.pc_spec_details || null);
+                                                                setPcSpecDialogOpen(true);
+                                                            }}
+                                                            className="h-7 w-7 p-0"
+                                                            title="View PC Spec Details"
+                                                        >
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </>
+                                                ) : (
                                                     <Button
-                                                        variant="ghost"
+                                                        variant="outline"
                                                         size="sm"
-                                                        onClick={() => {
-                                                            setSelectedPcSpec(station.pc_spec_details || null);
-                                                            setPcSpecDialogOpen(true);
-                                                        }}
-                                                        className="h-7 w-7 p-0"
-                                                        title="View PC Spec Details"
+                                                        onClick={() => router.visit(transferPage(station.id).url)}
+                                                        className="gap-2"
+                                                        title="Assign PC to this station"
                                                     >
-                                                        <Eye className="h-4 w-4" />
+                                                        <Plus className="h-4 w-4" />
+                                                        Assign PC
                                                     </Button>
                                                 )}
                                             </div>
@@ -402,19 +424,39 @@ export default function StationIndex() {
                                 <div className="flex justify-between items-center">
                                     <span className="text-muted-foreground">PC Spec:</span>
                                     <div className="flex items-center gap-2">
-                                        <span className="font-medium">{station.pc_spec}</span>
-                                        {station.pc_spec_details && (
+                                        {station.pc_spec_details ? (
+                                            <>
+                                                <div className="text-right">
+                                                    <span className="font-medium">{station.pc_spec}</span>
+                                                    {station.pc_spec_details.pc_number && (
+                                                        <div className="text-xs text-blue-600">
+                                                            PC: {station.pc_spec_details.pc_number}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setSelectedPcSpec(station.pc_spec_details || null);
+                                                        setPcSpecDialogOpen(true);
+                                                    }}
+                                                    className="h-7 w-7 p-0"
+                                                    title="View PC Spec Details"
+                                                >
+                                                    <Eye className="h-4 w-4" />
+                                                </Button>
+                                            </>
+                                        ) : (
                                             <Button
-                                                variant="ghost"
+                                                variant="outline"
                                                 size="sm"
-                                                onClick={() => {
-                                                    setSelectedPcSpec(station.pc_spec_details || null);
-                                                    setPcSpecDialogOpen(true);
-                                                }}
-                                                className="h-7 w-7 p-0"
-                                                title="View PC Spec Details"
+                                                onClick={() => router.visit(transferPage(station.id).url)}
+                                                className="gap-2"
+                                                title="Assign PC to this station"
                                             >
-                                                <Eye className="h-4 w-4" />
+                                                <Plus className="h-4 w-4" />
+                                                Assign PC
                                             </Button>
                                         )}
                                     </div>
@@ -511,6 +553,13 @@ export default function StationIndex() {
                                 {selectedPcSpec ? (
                                     <div className="space-y-4 text-left mt-4">
                                         <div className="space-y-3">
+                                            {selectedPcSpec.pc_number && (
+                                                <div>
+                                                    <div className="font-semibold text-foreground mb-1">PC Number:</div>
+                                                    <div className="text-blue-600 font-medium pl-2 break-words">{selectedPcSpec.pc_number}</div>
+                                                </div>
+                                            )}
+
                                             <div>
                                                 <div className="font-semibold text-foreground mb-1">Model:</div>
                                                 <div className="text-foreground pl-2 break-words">{selectedPcSpec.model}</div>

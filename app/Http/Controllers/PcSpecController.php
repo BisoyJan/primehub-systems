@@ -23,6 +23,7 @@ class PcSpecController extends Controller
             ->paginate(10)
             ->through(fn($pc) => [
                 'id'              => $pc->id,
+                'pc_number'       => $pc->pc_number,
                 'manufacturer'    => $pc->manufacturer,
                 'model'           => $pc->model,
                 'memory_type'     => $pc->memory_type,
@@ -249,6 +250,7 @@ class PcSpecController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
+            'pc_number'                   => 'nullable|string|max:100|unique:pc_specs,pc_number',
             'manufacturer'                => 'required|string|max:255',
             'model'                       => 'required|string|max:255',
             'form_factor'                 => 'required|string|max:50',
@@ -374,6 +376,7 @@ class PcSpecController extends Controller
         return Inertia::render('Computer/PcSpecs/Edit', [
             'pcspec' => [
                 'id'                  => $pcspec->id,
+                'pc_number'           => $pcspec->pc_number,
                 'manufacturer'        => $pcspec->manufacturer,
                 'model'               => $pcspec->model,
                 'form_factor'         => $pcspec->form_factor,
@@ -420,6 +423,7 @@ class PcSpecController extends Controller
     public function update(Request $request, PcSpec $pcspec)
     {
         $data = $request->validate([
+            'pc_number'                   => 'nullable|string|max:100|unique:pc_specs,pc_number,' . $pcspec->id,
             'manufacturer'                => 'required|string|max:255',
             'model'                       => 'required|string|max:255',
             'form_factor'                 => 'required|string|max:50',

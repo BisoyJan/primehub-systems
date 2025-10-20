@@ -22,7 +22,7 @@ import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, User } from 'lucide-react';
+import { ArrowUpDown, BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, User } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -66,6 +66,11 @@ const stationNavItems: NavItem[] = [
         title: 'Stations',
         href: stationIndex.url(),
         icon: Computer,
+    },
+    {
+        title: 'PC Transfer',
+        href: '/pc-transfers',
+        icon: ArrowUpDown,
     },
 ];
 

@@ -16,6 +16,7 @@ class PcSpecFactory extends Factory
         $memTypes      = ['DDR4', 'DDR5'];
 
         return [
+            'pc_number'           => 'PC-' . date('Y') . '-' . str_pad($this->faker->unique()->numberBetween(1, 999), 3, '0', STR_PAD_LEFT),
             'manufacturer'        => $this->faker->randomElement($manufacturers),
             'model'               => strtoupper($this->faker->bothify('????-####')),
             'form_factor'         => $this->faker->randomElement($forms),
@@ -26,5 +27,15 @@ class PcSpecFactory extends Factory
             'm2_slots'            => $this->faker->numberBetween(1, 3),
             'sata_ports'          => $this->faker->numberBetween(2, 6),
         ];
+    }
+
+    /**
+     * Indicate that the PC spec should not have a PC number.
+     */
+    public function withoutPcNumber(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'pc_number' => null,
+        ]);
     }
 }

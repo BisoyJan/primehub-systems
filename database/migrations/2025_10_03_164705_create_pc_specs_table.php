@@ -11,6 +11,7 @@ return new class extends Migration
         Schema::create('pc_specs', function (Blueprint $table) {
             $table->id();
 
+            $table->string('pc_number')->nullable();
             $table->string('manufacturer');
             $table->string('model');
             $table->string('form_factor');

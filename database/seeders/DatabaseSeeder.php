@@ -16,7 +16,8 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         // Seed unique sites
-        $siteNames = ['PH1-2F', 'PH1-3F', 'PH1-4F', 'PH2', 'PH3'];
+        //$siteNames = ['PH1-2F', 'PH1-3F', 'PH1-4F', 'PH2', 'PH3'];
+        $siteNames = ['PH1', 'PH2', 'PH3'];
         foreach ($siteNames as $name) {
             Site::firstOrCreate(['name' => $name]);
         }

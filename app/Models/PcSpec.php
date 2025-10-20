@@ -9,6 +9,7 @@ class PcSpec extends Model
 {
     use HasFactory;
     protected $fillable = [
+        'pc_number',
         'manufacturer',
         'model',
         'chipset',
@@ -69,6 +70,7 @@ class PcSpec extends Model
 
         return [
             'id' => $this->id,
+            'pc_number' => $this->pc_number,
             'model' => $this->model,
             'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
             'ram_gb' => $this->ramSpecs->sum('capacity_gb'),
@@ -97,6 +99,7 @@ class PcSpec extends Model
     {
         return [
             'id' => $this->id,
+            'pc_number' => $this->pc_number,
             'model' => $this->model,
             'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
             'ram_gb' => $this->ramSpecs->map(fn($ram) => $ram->capacity_gb)->implode(' + '),

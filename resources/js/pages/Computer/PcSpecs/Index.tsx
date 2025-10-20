@@ -80,6 +80,7 @@ interface ProcessorSpec {
 }
 interface PcSpec {
     id: number;
+    pc_number?: string | null;
     manufacturer: string;
     model: string;
     chipset: string;
@@ -191,6 +192,7 @@ export default function Index() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                    <TableHead>PC Number</TableHead>
                                     <TableHead>Manufacturer</TableHead>
                                     <TableHead>Model</TableHead>
                                     <TableHead className="hidden xl:table-cell">Processor</TableHead>
@@ -222,6 +224,9 @@ export default function Index() {
                                     return (
                                         <TableRow key={pc.id}>
                                             <TableCell className="hidden lg:table-cell">{pc.id}</TableCell>
+                                            <TableCell className="font-medium">
+                                                {pc.pc_number || <span className="text-gray-400">—</span>}
+                                            </TableCell>
                                             <TableCell>{pc.manufacturer}</TableCell>
                                             <TableCell>{pc.model}</TableCell>
                                             <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
@@ -430,7 +435,7 @@ export default function Index() {
 
                             <TableFooter>
                                 <TableRow>
-                                    <TableCell colSpan={8} className="text-center font-medium">
+                                    <TableCell colSpan={9} className="text-center font-medium">
                                         PC Specs List
                                     </TableCell>
                                 </TableRow>
@@ -456,6 +461,19 @@ export default function Index() {
 
                         return (
                             <div key={pc.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="text-xs text-muted-foreground">PC Number</div>
+                                        <div className="font-bold text-blue-600">
+                                            {pc.pc_number || <span className="text-gray-400">Not assigned</span>}
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xs text-muted-foreground">ID</div>
+                                        <div className="font-medium text-sm">#{pc.id}</div>
+                                    </div>
+                                </div>
+
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="text-xs text-muted-foreground">Manufacturer</div>

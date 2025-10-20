@@ -54,6 +54,7 @@ interface RamOption extends Option {
 
 interface PcSpec {
     id: number;
+    pc_number?: string | null;
     manufacturer: string;
     model: string;
     chipset: string;
@@ -113,6 +114,7 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
     })();
 
     const { data, setData, put, errors } = useForm({
+        pc_number: pcspec.pc_number ?? '',
         manufacturer: pcspec.manufacturer ?? '',
         model: pcspec.model ?? '',
         form_factor: pcspec.form_factor ?? '',
@@ -263,6 +265,18 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Core Info</h2>
                         <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <Label htmlFor="pc_number">PC Number (Optional)</Label>
+                                <Input
+                                    id="pc_number"
+                                    name="pc_number"
+                                    value={data.pc_number}
+                                    onChange={(e) => setData('pc_number', e.target.value)}
+                                    placeholder="e.g., PC-2025-001"
+                                />
+                                {errors.pc_number && <p className="text-red-600">{errors.pc_number}</p>}
+                            </div>
+
                             <div>
                                 <Label htmlFor="manufacturer">Manufacturer</Label>
                                 <Input id="manufacturer" name="manufacturer" value={data.manufacturer} onChange={(e) => setData('manufacturer', e.target.value)} />

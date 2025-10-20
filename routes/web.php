@@ -9,6 +9,7 @@ use App\Http\Controllers\StationController;
 use App\Http\Controllers\StockController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\AccountController;
+use App\Http\Controllers\PcTransferController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -44,6 +45,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('stocks.adjust');
     Route::resource('accounts', AccountController::class)
         ->except(['show']);
+
+    // PC Transfer routes
+    Route::get('pc-transfers', [PcTransferController::class, 'index'])
+        ->name('pc-transfers.index');
+    // Dedicated transfer page (table-based PC selector) - station is optional for bulk mode
+    Route::get('pc-transfers/transfer/{station?}', [PcTransferController::class, 'transferPage'])
+        ->name('pc-transfers.transferPage');
+    Route::post('pc-transfers', [PcTransferController::class, 'transfer'])
+        ->name('pc-transfers.transfer');
+    Route::post('pc-transfers/bulk', [PcTransferController::class, 'bulkTransfer'])
+        ->name('pc-transfers.bulk');
+    Route::delete('pc-transfers/remove', [PcTransferController::class, 'remove'])
+        ->name('pc-transfers.remove');
+    Route::get('pc-transfers/history', [PcTransferController::class, 'history'])
+        ->name('pc-transfers.history');
 });
 
 require __DIR__ . '/settings.php';

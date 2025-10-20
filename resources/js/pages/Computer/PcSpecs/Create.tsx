@@ -64,6 +64,7 @@ export default function Create() {
     const { ramOptions, diskOptions, processorOptions, flash } = usePage<PageProps>().props
 
     const form = useForm({
+        pc_number: '',
         manufacturer: '',
         model: '',
         form_factor: '',
@@ -327,6 +328,18 @@ export default function Create() {
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Core Info</h2>
                         <div className="grid grid-cols-2 gap-6">
+                            <div>
+                                <Label htmlFor="pc_number">PC Number (Optional)</Label>
+                                <Input
+                                    id="pc_number"
+                                    name="pc_number"
+                                    value={form.data.pc_number}
+                                    onChange={(e) => form.setData('pc_number', e.target.value)}
+                                    placeholder="e.g., PC-2025-001"
+                                />
+                                {form.errors.pc_number && <p className="text-red-600">{form.errors.pc_number}</p>}
+                            </div>
+
                             <div>
                                 <Label htmlFor="manufacturer">Manufacturer</Label>
                                 <Input id="manufacturer" name="manufacturer" value={form.data.manufacturer} onChange={(e) => form.setData('manufacturer', e.target.value)} />
