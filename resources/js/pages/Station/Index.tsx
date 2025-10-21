@@ -21,13 +21,14 @@ import {
     AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
-import { Eye, AlertTriangle, Plus } from "lucide-react";
+import { Eye, AlertTriangle, Plus, CheckSquare } from "lucide-react";
 import { transferPage } from '@/routes/pc-transfers';
 
 const breadcrumbs = [{ title: "Stations", href: "/stations" }];
@@ -89,6 +90,7 @@ export default function StationIndex() {
     const [selectedPcSpec, setSelectedPcSpec] = useState<Station['pc_spec_details'] | null>(null);
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [issueText, setIssueText] = useState("");
+    const [selectedEmptyStations, setSelectedEmptyStations] = useState<number[]>([]);
 
     useEffect(() => {
         if (flash?.message) {
@@ -152,6 +154,33 @@ export default function StationIndex() {
             },
         });
     };
+
+    const toggleStationSelection = (stationId: number, hasPC: boolean) => {
+        if (hasPC) return; // Can't select stations that already have PCs
+
+        setSelectedEmptyStations(prev =>
+            prev.includes(stationId)
+                ? prev.filter(id => id !== stationId)
+                : [...prev, stationId]
+        );
+    };
+
+    const handleBulkAssign = () => {
+        if (selectedEmptyStations.length === 0) {
+            toast.error('Please select at least one empty station');
+            return;
+        }
+
+        // Navigate to transfer page with multiple stations
+        const stationIds = selectedEmptyStations.join(',');
+        router.visit(`/pc-transfers/transfer?stations=${stationIds}`);
+    };
+
+    const clearSelection = () => {
+        setSelectedEmptyStations([]);
+    };
+
+    const emptyStationsCount = stations.data.filter(s => !s.pc_spec_details).length;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -228,23 +257,60 @@ export default function StationIndex() {
                     </div>
 
                     {/* Action Buttons - stacked on mobile, row on desktop */}
-                    <div className="flex flex-col sm:flex-row gap-3 sm:justify-end">
-                        <Button onClick={() => router.get('/stations/create')} className="w-full sm:w-auto">
-                            Add Station
-                        </Button>
-                        <Button onClick={() => router.get('/sites')} className="w-full sm:w-auto">
-                            Site Management
-                        </Button>
-                        <Button onClick={() => router.get('/campaigns')} className="w-full sm:w-auto">
-                            Campaign Management
-                        </Button>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:justify-between">
+                        {/* Bulk Selection Controls */}
+                        {selectedEmptyStations.length > 0 && (
+                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                                <span className="text-sm font-medium">
+                                    {selectedEmptyStations.length} empty station{selectedEmptyStations.length > 1 ? 's' : ''} selected
+                                </span>
+                                <div className="flex gap-2 w-full sm:w-auto">
+                                    <Button
+                                        onClick={handleBulkAssign}
+                                        className="flex items-center gap-2 flex-1 sm:flex-initial"
+                                        size="sm"
+                                    >
+                                        <CheckSquare className="h-4 w-4" />
+                                        Assign PCs to Selected
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        onClick={clearSelection}
+                                        size="sm"
+                                        className="flex-1 sm:flex-initial"
+                                    >
+                                        Clear
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Regular Action Buttons */}
+                        <div className="flex flex-col sm:flex-row gap-3 sm:ml-auto">
+                            <Button onClick={() => router.get('/stations/create')} className="w-full sm:w-auto">
+                                Add Station
+                            </Button>
+                            <Button onClick={() => router.get('/sites')} className="w-full sm:w-auto">
+                                Site Management
+                            </Button>
+                            <Button onClick={() => router.get('/campaigns')} className="w-full sm:w-auto">
+                                Campaign Management
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                {/* Results Count */}
-                <div className="text-sm text-muted-foreground mb-2">
-                    Showing {stations.data.length} of {stations.meta.total} station{stations.meta.total !== 1 ? 's' : ''}
-                    {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && ' (filtered)'}
+                {/* Results Count with Empty Stations Info */}
+                <div className="flex justify-between items-center text-sm">
+                    <div className="text-muted-foreground">
+                        Showing {stations.data.length} of {stations.meta.total} station{stations.meta.total !== 1 ? 's' : ''}
+                        {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && ' (filtered)'}
+                    </div>
+                    {emptyStationsCount > 0 && (
+                        <div className="text-orange-600 font-medium">
+                            {emptyStationsCount} station{emptyStationsCount > 1 ? 's' : ''} without PC
+                        </div>
+                    )}
                 </div>
 
                 {/* Desktop Table View - hidden on mobile */}
@@ -253,6 +319,9 @@ export default function StationIndex() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-12">
+                                        {/* Checkbox column for bulk selection */}
+                                    </TableHead>
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>Site</TableHead>
                                     <TableHead>Station #</TableHead>
@@ -265,64 +334,247 @@ export default function StationIndex() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {stations.data.map((station) => (
-                                    <TableRow key={station.id}>
-                                        <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
-                                        <TableCell>{station.site}</TableCell>
-                                        <TableCell>{station.station_number}</TableCell>
-                                        <TableCell>{station.campaign}</TableCell>
-                                        <TableCell>{station.status}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">
-                                            <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
-                                                {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
+                                {stations.data.map((station) => {
+                                    const hasPC = !!station.pc_spec_details;
+                                    const isSelected = selectedEmptyStations.includes(station.id);
+
+                                    return (
+                                        <TableRow
+                                            key={station.id}
+                                            className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+                                        >
+                                            <TableCell>
+                                                {!hasPC && (
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onCheckedChange={() => toggleStationSelection(station.id, hasPC)}
+                                                        aria-label={`Select station ${station.station_number}`}
+                                                    />
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
+                                            <TableCell>{station.site}</TableCell>
+                                            <TableCell>{station.station_number}</TableCell>
+                                            <TableCell>{station.campaign}</TableCell>
+                                            <TableCell>{station.status}</TableCell>
+                                            <TableCell className="hidden xl:table-cell">
+                                                <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
+                                                    {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    {station.pc_spec_details ? (
+                                                        <>
+                                                            <div>
+                                                                <span>{station.pc_spec}</span>
+                                                                {station.pc_spec_details.pc_number && (
+                                                                    <div className="text-xs text-blue-600 mt-0.5">
+                                                                        PC: {station.pc_spec_details.pc_number}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    setSelectedPcSpec(station.pc_spec_details || null);
+                                                                    setPcSpecDialogOpen(true);
+                                                                }}
+                                                                className="h-7 w-7 p-0"
+                                                                title="View PC Spec Details"
+                                                            >
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => router.visit(transferPage(station.id).url)}
+                                                            className="gap-2"
+                                                            title="Assign PC to this station"
+                                                        >
+                                                            <Plus className="h-4 w-4" />
+                                                            Assign PC
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="hidden xl:table-cell">
                                                 {station.pc_spec_details ? (
-                                                    <>
-                                                        <div>
-                                                            <span>{station.pc_spec}</span>
-                                                            {station.pc_spec_details.pc_number && (
-                                                                <div className="text-xs text-blue-600 mt-0.5">
-                                                                    PC: {station.pc_spec_details.pc_number}
-                                                                </div>
-                                                            )}
-                                                        </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {station.pc_spec_details.issue ? (
+                                                            <>
+                                                                <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                                                                <span className="text-xs text-red-600 font-medium truncate max-w-[150px]" title={station.pc_spec_details.issue}>
+                                                                    {station.pc_spec_details.issue}
+                                                                </span>
+                                                            </>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400">No issue</span>
+                                                        )}
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => {
-                                                                setSelectedPcSpec(station.pc_spec_details || null);
-                                                                setPcSpecDialogOpen(true);
-                                                            }}
-                                                            className="h-7 w-7 p-0"
-                                                            title="View PC Spec Details"
+                                                            onClick={() => handleOpenIssueDialog(station.pc_spec_details)}
+                                                            className="h-7 px-2 text-xs"
                                                         >
-                                                            <Eye className="h-4 w-4" />
+                                                            {station.pc_spec_details.issue ? 'Edit' : 'Add'}
                                                         </Button>
-                                                    </>
+                                                    </div>
                                                 ) : (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => router.visit(transferPage(station.id).url)}
-                                                        className="gap-2"
-                                                        title="Assign PC to this station"
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                        Assign PC
-                                                    </Button>
+                                                    <span className="text-xs text-gray-400">—</span>
                                                 )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="hidden xl:table-cell">
-                                            {station.pc_spec_details ? (
+                                            </TableCell>
+                                            <TableCell>
                                                 <div className="flex items-center gap-2">
+                                                    <Button variant="outline" size="sm" onClick={() => router.get(`/stations/${station.id}/edit`)} disabled={loading}>
+                                                        Edit
+                                                    </Button>
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button variant="destructive" size="sm" disabled={loading}>
+                                                                Delete
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Are you sure you want to delete station{" "}
+                                                                    <strong>"{station.station_number}"</strong>?
+                                                                    This action cannot be undone.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter>
+                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction
+                                                                    onClick={() => handleDelete(station.id)}
+                                                                    className="bg-red-600 hover:bg-red-700"
+                                                                >
+                                                                    Yes, Delete
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
+                                {stations.data.length === 0 && !loading && (
+                                    <TableRow>
+                                        <TableCell colSpan={10} className="py-8 text-center text-gray-500">
+                                            No stations found
+                                        </TableCell>
+                                    </TableRow>
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+                </div>
+
+                {/* Mobile Card View - visible only on mobile */}
+                <div className="md:hidden space-y-4">
+                    {stations.data.map((station) => {
+                        const hasPC = !!station.pc_spec_details;
+                        const isSelected = selectedEmptyStations.includes(station.id);
+
+                        return (
+                            <div
+                                key={station.id}
+                                className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500' : ''}`}
+                            >
+                                {/* Header with Checkbox, Station Number and Status */}
+                                <div className="flex justify-between items-start">
+                                    <div className="flex items-start gap-3">
+                                        {!hasPC && (
+                                            <Checkbox
+                                                checked={isSelected}
+                                                onCheckedChange={() => toggleStationSelection(station.id, hasPC)}
+                                                aria-label={`Select station ${station.station_number}`}
+                                                className="mt-1"
+                                            />
+                                        )}
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">Station</div>
+                                            <div className="font-semibold text-lg">{station.station_number}</div>
+                                        </div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-xs text-muted-foreground">Status</div>
+                                        <div className="font-medium">{station.status}</div>
+                                    </div>
+                                </div>
+
+                                {/* Station Details */}
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Site:</span>
+                                        <span className="font-medium">{station.site}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Campaign:</span>
+                                        <span className="font-medium">{station.campaign}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Monitor:</span>
+                                        <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : 'font-medium'}>
+                                            {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
+                                        </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">PC Spec:</span>
+                                        <div className="flex items-center gap-2">
+                                            {station.pc_spec_details ? (
+                                                <>
+                                                    <div className="text-right">
+                                                        <span className="font-medium">{station.pc_spec}</span>
+                                                        {station.pc_spec_details.pc_number && (
+                                                            <div className="text-xs text-blue-600">
+                                                                PC: {station.pc_spec_details.pc_number}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedPcSpec(station.pc_spec_details || null);
+                                                            setPcSpecDialogOpen(true);
+                                                        }}
+                                                        className="h-7 w-7 p-0"
+                                                        title="View PC Spec Details"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => router.visit(transferPage(station.id).url)}
+                                                    className="gap-2"
+                                                    title="Assign PC to this station"
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                    Assign PC
+                                                </Button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* PC Issue Section */}
+                                    {station.pc_spec_details && (
+                                        <div className="pt-2 border-t">
+                                            <div className="flex justify-between items-start gap-2">
+                                                <span className="text-muted-foreground">PC Issue:</span>
+                                                <div className="flex items-center gap-2 flex-1 justify-end">
                                                     {station.pc_spec_details.issue ? (
                                                         <>
                                                             <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                                                            <span className="text-xs text-red-600 font-medium truncate max-w-[150px]" title={station.pc_spec_details.issue}>
+                                                            <span className="text-xs text-red-600 font-medium truncate max-w-[120px]" title={station.pc_spec_details.issue}>
                                                                 {station.pc_spec_details.issue}
                                                             </span>
                                                         </>
@@ -338,200 +590,52 @@ export default function StationIndex() {
                                                         {station.pc_spec_details.issue ? 'Edit' : 'Add'}
                                                     </Button>
                                                 </div>
-                                            ) : (
-                                                <span className="text-xs text-gray-400">—</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => router.get(`/stations/${station.id}/edit`)} disabled={loading}>
-                                                    Edit
-                                                </Button>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button variant="destructive" size="sm" disabled={loading}>
-                                                            Delete
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Are you sure you want to delete station{" "}
-                                                                <strong>"{station.station_number}"</strong>?
-                                                                This action cannot be undone.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction
-                                                                onClick={() => handleDelete(station.id)}
-                                                                className="bg-red-600 hover:bg-red-700"
-                                                            >
-                                                                Yes, Delete
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {stations.data.length === 0 && !loading && (
-                                    <TableRow>
-                                        <TableCell colSpan={9} className="py-8 text-center text-gray-500">
-                                            No stations found
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
-                </div>
-
-                {/* Mobile Card View - visible only on mobile */}
-                <div className="md:hidden space-y-4">
-                    {stations.data.map((station) => (
-                        <div key={station.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                            {/* Header with Station Number and Status */}
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="text-xs text-muted-foreground">Station</div>
-                                    <div className="font-semibold text-lg">{station.station_number}</div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-xs text-muted-foreground">Status</div>
-                                    <div className="font-medium">{station.status}</div>
-                                </div>
-                            </div>
-
-                            {/* Station Details */}
-                            <div className="space-y-2 text-sm">
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Site:</span>
-                                    <span className="font-medium">{station.site}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Campaign:</span>
-                                    <span className="font-medium">{station.campaign}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Monitor:</span>
-                                    <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : 'font-medium'}>
-                                        {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
-                                    </span>
-                                </div>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-muted-foreground">PC Spec:</span>
-                                    <div className="flex items-center gap-2">
-                                        {station.pc_spec_details ? (
-                                            <>
-                                                <div className="text-right">
-                                                    <span className="font-medium">{station.pc_spec}</span>
-                                                    {station.pc_spec_details.pc_number && (
-                                                        <div className="text-xs text-blue-600">
-                                                            PC: {station.pc_spec_details.pc_number}
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        setSelectedPcSpec(station.pc_spec_details || null);
-                                                        setPcSpecDialogOpen(true);
-                                                    }}
-                                                    className="h-7 w-7 p-0"
-                                                    title="View PC Spec Details"
-                                                >
-                                                    <Eye className="h-4 w-4" />
-                                                </Button>
-                                            </>
-                                        ) : (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => router.visit(transferPage(station.id).url)}
-                                                className="gap-2"
-                                                title="Assign PC to this station"
-                                            >
-                                                <Plus className="h-4 w-4" />
-                                                Assign PC
-                                            </Button>
-                                        )}
-                                    </div>
-                                </div>
-
-                                {/* PC Issue Section */}
-                                {station.pc_spec_details && (
-                                    <div className="pt-2 border-t">
-                                        <div className="flex justify-between items-start gap-2">
-                                            <span className="text-muted-foreground">PC Issue:</span>
-                                            <div className="flex items-center gap-2 flex-1 justify-end">
-                                                {station.pc_spec_details.issue ? (
-                                                    <>
-                                                        <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                                                        <span className="text-xs text-red-600 font-medium truncate max-w-[120px]" title={station.pc_spec_details.issue}>
-                                                            {station.pc_spec_details.issue}
-                                                        </span>
-                                                    </>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">No issue</span>
-                                                )}
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleOpenIssueDialog(station.pc_spec_details)}
-                                                    className="h-7 px-2 text-xs"
-                                                >
-                                                    {station.pc_spec_details.issue ? 'Edit' : 'Add'}
-                                                </Button>
                                             </div>
                                         </div>
-                                    </div>
-                                )}
-                            </div>
+                                    )}
+                                </div>
 
-                            {/* Action Buttons */}
-                            <div className="flex gap-2 pt-2 border-t">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => router.get(`/stations/${station.id}/edit`)}
-                                    disabled={loading}
-                                    className="flex-1"
-                                >
-                                    Edit
-                                </Button>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button variant="destructive" size="sm" disabled={loading} className="flex-1">
-                                            Delete
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Are you sure you want to delete station{" "}
-                                                <strong>"{station.station_number}"</strong>?
-                                                This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={() => handleDelete(station.id)}
-                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                            >
-                                                Yes, Delete
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                                {/* Action Buttons */}
+                                <div className="flex gap-2 pt-2 border-t">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => router.get(`/stations/${station.id}/edit`)}
+                                        disabled={loading}
+                                        className="flex-1"
+                                    >
+                                        Edit
+                                    </Button>
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button variant="destructive" size="sm" disabled={loading} className="flex-1">
+                                                Delete
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Are you sure you want to delete station{" "}
+                                                    <strong>"{station.station_number}"</strong>?
+                                                    This action cannot be undone.
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                                <AlertDialogAction
+                                                    onClick={() => handleDelete(station.id)}
+                                                    className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                                >
+                                                    Yes, Delete
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
                     {stations.data.length === 0 && !loading && (
                         <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
                             No stations found

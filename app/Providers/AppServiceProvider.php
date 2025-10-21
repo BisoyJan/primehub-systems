@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use Illuminate\Support\Facades\URL;
 use Illuminate\Support\ServiceProvider;
 
 class AppServiceProvider extends ServiceProvider
@@ -19,6 +20,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // Force HTTPS URLs when using ngrok or in production
+        if (config('app.env') !== 'local' || str_contains(config('app.url'), 'https')) {
+            URL::forceScheme('https');
+        }
     }
 }

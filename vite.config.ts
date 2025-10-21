@@ -21,12 +21,12 @@ export default defineConfig({
         jsx: 'automatic',
     },
     // server: {
-    //     host: '192.168.15.180',
+    //     host: '0.0.0.0',
     //     port: 5173,
     //     strictPort: true,
     //     hmr: {
-    //         host: '192.168.15.180',
-    //         protocol: 'ws'
+    //         protocol: 'wss',
+    //         host: 'your-ngrok-domain.ngrok-free.dev',
     //     },
     // }
 

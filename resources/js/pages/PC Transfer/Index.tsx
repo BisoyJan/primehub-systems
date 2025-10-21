@@ -396,7 +396,7 @@ export default function Index() {
                                                                 size="sm"
                                                             >
                                                                 <ArrowRight size={14} className="mr-1" />
-                                                                Transfer PC
+                                                                {station.pc_spec_id ? 'Transfer PC' : 'Assign PC'}
                                                             </Button>
                                                         </Link>
                                                         {station.pc_spec_id && (

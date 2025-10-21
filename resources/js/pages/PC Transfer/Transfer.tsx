@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X } from 'lucide-react';
+import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, HelpCircle, MousePointer, CheckSquare, ListChecks } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,13 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+} from '@/components/ui/dialog';
 
 import { index as pcTransferIndex, bulk as bulkTransferRoute } from '@/routes/pc-transfers';
 
@@ -93,12 +100,16 @@ export default function Transfer(props: Props) {
     const [errors, setErrors] = useState<string[]>([]);
     const [processing, setProcessing] = useState(false);
     const [notes, setNotes] = useState('');
+    const [highlightedStationId, setHighlightedStationId] = useState<number | null>(null);
+    const [helpDialogOpen, setHelpDialogOpen] = useState(false);
 
-    // Auto-select PC from preselected station
+    // Auto-select PC from preselected station OR highlight empty station
     useEffect(() => {
         if (preselectedStationId) {
             const preselectedStation = stations.find(s => s.id === preselectedStationId);
+
             if (preselectedStation?.pc_spec_id) {
+                // Station has a PC - auto-select it for transfer
                 const pcId = preselectedStation.pc_spec_id;
                 const color = generateRandomColor();
 
@@ -114,6 +125,17 @@ export default function Transfer(props: Props) {
                     const pcRow = document.querySelector(`[data-pc-id="${pcId}"]`);
                     if (pcRow) {
                         pcRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            } else if (preselectedStation) {
+                // Station is empty - highlight it permanently until PC is selected
+                setHighlightedStationId(preselectedStationId);
+
+                // Scroll to the station
+                setTimeout(() => {
+                    const stationRow = document.querySelector(`[data-station-id="${preselectedStationId}"]`);
+                    if (stationRow) {
+                        stationRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                 }, 100);
             }
@@ -150,12 +172,55 @@ export default function Transfer(props: Props) {
     function togglePcSelection(pcId: number) {
         const existing = getTransferByPc(pcId);
         if (existing) {
+            // Prevent deselecting PC that was auto-selected from "Transfer PC" button
+            if (preselectedStationId) {
+                const preselectedStation = stations.find(s => s.id === preselectedStationId);
+                if (preselectedStation?.pc_spec_id === pcId) {
+                    toast.error('Cannot deselect this PC. It was auto-selected from the station. Use "Back" to cancel this transfer.');
+                    return;
+                }
+            }
+
             // Remove this transfer
             setTransfers(prev => prev.filter(t => t.pcId !== pcId));
         } else {
-            // Add new transfer (PC selected, waiting for station) with random color
-            const color = generateRandomColor();
-            setTransfers(prev => [...prev, { pcId, stationId: 0, color }]);
+            // Only allow one PC selection at a time when assigning to a preselected station
+            const preselectedStation = preselectedStationId
+                ? stations.find(s => s.id === preselectedStationId)
+                : null;
+
+            // If station is preselected (either empty OR has existing PC for transfer)
+            if (preselectedStation && preselectedStationId) {
+                // Block selection if there's already a PC selected for this preselected station
+                if (transfers.length > 0) {
+                    toast.error('Cannot select multiple PCs for a single station transfer. Deselect the current PC first.');
+                    return;
+                }
+
+                const color = generateRandomColor();
+
+                // Single selection mode - assign directly to preselected station if empty
+                if (!preselectedStation.pc_spec_id) {
+                    setTransfers([{
+                        pcId,
+                        stationId: preselectedStationId,
+                        color
+                    }]);
+                    // Remove station highlight once PC is selected
+                    setHighlightedStationId(null);
+                } else {
+                    // Station has PC - select this PC for transfer (station selection comes later)
+                    setTransfers([{
+                        pcId,
+                        stationId: 0,
+                        color
+                    }]);
+                }
+            } else {
+                // For bulk/multi-select mode, add new transfer
+                const color = generateRandomColor();
+                setTransfers(prev => [...prev, { pcId, stationId: 0, color }]);
+            }
         }
         setErrors([]);
     }
@@ -179,6 +244,12 @@ export default function Transfer(props: Props) {
     }
 
     function deselectStation(stationId: number) {
+        // Prevent deselection of preselected station (from "Assign PC" or "Transfer PC" button)
+        if (preselectedStationId && stationId === preselectedStationId) {
+            toast.error('Cannot deselect the target station. Use "Back" to cancel this assignment.');
+            return;
+        }
+
         // Find transfer with this station and reset its stationId to 0
         setTransfers(prev => prev.map(t =>
             t.stationId === stationId
@@ -189,6 +260,15 @@ export default function Transfer(props: Props) {
     }
 
     function clearTransfer(pcId: number) {
+        // Prevent clearing transfer when PC was auto-selected from "Transfer PC" button
+        if (preselectedStationId) {
+            const preselectedStation = stations.find(s => s.id === preselectedStationId);
+            if (preselectedStation?.pc_spec_id === pcId) {
+                toast.error('Cannot deselect this PC. It was auto-selected from the station. Use "Back" to cancel this transfer.');
+                return;
+            }
+        }
+
         setTransfers(prev => prev.filter(t => t.pcId !== pcId));
         setErrors([]);
     }
@@ -323,19 +403,29 @@ export default function Transfer(props: Props) {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 space-y-6">
                 {/* Header with Back Button and Transfer Action */}
                 <div className="flex items-center justify-between">
-                    <Link href={pcTransferIndex().url}>
-                        <Button variant="outline">
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Transfers
+                    <div className="flex items-center gap-2">
+                        <Link href={pcTransferIndex().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to Transfers
+                            </Button>
+                        </Link>
+                        <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => setHelpDialogOpen(true)}
+                            title="How to use PC Transfer"
+                        >
+                            <HelpCircle className="h-4 w-4" />
                         </Button>
-                    </Link>
+                    </div>
 
                     {transfers.length > 0 && (
-                        <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 w-full">
+                        <div className="flex flex-col sm:flex-row items-center justify-end gap-2 sm:gap-4">
                             <span className="text-sm text-muted-foreground">
                                 {transfers.filter(t => t.stationId !== 0).length} of {transfers.length} transfers ready
                             </span>
-                            <div className="w-full sm:w-auto">
+                            <div>
                                 <Button
                                     onClick={handleSubmit}
                                     disabled={processing || transfers.some(t => t.stationId === 0)}
@@ -467,7 +557,11 @@ export default function Transfer(props: Props) {
                     <Card>
                         <CardHeader>
                             <CardTitle>Available PC Specs</CardTitle>
-                            <CardDescription>Click the "Select" button to add PCs to your transfer list</CardDescription>
+                            <CardDescription>
+                                {preselectedStationId && !stations.find(s => s.id === preselectedStationId)?.pc_spec_id
+                                    ? `Select a PC to assign to station ${stations.find(s => s.id === preselectedStationId)?.station_number}`
+                                    : 'Click the "Select" button to add PCs to your transfer list'}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="mb-4">
@@ -505,6 +599,11 @@ export default function Transfer(props: Props) {
                                                 const transfer = getTransferByPc(pc.id);
                                                 const darkColor = transfer ? generateDarkColor(transfer.color) : null;
                                                 const willBeFloating = isPcBecomingFloating(pc.id);
+
+                                                // Disable other PCs when in single-station mode with a PC already selected
+                                                const isSingleStationMode = !!preselectedStationId;
+                                                const hasSelection = transfers.length > 0;
+                                                const isDisabled = isSingleStationMode && hasSelection && !transfer && !willBeFloating;
 
                                                 return (
                                                     <TableRow
@@ -585,6 +684,7 @@ export default function Transfer(props: Props) {
                                                                 <Button
                                                                     size="sm"
                                                                     onClick={() => togglePcSelection(pc.id)}
+                                                                    disabled={isDisabled}
                                                                 >
                                                                     Select
                                                                 </Button>
@@ -605,9 +705,11 @@ export default function Transfer(props: Props) {
                         <CardHeader>
                             <CardTitle>Destination Stations</CardTitle>
                             <CardDescription>
-                                {transfers.find(t => t.stationId === 0)
-                                    ? 'Select a station for the highlighted PC'
-                                    : 'Select PCs first, then choose destination stations'}
+                                {preselectedStationId && !stations.find(s => s.id === preselectedStationId)?.pc_spec_id
+                                    ? 'Select a PC from the left to assign to the highlighted station'
+                                    : transfers.find(t => t.stationId === 0)
+                                        ? 'Select a station for the highlighted PC'
+                                        : 'Select PCs first, then choose destination stations'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -646,11 +748,14 @@ export default function Transfer(props: Props) {
                                                 const transfer = getTransferByStation(station.id);
                                                 const darkColor = transfer ? generateDarkColor(transfer.color) : null;
                                                 const hasIncomplete = transfers.some(t => t.stationId === 0);
+                                                const isHighlighted = highlightedStationId === station.id;
 
                                                 return (
                                                     <TableRow
                                                         key={station.id}
-                                                        className="hover:bg-muted/50"
+                                                        data-station-id={station.id}
+                                                        className={`hover:bg-muted/50 transition-all duration-300 ${isHighlighted ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500 ring-inset' : ''
+                                                            }`}
                                                         style={transfer ? {
                                                             backgroundColor: transfer.color,
                                                             borderLeftWidth: '4px',
@@ -715,6 +820,217 @@ export default function Transfer(props: Props) {
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Help Dialog */}
+                <Dialog open={helpDialogOpen} onOpenChange={setHelpDialogOpen}>
+                    <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
+                        <DialogHeader>
+                            <DialogTitle className="flex items-center gap-2">
+                                <HelpCircle className="h-5 w-5" />
+                                How to Use PC Transfer
+                            </DialogTitle>
+                            <DialogDescription>
+                                Follow these steps to transfer PCs to stations
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        <div className="space-y-6 py-4">
+                            {/* Assign PC (Empty Station) */}
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    <MousePointer className="h-5 w-5 text-blue-600" />
+                                    Assign PC (Empty Station)
+                                </h3>
+                                <div className="space-y-2 pl-7 text-sm">
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-blue-600">1.</span>
+                                        <div>
+                                            <span className="font-medium">From Station Page:</span> Click <Badge variant="outline" className="mx-1">Assign PC</Badge> button on an empty station
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-blue-600">2.</span>
+                                        <div>
+                                            <span className="font-medium">Station Highlighted:</span> The target station will be <span className="bg-blue-100 px-2 py-0.5 rounded">highlighted in blue</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-blue-600">3.</span>
+                                        <div>
+                                            <span className="font-medium">Select PC:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on any PC from the left table (only one PC allowed)
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-blue-600">4.</span>
+                                        <div>
+                                            <span className="font-medium">Auto-Assignment:</span> PC automatically assigns to the highlighted station. Other PCs become unselectable.
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-blue-600">5.</span>
+                                        <div>
+                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer 1 PC</Badge> to complete
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4" />
+
+                            {/* Transfer PC (Station with PC) */}
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    <ArrowRight className="h-5 w-5 text-indigo-600" />
+                                    Transfer PC (Station with Existing PC)
+                                </h3>
+                                <div className="space-y-2 pl-7 text-sm">
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-indigo-600">1.</span>
+                                        <div>
+                                            <span className="font-medium">From Station Page:</span> Click <Badge variant="outline" className="mx-1">Transfer PC</Badge> button on a station with a PC
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-indigo-600">2.</span>
+                                        <div>
+                                            <span className="font-medium">Auto-Selection:</span> The PC currently at that station is automatically selected and <span className="font-semibold">locked</span>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-indigo-600">3.</span>
+                                        <div>
+                                            <span className="font-medium">Cannot Deselect:</span> The selected PC cannot be deselected (use "Back" to cancel entire transfer)
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-indigo-600">4.</span>
+                                        <div>
+                                            <span className="font-medium">Choose Destination:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on a destination station from the right table
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-indigo-600">5.</span>
+                                        <div>
+                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer 1 PC</Badge> to move the PC to the new station
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4" />
+
+                            {/* Multiple Station Assignment */}
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    <CheckSquare className="h-5 w-5 text-green-600" />
+                                    Multiple Stations (Bulk Mode)
+                                </h3>
+                                <div className="space-y-2 pl-7 text-sm">
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-green-600">1.</span>
+                                        <div>
+                                            <span className="font-medium">From Station Page:</span> Check <Badge variant="outline" className="mx-1">☑</Badge> multiple empty stations
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-green-600">2.</span>
+                                        <div>
+                                            <span className="font-medium">Bulk Action:</span> Click <Badge variant="outline" className="mx-1">Assign PCs to Selected</Badge>
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-green-600">3.</span>
+                                        <div>
+                                            <span className="font-medium">Select PCs:</span> Click <Badge variant="outline" className="mx-1">Select</Badge> on each PC you want to assign
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-green-600">4.</span>
+                                        <div>
+                                            <span className="font-medium">Choose Stations:</span> For each PC, click <Badge variant="outline" className="mx-1">Select</Badge> on a destination station (right side)
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-green-600">5.</span>
+                                        <div>
+                                            <span className="font-medium">Review:</span> Check <span className="bg-purple-50 border border-purple-300 px-2 py-0.5 rounded">Selected Transfers</span> card for accuracy
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <span className="font-bold text-green-600">6.</span>
+                                        <div>
+                                            <span className="font-medium">Submit:</span> Click <Badge className="mx-1 bg-blue-600">Transfer X PCs</Badge> to complete all at once
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4" />
+
+                            {/* Color Coding System */}
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    <ListChecks className="h-5 w-5 text-purple-600" />
+                                    Understanding Color Codes
+                                </h3>
+                                <div className="space-y-2 pl-7 text-sm">
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-6 h-6 rounded border-2 border-blue-500 bg-blue-100 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <span className="font-medium">Blue Highlight:</span> Station waiting for PC assignment (single mode)
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-6 h-6 rounded border-2 border-purple-500 bg-purple-100 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <span className="font-medium">Random Colors:</span> Each PC-to-station transfer pair gets a unique color
+                                        </div>
+                                    </div>
+                                    <div className="flex items-start gap-3">
+                                        <div className="w-6 h-6 rounded border-2 border-orange-400 bg-orange-50 flex-shrink-0 mt-0.5" />
+                                        <div>
+                                            <span className="font-medium">Orange Alert:</span> A PC will become "floating" (unassigned) when replaced
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="border-t pt-4" />
+
+                            {/* Quick Tips */}
+                            <div className="space-y-3">
+                                <h3 className="font-semibold text-lg flex items-center gap-2">
+                                    <AlertCircle className="h-5 w-5 text-amber-600" />
+                                    Quick Tips
+                                </h3>
+                                <div className="space-y-2 pl-7 text-sm">
+                                    <div className="flex items-start gap-2">
+                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                        <div><span className="font-medium">Deselect:</span> Click <Badge variant="outline" className="mx-1">Deselect</Badge> to remove a PC or station from transfer</div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                        <div><span className="font-medium">Floating PCs:</span> Click <Badge className="mx-1 bg-orange-600">Assign</Badge> to reassign a floating PC</div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                        <div><span className="font-medium">Notes:</span> Add optional notes before transferring for record-keeping</div>
+                                    </div>
+                                    <div className="flex items-start gap-2">
+                                        <ArrowRight className="h-4 w-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                                        <div><span className="font-medium">Search:</span> Use search boxes to quickly find specific PCs or stations</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex justify-end pt-4 border-t">
+                            <Button onClick={() => setHelpDialogOpen(false)}>
+                                Got it!
+                            </Button>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );
