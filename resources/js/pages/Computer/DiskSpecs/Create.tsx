@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { toast } from 'sonner';
+import React from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -15,17 +14,11 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 
-import type { BreadcrumbItem } from '@/types';
+import { useFlashMessage } from '@/hooks';
 import { store, create, index } from '@/routes/diskspecs';
 
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Create a New Disk Specification',
-        href: create().url,
-    },
-];
-
 export default function Create() {
+    useFlashMessage(); // Automatically handles flash messages
 
     const { data, setData, post, errors } = useForm({
         manufacturer: '',
@@ -38,25 +31,17 @@ export default function Create() {
         stock_quantity: 0,
     });
 
-    const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
-
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === "error") {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         post(store.url());
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create a New Disk Specification" />
+        <AppLayout breadcrumbs={[
+            { title: 'Disk Specifications', href: index.url() },
+            { title: 'Create', href: create.url() }
+        ]}>
+            <Head title="Create Disk Specification" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
                 <div className="flex justify-start">

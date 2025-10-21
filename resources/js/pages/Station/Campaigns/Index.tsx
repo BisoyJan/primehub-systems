@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { router, usePage } from "@inertiajs/react";
+import { router, usePage, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -7,8 +7,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import AppLayout from "@/layouts/app-layout";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
+import type { BreadcrumbItem } from "@/types";
+import { index as campaignsIndex } from "@/routes/campaigns";
 
-const breadcrumbs = [{ title: 'Campaign', href: '/campaigns' }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Campaigns', href: campaignsIndex().url }
+];
 
 interface Campaign {
     id: number;
@@ -98,6 +102,7 @@ export default function CampaignManagement() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Campaign Management" />
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
                 <div className="flex items-center gap-3 mb-4">
                     <h2 className="text-xl font-semibold">Campaign Management</h2>

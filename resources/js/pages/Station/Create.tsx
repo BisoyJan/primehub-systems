@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { router, usePage, useForm } from "@inertiajs/react";
+import { router, usePage, useForm, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -8,8 +8,12 @@ import PcSpecTable from "@/components/PcSpecTable";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import type { BreadcrumbItem } from "@/types";
+import { index as stationsIndex } from "@/routes/stations";
 
-const breadcrumbs = [{ title: "Stations", href: "/stations" }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: "Stations", href: stationsIndex().url }
+];
 
 interface Site { id: number; name: string; }
 interface Campaign { id: number; name: string; }
@@ -138,6 +142,7 @@ export default function StationCreate() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Create Station" />
             <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6">
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
                     <h2 className="text-xl md:text-2xl font-semibold">Add Station</h2>

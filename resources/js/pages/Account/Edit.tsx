@@ -1,14 +1,16 @@
 import React from "react";
-import { router, useForm, usePage } from "@inertiajs/react";
+import { router, useForm, usePage, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import type { BreadcrumbItem } from "@/types";
+import { index as accountsIndex, edit as accountsEdit } from "@/routes/accounts";
 
-const breadcrumbs = [
-    { title: "Accounts", href: "/accounts" },
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: "Accounts", href: accountsIndex().url },
     { title: "Edit", href: "#" }
 ];
 
@@ -46,6 +48,7 @@ export default function AccountEdit() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Edit User Account" />
             <div className="max-w-2xl mx-auto mt-4 p-6 rounded-lg shadow">
                 <h2 className="text-2xl font-semibold mb-6">Edit User Account</h2>
 

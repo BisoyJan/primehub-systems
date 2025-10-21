@@ -12,31 +12,32 @@ class DatabaseSeeder extends Seeder
 {
     /**
      * Seed the application's database.
+     *
+     * All seeders now utilize factories for generating realistic test data.
      */
     public function run(): void
     {
-        // Seed unique sites
-        //$siteNames = ['PH1-2F', 'PH1-3F', 'PH1-4F', 'PH2', 'PH3'];
+        // Seed unique sites (hardcoded as these are business-specific)
         $siteNames = ['PH1', 'PH2', 'PH3'];
         foreach ($siteNames as $name) {
             Site::firstOrCreate(['name' => $name]);
         }
 
-        // Seed unique campaigns
+        // Seed unique campaigns (hardcoded as these are business-specific)
         $campaignNames = ['Admin', 'All State', 'Helix', 'LG Copier', 'Medicare', 'PSO', 'Real State', 'Sales'];
         foreach ($campaignNames as $name) {
             Campaign::firstOrCreate(['name' => $name]);
         }
 
-        // Call all seeders
+        // Call all seeders - each now uses factories for generating data
         $this->call([
-            AccountSeeder::class,
-            ProcessorSpecSeeder::class,
-            RamSpecSeeder::class,
-            DiskSpecSeeder::class,
-            StockSeeder::class,
-            PcSpecSeeder::class,
-            StationSeeder::class,
+            AccountSeeder::class,       // Creates 4 test accounts + 10 random users via factory
+            ProcessorSpecSeeder::class, // Creates 20 processors via factory
+            RamSpecSeeder::class,       // Creates 20 RAM specs via factory
+            DiskSpecSeeder::class,      // Creates 20 disk specs via factory
+            StockSeeder::class,         // Creates stock entries for all specs with random quantities
+            PcSpecSeeder::class,        // Creates 15 PC specs via factory with relationships
+            StationSeeder::class,       // Creates 30 site-based stations + 20 random via factory
         ]);
     }
 }

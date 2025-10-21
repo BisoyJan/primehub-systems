@@ -37,6 +37,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
+import type { BreadcrumbItem } from '@/types';
 import {
     index as pcSpecIndex,
     create as pcSpecCreate,
@@ -44,7 +45,9 @@ import {
     destroy as pcSpecDestroy,
 } from '@/routes/pcspecs';
 
-const breadcrumbs = [{ title: "PcSpecs", href: pcSpecIndex().url }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: "PC Specifications", href: pcSpecIndex().url }
+];
 
 interface RamSpec {
     id: number;

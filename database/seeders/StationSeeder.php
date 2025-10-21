@@ -5,7 +5,7 @@ use Illuminate\Database\Seeder;
 use App\Models\Station;
 use App\Models\Site;
 use App\Models\PcSpec;
-use Illuminate\Support\Str;
+use App\Models\Campaign;
 
 class StationSeeder extends Seeder
 {
@@ -14,22 +14,27 @@ class StationSeeder extends Seeder
      */
     public function run(): void
     {
-        // Example: Seed 10 stations for each site, with optional PC spec
         $sites = Site::all();
         $pcSpecs = PcSpec::all();
-        $campaigns = \App\Models\Campaign::all();
+        $campaigns = Campaign::all();
 
-        // Create a collection of available PC specs that haven't been assigned yet
+        // If no sites, campaigns, or PC specs exist, create them first
+        if ($sites->isEmpty() || $campaigns->isEmpty()) {
+            return;
+        }
+
+        // Create a pool of available PC specs (some stations may not have PC specs)
         $availablePcSpecs = $pcSpecs->shuffle();
         $pcSpecIndex = 0;
 
+        // Create 10 stations for each site
         foreach ($sites as $site) {
             for ($i = 1; $i <= 10; $i++) {
                 $stationNumber = strtoupper(($site->code ?? $site->name) . '-' . str_pad($i, 3, '0', STR_PAD_LEFT));
 
-                // Assign unique PC spec if available, otherwise null
+                // Assign unique PC spec if available, 50% chance of having no PC spec
                 $pcSpecId = null;
-                if ($pcSpecIndex < $availablePcSpecs->count()) {
+                if ($pcSpecIndex < $availablePcSpecs->count() && fake()->boolean(70)) {
                     $pcSpecId = $availablePcSpecs[$pcSpecIndex]->id;
                     $pcSpecIndex++;
                 }
@@ -37,11 +42,15 @@ class StationSeeder extends Seeder
                 Station::create([
                     'site_id' => $site->id,
                     'station_number' => $stationNumber,
-                    'pc_spec_id' => $pcSpecId, // Unique PC spec or null
-                    'campaign_id' => $campaigns->random()->id, // Assign a random campaign
-                    'status' => 'active', // Default status if required
+                    'pc_spec_id' => $pcSpecId,
+                    'campaign_id' => $campaigns->random()->id,
+                    'status' => fake()->randomElement(['active', 'inactive', 'maintenance']),
+                    'monitor_type' => fake()->randomElement(['Single', 'Dual']),
                 ]);
             }
         }
+
+        // Create additional random stations using the factory (optional)
+        Station::factory()->count(20)->create();
     }
 }

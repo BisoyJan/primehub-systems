@@ -1,6 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { toast } from 'sonner';
+import React, { useMemo } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -15,15 +14,11 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 
-import type { BreadcrumbItem } from '@/types';
+import { useFlashMessage } from '@/hooks';
 import { update, index } from '@/routes/processorspecs';
 
 const intelSockets = ['LGA1151', 'LGA1200', 'LGA1700'];
 const amdSockets = ['AM3+', 'AM4', 'AM5', 'TR4', 'sTRX4'];
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Edit a Processor Specification', href: index().url },
-];
 
 interface ProcessorSpec {
     id: number;
@@ -43,7 +38,7 @@ interface Props {
 }
 
 export default function Edit({ processorspec }: Props) {
-    const { flash } = usePage<{ flash?: { message?: string; type?: string } }>().props;
+    useFlashMessage(); // Automatically handles flash messages
 
     const { data, setData, put, errors } = useForm({
         manufacturer: processorspec.manufacturer,
@@ -64,22 +59,16 @@ export default function Edit({ processorspec }: Props) {
         return [...intelSockets, ...amdSockets];
     }, [data.manufacturer]);
 
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === 'error') {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
-
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
         put(update.url(processorspec.id));
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <AppLayout breadcrumbs={[
+            { title: 'Processor Specifications', href: index().url },
+            { title: 'Edit', href: '#' }
+        ]}>
             <Head title="Edit Processor Specification" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">

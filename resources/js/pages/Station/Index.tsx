@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { router, usePage } from "@inertiajs/react";
+import { router, usePage, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
@@ -9,17 +9,6 @@ import {
     DialogTitle,
     DialogDescription
 } from "@/components/ui/dialog";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import AppLayout from "@/layouts/app-layout";
@@ -30,8 +19,13 @@ import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
 import { Eye, AlertTriangle, Plus, CheckSquare } from "lucide-react";
 import { transferPage } from '@/routes/pc-transfers';
+import { index as stationsIndex } from "@/routes/stations";
 
-const breadcrumbs = [{ title: "Stations", href: "/stations" }];
+// New reusable components and hooks
+import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { PageHeader } from "@/components/PageHeader";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 
 interface Station {
     id: number;
@@ -79,7 +73,17 @@ interface Filters {
 }
 
 export default function StationIndex() {
-    const { stations, flash, filters } = usePage<{ stations: StationsPayload; flash?: Flash; filters: Filters }>().props;
+    const { stations, filters } = usePage<{ stations: StationsPayload; flash?: Flash; filters: Filters }>().props;
+
+    // Use new hooks for cleaner code
+    const { title, breadcrumbs } = usePageMeta({
+        title: "Stations",
+        breadcrumbs: [{ title: "Stations", href: stationsIndex().url }]
+    });
+
+    useFlashMessage(); // Automatically handles flash messages
+    const isPageLoading = usePageLoading(); // Track page loading state
+
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState("");
     const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -91,13 +95,6 @@ export default function StationIndex() {
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [issueText, setIssueText] = useState("");
     const [selectedEmptyStations, setSelectedEmptyStations] = useState<number[]>([]);
-
-    useEffect(() => {
-        if (flash?.message) {
-            if (flash.type === "error") toast.error(flash.message);
-            else toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -184,10 +181,16 @@ export default function StationIndex() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 md:p-6">
-                <div className="flex items-center gap-3">
-                    <h2 className="text-lg md:text-xl font-semibold">Station Management</h2>
-                </div>
+            <Head title={title} />
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 md:p-6 relative">
+                {/* Loading overlay for page transitions */}
+                <LoadingOverlay isLoading={isPageLoading} />
+
+                {/* Page header */}
+                <PageHeader
+                    title="Station Management"
+                    description="Manage workstation assignments and configurations"
+                />
 
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
@@ -432,32 +435,14 @@ export default function StationIndex() {
                                                     <Button variant="outline" size="sm" onClick={() => router.get(`/stations/${station.id}/edit`)} disabled={loading}>
                                                         Edit
                                                     </Button>
-                                                    <AlertDialog>
-                                                        <AlertDialogTrigger asChild>
-                                                            <Button variant="destructive" size="sm" disabled={loading}>
-                                                                Delete
-                                                            </Button>
-                                                        </AlertDialogTrigger>
-                                                        <AlertDialogContent>
-                                                            <AlertDialogHeader>
-                                                                <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                                                <AlertDialogDescription>
-                                                                    Are you sure you want to delete station{" "}
-                                                                    <strong>"{station.station_number}"</strong>?
-                                                                    This action cannot be undone.
-                                                                </AlertDialogDescription>
-                                                            </AlertDialogHeader>
-                                                            <AlertDialogFooter>
-                                                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                <AlertDialogAction
-                                                                    onClick={() => handleDelete(station.id)}
-                                                                    className="bg-red-600 hover:bg-red-700"
-                                                                >
-                                                                    Yes, Delete
-                                                                </AlertDialogAction>
-                                                            </AlertDialogFooter>
-                                                        </AlertDialogContent>
-                                                    </AlertDialog>
+
+                                                    {/* Reusable delete confirmation dialog */}
+                                                    <DeleteConfirmDialog
+                                                        onConfirm={() => handleDelete(station.id)}
+                                                        title="Delete Station"
+                                                        description={`Are you sure you want to delete station "${station.station_number}"?`}
+                                                        disabled={loading}
+                                                    />
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -606,32 +591,16 @@ export default function StationIndex() {
                                     >
                                         Edit
                                     </Button>
-                                    <AlertDialog>
-                                        <AlertDialogTrigger asChild>
-                                            <Button variant="destructive" size="sm" disabled={loading} className="flex-1">
-                                                Delete
-                                            </Button>
-                                        </AlertDialogTrigger>
-                                        <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
-                                            <AlertDialogHeader>
-                                                <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                                <AlertDialogDescription>
-                                                    Are you sure you want to delete station{" "}
-                                                    <strong>"{station.station_number}"</strong>?
-                                                    This action cannot be undone.
-                                                </AlertDialogDescription>
-                                            </AlertDialogHeader>
-                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                                <AlertDialogAction
-                                                    onClick={() => handleDelete(station.id)}
-                                                    className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                >
-                                                    Yes, Delete
-                                                </AlertDialogAction>
-                                            </AlertDialogFooter>
-                                        </AlertDialogContent>
-                                    </AlertDialog>
+
+                                    {/* Reusable delete confirmation dialog */}
+                                    <div className="flex-1">
+                                        <DeleteConfirmDialog
+                                            onConfirm={() => handleDelete(station.id)}
+                                            title="Delete Station"
+                                            description={`Are you sure you want to delete station "${station.station_number}"?`}
+                                            disabled={loading}
+                                        />
+                                    </div>
                                 </div>
                             </div>
                         );

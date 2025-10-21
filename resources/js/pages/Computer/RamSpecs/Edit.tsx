@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { toast } from "sonner";
+import React from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -16,15 +15,8 @@ import {
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { ArrowLeft, CircleAlert } from 'lucide-react';
 
-import type { BreadcrumbItem } from '@/types';
-import { update, create, index } from '@/routes/ramspecs';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Edit a RAM Specification',
-        href: create().url,
-    },
-];
+import { useFlashMessage } from '@/hooks';
+import { update, index } from '@/routes/ramspecs';
 
 interface ramSpec {
     id: number;
@@ -42,6 +34,7 @@ interface Props {
 }
 
 export default function Edit({ ramspec }: Props) {
+    useFlashMessage(); // Automatically handles flash messages
 
     const { data, setData, put, errors } = useForm({
         manufacturer: ramspec.manufacturer,
@@ -53,27 +46,17 @@ export default function Edit({ ramspec }: Props) {
         voltage: ramspec.voltage,
     });
 
-    // Get flash message and type from page props
-    const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
-
-    // Show toast when flash message changes
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === "error") {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
-
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
         put(update.url(ramspec.id));
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create a New RAM Specification" />
+        <AppLayout breadcrumbs={[
+            { title: 'RAM Specifications', href: index().url },
+            { title: 'Edit', href: '#' }
+        ]}>
+            <Head title="Edit RAM Specification" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
                 <div className="flex justify-start">

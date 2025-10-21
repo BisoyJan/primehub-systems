@@ -1,6 +1,5 @@
-import { useEffect } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { toast } from 'sonner';
+import React from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -15,15 +14,8 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 
-import type { BreadcrumbItem } from '@/types';
+import { useFlashMessage } from '@/hooks';
 import { update, index } from '@/routes/diskspecs';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    {
-        title: 'Edit a Disk Specification',
-        href: index().url,
-    },
-];
 
 interface DiskSpec {
     id: number;
@@ -41,6 +33,7 @@ interface Props {
 }
 
 export default function Edit({ diskspec }: Props) {
+    useFlashMessage(); // Automatically handles flash messages
 
     const { data, setData, put, errors } = useForm({
         manufacturer: diskspec.manufacturer,
@@ -52,24 +45,16 @@ export default function Edit({ diskspec }: Props) {
         sequential_write_mb: diskspec.sequential_write_mb,
     });
 
-    const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
-
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === "error") {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
-
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
         put(update.url(diskspec.id));
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
+        <AppLayout breadcrumbs={[
+            { title: 'Disk Specifications', href: index().url },
+            { title: 'Edit', href: '#' }
+        ]}>
             <Head title="Edit Disk Specification" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">

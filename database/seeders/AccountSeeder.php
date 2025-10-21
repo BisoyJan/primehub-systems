@@ -13,8 +13,8 @@ class AccountSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create test accounts for each role
-        $users = [
+        // Create specific test accounts for each role
+        $testAccounts = [
             [
                 'name' => 'Super Admin User',
                 'email' => 'superadmin@example.com',
@@ -43,20 +43,16 @@ class AccountSeeder extends Seeder
                 'role' => 'HR',
                 'email_verified_at' => now(),
             ],
-            [
-                'name' => 'Test User',
-                'email' => 'test@example.com',
-                'password' => Hash::make('password'),
-                'role' => 'Agent',
-                'email_verified_at' => now(),
-            ],
         ];
 
-        foreach ($users as $user) {
+        foreach ($testAccounts as $user) {
             User::firstOrCreate(
                 ['email' => $user['email']],
                 $user
             );
         }
+
+        // Create additional random users using the factory
+        User::factory()->count(10)->create();
     }
 }

@@ -1,6 +1,5 @@
-import { useEffect, useMemo } from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
-import { toast } from 'sonner';
+import React, { useMemo } from 'react';
+import { Head, Link, useForm } from '@inertiajs/react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -15,18 +14,14 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 
-import type { BreadcrumbItem } from '@/types';
+import { useFlashMessage } from '@/hooks';
 import { store, create, index } from '@/routes/processorspecs';
 
 const intelSockets = ['LGA1151', 'LGA1200', 'LGA1700'];
 const amdSockets = ['AM3+', 'AM4', 'AM5', 'TR4', 'sTRX4'];
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Create a New Processor Specification', href: create().url },
-];
-
 export default function Create() {
-    const { flash } = usePage<{ flash?: { message?: string; type?: string } }>().props;
+    useFlashMessage(); // Automatically handles flash messages
 
     const { data, setData, post, errors } = useForm({
         manufacturer: '' as string,
@@ -50,23 +45,17 @@ export default function Create() {
                 : [...intelSockets, ...amdSockets];
     }, [data.manufacturer]);
 
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === "error") {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         post(store.url());
     };
 
     return (
-        <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create a New Processor Specification" />
+        <AppLayout breadcrumbs={[
+            { title: 'Processor Specifications', href: index.url() },
+            { title: 'Create', href: create.url() }
+        ]}>
+            <Head title="Create Processor Specification" />
 
             <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
                 <div className="flex justify-start">

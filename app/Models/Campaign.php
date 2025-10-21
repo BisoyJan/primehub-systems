@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Builder;
 
 class Campaign extends Model
 {
+    use HasFactory;
+
     protected $fillable = ['name'];
 
     // Scope for search functionality
@@ -17,5 +20,11 @@ class Campaign extends Model
         }
 
         return $query->where('name', 'like', "%{$search}%");
+    }
+
+    // Relationship to stations
+    public function stations()
+    {
+        return $this->hasMany(Station::class);
     }
 }

@@ -21,9 +21,12 @@ import {
 import { Badge } from '@/components/ui/badge';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
-import { dashboard } from '@/routes';
+import type { BreadcrumbItem } from '@/types';
+import { index as pcTransfersIndex } from '@/routes/pc-transfers';
 
-const breadcrumbs = [{ title: 'PC Transfer History', href: dashboard().url }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'PC Transfer History', href: `${pcTransfersIndex().url}/history` }
+];
 
 type Transfer = {
     id: number;

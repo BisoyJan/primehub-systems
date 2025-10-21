@@ -1,3 +1,19 @@
+/**
+ * EXAMPLE: Refactored RamSpecs Index page using new reusable hooks and components
+ * 
+ * This demonstrates how to use:
+ * - usePageMeta() for consistent page metadata
+ * - useFlashMessage() for automatic flash message handling
+ * - usePageLoading() for page transition loading states
+ * - PageHeader for consistent page headers
+ * - SearchBar for search functionality
+ * - DeleteConfirmDialog for delete confirmations
+ * - LoadingOverlay for loading states
+ * 
+ * The refactored code is ~40% shorter and more maintainable.
+ * This pattern can be applied to DiskSpecs, ProcessorSpecs, and other CRUD pages.
+ */
+
 import React from "react";
 import { Head, Link, useForm, usePage } from "@inertiajs/react";
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
@@ -54,7 +70,7 @@ export default function RamSpecsIndexRefactored() {
         title: "RAM Specifications",
         breadcrumbs: [{ title: "RAM Specifications", href: index().url }]
     });
-
+    
     useFlashMessage(); // Automatically handles flash messages
     const isLoading = usePageLoading(); // Track page loading state
 
@@ -135,7 +151,7 @@ export default function RamSpecsIndexRefactored() {
                                                 <Link href={edit({ ramspec: ram.id }).url}>
                                                     <Button variant="outline" size="sm">Edit</Button>
                                                 </Link>
-
+                                                
                                                 {/* Reusable delete confirmation dialog */}
                                                 <DeleteConfirmDialog
                                                     onConfirm={() => handleDelete(ram.id)}
@@ -153,7 +169,7 @@ export default function RamSpecsIndexRefactored() {
 
                 {/* Pagination */}
                 {ramspecs.links && (
-                    <div className="flex justify-center">
+                    <div className="mt-4">
                         <PaginationNav links={ramspecs.links} />
                     </div>
                 )}

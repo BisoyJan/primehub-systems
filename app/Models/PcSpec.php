@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class PcSpec extends Model
 {
     use HasFactory;
+
     protected $fillable = [
         'pc_number',
         'manufacturer',
@@ -27,6 +28,21 @@ class PcSpec extends Model
         'wifi',
         'issue',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'ram_slots' => 'integer',
+            'max_ram_capacity_gb' => 'integer',
+            'max_ram_speed' => 'integer',
+            'pcie_slots' => 'integer',
+            'm2_slots' => 'integer',
+            'sata_ports' => 'integer',
+            'usb_ports' => 'integer',
+            'ethernet_speed' => 'integer',
+            'wifi' => 'boolean',
+        ];
+    }
 
     public function ramSpecs()
     {
@@ -61,6 +77,11 @@ class PcSpec extends Model
     public function stations()
     {
         return $this->hasMany(Station::class);
+    }
+
+    public function transfers()
+    {
+        return $this->hasMany(PcTransfer::class);
     }
 
     // Format PC Spec details for frontend display

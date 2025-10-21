@@ -2,11 +2,14 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PcTransfer extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'from_station_id',
         'to_station_id',
@@ -15,6 +18,16 @@ class PcTransfer extends Model
         'transfer_type',
         'notes',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'from_station_id' => 'integer',
+            'to_station_id' => 'integer',
+            'pc_spec_id' => 'integer',
+            'user_id' => 'integer',
+        ];
+    }
 
     public function fromStation(): BelongsTo
     {

@@ -27,7 +27,7 @@ import {
 } from '@/components/ui/table';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
-import { dashboard } from '@/routes';
+import type { BreadcrumbItem } from '@/types';
 import {
     index as stocksIndex,
     store as stocksStore,
@@ -35,7 +35,9 @@ import {
     destroy as stocksDestroy,
 } from '@/routes/stocks';
 
-const breadcrumbs = [{ title: 'Stocks', href: dashboard().url }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: 'Stocks', href: stocksIndex().url }
+];
 
 type SpecType = 'ram' | 'disk' | 'processor';
 

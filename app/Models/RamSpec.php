@@ -4,8 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\ProcessorSpec;
-use App\Models\PcSpec;
 use App\Traits\HasSpecSearch;
 
 class RamSpec extends Model
@@ -22,6 +20,15 @@ class RamSpec extends Model
         'voltage',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'capacity_gb' => 'integer',
+            'speed' => 'integer',
+            'voltage' => 'decimal:2',
+        ];
+    }
+
     public function pcSpecs()
     {
         return $this->belongsToMany(
@@ -29,16 +36,6 @@ class RamSpec extends Model
             'pc_spec_ram_spec',
             'ram_spec_id',
             'pc_spec_id'
-        );
-    }
-
-    public function processorSpecs()
-    {
-        return $this->belongsToMany(
-            ProcessorSpec::class,
-            'processor_spec_ram_spec',
-            'ram_spec_id',
-            'processor_spec_id'
         );
     }
 

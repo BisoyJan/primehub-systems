@@ -2,12 +2,15 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Builder;
 
 class Station extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'site_id',
         'station_number',
@@ -16,6 +19,15 @@ class Station extends Model
         'monitor_type',
         'pc_spec_id',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'site_id' => 'integer',
+            'campaign_id' => 'integer',
+            'pc_spec_id' => 'integer',
+        ];
+    }
 
     public function site(): BelongsTo
     {
@@ -30,6 +42,16 @@ class Station extends Model
     public function pcSpec(): BelongsTo
     {
         return $this->belongsTo(PcSpec::class);
+    }
+
+    public function transfersFrom()
+    {
+        return $this->hasMany(PcTransfer::class, 'from_station_id');
+    }
+
+    public function transfersTo()
+    {
+        return $this->hasMany(PcTransfer::class, 'to_station_id');
     }
 
     // Scope for search functionality

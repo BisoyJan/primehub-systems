@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, HelpCircle, MousePointer, CheckSquare, ListChecks } from 'lucide-react';
+import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, MousePointer, CheckSquare, ListChecks } from 'lucide-react';
+import UseAnimations from 'react-useanimations';
+import help from 'react-useanimations/lib/help';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,10 @@ import {
 } from '@/components/ui/dialog';
 
 import { index as pcTransferIndex, bulk as bulkTransferRoute } from '@/routes/pc-transfers';
+
+// New reusable components and hooks
+import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 
 interface PcSpec {
     id: number;
@@ -93,6 +99,18 @@ interface Transfer {
 
 export default function Transfer(props: Props) {
     const { stations, pcSpecs, preselectedStationId } = props;
+
+    // Use new hooks for cleaner code
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Bulk PC Transfer',
+        breadcrumbs: [
+            { title: 'PC Transfer', href: pcTransferIndex().url },
+            { title: 'Transfer', href: '#' }
+        ]
+    });
+
+    useFlashMessage(); // Automatically handles flash messages
+    const isPageLoading = usePageLoading(); // Track page loading state
 
     const [pcSearch, setPcSearch] = useState('');
     const [stationSearch, setStationSearch] = useState('');
@@ -351,10 +369,22 @@ export default function Transfer(props: Props) {
         setErrors([]);
 
         const payload = {
-            transfers: transfers.map(t => ({
-                to_station_id: t.stationId,
-                pc_spec_id: t.pcId,
-            })),
+            transfers: transfers.map(t => {
+                // Determine transfer type based on context
+                const pc = pcSpecs.find(p => p.id === t.pcId);
+                const fromStation = pc?.station;
+
+                // If PC is moving from one station to another, it's an assign
+                // (In bulk mode, we don't support swap - replaced PCs just become floating)
+                const transferType = 'assign';
+
+                return {
+                    to_station_id: t.stationId,
+                    pc_spec_id: t.pcId,
+                    from_station_id: fromStation?.id || null,
+                    transfer_type: transferType,
+                };
+            }),
             notes: notes.trim() || undefined, // Include notes if provided
         };
 
@@ -397,10 +427,13 @@ export default function Transfer(props: Props) {
     }
 
     return (
-        <AppLayout>
-            <Head title="Bulk PC Transfer" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 space-y-6">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 space-y-6 relative">
+                {/* Loading overlay for page transitions */}
+                <LoadingOverlay isLoading={isPageLoading} />
+
                 {/* Header with Back Button and Transfer Action */}
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -416,7 +449,7 @@ export default function Transfer(props: Props) {
                             onClick={() => setHelpDialogOpen(true)}
                             title="How to use PC Transfer"
                         >
-                            <HelpCircle className="h-4 w-4" />
+                            <UseAnimations animation={help} size={25} strokeColor="currentColor" />
                         </Button>
                     </div>
 
@@ -826,7 +859,7 @@ export default function Transfer(props: Props) {
                     <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                         <DialogHeader>
                             <DialogTitle className="flex items-center gap-2">
-                                <HelpCircle className="h-5 w-5" />
+                                <UseAnimations animation={help} size={20} strokeColor="currentColor" />
                                 How to Use PC Transfer
                             </DialogTitle>
                             <DialogDescription>

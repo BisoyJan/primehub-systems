@@ -25,11 +25,12 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { index as pcTransfersIndex, transferPage } from '@/routes/pc-transfers';
 
-import { dashboard } from '@/routes';
-import { transferPage } from '@/routes/pc-transfers';
-
-const breadcrumbs = [{ title: 'PC Transfer', href: dashboard().url }];
+// New reusable components and hooks
+import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 
 type PcSpecDetails = {
     manufacturer: string;
@@ -99,6 +100,15 @@ export default function Index() {
     const page = usePage<PageProps>();
     const props = page.props;
 
+    // Use new hooks for cleaner code
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'PC Transfer',
+        breadcrumbs: [{ title: 'PC Transfer', href: pcTransfersIndex().url }]
+    });
+
+    useFlashMessage(); // Automatically handles flash messages
+    const isPageLoading = usePageLoading(); // Track page loading state
+
     const [stations, setStations] = useState<Station[]>(props.stations.data);
     const [links, setLinks] = useState<PaginationLink[]>(props.stations.links);
 
@@ -112,13 +122,6 @@ export default function Index() {
     // Bulk transfer states
     const [bulkMode, setBulkMode] = useState(false);
     const [selectedStations, setSelectedStations] = useState<Set<number>>(new Set());
-
-    useEffect(() => {
-        if (props.flash?.message) {
-            if (props.flash.type === 'error') toast.error(props.flash.message);
-            else toast.success(props.flash.message);
-        }
-    }, [props.flash?.message, props.flash?.type]);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -198,11 +201,17 @@ export default function Index() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="PC Transfer" />
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
-                <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-2xl font-bold">PC Transfer Management</h2>
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+                {/* Loading overlay for page transitions */}
+                <LoadingOverlay isLoading={isPageLoading} />
+
+                {/* Page header with actions */}
+                <PageHeader
+                    title="PC Transfer Management"
+                    description="Transfer PCs between stations and manage configurations"
+                >
                     <div className="flex items-center gap-2">
                         {bulkMode && selectedStations.size > 0 && (
                             <Badge variant="secondary" className="px-3 py-1">
@@ -233,7 +242,7 @@ export default function Index() {
                             View History
                         </Button>
                     </div>
-                </div>
+                </PageHeader>
 
                 {/* Filters */}
                 <Card>

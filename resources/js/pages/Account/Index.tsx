@@ -1,25 +1,19 @@
-import React, { useEffect, useState } from "react";
-import { router, usePage, Link } from "@inertiajs/react";
+import React, { useEffect, useState, useRef } from "react";
+import { router, usePage, Link, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
+import { index as accountsIndex, create as accountsCreate } from "@/routes/accounts";
 import { toast } from "sonner";
 
-const breadcrumbs = [{ title: "Accounts", href: "/accounts" }];
+// New reusable hooks and components
+import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { PageHeader } from "@/components/PageHeader";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 
 interface User {
     id: number;
@@ -29,7 +23,6 @@ interface User {
     created_at: string;
 }
 
-interface Flash { message?: string; type?: string; }
 interface Meta {
     current_page: number;
     last_page: number;
@@ -48,7 +41,7 @@ interface Filters {
 }
 
 export default function AccountIndex() {
-    const { users, flash, filters } = usePage<{ users: UsersPayload; flash?: Flash; filters: Filters }>().props;
+    const { users, filters } = usePage<{ users: UsersPayload; filters: Filters }>().props;
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(filters.search || "");
     const [debouncedSearch, setDebouncedSearch] = useState(filters.search || "");
@@ -56,12 +49,16 @@ export default function AccountIndex() {
     const auth = usePage().props.auth as { user?: { id: number } };
     const currentUserId = auth?.user?.id;
 
-    useEffect(() => {
-        if (flash?.message) {
-            if (flash.type === "error") toast.error(flash.message);
-            else toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
+    // Track initial mount to prevent effect on first render
+    const isInitialMount = useRef(true);
+
+    // Use new hooks
+    const { title, breadcrumbs } = usePageMeta({
+        title: "Account Management",
+        breadcrumbs: [{ title: "Accounts", href: accountsIndex().url }]
+    });
+    useFlashMessage(); // Automatically handles flash messages
+    const isPageLoading = usePageLoading();
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -69,9 +66,17 @@ export default function AccountIndex() {
     }, [search]);
 
     useEffect(() => {
+        // Skip the effect on initial mount to avoid duplicate requests
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
         const params: Record<string, string | number> = {};
         if (debouncedSearch) params.search = debouncedSearch;
         if (roleFilter && roleFilter !== "all") params.role = roleFilter;
+        // Reset to page 1 when filters change
+        params.page = 1;
 
         setLoading(true);
         router.get("/accounts", params, {
@@ -109,10 +114,18 @@ export default function AccountIndex() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-xl font-semibold">Account Management</h2>
-                </div>
+            <Head title={title} />
+            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 relative">
+                {/* Loading overlay for page transitions */}
+                <LoadingOverlay isLoading={isPageLoading || loading} message="Loading accounts..." />
+
+                {/* Page header with create button */}
+                <PageHeader
+                    title="Account Management"
+                    description="Manage user accounts and permissions"
+                    createLink={accountsCreate().url}
+                    createLabel="Create Account"
+                />
 
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
@@ -149,17 +162,9 @@ export default function AccountIndex() {
                             </Button>
                         )}
                     </div>
-
-                    <div className="flex justify-end">
-                        <Link href="/accounts/create">
-                            <Button className="bg-blue-600 hover:bg-blue-700 text-white">
-                                Add User Account
-                            </Button>
-                        </Link>
-                    </div>
                 </div>
 
-                {/* Results Count */}
+                {/* Table section */}
                 <div className="text-sm text-muted-foreground mb-2">
                     Showing {users.data.length} of {users.meta.total} user account{users.meta.total !== 1 ? 's' : ''}
                     {(roleFilter !== "all" || search) && ' (filtered)'}
@@ -198,36 +203,13 @@ export default function AccountIndex() {
                                                         Edit
                                                     </Button>
                                                 </Link>
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button
-                                                            variant="destructive"
-                                                            size="sm"
-                                                            disabled={loading || user.id === currentUserId}
-                                                        >
-                                                            Delete
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Are you sure you want to delete the account for{" "}
-                                                                <strong>"{user.name}"</strong>?
-                                                                This action cannot be undone.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter>
-                                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction
-                                                                onClick={() => handleDelete(user.id)}
-                                                                className="bg-red-600 hover:bg-red-700"
-                                                            >
-                                                                Yes, Delete
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
+
+                                                <DeleteConfirmDialog
+                                                    onConfirm={() => handleDelete(user.id)}
+                                                    title="Delete User Account"
+                                                    description={`Are you sure you want to delete the account for "${user.name}"? This action cannot be undone.`}
+                                                    disabled={loading || user.id === currentUserId}
+                                                />
                                             </div>
                                         </TableCell>
                                     </TableRow>
@@ -266,37 +248,16 @@ export default function AccountIndex() {
                                         Edit
                                     </Button>
                                 </Link>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            className="flex-1"
-                                            disabled={loading || user.id === currentUserId}
-                                        >
-                                            Delete
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent>
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirm Deletion</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Are you sure you want to delete the account for{" "}
-                                                <strong>"{user.name}"</strong>?
-                                                This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter>
-                                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={() => handleDelete(user.id)}
-                                                className="bg-red-600 hover:bg-red-700"
-                                            >
-                                                Yes, Delete
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+
+                                <div className="flex-1">
+                                    <DeleteConfirmDialog
+                                        onConfirm={() => handleDelete(user.id)}
+                                        title="Delete User Account"
+                                        description={`Are you sure you want to delete the account for "${user.name}"? This action cannot be undone.`}
+                                        disabled={loading || user.id === currentUserId}
+                                        triggerClassName="w-full"
+                                    />
+                                </div>
                             </div>
                         </div>
                     ))}

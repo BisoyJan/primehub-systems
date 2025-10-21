@@ -1,7 +1,6 @@
-import { useEffect } from "react";
+import React from "react";
 import { Head, Link, useForm, usePage } from "@inertiajs/react";
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
-import { toast } from "sonner";
 
 import AppLayout from "@/layouts/app-layout";
 import { Button } from "@/components/ui/button";
@@ -9,29 +8,20 @@ import {
     Table,
     TableBody,
     TableCell,
-    TableFooter,
     TableHead,
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 
-import { dashboard } from "@/routes";
+// New reusable components and hooks
+import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { PageHeader } from "@/components/PageHeader";
+import { SearchBar } from "@/components/SearchBar";
+import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+
 import { create, edit, destroy, index } from "@/routes/diskspecs";
-
-
-const breadcrumbs = [{ title: "DiskSpecs", href: dashboard().url }];
 
 interface DiskSpec {
     id: number;
@@ -64,16 +54,14 @@ export default function Index() {
     const { diskspecs, search: initialSearch } = usePage<Props>().props;
     const form = useForm({ search: initialSearch || "" });
 
-    const { flash } = usePage().props as { flash?: { message?: string; type?: string } };
+    // Use new hooks for cleaner code
+    const { title, breadcrumbs } = usePageMeta({
+        title: "Disk Specifications",
+        breadcrumbs: [{ title: "Disk Specifications", href: index().url }]
+    });
 
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === "error") {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
+    useFlashMessage(); // Automatically handles flash messages
+    const isLoading = usePageLoading(); // Track page loading state
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -91,33 +79,27 @@ export default function Index() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Disk Specs" />
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-3 rounded-xl p-3 md:p-6">
-                {/* Header Section */}
-                <div className="flex flex-col gap-3">
-                    <h2 className="text-lg md:text-xl font-semibold">Disk Specs Management</h2>
+            <div className="flex h-full flex-1 flex-col gap-3 rounded-xl p-3 md:p-6 relative">
+                {/* Loading overlay for page transitions */}
+                <LoadingOverlay isLoading={isLoading} />
 
-                    {/* Search Form - full width on mobile */}
-                    <form onSubmit={handleSearch} className="flex gap-2">
-                        <input
-                            type="text"
-                            name="search"
-                            placeholder="Search disk details..."
-                            value={form.data.search}
-                            onChange={(e) => form.setData("search", e.target.value)}
-                            className="border rounded px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <Button type="submit" className="shrink-0">Search</Button>
-                    </form>
-
-                    {/* Add Button - full width on mobile */}
-                    <Link href={create.url()} className="w-full sm:w-auto sm:self-end">
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto">
-                            Add Disk Spec
-                        </Button>
-                    </Link>
-                </div>
+                {/* Reusable page header with create button */}
+                <PageHeader
+                    title="Disk Specs Management"
+                    description="Manage disk storage component specifications and inventory"
+                    createLink={create.url()}
+                    createLabel="Add Disk Spec"
+                >
+                    {/* Reusable search bar */}
+                    <SearchBar
+                        value={form.data.search}
+                        onChange={(value) => form.setData("search", value)}
+                        onSubmit={handleSearch}
+                        placeholder="Search disk specifications..."
+                    />
+                </PageHeader>
 
                 {/* Desktop Table - hidden on mobile */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
@@ -175,50 +157,17 @@ export default function Index() {
                                                     Edit
                                                 </Button>
                                             </Link>
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button
-                                                        variant="destructive"
-                                                        size="sm"
-                                                        className="bg-red-600 hover:bg-red-700 text-white"
-                                                    >
-                                                        Delete
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Are you sure you want to delete{" "}
-                                                            <strong>
-                                                                {disk.manufacturer} {disk.model}
-                                                            </strong>
-                                                            ? This action cannot be undone.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                                        <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction
-                                                            onClick={() => handleDelete(disk.id)}
-                                                            className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                        >
-                                                            Yes, Delete
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+
+                                            {/* Reusable delete confirmation dialog */}
+                                            <DeleteConfirmDialog
+                                                onConfirm={() => handleDelete(disk.id)}
+                                                title="Delete Disk Specification"
+                                                description={`Are you sure you want to delete ${disk.manufacturer} ${disk.model}?`}
+                                            />
                                         </TableCell>
                                     </TableRow>
                                 ))}
                             </TableBody>
-
-                            <TableFooter>
-                                <TableRow>
-                                    <TableCell colSpan={10} className="text-center font-medium">
-                                        Disk Specs List
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
                         </Table>
                     </div>
                 </div>
@@ -239,8 +188,8 @@ export default function Index() {
                                     {(!disk.stock || disk.stock.quantity < 10) && (
                                         <span
                                             className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${!disk.stock || disk.stock.quantity === 0
-                                                    ? "bg-red-100 text-red-700"
-                                                    : "bg-yellow-100 text-yellow-700"
+                                                ? "bg-red-100 text-red-700"
+                                                : "bg-yellow-100 text-yellow-700"
                                                 }`}
                                         >
                                             {!disk.stock || disk.stock.quantity === 0 ? "Out" : "Low"}
@@ -288,38 +237,15 @@ export default function Index() {
                                         Edit
                                     </Button>
                                 </Link>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            className="bg-red-600 hover:bg-red-700 text-white flex-1"
-                                        >
-                                            Delete
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirm Deletion?</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Are you sure you want to delete{" "}
-                                                <strong>
-                                                    {disk.manufacturer} {disk.model}
-                                                </strong>
-                                                ? This action cannot be undone.
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                onClick={() => handleDelete(disk.id)}
-                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                            >
-                                                Yes, Delete
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+
+                                {/* Reusable delete confirmation dialog */}
+                                <div className="flex-1">
+                                    <DeleteConfirmDialog
+                                        onConfirm={() => handleDelete(disk.id)}
+                                        title="Delete Disk Specification"
+                                        description={`Are you sure you want to delete ${disk.manufacturer} ${disk.model}?`}
+                                    />
+                                </div>
                             </div>
                         </div>
                     ))}

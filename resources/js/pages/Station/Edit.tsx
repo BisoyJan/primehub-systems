@@ -1,13 +1,17 @@
 import React, { useEffect, useState } from "react";
-import { router, usePage, useForm } from "@inertiajs/react";
+import { router, usePage, useForm, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import PcSpecTable from "@/components/PcSpecTable";
 import { toast } from "sonner";
+import type { BreadcrumbItem } from "@/types";
+import { index as stationsIndex } from "@/routes/stations";
 
-const breadcrumbs = [{ title: "Stations", href: "/stations" }];
+const breadcrumbs: BreadcrumbItem[] = [
+    { title: "Stations", href: stationsIndex().url }
+];
 
 interface Site { id: number; name: string; }
 interface Campaign { id: number; name: string; }
@@ -83,6 +87,7 @@ export default function StationEdit() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title="Edit Station" />
             <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6">
                 <h2 className="text-xl md:text-2xl font-semibold mb-4">Edit Station</h2>
                 <form onSubmit={handleSubmit} className="space-y-4">

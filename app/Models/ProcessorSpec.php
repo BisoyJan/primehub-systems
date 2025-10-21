@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Models\PcSpec;
 use App\Traits\HasSpecSearch;
 
 class ProcessorSpec extends Model
@@ -23,6 +22,18 @@ class ProcessorSpec extends Model
         'tdp_watts',
     ];
 
+    protected function casts(): array
+    {
+        return [
+            'core_count' => 'integer',
+            'thread_count' => 'integer',
+            'base_clock_ghz' => 'decimal:2',
+            'boost_clock_ghz' => 'decimal:2',
+            'integrated_graphics' => 'boolean',
+            'tdp_watts' => 'integer',
+        ];
+    }
+
     public function pcSpecs()
     {
         return $this->belongsToMany(
@@ -30,16 +41,6 @@ class ProcessorSpec extends Model
             'pc_spec_processor_spec',
             'processor_spec_id',
             'pc_spec_id'
-        );
-    }
-
-    public function processorSpecs()
-    {
-        return $this->belongsToMany(
-            ProcessorSpec::class,
-            'processor_spec_processor_spec',
-            'processor_spec_id',
-            'processor_spec_id'
         );
     }
 
