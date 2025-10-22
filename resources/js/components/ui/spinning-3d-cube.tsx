@@ -1,5 +1,5 @@
 import { useAnimationFrame, motion } from "framer-motion";
-import { useRef } from "react";
+import { useRef, useState } from "react";
 
 interface Spinning3DCubeProps {
     size?: number;
@@ -11,12 +11,18 @@ export function Spinning3DCube({
     className = ""
 }: Spinning3DCubeProps) {
     const ref = useRef<HTMLDivElement>(null);
+    const [rotationSpeed] = useState(() => ({
+        x: (Math.random() - 0.5) * 0.02, // Random X rotation speed (very slow)
+        y: (Math.random() - 0.5) * 0.04 + 0.025, // Random Y rotation speed (very slow, slightly biased positive)
+        z: (Math.random() - 0.5) * 0.015, // Random Z rotation speed (very slow)
+    }));
 
     useAnimationFrame((t) => {
         if (!ref.current) return;
-        const rotateX = Math.cos(t / 3000) * 25;
-        const rotateY = (t / 20) % 360;
-        ref.current.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg)`;
+        const rotateX = t * rotationSpeed.x;
+        const rotateY = t * rotationSpeed.y;
+        const rotateZ = t * rotationSpeed.z;
+        ref.current.style.transform = `rotateX(${rotateX}deg) rotateY(${rotateY}deg) rotateZ(${rotateZ}deg)`;
     });
 
     // Define colors matching PrimeHub logo - gradient from light to dark blue
@@ -52,7 +58,6 @@ export function Spinning3DCube({
                     height: size,
                     position: "relative",
                     transformStyle: "preserve-3d",
-                    animation: "spin 10s linear infinite",
                 }}
             >
                 {/* Front face - Light blue (top face in logo) */}
