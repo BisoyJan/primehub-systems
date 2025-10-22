@@ -187,7 +187,7 @@ export default function AuthSplitAnimatedLayout({
             </div>
 
             {/* Subtle Vertical Divider - Blended */}
-            <div 
+            <div
                 ref={dividerRef}
                 className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px origin-top"
                 style={{
