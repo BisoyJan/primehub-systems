@@ -161,7 +161,8 @@ export default function Index() {
             return;
         }
         fetchIndex();
-    }, [filterType, debouncedSearchQuery, fetchIndex]); // FIX: Added fetchIndex to dependency array
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [filterType, debouncedSearchQuery]); // Only trigger when filters change, not when fetchIndex changes
 
     // FIX: Corrected useEffect for polling
     useEffect(() => {
@@ -169,7 +170,8 @@ export default function Index() {
         // Pass the current page URL to maintain pagination during polling
         const t = window.setInterval(() => fetchIndex(window.location.href), pollMs);
         return () => clearInterval(t);
-    }, [pollMs, fetchIndex]); // FIX: Added fetchIndex to dependency array
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pollMs]); // Only trigger when polling interval changes, not when fetchIndex changes
 
     function mapTypeFromStockable(stockableType: string): SpecType {
         if (!stockableType) return 'ram';

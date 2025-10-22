@@ -160,9 +160,11 @@ export default function Index() {
         setLinks(props.stations.links);
     }, [props.stations.data, props.stations.links]);
 
+    // Only fetch when filters change, not when fetchStations changes
     useEffect(() => {
         fetchStations();
-    }, [fetchStations]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [debouncedSearch, siteFilter, campaignFilter]);
 
     function handleRemovePC(station: Station) {
         if (!station.pc_spec_id) {

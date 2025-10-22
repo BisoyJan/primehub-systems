@@ -9,7 +9,7 @@ export default defineConfig({
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             ssr: 'resources/js/ssr.tsx',
-            refresh: true,
+            refresh: false, // Disable auto-refresh to prevent cursor-triggered reloads
         }),
         react(),
         tailwindcss(),
@@ -19,6 +19,17 @@ export default defineConfig({
     ],
     esbuild: {
         jsx: 'automatic',
+    },
+    build: {
+        rollupOptions: {
+            onwarn(warning, warn) {
+                // Suppress eval warnings from lottie-web (used by react-useanimations)
+                if (warning.code === 'EVAL' && warning.id?.includes('lottie')) {
+                    return;
+                }
+                warn(warning);
+            },
+        },
     },
     server: {
         host: '192.168.15.180',

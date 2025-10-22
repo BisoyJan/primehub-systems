@@ -297,12 +297,11 @@ export default function Index() {
                                 maintenances.data.map((maintenance) => (
                                     <TableRow key={maintenance.id}>
                                         <TableCell className="font-medium">
-                                            {maintenance.station.station_number}
-                                        </TableCell>
-                                        <TableCell className="text-muted-foreground">
                                             {maintenance.station.pc_spec?.pc_number || 'N/A'}
                                         </TableCell>
-                                        <TableCell>{maintenance.station.pc_spec?.model || 'N/A'}</TableCell>
+                                        <TableCell className="text-muted-foreground">
+                                            {maintenance.station.pc_spec?.model || 'N/A'}
+                                        </TableCell>
                                         <TableCell>{maintenance.station.site.name}</TableCell>
                                         <TableCell>
                                             {maintenance.maintenance_type || 'N/A'}
@@ -338,7 +337,7 @@ export default function Index() {
                                                 <DeleteConfirmDialog
                                                     onConfirm={() => handleDelete(maintenance.id)}
                                                     title="Delete Maintenance Record"
-                                                    description={`Are you sure you want to delete this maintenance record for Station ${maintenance.station.station_number}? This action cannot be undone.`}
+                                                    description={`Are you sure you want to delete this maintenance record for PC ${maintenance.station.pc_spec?.pc_number || maintenance.station.station_number}? This action cannot be undone.`}
                                                     disabled={loading}
                                                     triggerClassName="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/90"
                                                     triggerLabel=""

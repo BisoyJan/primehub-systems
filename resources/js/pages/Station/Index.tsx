@@ -107,7 +107,6 @@ export default function StationIndex() {
         if (siteFilter && siteFilter !== "all") params.site = siteFilter;
         if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
         if (statusFilter && statusFilter !== "all") params.status = statusFilter;
-        params.page = stations.meta.current_page || 1;
 
         setLoading(true);
         router.get("/stations", params, {
@@ -116,7 +115,7 @@ export default function StationIndex() {
             replace: true,
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, siteFilter, campaignFilter, statusFilter, stations.meta.current_page]);
+    }, [debouncedSearch, siteFilter, campaignFilter, statusFilter]);
 
     const handleDelete = (stationId: number) => {
         setLoading(true);
