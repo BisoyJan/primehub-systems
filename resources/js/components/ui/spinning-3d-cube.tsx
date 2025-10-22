@@ -24,12 +24,12 @@ export function Spinning3DCube({
     const mediumBlue = "#3b82f6"; // blue-500
     const darkBlue = "#2563eb"; // blue-600
 
-    const createFaceStyle = (backgroundColor: string) => ({
+    const createFaceStyle = () => ({
         position: "absolute" as const,
         width: size,
         height: size,
-        backgroundColor,
-        border: "2px solid rgba(255, 255, 255, 0.3)",
+        backgroundColor: "transparent",
+        border: "none",
         display: "grid",
         gridTemplateColumns: "repeat(2, 1fr)",
         gridTemplateRows: "repeat(2, 1fr)",
@@ -37,11 +37,11 @@ export function Spinning3DCube({
         padding: "8px",
     });
 
-    const gridCellStyle = {
-        backgroundColor: "rgba(255, 255, 255, 0.2)",
+    const createGridCellStyle = (color: string) => ({
+        backgroundColor: color,
         borderRadius: "3px",
-        border: "1px solid rgba(255, 255, 255, 0.4)",
-    };
+        border: "1px solid rgba(0, 0, 0, 0.6)",
+    });
 
     return (
         <div className={`flex items-center justify-center ${className}`} style={{ perspective: "1000px" }}>
@@ -52,12 +52,13 @@ export function Spinning3DCube({
                     height: size,
                     position: "relative",
                     transformStyle: "preserve-3d",
+                    animation: "spin 10s linear infinite",
                 }}
             >
                 {/* Front face - Light blue (top face in logo) */}
                 <motion.div
                     style={{
-                        ...createFaceStyle(lightBlue),
+                        ...createFaceStyle(),
                         transform: `translateZ(${size / 2}px)`,
                     }}
                     initial={{ opacity: 0 }}
@@ -65,14 +66,14 @@ export function Spinning3DCube({
                     transition={{ duration: 0.5 }}
                 >
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} style={gridCellStyle} />
+                        <div key={i} style={createGridCellStyle(lightBlue)} />
                     ))}
                 </motion.div>
 
                 {/* Back face - Dark blue */}
                 <motion.div
                     style={{
-                        ...createFaceStyle(darkBlue),
+                        ...createFaceStyle(),
                         transform: `translateZ(-${size / 2}px) rotateY(180deg)`,
                     }}
                     initial={{ opacity: 0 }}
@@ -80,14 +81,14 @@ export function Spinning3DCube({
                     transition={{ duration: 0.5, delay: 0.1 }}
                 >
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} style={gridCellStyle} />
+                        <div key={i} style={createGridCellStyle(darkBlue)} />
                     ))}
                 </motion.div>
 
                 {/* Right face - Medium blue (right face in logo) */}
                 <motion.div
                     style={{
-                        ...createFaceStyle(mediumBlue),
+                        ...createFaceStyle(),
                         transform: `rotateY(90deg) translateZ(${size / 2}px)`,
                     }}
                     initial={{ opacity: 0 }}
@@ -95,14 +96,14 @@ export function Spinning3DCube({
                     transition={{ duration: 0.5, delay: 0.2 }}
                 >
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} style={gridCellStyle} />
+                        <div key={i} style={createGridCellStyle(mediumBlue)} />
                     ))}
                 </motion.div>
 
                 {/* Left face - Dark blue (left face in logo) */}
                 <motion.div
                     style={{
-                        ...createFaceStyle(darkBlue),
+                        ...createFaceStyle(),
                         transform: `rotateY(-90deg) translateZ(${size / 2}px)`,
                     }}
                     initial={{ opacity: 0 }}
@@ -110,14 +111,14 @@ export function Spinning3DCube({
                     transition={{ duration: 0.5, delay: 0.3 }}
                 >
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} style={gridCellStyle} />
+                        <div key={i} style={createGridCellStyle(darkBlue)} />
                     ))}
                 </motion.div>
 
                 {/* Top face - Light blue */}
                 <motion.div
                     style={{
-                        ...createFaceStyle(lightBlue),
+                        ...createFaceStyle(),
                         transform: `rotateX(90deg) translateZ(${size / 2}px)`,
                     }}
                     initial={{ opacity: 0 }}
@@ -125,14 +126,14 @@ export function Spinning3DCube({
                     transition={{ duration: 0.5, delay: 0.4 }}
                 >
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} style={gridCellStyle} />
+                        <div key={i} style={createGridCellStyle(lightBlue)} />
                     ))}
                 </motion.div>
 
                 {/* Bottom face - Dark blue */}
                 <motion.div
                     style={{
-                        ...createFaceStyle(darkBlue),
+                        ...createFaceStyle(),
                         transform: `rotateX(-90deg) translateZ(${size / 2}px)`,
                     }}
                     initial={{ opacity: 0 }}
@@ -140,7 +141,7 @@ export function Spinning3DCube({
                     transition={{ duration: 0.5, delay: 0.5 }}
                 >
                     {[...Array(4)].map((_, i) => (
-                        <div key={i} style={gridCellStyle} />
+                        <div key={i} style={createGridCellStyle(darkBlue)} />
                     ))}
                 </motion.div>
             </div>

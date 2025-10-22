@@ -10,6 +10,7 @@ use App\Http\Controllers\StockController;
 use App\Http\Controllers\SiteController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\PcTransferController;
+use App\Http\Controllers\PcMaintenanceController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -60,6 +61,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->name('pc-transfers.remove');
     Route::get('pc-transfers/history', [PcTransferController::class, 'history'])
         ->name('pc-transfers.history');
+
+    // PC Maintenance routes
+    Route::resource('pc-maintenance', PcMaintenanceController::class);
 });
 
 require __DIR__ . '/settings.php';

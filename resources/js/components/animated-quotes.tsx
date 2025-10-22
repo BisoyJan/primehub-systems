@@ -35,7 +35,7 @@ export function AnimatedQuotes({ className, interval = 8000 }: AnimatedQuotesPro
     return (
         <div className="relative">
             <svg className="absolute -left-4 -top-2 w-8 h-8 text-white/30" fill="currentColor" viewBox="0 0 32 32">
-                <path d="M10 8c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8zm14 0c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8z"/>
+                <path d="M10 8c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8zm14 0c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8z" />
             </svg>
             <TextAnimate
                 key={key}
@@ -47,7 +47,7 @@ export function AnimatedQuotes({ className, interval = 8000 }: AnimatedQuotesPro
                 {`"${motivationalQuotes[currentQuote]}"`}
             </TextAnimate>
             <svg className="absolute -right-4 -bottom-2 w-8 h-8 text-white/30 rotate-180" fill="currentColor" viewBox="0 0 32 32">
-                <path d="M10 8c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8zm14 0c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8z"/>
+                <path d="M10 8c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8zm14 0c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8z" />
             </svg>
         </div>
     );

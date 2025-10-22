@@ -182,7 +182,7 @@ export default function StationIndex() {
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 md:p-6 relative">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
                 {/* Loading overlay for page transitions */}
                 <LoadingOverlay isLoading={isPageLoading} />
 

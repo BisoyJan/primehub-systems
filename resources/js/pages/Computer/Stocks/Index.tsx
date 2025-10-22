@@ -304,7 +304,7 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="Stocks" />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 md:p-6">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
                 <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
                     <h2 className="text-lg md:text-xl font-semibold">Stock Management</h2>
 

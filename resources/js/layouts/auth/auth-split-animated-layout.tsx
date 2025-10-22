@@ -21,6 +21,7 @@ export default function AuthSplitAnimatedLayout({
     const titleRef = useRef<HTMLHeadingElement>(null);
     const taglineRef = useRef<HTMLParagraphElement>(null);
     const cubeRef = useRef<HTMLDivElement>(null);
+    const dividerRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
         const ctx = gsap.context(() => {
@@ -78,6 +79,15 @@ export default function AuthSplitAnimatedLayout({
                 ease: 'power3.out',
             });
 
+            // Animate divider line with fade and scale
+            gsap.from(dividerRef.current, {
+                scaleY: 0,
+                opacity: 0,
+                duration: 1.2,
+                delay: 0.5,
+                ease: 'power2.out',
+            });
+
             // Add floating animation to logo
             gsap.to(logoRef.current, {
                 y: -10,
@@ -93,14 +103,14 @@ export default function AuthSplitAnimatedLayout({
     }, []);
 
     return (
-        <div className="flex min-h-screen">
+        <div className="flex min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black relative">
             {/* Left Side - Logo and Branding */}
             <div
                 ref={logoContainerRef}
-                className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-700 relative overflow-hidden"
+                className="hidden lg:flex lg:w-1/2 relative overflow-hidden"
             >
                 {/* Animated Background Pattern */}
-                <div className="absolute inset-0 opacity-20">
+                <div className="absolute inset-0 opacity-10">
                     <div className="absolute inset-0" style={{
                         backgroundImage: `
                             linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
@@ -111,7 +121,7 @@ export default function AuthSplitAnimatedLayout({
                 </div>
 
                 {/* Gradient Overlay */}
-                <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/30 to-transparent" />
 
                 {/* Content */}
                 <div className="relative z-10 flex flex-col items-center justify-center w-full p-12">
@@ -171,20 +181,29 @@ export default function AuthSplitAnimatedLayout({
                 </div>
 
                 {/* Modern Floating Orbs */}
-                <div className="absolute top-20 left-20 w-64 h-64 bg-purple-400/20 rounded-full blur-3xl animate-float" />
-                <div className="absolute bottom-20 right-20 w-80 h-80 bg-blue-400/20 rounded-full blur-3xl animate-float-delayed" />
-                <div className="absolute top-1/2 left-1/4 w-40 h-40 bg-indigo-400/20 rounded-full blur-2xl animate-float-slow" />
+                <div className="absolute top-20 left-20 w-64 h-64 bg-blue-500/25 rounded-full blur-3xl animate-float" />
+                <div className="absolute bottom-20 right-20 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl animate-float-delayed" />
+                <div className="absolute top-1/2 left-1/4 w-40 h-40 bg-purple-500/15 rounded-full blur-2xl animate-float-slow" />
             </div>
 
+            {/* Subtle Vertical Divider - Blended */}
+            <div 
+                ref={dividerRef}
+                className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px origin-top"
+                style={{
+                    background: 'linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.05) 20%, rgba(255, 255, 255, 0.05) 80%, transparent 100%)'
+                }}
+            />
+
             {/* Right Side - Login Form */}
-            <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-950">
+            <div className="w-full lg:w-1/2 flex items-center justify-center p-8">
                 <div
                     ref={formContainerRef}
                     className="w-full max-w-md"
                 >
                     {/* Mobile Logo */}
                     <div className="lg:hidden flex justify-center mb-8">
-                        <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 shadow-xl">
+                        <div className="bg-white/5 backdrop-blur-xl rounded-2xl p-4 shadow-xl border border-white/10">
                             <img
                                 src="/primehub-logo.png"
                                 alt="PrimeHub Logo"
@@ -193,14 +212,14 @@ export default function AuthSplitAnimatedLayout({
                         </div>
                     </div>
 
-                    {/* Modern Card Container */}
-                    <div className="bg-white dark:bg-gray-800 rounded-3xl shadow-2xl p-8 border border-gray-200 dark:border-gray-700">
+                    {/* Glass Morphism Card Container */}
+                    <div className="bg-white/5 backdrop-blur-2xl rounded-3xl shadow-2xl p-8 border border-white/10">
                         {/* Title and Description */}
                         <div className="space-y-3 mb-8">
-                            <h2 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
+                            <h2 className="text-3xl font-bold tracking-tight text-white">
                                 {title}
                             </h2>
-                            <p className="text-sm text-gray-600 dark:text-gray-400 font-medium">
+                            <p className="text-sm text-gray-300 font-medium">
                                 {description}
                             </p>
                         </div>
@@ -212,7 +231,7 @@ export default function AuthSplitAnimatedLayout({
                     </div>
 
                     {/* Footer Text */}
-                    <p className="text-center text-sm text-gray-500 dark:text-gray-400 mt-6">
+                    <p className="text-center text-sm text-gray-400 mt-6">
                         Powered by PrimeHub Systems
                     </p>
                 </div>

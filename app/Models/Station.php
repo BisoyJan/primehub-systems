@@ -54,6 +54,11 @@ class Station extends Model
         return $this->hasMany(PcTransfer::class, 'to_station_id');
     }
 
+    public function maintenances()
+    {
+        return $this->hasMany(PcMaintenance::class);
+    }
+
     // Scope for search functionality
     public function scopeSearch(Builder $query, ?string $search): Builder
     {

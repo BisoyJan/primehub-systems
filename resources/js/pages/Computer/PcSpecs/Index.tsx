@@ -162,7 +162,7 @@ export default function Index() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title="PC Specs" />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 md:p-6">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
                 {/* Header Section */}
                 <div className="flex flex-col gap-3">
                     <h2 className="text-lg md:text-xl font-semibold">PC Specs Management</h2>
