@@ -38,7 +38,7 @@ class StationSeeder extends Seeder
         }
 
         $this->command->info('🚀 Starting Station seeding...');
-        
+
         // Track available PC specs (each can only be assigned once)
         $availablePcSpecs = $pcSpecs->shuffle()->values();
         $pcSpecIndex = 0;
@@ -59,7 +59,7 @@ class StationSeeder extends Seeder
         foreach ($sites as $siteIndex => $site) {
             $siteCode = $site->code ?? strtoupper(substr($site->name, 0, 3));
             $stationsPerSite = fake()->numberBetween(8, 15);
-            
+
             $this->command->info("  📍 Creating {$stationsPerSite} stations for site: {$site->name}");
 
             for ($i = 1; $i <= $stationsPerSite; $i++) {
@@ -126,7 +126,7 @@ class StationSeeder extends Seeder
                 // Attach monitors based on monitor_type and availability
                 if ($monitors->isNotEmpty()) {
                     $hasMonitors = fake()->boolean(85); // 85% have monitors
-                    
+
                     if ($hasMonitors) {
                         if ($monitorType === 'single') {
                             // Single monitor
@@ -140,7 +140,7 @@ class StationSeeder extends Seeder
                                 // Different monitor models
                                 $monitor1 = $monitors->random();
                                 $availableMonitors = $monitors->where('id', '!=', $monitor1->id);
-                                
+
                                 if ($availableMonitors->isNotEmpty()) {
                                     $monitor2 = $availableMonitors->random();
                                     $station->monitors()->attach([
@@ -163,7 +163,7 @@ class StationSeeder extends Seeder
         // Create some additional random stations for variety
         $additionalCount = 15;
         $this->command->info("  🎲 Creating {$additionalCount} additional random stations...");
-        
+
         for ($i = 1; $i <= $additionalCount; $i++) {
             $randomSite = $sites->random();
             $randomCode = strtoupper(fake()->lexify('???'));
@@ -226,12 +226,12 @@ class StationSeeder extends Seeder
         $this->command->info("✅ Successfully created {$totalCreated} stations!");
         $this->command->info("   - {$pcSpecIndex} stations with PCs assigned");
         $this->command->info("   - " . ($totalCreated - $pcSpecIndex) . " stations without PCs (vacant/reserved)");
-        
+
         // Status breakdown
         $statusCounts = Station::selectRaw('status, COUNT(*) as count')
             ->groupBy('status')
             ->pluck('count', 'status');
-        
+
         $this->command->newLine();
         $this->command->info("📊 Status Distribution:");
         foreach ($statusCounts as $status => $count) {
@@ -241,7 +241,7 @@ class StationSeeder extends Seeder
         // Monitor breakdown
         $singleMonitors = Station::where('monitor_type', 'single')->count();
         $dualMonitors = Station::where('monitor_type', 'dual')->count();
-        
+
         $this->command->newLine();
         $this->command->info("🖥️  Monitor Distribution:");
         $this->command->info("   - Single monitors: {$singleMonitors}");

@@ -75,9 +75,9 @@ export default function MonitorSpecTable({
     const columns: DataTableColumn<MonitorSpec>[] = [
         { accessor: "brand", header: "Brand" },
         { accessor: "model", header: "Model" },
-        { 
-            accessor: "screen_size", 
-            header: "Size", 
+        {
+            accessor: "screen_size",
+            header: "Size",
             cell: (value) => `${value}"`
         },
         { accessor: "resolution", header: "Resolution" },
@@ -216,13 +216,12 @@ export default function MonitorSpecTable({
                                         onSelect(monitor);
                                     }
                                 }}
-                                className={`border rounded-lg p-4 shadow-sm space-y-3 transition-all ${
-                                    isDisabled 
+                                className={`border rounded-lg p-4 shadow-sm space-y-3 transition-all ${isDisabled
                                         ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
                                         : isSelected
                                             ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-600 ring-2 ring-blue-200 dark:ring-blue-700 cursor-pointer'
                                             : 'bg-card hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer'
-                                }`}
+                                    }`}
                             >
                                 <div className="flex items-start gap-3">
                                     <input
@@ -273,7 +272,7 @@ export default function MonitorSpecTable({
                                                             const otherMonitorsQty = selectedMonitors
                                                                 .filter(m => m.id !== monitor.id)
                                                                 .reduce((sum, m) => sum + m.quantity, 0);
-                                                            
+
                                                             if (otherMonitorsQty + newQty <= maxQty) {
                                                                 onQuantityChange(monitor.id, newQty);
                                                             }
@@ -290,8 +289,8 @@ export default function MonitorSpecTable({
                                         <button
                                             type="button"
                                             className={`underline text-sm mt-2 ${isSelected
-                                                    ? 'text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200'
-                                                    : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                                                ? 'text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200'
+                                                : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
                                                 }`}
                                             onClick={(e) => {
                                                 e.stopPropagation();

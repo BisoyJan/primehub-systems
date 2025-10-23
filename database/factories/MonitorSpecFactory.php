@@ -15,7 +15,7 @@ class MonitorSpecFactory extends Factory
         $panelTypes = ['IPS', 'VA', 'TN', 'OLED'];
         $resolutions = ['1920x1080', '2560x1440', '3840x2160', '1920x1200', '2560x1080'];
         $screenSizes = [21.5, 24.0, 27.0, 32.0, 34.0];
-        
+
         return [
             'brand' => fake()->randomElement($brands),
             'model' => fake()->bothify('??###-##'),

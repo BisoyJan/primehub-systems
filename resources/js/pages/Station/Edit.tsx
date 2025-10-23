@@ -237,10 +237,10 @@ export default function StationEdit() {
                             )}
                         </div>
                         <p className="text-xs text-gray-500 mb-2 break-words">
-                            💡 Monitor Type: <strong>{data.monitor_type === 'single' ? 'Single' : 'Dual'}</strong> 
+                            💡 Monitor Type: <strong>{data.monitor_type === 'single' ? 'Single' : 'Dual'}</strong>
                             {data.monitor_type === 'dual' ? ' - You can select up to 2 monitors' : ' - Select 1 monitor'}
                         </p>
-                        
+
                         <MonitorSpecTable
                             monitorSpecs={monitorSpecs}
                             selectedMonitors={data.monitor_ids}
@@ -249,7 +249,7 @@ export default function StationEdit() {
                                 setData("monitor_ids", [...data.monitor_ids, { id: monitor.id, quantity: 1 }]);
                             }}
                             onQuantityChange={(monitorId, quantity) => {
-                                setData("monitor_ids", data.monitor_ids.map(m => 
+                                setData("monitor_ids", data.monitor_ids.map(m =>
                                     m.id === monitorId ? { ...m, quantity } : m
                                 ));
                             }}
