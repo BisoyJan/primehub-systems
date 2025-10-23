@@ -1,14 +1,14 @@
 <?php
 
-use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\Station\CampaignController;
+use App\Http\Controllers\Station\SiteController;
+use App\Http\Controllers\Station\StationController;
 use App\Http\Controllers\ProcessorSpecsController;
 use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\RamSpecsController;
 use App\Http\Controllers\MonitorSpecsController;
 use App\Http\Controllers\PcSpecController;
-use App\Http\Controllers\StationController;
 use App\Http\Controllers\StockController;
-use App\Http\Controllers\SiteController;
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\PcTransferController;
 use App\Http\Controllers\PcMaintenanceController;

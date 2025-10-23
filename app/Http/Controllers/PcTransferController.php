@@ -21,7 +21,7 @@ class PcTransferController extends Controller
         $search = $request->query('search');
         $siteFilter = $request->query('site');
         $campaignFilter = $request->query('campaign');
-        $perPage = 20;
+        $perPage = 15;
 
         // Get stations with their PC specs
         $query = Station::with(['site', 'campaign', 'pcSpec.ramSpecs', 'pcSpec.diskSpecs', 'pcSpec.processorSpecs'])
@@ -75,7 +75,7 @@ class PcTransferController extends Controller
                 ];
             });
 
-        return Inertia::render('PC Transfer/Index', [
+        return Inertia::render('Station/PcTransfer/Index', [
             'stations' => [
                 'data' => $stations,
                 'links' => $paginatorArray['links'] ?? [],
@@ -346,7 +346,7 @@ class PcTransferController extends Controller
 
         $paginatorArray = $transfers->toArray();
 
-        return Inertia::render('PC Transfer/History', [
+        return Inertia::render('Station/PcTransfer/History', [
             'transfers' => [
                 'data' => $formattedTransfers,
                 'links' => $paginatorArray['links'] ?? [],
@@ -420,7 +420,7 @@ class PcTransferController extends Controller
             ->orderBy('name')
             ->get();
 
-        return Inertia::render('PC Transfer/Transfer', [
+        return Inertia::render('Station/PcTransfer/Transfer', [
             'stations' => $stations,
             'pcSpecs' => $pcSpecs,
             'filters' => [

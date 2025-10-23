@@ -50,7 +50,7 @@ class PcMaintenanceController extends Controller
 
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('PcMaintenance/Index', [
+        return Inertia::render('Station/PcMaintenance/Index', [
             'maintenances' => $maintenances,
             'sites' => $sites,
             'filters' => $request->only(['status', 'search', 'site']),
@@ -70,7 +70,7 @@ class PcMaintenanceController extends Controller
 
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('PcMaintenance/Create', [
+        return Inertia::render('Station/PcMaintenance/Create', [
             'stations' => $stations,
             'sites' => $sites,
         ]);
@@ -121,7 +121,7 @@ class PcMaintenanceController extends Controller
     {
         $pcMaintenance->load('pcSpec');
 
-        return Inertia::render('PcMaintenance/Show', [
+        return Inertia::render('Station/PcMaintenance/Show', [
             'maintenance' => $pcMaintenance,
         ]);
     }
@@ -138,7 +138,7 @@ class PcMaintenanceController extends Controller
 
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('PcMaintenance/Edit', [
+        return Inertia::render('Station/PcMaintenance/Edit', [
             'maintenance' => $pcMaintenance->load('station.pcSpec', 'station.site'),
             'stations' => $stations,
             'sites' => $sites,

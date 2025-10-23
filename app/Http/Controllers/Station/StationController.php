@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Station;
 
+use App\Http\Controllers\Controller;
 use App\Models\MonitorSpec;
 use App\Models\Station;
 use App\Models\Site;

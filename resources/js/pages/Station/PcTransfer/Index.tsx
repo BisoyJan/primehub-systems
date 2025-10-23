@@ -372,7 +372,19 @@ export default function Index() {
                                             <TableCell>{station.site}</TableCell>
                                             <TableCell>{station.campaign}</TableCell>
                                             <TableCell>
-                                                <Badge variant={station.status === 'active' ? 'default' : 'secondary'}>
+                                                <Badge
+                                                    className={
+                                                        station.status.toLowerCase() === 'occupied'
+                                                            ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                            : station.status.toLowerCase() === 'vacant'
+                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                : station.status.toLowerCase() === 'no pc'
+                                                                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                    : station.status.toLowerCase() === 'admin'
+                                                                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                                        : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                                    }
+                                                >
                                                     {station.status}
                                                 </Badge>
                                             </TableCell>

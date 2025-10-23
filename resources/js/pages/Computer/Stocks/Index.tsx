@@ -394,7 +394,14 @@ export default function Index() {
                                                 row.stockable?.series ??
                                                 '-'}
                                         </TableCell>
-                                        <TableCell>{row.quantity}</TableCell>
+                                        <TableCell>
+                                            {row.quantity}
+                                            {row.quantity < 10 && (
+                                                <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                                                    Low Stock
+                                                </span>
+                                            )}
+                                        </TableCell>
                                         <TableCell className="hidden xl:table-cell">{row.reserved}</TableCell>
                                         <TableCell className="hidden xl:table-cell">{row.location ?? '-'}</TableCell>
                                         <TableCell className="hidden xl:table-cell">{row.notes ?? '-'}</TableCell>
@@ -451,7 +458,14 @@ export default function Index() {
                                 </div>
                                 <div className="text-right">
                                     <div className="text-xs text-muted-foreground">Quantity</div>
-                                    <div className="font-medium text-lg">{row.quantity}</div>
+                                    <div className="flex items-center gap-2 justify-end">
+                                        <div className="font-medium text-lg">{row.quantity}</div>
+                                        {row.quantity < 10 && (
+                                            <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                                                Low
+                                            </span>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
 

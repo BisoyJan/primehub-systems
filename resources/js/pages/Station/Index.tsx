@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Badge } from "@/components/ui/badge";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -382,7 +383,23 @@ export default function StationIndex() {
                                             <TableCell>{station.site}</TableCell>
                                             <TableCell>{station.station_number}</TableCell>
                                             <TableCell>{station.campaign}</TableCell>
-                                            <TableCell>{station.status}</TableCell>
+                                            <TableCell>
+                                                <Badge
+                                                    className={
+                                                        station.status.toLowerCase() === 'occupied'
+                                                            ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                            : station.status.toLowerCase() === 'vacant'
+                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                : station.status.toLowerCase() === 'no pc'
+                                                                    ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                    : station.status.toLowerCase() === 'admin'
+                                                                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                                        : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                                    }
+                                                >
+                                                    {station.status}
+                                                </Badge>
+                                            </TableCell>
                                             <TableCell className="hidden xl:table-cell">
                                                 <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
                                                     {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
