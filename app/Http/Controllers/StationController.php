@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\MonitorSpec;
 use App\Models\Station;
 use App\Models\Site;
 use App\Models\PcSpec;
@@ -16,7 +17,7 @@ class StationController extends Controller
     public function index(Request $request)
     {
         $paginated = Station::query()
-            ->with(['site', 'pcSpec', 'campaign'])
+            ->with(['site', 'pcSpec', 'campaign', 'monitors'])
             ->search($request->query('search'))
             ->filterBySite($request->query('site'))
             ->filterByCampaign($request->query('campaign'))
@@ -26,6 +27,18 @@ class StationController extends Controller
             ->withQueryString();
 
         $items = $paginated->getCollection()->map(function (Station $station) {
+            $monitors = $station->monitors->map(function ($monitor) {
+                return [
+                    'id' => $monitor->id,
+                    'brand' => $monitor->brand,
+                    'model' => $monitor->model,
+                    'screen_size' => $monitor->screen_size,
+                    'resolution' => $monitor->resolution,
+                    'panel_type' => $monitor->panel_type,
+                    'quantity' => $monitor->pivot->quantity ?? 1,
+                ];
+            });
+
             return [
                 'id' => $station->id,
                 'site' => $station->site?->name,
@@ -35,6 +48,7 @@ class StationController extends Controller
                 'monitor_type' => $station->monitor_type,
                 'pc_spec' => $station->pcSpec?->model,
                 'pc_spec_details' => $station->pcSpec?->getFormattedDetails(),
+                'monitors' => $monitors,
                 'created_at' => optional($station->created_at)->toDateTimeString(),
                 'updated_at' => optional($station->updated_at)->toDateTimeString(),
             ];
@@ -63,6 +77,7 @@ class StationController extends Controller
             'sites' => Site::all(['id', 'name']),
             'campaigns' => Campaign::all(['id', 'name']),
             'pcSpecs' => $this->getFormattedPcSpecs(),
+            'monitorSpecs' => MonitorSpec::all(['id', 'brand', 'model', 'screen_size', 'resolution', 'panel_type']),
             'usedPcSpecIds' => Station::pluck('pc_spec_id')->toArray(),
         ]);
     }
@@ -80,7 +95,22 @@ class StationController extends Controller
             $data['pc_spec_id'] = null;
         }
 
-        Station::create($data);
+        // Extract monitor data before creating station
+        $monitorIds = $request->input('monitor_ids', []);
+
+        $station = Station::create($data);
+
+        // Attach monitors if provided
+        if (!empty($monitorIds)) {
+            foreach ($monitorIds as $monitorData) {
+                if (is_array($monitorData) && isset($monitorData['id'])) {
+                    $station->monitors()->attach($monitorData['id'], [
+                        'quantity' => $monitorData['quantity'] ?? 1
+                    ]);
+                }
+            }
+        }
+
         return redirect()->back()->with('flash', ['message' => 'Station saved', 'type' => 'success']);
     }
 
@@ -246,11 +276,15 @@ class StationController extends Controller
     // Show edit form
     public function edit(Station $station)
     {
+        // Load the station with its monitors
+        $station->load('monitors');
+
         return Inertia::render('Station/Edit', [
             'station' => $station,
             'sites' => Site::all(['id', 'name']),
             'campaigns' => Campaign::all(['id', 'name']),
             'pcSpecs' => $this->getFormattedPcSpecs(),
+            'monitorSpecs' => \App\Models\MonitorSpec::all(['id', 'brand', 'model', 'screen_size', 'resolution', 'panel_type']),
             'usedPcSpecIds' => Station::pluck('pc_spec_id')->toArray(),
         ]);
     }
@@ -269,6 +303,21 @@ class StationController extends Controller
         }
 
         $station->update($data);
+
+        // Sync monitors
+        $monitorIds = $request->input('monitor_ids', []);
+        $station->monitors()->detach(); // Remove all existing monitors
+
+        if (!empty($monitorIds)) {
+            foreach ($monitorIds as $monitorData) {
+                if (is_array($monitorData) && isset($monitorData['id'])) {
+                    $station->monitors()->attach($monitorData['id'], [
+                        'quantity' => $monitorData['quantity'] ?? 1
+                    ]);
+                }
+            }
+        }
+
         return redirect()->back()->with('flash', ['message' => 'Station updated', 'type' => 'success']);
     }
 
@@ -319,6 +368,9 @@ class StationController extends Controller
             'status' => 'required|string|max:255',
             'monitor_type' => 'required|in:single,dual',
             'pc_spec_id' => 'nullable|exists:pc_specs,id',
+            'monitor_ids' => 'nullable|array',
+            'monitor_ids.*.id' => 'required|exists:monitor_specs,id',
+            'monitor_ids.*.quantity' => 'required|integer|min:1|max:2',
         ], [
             'station_number.unique' => 'The station number has already been used.',
         ], [
@@ -327,6 +379,7 @@ class StationController extends Controller
             'campaign_id' => 'campaign',
             'monitor_type' => 'monitor type',
             'pc_spec_id' => 'PC spec',
+            'monitor_ids' => 'monitors',
         ]);
     }
 }

@@ -74,6 +74,16 @@ class PcSpec extends Model
         );
     }
 
+    public function monitors()
+    {
+        return $this->belongsToMany(
+            MonitorSpec::class,
+            'monitor_pc_spec',
+            'pc_spec_id',
+            'monitor_spec_id'
+        )->withPivot('quantity')->withTimestamps();
+    }
+
     public function stations()
     {
         return $this->hasMany(Station::class);

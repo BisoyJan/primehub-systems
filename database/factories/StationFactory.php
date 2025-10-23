@@ -27,7 +27,7 @@ class StationFactory extends Factory
             'station_number' => 'ST-' . fake()->unique()->numberBetween(1, 9999),
             'campaign_id' => Campaign::factory(),
             'status' => fake()->randomElement(['active', 'inactive', 'maintenance']),
-            'monitor_type' => fake()->randomElement(['Dual', 'Single']),
+            'monitor_type' => fake()->randomElement(['dual', 'single']), // lowercase to match seeder
             'pc_spec_id' => PcSpec::factory(),
         ];
     }

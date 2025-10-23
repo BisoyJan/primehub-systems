@@ -50,6 +50,15 @@ interface Station {
         disk_type: string;
         issue?: string | null;
     };
+    monitors?: Array<{
+        id: number;
+        brand: string;
+        model: string;
+        screen_size: number;
+        resolution: string;
+        panel_type: string;
+        quantity: number;
+    }>;
 }
 interface Flash { message?: string; type?: string; }
 interface Meta {
@@ -84,14 +93,18 @@ export default function StationIndex() {
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading(); // Track page loading state
 
+    // Initialize filters from URL params
+    const urlParams = new URLSearchParams(window.location.search);
     const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState("");
-    const [debouncedSearch, setDebouncedSearch] = useState("");
-    const [siteFilter, setSiteFilter] = useState("all");
-    const [campaignFilter, setCampaignFilter] = useState("all");
-    const [statusFilter, setStatusFilter] = useState("all");
+    const [search, setSearch] = useState(urlParams.get('search') || "");
+    const [debouncedSearch, setDebouncedSearch] = useState(urlParams.get('search') || "");
+    const [siteFilter, setSiteFilter] = useState(urlParams.get('site') || "all");
+    const [campaignFilter, setCampaignFilter] = useState(urlParams.get('campaign') || "all");
+    const [statusFilter, setStatusFilter] = useState(urlParams.get('status') || "all");
     const [pcSpecDialogOpen, setPcSpecDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<Station['pc_spec_details'] | null>(null);
+    const [monitorDialogOpen, setMonitorDialogOpen] = useState(false);
+    const [selectedMonitors, setSelectedMonitors] = useState<Station['monitors']>([]);
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [issueText, setIssueText] = useState("");
     const [selectedEmptyStations, setSelectedEmptyStations] = useState<number[]>([]);
@@ -101,13 +114,23 @@ export default function StationIndex() {
         return () => clearTimeout(timer);
     }, [search]);
 
+    // Track if this is the initial mount
+    const isInitialMount = React.useRef(true);
+
     useEffect(() => {
+        // Skip on initial mount (data already loaded by Inertia)
+        if (isInitialMount.current) {
+            isInitialMount.current = false;
+            return;
+        }
+
         const params: Record<string, string | number> = {};
         if (debouncedSearch) params.search = debouncedSearch;
         if (siteFilter && siteFilter !== "all") params.site = siteFilter;
         if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
         if (statusFilter && statusFilter !== "all") params.status = statusFilter;
 
+        // When filters change, reset to page 1 (don't preserve page from URL)
         setLoading(true);
         router.get("/stations", params, {
             preserveState: true,
@@ -329,7 +352,8 @@ export default function StationIndex() {
                                     <TableHead>Station #</TableHead>
                                     <TableHead>Campaign</TableHead>
                                     <TableHead>Status</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Monitor</TableHead>
+                                    <TableHead className="hidden xl:table-cell">Monitor Type</TableHead>
+                                    <TableHead>Monitors</TableHead>
                                     <TableHead>PC Spec</TableHead>
                                     <TableHead className="hidden xl:table-cell">PC Issue</TableHead>
                                     <TableHead>Actions</TableHead>
@@ -363,6 +387,39 @@ export default function StationIndex() {
                                                 <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
                                                     {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
                                                 </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    {station.monitors && station.monitors.length > 0 ? (
+                                                        <>
+                                                            <div className="text-sm">
+                                                                {station.monitors.map((monitor, idx) => (
+                                                                    <div key={monitor.id} className="flex items-center gap-1">
+                                                                        <span>{monitor.brand} {monitor.model}</span>
+                                                                        {monitor.quantity > 1 && (
+                                                                            <span className="text-xs text-blue-600 font-medium">×{monitor.quantity}</span>
+                                                                        )}
+                                                                        {idx < station.monitors!.length - 1 && <span className="text-gray-400">,</span>}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => {
+                                                                    setSelectedMonitors(station.monitors || []);
+                                                                    setMonitorDialogOpen(true);
+                                                                }}
+                                                                className="h-7 w-7 p-0"
+                                                                title="View Monitor Details"
+                                                            >
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">No monitors</span>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
@@ -449,7 +506,7 @@ export default function StationIndex() {
                                 })}
                                 {stations.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={11} className="py-8 text-center text-gray-500">
                                             No stations found
                                         </TableCell>
                                     </TableRow>
@@ -503,10 +560,43 @@ export default function StationIndex() {
                                         <span className="font-medium">{station.campaign}</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Monitor:</span>
+                                        <span className="text-muted-foreground">Monitor Type:</span>
                                         <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : 'font-medium'}>
                                             {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
                                         </span>
+                                    </div>
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-muted-foreground">Monitors:</span>
+                                        <div className="flex items-center gap-2">
+                                            {station.monitors && station.monitors.length > 0 ? (
+                                                <>
+                                                    <div className="text-right text-sm">
+                                                        {station.monitors.map((monitor) => (
+                                                            <div key={monitor.id}>
+                                                                {monitor.brand} {monitor.model}
+                                                                {monitor.quantity > 1 && (
+                                                                    <span className="text-xs text-blue-600 ml-1">×{monitor.quantity}</span>
+                                                                )}
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            setSelectedMonitors(station.monitors || []);
+                                                            setMonitorDialogOpen(true);
+                                                        }}
+                                                        className="h-7 w-7 p-0"
+                                                        title="View Monitor Details"
+                                                    >
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                </>
+                                            ) : (
+                                                <span className="text-xs text-gray-400">No monitors</span>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="flex justify-between items-center">
                                         <span className="text-muted-foreground">PC Spec:</span>
@@ -612,7 +702,7 @@ export default function StationIndex() {
                 </div>
                 <div className="flex justify-center mt-4">
                     {stations.links && stations.links.length > 0 && (
-                        <PaginationNav links={stations.links} />
+                        <PaginationNav links={stations.links} only={['stations']} />
                     )}
                 </div>
 
@@ -659,6 +749,64 @@ export default function StationIndex() {
                                     </div>
                                 ) : (
                                     <p className="text-muted-foreground">No PC spec details available.</p>
+                                )}
+                            </DialogDescription>
+                        </DialogHeader>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Monitor Details Dialog */}
+                <Dialog open={monitorDialogOpen} onOpenChange={setMonitorDialogOpen}>
+                    <DialogContent className="max-w-[90vw] sm:max-w-2xl">
+                        <DialogHeader>
+                            <DialogTitle>Monitor Details</DialogTitle>
+                            <DialogDescription>
+                                {selectedMonitors && selectedMonitors.length > 0 ? (
+                                    <div className="space-y-4 text-left mt-4">
+                                        {selectedMonitors.map((monitor, idx) => (
+                                            <div key={monitor.id} className="border-b pb-4 last:border-b-0 last:pb-0">
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <h3 className="font-semibold text-foreground text-lg">
+                                                            Monitor {idx + 1}
+                                                            {monitor.quantity > 1 && (
+                                                                <span className="ml-2 text-sm text-blue-600 font-medium">
+                                                                    (Quantity: {monitor.quantity})
+                                                                </span>
+                                                            )}
+                                                        </h3>
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="font-semibold text-foreground mb-1">Brand:</div>
+                                                        <div className="text-foreground pl-2">{monitor.brand}</div>
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="font-semibold text-foreground mb-1">Model:</div>
+                                                        <div className="text-foreground pl-2">{monitor.model}</div>
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="font-semibold text-foreground mb-1">Screen Size:</div>
+                                                        <div className="text-foreground pl-2">{monitor.screen_size}"</div>
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="font-semibold text-foreground mb-1">Resolution:</div>
+                                                        <div className="text-foreground pl-2">{monitor.resolution}</div>
+                                                    </div>
+
+                                                    <div>
+                                                        <div className="font-semibold text-foreground mb-1">Panel Type:</div>
+                                                        <div className="text-foreground pl-2">{monitor.panel_type}</div>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-muted-foreground">No monitor details available.</p>
                                 )}
                             </DialogDescription>
                         </DialogHeader>

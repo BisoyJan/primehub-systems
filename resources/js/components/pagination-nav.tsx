@@ -12,9 +12,10 @@ interface Props {
     links: PaginationLink[];
     className?: string;
     onPageChange?: (page: number) => void;
+    only?: string[];
 }
 
-export default function PaginationNav({ links, className = "", onPageChange }: Props) {
+export default function PaginationNav({ links, className = "", onPageChange, only }: Props) {
     if (!links || links.length === 0) return null;
 
     const getPageNumber = (url: string | null): number | null => {
@@ -67,6 +68,7 @@ export default function PaginationNav({ links, className = "", onPageChange }: P
                         href={link.url}
                         className={`${base} ${active ? activeClasses : normalClasses}`}
                         preserveScroll
+                        only={only}
                         aria-current={active ? "page" : undefined}
                         dangerouslySetInnerHTML={{ __html: link.label }}
                     />

@@ -39,7 +39,7 @@ const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Stocks', href: stocksIndex().url }
 ];
 
-type SpecType = 'ram' | 'disk' | 'processor';
+type SpecType = 'ram' | 'disk' | 'processor' | 'monitor';
 
 type StockRow = {
     id: number;
@@ -179,6 +179,7 @@ export default function Index() {
         if (/Ram/i.test(base)) return 'ram';
         if (/Disk/i.test(base)) return 'disk';
         if (/Processor/i.test(base)) return 'processor';
+        if (/Monitor/i.test(base)) return 'monitor';
         return 'ram';
     }
 
@@ -334,6 +335,7 @@ export default function Index() {
                                 <SelectItem value="ram">RAM</SelectItem>
                                 <SelectItem value="disk">Disk</SelectItem>
                                 <SelectItem value="processor">Processor</SelectItem>
+                                <SelectItem value="monitor">Monitor</SelectItem>
                             </SelectContent>
                         </Select>
 
@@ -360,7 +362,7 @@ export default function Index() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableCaption>
-                                Stock items for RAM, Disk and Processor specs
+                                Stock items for RAM, Disk, Processor and Monitor specs
                             </TableCaption>
                             <TableHeader>
                                 <TableRow>
@@ -535,6 +537,7 @@ export default function Index() {
                                     <SelectItem value="ram">RAM</SelectItem>
                                     <SelectItem value="disk">Disk</SelectItem>
                                     <SelectItem value="processor">Processor</SelectItem>
+                                    <SelectItem value="monitor">Monitor</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

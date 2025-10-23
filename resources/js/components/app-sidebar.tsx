@@ -20,9 +20,10 @@ import { index as processorIndex } from '@/routes/processorspecs'
 import { index as pcIndex } from '@/routes/pcspecs'
 import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
+import { index as monitorIndex } from '@/routes/monitorspecs'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, User, Wrench } from 'lucide-react';
+import { ArrowUpDown, BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -48,6 +49,11 @@ const computerNavItems: NavItem[] = [
         title: 'Processor Specs',
         href: processorIndex.url(),
         icon: CpuIcon
+    },
+    {
+        title: 'Monitor Specs',
+        href: monitorIndex.url(),
+        icon: Monitor
     },
     {
         title: 'PC Specs',

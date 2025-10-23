@@ -37,7 +37,7 @@ export function DataTable<T extends { id: number }>({ columns, data, rowDisabled
                     const disabled = rowDisabled?.(row);
                     const selected = rowSelected?.(row);
                     return (
-                        <TableRow key={row.id} className={disabled ? "bg-gray-100 text-gray-400" : selected ? "bg-gray-800" : ""}>
+                        <TableRow key={row.id} className={disabled ? "bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500" : selected ? "bg-blue-50 dark:bg-blue-900/30 text-gray-900 dark:text-gray-100" : ""}>
                             {showSelector && (
                                 <TableCell className="text-center">
                                     <input

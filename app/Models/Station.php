@@ -44,6 +44,13 @@ class Station extends Model
         return $this->belongsTo(PcSpec::class);
     }
 
+    public function monitors()
+    {
+        return $this->belongsToMany(MonitorSpec::class, 'monitor_station')
+            ->withPivot('quantity')
+            ->withTimestamps();
+    }
+
     public function transfersFrom()
     {
         return $this->hasMany(PcTransfer::class, 'from_station_id');

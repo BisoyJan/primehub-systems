@@ -7,6 +7,7 @@ use App\Models\Stock;
 use App\Models\RamSpec;
 use App\Models\DiskSpec;
 use App\Models\ProcessorSpec;
+use App\Models\MonitorSpec;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
@@ -21,6 +22,7 @@ class StockController extends Controller
         'ram' => RamSpec::class,
         'disk' => DiskSpec::class,
         'processor' => ProcessorSpec::class,
+        'monitor' => MonitorSpec::class,
     ];
 
     /**
@@ -48,6 +50,7 @@ class StockController extends Controller
             'ram'       => RamSpec::class,
             'disk'      => DiskSpec::class,
             'processor' => ProcessorSpec::class,
+            'monitor'   => MonitorSpec::class,
         ];
 
         // Filter by a specific type if provided
@@ -148,7 +151,7 @@ class StockController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'type' => 'required|string|in:ram,disk,processor',
+            'type' => 'required|string|in:ram,disk,processor,monitor',
             'stockable_id' => 'required|integer|min:1',
             'quantity' => 'nullable|integer|min:0',
             'reserved' => 'nullable|integer|min:0',
@@ -252,7 +255,7 @@ class StockController extends Controller
     public function adjust(Request $request)
     {
         $data = $request->validate([
-            'type' => 'required|string|in:ram,disk,processor',
+            'type' => 'required|string|in:ram,disk,processor,monitor',
             'stockable_id' => 'required|integer|min:1',
             'delta' => 'required|integer',
         ]);
@@ -287,6 +290,7 @@ class StockController extends Controller
         if (stripos($base, 'Ram') !== false) return 'ram';
         if (stripos($base, 'Disk') !== false) return 'disk';
         if (stripos($base, 'Processor') !== false) return 'processor';
+        if (stripos($base, 'Monitor') !== false) return 'monitor';
         return 'ram';
     }
 }

@@ -4,6 +4,7 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\ProcessorSpecsController;
 use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\RamSpecsController;
+use App\Http\Controllers\MonitorSpecsController;
 use App\Http\Controllers\PcSpecController;
 use App\Http\Controllers\StationController;
 use App\Http\Controllers\StockController;
@@ -28,6 +29,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('diskspecs', DiskSpecsController::class)
         ->except(['show']);
     Route::resource('processorspecs', ProcessorSpecsController::class)
+        ->except(['show']);
+    Route::resource('monitorspecs', MonitorSpecsController::class)
         ->except(['show']);
     Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])
         ->name('pcspecs.updateIssue');
