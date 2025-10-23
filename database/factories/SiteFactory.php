@@ -11,9 +11,11 @@ class SiteFactory extends Factory
 
     public function definition(): array
     {
-        $sites = ['PH1-2F', 'PH1-3F', 'PH1-4F', 'PH2', 'PH3'];
+        $sites = ['PH1', 'PH2', 'PH3', 'PH1-2F', 'PH1-3F', 'PH1-4F', 'PH4', 'PH5', 'PH6', 'PH7'];
+
         return [
-            'name' => $this->faker->randomElement($sites),
+            // Use unique() to ensure no duplicate names during factory generation
+            'name' => $this->faker->unique()->randomElement($sites),
         ];
     }
 }

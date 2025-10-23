@@ -236,6 +236,12 @@ export default function Index() {
                                 Configure Transfers
                             </Button>
                         )}
+                        <Link href="/pc-transfers/transfer">
+                            <Button variant="outline">
+                                <ArrowRight size={16} className="mr-2" />
+                                Transfer
+                            </Button>
+                        </Link>
                         <Button
                             variant="outline"
                             onClick={() => router.visit('/pc-transfers/history')}

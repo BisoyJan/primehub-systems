@@ -20,9 +20,15 @@ class CampaignFactory extends Factory
             'PSO',
             'Real State',
             'Sales',
+            'Customer Service',
+            'Technical Support',
+            'Marketing',
+            'Finance',
         ];
+
         return [
-            'name' => $this->faker->randomElement($campaigns),
+            // Use unique() to ensure no duplicate names during factory generation
+            'name' => $this->faker->unique()->randomElement($campaigns),
         ];
     }
 }

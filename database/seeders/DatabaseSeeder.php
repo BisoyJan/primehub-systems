@@ -31,7 +31,7 @@ class DatabaseSeeder extends Seeder
 
         // Call all seeders - each now uses factories for generating data
         $this->call([
-            AccountSeeder::class,       // Creates 4 test accounts + 10 random users via factory
+            AccountSeeder::class,       // Creates 5 test accounts + 10 random users via factory
             ProcessorSpecSeeder::class, // Creates 20 processors via factory
             RamSpecSeeder::class,       // Creates 20 RAM specs via factory
             DiskSpecSeeder::class,      // Creates 20 disk specs via factory

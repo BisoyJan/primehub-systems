@@ -11,7 +11,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import {
     Dialog,
@@ -44,6 +46,10 @@ interface PcSpec {
     station?: {
         id: number;
         station_number: string;
+        site: string;
+        site_id: number;
+        campaign: string;
+        campaign_id: number;
     } | null;
     is_floating?: boolean; // Indicates PC was recently unassigned
 }
@@ -52,7 +58,9 @@ interface Station {
     id: number;
     station_number: string;
     site: string;
+    site_id: number;
     campaign: string;
+    campaign_id: number;
     pc_spec_id: number | null;
     pc_spec_details: {
         pc_number?: string | null;
@@ -65,9 +73,23 @@ interface Station {
     } | null;
 }
 
+interface Site {
+    id: number;
+    name: string;
+}
+
+interface Campaign {
+    id: number;
+    name: string;
+}
+
 interface Props {
     stations: Station[];
     pcSpecs: PcSpec[];
+    filters: {
+        sites: Site[];
+        campaigns: Campaign[];
+    };
     preselectedStationId?: number | null;
     flash?: { message?: string; type?: string } | null;
 }
@@ -112,8 +134,20 @@ export default function Transfer(props: Props) {
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading(); // Track page loading state
 
+    // Ensure unique sites and campaigns (in case backend sends duplicates)
+    const uniqueSites = Array.from(
+        new Map(props.filters.sites.map(site => [site.id, site])).values()
+    );
+    const uniqueCampaigns = Array.from(
+        new Map(props.filters.campaigns.map(campaign => [campaign.id, campaign])).values()
+    );
+
     const [pcSearch, setPcSearch] = useState('');
     const [stationSearch, setStationSearch] = useState('');
+    const [pcSiteFilter, setPcSiteFilter] = useState('all');
+    const [pcCampaignFilter, setPcCampaignFilter] = useState('all');
+    const [stationSiteFilter, setStationSiteFilter] = useState('all');
+    const [stationCampaignFilter, setStationCampaignFilter] = useState('all');
     const [transfers, setTransfers] = useState<Transfer[]>([]);
     const [errors, setErrors] = useState<string[]>([]);
     const [processing, setProcessing] = useState(false);
@@ -162,21 +196,31 @@ export default function Transfer(props: Props) {
 
     const filteredPcSpecs = pcSpecs.filter(pc => {
         const search = pcSearch.toLowerCase();
-        return (
+        const matchesSearch = (
             (pc.pc_number && pc.pc_number.toLowerCase().includes(search)) ||
             pc.label.toLowerCase().includes(search) ||
             (pc.details.model && pc.details.model.toLowerCase().includes(search)) ||
             (pc.details.processor && pc.details.processor.toLowerCase().includes(search))
         );
+
+        const matchesSite = pcSiteFilter === 'all' || (pc.station && String(pc.station.site_id) === pcSiteFilter);
+        const matchesCampaign = pcCampaignFilter === 'all' || (pc.station && String(pc.station.campaign_id) === pcCampaignFilter);
+
+        return matchesSearch && matchesSite && matchesCampaign;
     });
 
     const filteredStations = stations.filter(station => {
         const search = stationSearch.toLowerCase();
-        return (
+        const matchesSearch = (
             station.station_number.toLowerCase().includes(search) ||
             station.site.toLowerCase().includes(search) ||
             station.campaign.toLowerCase().includes(search)
         );
+
+        const matchesSite = stationSiteFilter === 'all' || String(station.site_id) === stationSiteFilter;
+        const matchesCampaign = stationCampaignFilter === 'all' || String(station.campaign_id) === stationCampaignFilter;
+
+        return matchesSearch && matchesSite && matchesCampaign;
     });
 
     function getTransferByPc(pcId: number): Transfer | undefined {
@@ -597,7 +641,7 @@ export default function Transfer(props: Props) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="mb-4">
+                            <div className="mb-4 space-y-3">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -607,6 +651,42 @@ export default function Transfer(props: Props) {
                                         value={pcSearch}
                                         onChange={(e) => setPcSearch(e.target.value)}
                                     />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Site Filter</Label>
+                                        <Select value={pcSiteFilter} onValueChange={setPcSiteFilter}>
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Sites</SelectItem>
+                                                {uniqueSites.map((site) => (
+                                                    <SelectItem key={site.id} value={String(site.id)}>
+                                                        {site.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Campaign Filter</Label>
+                                        <Select value={pcCampaignFilter} onValueChange={setPcCampaignFilter}>
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Campaigns</SelectItem>
+                                                {uniqueCampaigns.map((campaign) => (
+                                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                                        {campaign.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                             </div>
 
@@ -746,7 +826,7 @@ export default function Transfer(props: Props) {
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="mb-4">
+                            <div className="mb-4 space-y-3">
                                 <div className="relative">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                                     <Input
@@ -756,6 +836,42 @@ export default function Transfer(props: Props) {
                                         value={stationSearch}
                                         onChange={(e) => setStationSearch(e.target.value)}
                                     />
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Site Filter</Label>
+                                        <Select value={stationSiteFilter} onValueChange={setStationSiteFilter}>
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Sites</SelectItem>
+                                                {uniqueSites.map((site) => (
+                                                    <SelectItem key={site.id} value={String(site.id)}>
+                                                        {site.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Campaign Filter</Label>
+                                        <Select value={stationCampaignFilter} onValueChange={setStationCampaignFilter}>
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Campaigns</SelectItem>
+                                                {uniqueCampaigns.map((campaign) => (
+                                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                                        {campaign.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
                                 </div>
                             </div>
 

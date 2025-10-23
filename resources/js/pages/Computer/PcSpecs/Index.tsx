@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
+import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
@@ -37,17 +38,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
-import type { BreadcrumbItem } from '@/types';
+// New reusable components and hooks
+import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { PageHeader } from "@/components/PageHeader";
+import { SearchBar } from "@/components/SearchBar";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+
 import {
     index as pcSpecIndex,
     create as pcSpecCreate,
     edit as pcSpecEdit,
     destroy as pcSpecDestroy,
 } from '@/routes/pcspecs';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: "PC Specifications", href: pcSpecIndex().url }
-];
 
 interface RamSpec {
     id: number;
@@ -96,44 +98,46 @@ interface PcSpec {
     processorSpecs: ProcessorSpec[];
 }
 
+interface PaginatedPcSpecs {
+    data: PcSpec[];
+    links: PaginationLink[];
+}
 
-type PageProps = {
-    pcspecs: { data: PcSpec[]; links: PaginationLink[] };
+interface Props extends InertiaPageProps {
     flash?: { message?: string; type?: string };
+    pcspecs: PaginatedPcSpecs;
     search?: string;
-};
+}
 
 export default function Index() {
-    const { pcspecs, flash, search: initialSearch } =
-        usePage<PageProps>().props;
+    const { pcspecs, search: initialSearch } = usePage<Props>().props;
     const form = useForm({ search: initialSearch || '' });
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
 
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === "error") {
-            toast.error(flash.message);
-        } else {
-            toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
+    // Use new hooks for cleaner code
+    const { title, breadcrumbs } = usePageMeta({
+        title: "PC Specifications",
+        breadcrumbs: [{ title: "PC Specifications", href: pcSpecIndex().url }]
+    });
 
-    function handleSearch(e: React.FormEvent) {
+    useFlashMessage(); // Automatically handles flash messages
+    const isLoading = usePageLoading(); // Track page loading state
+
+    const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
         form.get(pcSpecIndex.url(), {
             preserveState: true,
             preserveScroll: true,
         });
-    }
+    };
 
-    function handleDelete(id: number) {
-        form.delete(
-            pcSpecDestroy({ pcspec: id }).url, {
+    const handleDelete = (id: number) => {
+        form.delete(pcSpecDestroy({ pcspec: id }).url, {
             preserveScroll: true,
         });
-    }
+    };
 
     function handleOpenIssueDialog(pcSpec: PcSpec) {
         setSelectedPcSpec(pcSpec);
@@ -160,33 +164,27 @@ export default function Index() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="PC Specs" />
+            <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
-                {/* Header Section */}
-                <div className="flex flex-col gap-3">
-                    <h2 className="text-lg md:text-xl font-semibold">PC Specs Management</h2>
+                {/* Loading overlay for page transitions */}
+                <LoadingOverlay isLoading={isLoading} />
 
-                    {/* Search Form */}
-                    <form onSubmit={handleSearch} className="flex gap-2">
-                        <input
-                            type="text"
-                            name="search"
-                            placeholder="Search by model…"
-                            value={form.data.search}
-                            onChange={(e) => form.setData("search", e.target.value)}
-                            className="border rounded px-3 py-2 text-sm w-full focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <Button type="submit" className="shrink-0">Search</Button>
-                    </form>
-
-                    {/* Add Button */}
-                    <Link href={pcSpecCreate.url()} className="w-full sm:w-auto sm:self-end">
-                        <Button className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto">
-                            Add PC Spec
-                        </Button>
-                    </Link>
-                </div>
+                {/* Reusable page header with create button */}
+                <PageHeader
+                    title="PC Specs Management"
+                    description="Manage complete PC specifications and configurations"
+                    createLink={pcSpecCreate.url()}
+                    createLabel="Add PC Spec"
+                >
+                    {/* Reusable search bar */}
+                    <SearchBar
+                        value={form.data.search}
+                        onChange={(value) => form.setData("search", value)}
+                        onSubmit={handleSearch}
+                        placeholder="Search PC specifications..."
+                    />
+                </PageHeader>
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">

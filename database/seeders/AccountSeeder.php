@@ -43,6 +43,13 @@ class AccountSeeder extends Seeder
                 'role' => 'HR',
                 'email_verified_at' => now(),
             ],
+            [
+                'name' => 'IT User',
+                'email' => 'it@example.com',
+                'password' => Hash::make('password'),
+                'role' => 'IT',
+                'email_verified_at' => now(),
+            ],
         ];
 
         foreach ($testAccounts as $user) {

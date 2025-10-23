@@ -378,6 +378,10 @@ class PcTransferController extends Controller
                     'station' => $assignedStation ? [
                         'id' => $assignedStation->id,
                         'station_number' => $assignedStation->station_number,
+                        'site' => $assignedStation->site->name,
+                        'site_id' => $assignedStation->site_id,
+                        'campaign' => $assignedStation->campaign->name,
+                        'campaign_id' => $assignedStation->campaign_id,
                     ] : null,
                 ];
             });
@@ -397,15 +401,32 @@ class PcTransferController extends Controller
                 'id' => $st->id,
                 'station_number' => $st->station_number,
                 'site' => $st->site->name,
+                'site_id' => $st->site_id,
                 'campaign' => $st->campaign->name,
+                'campaign_id' => $st->campaign_id,
                 'pc_spec_id' => $st->pc_spec_id,
                 'pc_spec_details' => $st->pcSpec ? $st->pcSpec->getFormattedDetails() : null,
             ];
         });
 
+        // Get unique sites and campaigns for filters (distinct values only)
+        $sites = Site::select('id', 'name')
+            ->distinct()
+            ->orderBy('name')
+            ->get();
+
+        $campaigns = Campaign::select('id', 'name')
+            ->distinct()
+            ->orderBy('name')
+            ->get();
+
         return Inertia::render('PC Transfer/Transfer', [
             'stations' => $stations,
             'pcSpecs' => $pcSpecs,
+            'filters' => [
+                'sites' => $sites,
+                'campaigns' => $campaigns,
+            ],
             'preselectedStationId' => $station?->id,
             'flash' => session('flash') ?? null,
         ]);
