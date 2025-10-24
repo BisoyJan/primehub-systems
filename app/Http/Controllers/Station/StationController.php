@@ -285,7 +285,7 @@ class StationController extends Controller
             'sites' => Site::all(['id', 'name']),
             'campaigns' => Campaign::all(['id', 'name']),
             'pcSpecs' => $this->getFormattedPcSpecs(),
-            'monitorSpecs' => \App\Models\MonitorSpec::all(['id', 'brand', 'model', 'screen_size', 'resolution', 'panel_type']),
+            'monitorSpecs' => MonitorSpec::all(['id', 'brand', 'model', 'screen_size', 'resolution', 'panel_type']),
             'usedPcSpecIds' => Station::pluck('pc_spec_id')->toArray(),
         ]);
     }

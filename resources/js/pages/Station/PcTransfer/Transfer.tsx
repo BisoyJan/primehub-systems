@@ -122,6 +122,19 @@ interface Transfer {
 export default function Transfer(props: Props) {
     const { stations, pcSpecs, preselectedStationId } = props;
 
+    // Read 'pc' query param from URL
+    const [autoSelectedPcId, setAutoSelectedPcId] = useState<number | null>(null);
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const pcIdParam = params.get('pc');
+        if (pcIdParam) {
+            const pcId = parseInt(pcIdParam, 10);
+            if (!isNaN(pcId)) {
+                setAutoSelectedPcId(pcId);
+            }
+        }
+    }, []);
+
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
         title: 'Bulk PC Transfer',
@@ -157,22 +170,17 @@ export default function Transfer(props: Props) {
 
     // Auto-select PC from preselected station OR highlight empty station
     useEffect(() => {
+        // Existing logic for preselectedStationId
         if (preselectedStationId) {
             const preselectedStation = stations.find(s => s.id === preselectedStationId);
-
             if (preselectedStation?.pc_spec_id) {
-                // Station has a PC - auto-select it for transfer
                 const pcId = preselectedStation.pc_spec_id;
                 const color = generateRandomColor();
-
-                // Auto-select the PC that's currently at this station
                 setTransfers([{
                     pcId,
                     stationId: 0,
                     color
                 }]);
-
-                // Scroll to highlight the selected PC
                 setTimeout(() => {
                     const pcRow = document.querySelector(`[data-pc-id="${pcId}"]`);
                     if (pcRow) {
@@ -180,10 +188,7 @@ export default function Transfer(props: Props) {
                     }
                 }, 100);
             } else if (preselectedStation) {
-                // Station is empty - highlight it permanently until PC is selected
                 setHighlightedStationId(preselectedStationId);
-
-                // Scroll to the station
                 setTimeout(() => {
                     const stationRow = document.querySelector(`[data-station-id="${preselectedStationId}"]`);
                     if (stationRow) {
@@ -192,7 +197,22 @@ export default function Transfer(props: Props) {
                 }, 100);
             }
         }
-    }, [preselectedStationId, stations]);
+        // New logic for autoSelectedPcId from query param
+        else if (autoSelectedPcId) {
+            // Only auto-select if not already selected
+            setTransfers(prev => {
+                if (prev.some(t => t.pcId === autoSelectedPcId)) return prev;
+                const color = generateRandomColor();
+                return [{ pcId: autoSelectedPcId, stationId: 0, color }];
+            });
+            setTimeout(() => {
+                const pcRow = document.querySelector(`[data-pc-id="${autoSelectedPcId}"]`);
+                if (pcRow) {
+                    pcRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }, 100);
+        }
+    }, [preselectedStationId, stations, autoSelectedPcId]);
 
     const filteredPcSpecs = pcSpecs.filter(pc => {
         const search = pcSearch.toLowerCase();

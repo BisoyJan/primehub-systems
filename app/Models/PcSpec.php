@@ -94,6 +94,11 @@ class PcSpec extends Model
         return $this->hasMany(PcTransfer::class);
     }
 
+    public function station()
+    {
+        return $this->belongsTo(Station::class);
+    }
+
     // Format PC Spec details for frontend display
     public function getFormattedDetails(): array
     {

@@ -19,55 +19,53 @@ Route::get('/', function () {
     return redirect()->route('login');
 })->name('home');
 
+
 Route::middleware(['auth', 'verified'])->group(function () {
-    Route::get('dashboard', function () {
-        return Inertia::render('dashboard');
-    })->name('dashboard');
+    // Dashboard
+    Route::get('dashboard', fn() => Inertia::render('dashboard'))->name('dashboard');
 
-    Route::resource('ramspecs', RamSpecsController::class)
-        ->except(['show']);
-    Route::resource('diskspecs', DiskSpecsController::class)
-        ->except(['show']);
-    Route::resource('processorspecs', ProcessorSpecsController::class)
-        ->except(['show']);
-    Route::resource('monitorspecs', MonitorSpecsController::class)
-        ->except(['show']);
-    Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])
-        ->name('pcspecs.updateIssue');
-    Route::resource('pcspecs', PcSpecController::class)
-        ->except(['show']);
-    Route::resource('sites', SiteController::class)
-        ->except(['show']);
-    Route::post('stations/bulk', [StationController::class, 'storeBulk'])
-        ->name('stations.bulk');
-    Route::resource('stations', StationController::class)
-        ->except(['show']);
-    Route::resource('campaigns', CampaignController::class)
-        ->except(['show']);
+    // Hardware Specs
+    Route::resource('ramspecs', RamSpecsController::class)->except(['show']);
+    Route::resource('diskspecs', DiskSpecsController::class)->except(['show']);
+    Route::resource('processorspecs', ProcessorSpecsController::class)->except(['show']);
+    Route::resource('monitorspecs', MonitorSpecsController::class)->except(['show']);
+
+    // PC Specs
+    Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])->name('pcspecs.updateIssue');
+    Route::get('pcspecs/{pcspec}/qrcode', [PcSpecController::class, 'generateQRCode'])->name('pcspecs.qrcode');
+    Route::post('pcspecs/qrcode/bulk', [PcSpecController::class, 'generateBulkQRCodes'])->name('pcspecs.qrcode.bulk');
+    Route::resource('pcspecs', PcSpecController::class);
+
+    // Sites & Campaigns
+    Route::resource('sites', SiteController::class)->except(['show']);
+    Route::resource('campaigns', CampaignController::class)->except(['show']);
+
+    // Stations
+    Route::post('stations/bulk', [StationController::class, 'storeBulk'])->name('stations.bulk');
+    Route::resource('stations', StationController::class)->except(['show']);
+
+    // Stocks
     Route::resource('stocks', StockController::class);
-    Route::post('stocks/adjust', [StockController::class, 'adjust'])
-        ->name('stocks.adjust');
-    Route::resource('accounts', AccountController::class)
-        ->except(['show']);
+    Route::post('stocks/adjust', [StockController::class, 'adjust'])->name('stocks.adjust');
 
-    // PC Transfer routes
-    Route::get('pc-transfers', [PcTransferController::class, 'index'])
-        ->name('pc-transfers.index');
-    // Dedicated transfer page (table-based PC selector) - station is optional for bulk mode
-    Route::get('pc-transfers/transfer/{station?}', [PcTransferController::class, 'transferPage'])
-        ->name('pc-transfers.transferPage');
-    Route::post('pc-transfers', [PcTransferController::class, 'transfer'])
-        ->name('pc-transfers.transfer');
-    Route::post('pc-transfers/bulk', [PcTransferController::class, 'bulkTransfer'])
-        ->name('pc-transfers.bulk');
-    Route::delete('pc-transfers/remove', [PcTransferController::class, 'remove'])
-        ->name('pc-transfers.remove');
-    Route::get('pc-transfers/history', [PcTransferController::class, 'history'])
-        ->name('pc-transfers.history');
+    // Accounts
+    Route::resource('accounts', AccountController::class)->except(['show']);
 
-    // PC Maintenance routes
+    // PC Transfer
+    Route::prefix('pc-transfers')->group(function () {
+        Route::get('/', [PcTransferController::class, 'index'])->name('pc-transfers.index');
+        Route::get('/transfer/{station?}', [PcTransferController::class, 'transferPage'])->name('pc-transfers.transferPage');
+        Route::post('/', [PcTransferController::class, 'transfer'])->name('pc-transfers.transfer');
+        Route::post('/bulk', [PcTransferController::class, 'bulkTransfer'])->name('pc-transfers.bulk');
+        Route::delete('/remove', [PcTransferController::class, 'remove'])->name('pc-transfers.remove');
+        Route::get('/history', [PcTransferController::class, 'history'])->name('pc-transfers.history');
+    });
+
+    // PC Maintenance
     Route::resource('pc-maintenance', PcMaintenanceController::class);
 });
 
 require __DIR__ . '/settings.php';
 require __DIR__ . '/auth.php';
+
+

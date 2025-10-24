@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import { toast } from 'sonner';
+import { QRCodePrintView } from '@/components/QRCodePrintView';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -116,6 +117,10 @@ export default function Index() {
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
 
+    // QR Code functionality
+    const [selectedPcIds, setSelectedPcIds] = useState<number[]>([]);
+    const [showQRPrintView, setShowQRPrintView] = useState(false);
+
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
         title: "PC Specifications",
@@ -153,7 +158,6 @@ export default function Index() {
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success('Issue updated successfully');
                 setIssueDialogOpen(false);
             },
             onError: () => {
@@ -161,6 +165,113 @@ export default function Index() {
             },
         });
     }
+
+    // QR Code handlers
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            setSelectedPcIds(pcspecs.data.map(pc => pc.id));
+        } else {
+            setSelectedPcIds([]);
+        }
+    };
+
+    const handleSelectPc = (id: number, checked: boolean) => {
+        if (checked) {
+            setSelectedPcIds(prev => [...prev, id]);
+        } else {
+            setSelectedPcIds(prev => prev.filter(pcId => pcId !== id));
+        }
+    };
+
+    const handleGenerateQRCodes = () => {
+        if (selectedPcIds.length === 0) {
+            toast.error('Please select at least one PC to generate QR codes');
+            return;
+        }
+        setShowQRPrintView(true);
+    };
+
+    const handleDownloadQRCodes = () => {
+        if (selectedPcIds.length === 0) {
+            toast.error('Please select at least one PC to download QR codes');
+            return;
+        }
+
+        // Get CSRF token
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+
+        console.log('CSRF Token found:', csrfToken ? 'Yes' : 'No');
+        console.log('CSRF Token value:', csrfToken);
+
+        if (!csrfToken) {
+            toast.error('CSRF token not found. Please refresh the page.');
+            return;
+        }
+
+        toast.info('Generating QR codes...');
+
+        // Create a form and submit it to trigger file download
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/pcspecs/qrcode/bulk';
+        form.style.display = 'none';
+
+        // Add CSRF token
+        const csrfInput = document.createElement('input');
+        csrfInput.type = 'hidden';
+        csrfInput.name = '_token';
+        csrfInput.value = csrfToken;
+        form.appendChild(csrfInput);
+
+        console.log('Form CSRF input:', csrfInput.name, '=', csrfInput.value);
+
+        // Add PC IDs as array
+        selectedPcIds.forEach(id => {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'pc_spec_ids[]';
+            input.value = id.toString();
+            form.appendChild(input);
+        });
+
+        console.log('PC IDs to send:', selectedPcIds);
+
+        // Add format
+        const formatInput = document.createElement('input');
+        formatInput.type = 'hidden';
+        formatInput.name = 'format';
+        formatInput.value = 'png';
+        form.appendChild(formatInput);
+
+        // Add size
+        const sizeInput = document.createElement('input');
+        sizeInput.type = 'hidden';
+        sizeInput.name = 'size';
+        sizeInput.value = '256';
+        form.appendChild(sizeInput);
+
+        // Add metadata
+        const metadataInput = document.createElement('input');
+        metadataInput.type = 'hidden';
+        metadataInput.name = 'metadata';
+        metadataInput.value = '0';
+        form.appendChild(metadataInput);
+
+        // Submit form
+        document.body.appendChild(form);
+
+        console.log('Form contents before submit:', new FormData(form));
+
+        form.submit();
+
+        // Clean up after a delay
+        setTimeout(() => {
+            document.body.removeChild(form);
+            toast.success('Download started');
+        }, 1000);
+    };
+
+    const selectedPcSpecs = pcspecs.data.filter(pc => selectedPcIds.includes(pc.id));
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -186,12 +297,53 @@ export default function Index() {
                     />
                 </PageHeader>
 
+                {/* QR Code Selection Actions */}
+                {selectedPcIds.length > 0 && (
+                    <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <span className="font-medium text-blue-900 dark:text-blue-100">
+                                {selectedPcIds.length} PC{selectedPcIds.length !== 1 ? 's' : ''} selected
+                            </span>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setSelectedPcIds([])}
+                            >
+                                Clear Selection
+                            </Button>
+                        </div>
+                        <div className="flex gap-2">
+                            <Button
+                                onClick={handleDownloadQRCodes}
+                                variant="outline"
+                                className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white dark:hover:text-white"
+                            >
+                                Download as ZIP
+                            </Button>
+                            <Button
+                                onClick={handleGenerateQRCodes}
+                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                            >
+                                Generate QR Codes for Print
+                            </Button>
+                        </div>
+                    </div>
+                )}
+
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead className="w-12">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedPcIds.length === pcspecs.data.length && pcspecs.data.length > 0}
+                                            onChange={(e) => handleSelectAll(e.target.checked)}
+                                            className="cursor-pointer"
+                                        />
+                                    </TableHead>
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>PC Number</TableHead>
                                     <TableHead>Manufacturer</TableHead>
@@ -224,6 +376,14 @@ export default function Index() {
 
                                     return (
                                         <TableRow key={pc.id}>
+                                            <TableCell>
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedPcIds.includes(pc.id)}
+                                                    onChange={(e) => handleSelectPc(pc.id, e.target.checked)}
+                                                    className="cursor-pointer"
+                                                />
+                                            </TableCell>
                                             <TableCell className="hidden lg:table-cell">{pc.id}</TableCell>
                                             <TableCell className="font-medium">
                                                 {pc.pc_number || <span className="text-gray-400">—</span>}
@@ -436,7 +596,7 @@ export default function Index() {
 
                             <TableFooter>
                                 <TableRow>
-                                    <TableCell colSpan={9} className="text-center font-medium">
+                                    <TableCell colSpan={10} className="text-center font-medium">
                                         PC Specs List
                                     </TableCell>
                                 </TableRow>
@@ -463,10 +623,18 @@ export default function Index() {
                         return (
                             <div key={pc.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
                                 <div className="flex justify-between items-start">
-                                    <div>
-                                        <div className="text-xs text-muted-foreground">PC Number</div>
-                                        <div className="font-bold text-blue-600">
-                                            {pc.pc_number || <span className="text-gray-400">Not assigned</span>}
+                                    <div className="flex items-start gap-3 flex-1">
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedPcIds.includes(pc.id)}
+                                            onChange={(e) => handleSelectPc(pc.id, e.target.checked)}
+                                            className="cursor-pointer mt-1"
+                                        />
+                                        <div>
+                                            <div className="text-xs text-muted-foreground">PC Number</div>
+                                            <div className="font-bold text-blue-600">
+                                                {pc.pc_number || <span className="text-gray-400">Not assigned</span>}
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="text-right">
@@ -705,6 +873,14 @@ export default function Index() {
                         </div>
                     </DialogContent>
                 </Dialog>
+
+                {/* QR Code Print View */}
+                {showQRPrintView && (
+                    <QRCodePrintView
+                        pcSpecs={selectedPcSpecs}
+                        onClose={() => setShowQRPrintView(false)}
+                    />
+                )}
             </div>
         </AppLayout>
     );
