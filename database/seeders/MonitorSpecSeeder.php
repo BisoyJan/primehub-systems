@@ -12,8 +12,8 @@ class MonitorSpecSeeder extends Seeder
      */
     public function run(): void
     {
-        // Create 25 monitor specifications using the factory
-        $monitors = MonitorSpec::factory()->count(25)->create();
+        // Create 15 monitor specifications using the factory
+        $monitors = MonitorSpec::factory()->count(15)->create();
 
         $this->command->info('Created ' . $monitors->count() . ' monitor specifications.');
     }

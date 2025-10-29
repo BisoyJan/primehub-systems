@@ -83,6 +83,109 @@ interface Filters {
 }
 
 export default function StationIndex() {
+    // QR Code ZIP state
+    const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+    const [bulkProgress, setBulkProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
+    const [selectedZipProgress, setSelectedZipProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
+    const bulkIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    const selectedZipIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+
+    // Selection logic
+    const handleSelectAllStations = (checked: boolean) => {
+        setSelectedStationIds(checked ? stations.data.map(s => s.id) : []);
+    };
+    const handleSelectStation = (id: number, checked: boolean) => {
+        setSelectedStationIds(prev => checked ? [...prev, id] : prev.filter(sid => sid !== id));
+    };
+
+    // Bulk QR ZIP
+    const handleBulkDownloadAllQRCodes = () => {
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) return toast.error('CSRF token not found');
+        toast.info('Preparing bulk QR code ZIP...');
+        fetch('/stations/qrcode/bulk-all', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ format: 'png', size: 256, metadata: 0 }),
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.jobId) setBulkProgress({ running: true, percent: 0, status: 'Starting...', jobId: data.jobId });
+                else toast.error('Failed to start bulk download');
+            });
+    };
+
+    useEffect(() => {
+        if (bulkProgress.running && bulkProgress.jobId) {
+            bulkIntervalRef.current = setInterval(() => {
+                fetch(`/stations/qrcode/bulk-progress/${bulkProgress.jobId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setBulkProgress(prev => ({
+                            ...prev,
+                            percent: data.percent,
+                            status: data.status,
+                            downloadUrl: data.downloadUrl,
+                            running: !data.finished,
+                        }));
+                        if (data.finished && bulkIntervalRef.current) {
+                            clearInterval(bulkIntervalRef.current);
+                            bulkIntervalRef.current = null;
+                            if (data.downloadUrl) {
+                                window.location.href = data.downloadUrl;
+                                toast.success('Download started');
+                            }
+                        }
+                    });
+            }, 2000);
+        }
+        return () => { if (bulkIntervalRef.current) clearInterval(bulkIntervalRef.current); };
+    }, [bulkProgress.running, bulkProgress.jobId]);
+
+    // Selected QR ZIP
+    const handleDownloadSelectedQRCodes = () => {
+        if (selectedStationIds.length === 0) return toast.error('No stations selected');
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) return toast.error('CSRF token not found');
+        toast.info('Preparing selected QR code ZIP...');
+        fetch('/stations/qrcode/zip-selected', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-CSRF-TOKEN': csrfToken },
+            body: JSON.stringify({ station_ids: selectedStationIds, format: 'png', size: 256, metadata: 0 }),
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.jobId) setSelectedZipProgress({ running: true, percent: 0, status: 'Starting...', jobId: data.jobId });
+                else toast.error('Failed to start selected ZIP download');
+            });
+    };
+
+    useEffect(() => {
+        if (selectedZipProgress.running && selectedZipProgress.jobId) {
+            selectedZipIntervalRef.current = setInterval(() => {
+                fetch(`/stations/qrcode/selected-progress/${selectedZipProgress.jobId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setSelectedZipProgress(prev => ({
+                            ...prev,
+                            percent: data.percent,
+                            status: data.status,
+                            downloadUrl: data.downloadUrl,
+                            running: !data.finished,
+                        }));
+                        if (data.finished && selectedZipIntervalRef.current) {
+                            clearInterval(selectedZipIntervalRef.current);
+                            selectedZipIntervalRef.current = null;
+                            if (data.downloadUrl) {
+                                window.location.href = data.downloadUrl;
+                                toast.success('Download started');
+                            }
+                        }
+                    });
+            }, 2000);
+        }
+        return () => { if (selectedZipIntervalRef.current) clearInterval(selectedZipIntervalRef.current); };
+    }, [selectedZipProgress.running, selectedZipProgress.jobId]);
     const { stations, filters } = usePage<{ stations: StationsPayload; flash?: Flash; filters: Filters }>().props;
 
     // Use new hooks for cleaner code
@@ -283,17 +386,17 @@ export default function StationIndex() {
                     </div>
 
                     {/* Action Buttons - stacked on mobile, row on desktop */}
-                    <div className="flex flex-col sm:flex-row gap-3 sm:justify-between">
+                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:justify-between min-w-0">
                         {/* Bulk Selection Controls */}
                         {selectedEmptyStations.length > 0 && (
-                            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
+                            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 min-w-0">
                                 <span className="text-sm font-medium">
                                     {selectedEmptyStations.length} empty station{selectedEmptyStations.length > 1 ? 's' : ''} selected
                                 </span>
-                                <div className="flex gap-2 w-full sm:w-auto">
+                                <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto min-w-0">
                                     <Button
                                         onClick={handleBulkAssign}
-                                        className="flex items-center gap-2 flex-1 sm:flex-initial"
+                                        className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0"
                                         size="sm"
                                     >
                                         <CheckSquare className="h-4 w-4" />
@@ -303,9 +406,40 @@ export default function StationIndex() {
                                         variant="outline"
                                         onClick={clearSelection}
                                         size="sm"
-                                        className="flex-1 sm:flex-initial"
+                                        className="flex-1 sm:flex-initial min-w-0"
                                     >
                                         Clear
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* QR Code ZIP Actions */}
+                        {selectedStationIds.length > 0 && (
+                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between min-w-0">
+                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center min-w-0">
+                                    <span className="font-medium text-blue-900 dark:text-blue-100">
+                                        {selectedStationIds.length} Station{selectedStationIds.length !== 1 ? 's' : ''} selected
+                                    </span>
+                                    <Button variant="outline" size="sm" onClick={() => setSelectedStationIds([])} className="w-full sm:w-auto min-w-0">
+                                        Clear Selection
+                                    </Button>
+                                </div>
+                                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-2 min-w-0">
+                                    <Button
+                                        onClick={handleDownloadSelectedQRCodes}
+                                        variant="outline"
+                                        className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white dark:hover:text-white w-full sm:w-auto min-w-0"
+                                        disabled={selectedZipProgress.running}
+                                    >
+                                        Download Selected QR Codes as ZIP
+                                    </Button>
+                                    <Button
+                                        onClick={handleBulkDownloadAllQRCodes}
+                                        className="bg-blue-700 hover:bg-blue-800 text-white w-full sm:w-auto min-w-0"
+                                        disabled={bulkProgress.running}
+                                    >
+                                        Download All QR Codes as ZIP
                                     </Button>
                                 </div>
                             </div>
@@ -346,7 +480,12 @@ export default function StationIndex() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-12">
-                                        {/* Checkbox column for bulk selection */}
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedStationIds.length === stations.data.length && stations.data.length > 0}
+                                            onChange={e => handleSelectAllStations(e.target.checked)}
+                                            className="cursor-pointer"
+                                        />
                                     </TableHead>
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>Site</TableHead>
@@ -362,7 +501,6 @@ export default function StationIndex() {
                             </TableHeader>
                             <TableBody>
                                 {stations.data.map((station) => {
-                                    const hasPC = !!station.pc_spec_details;
                                     const isSelected = selectedEmptyStations.includes(station.id);
 
                                     return (
@@ -371,14 +509,40 @@ export default function StationIndex() {
                                             className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
                                         >
                                             <TableCell>
-                                                {!hasPC && (
-                                                    <Checkbox
-                                                        checked={isSelected}
-                                                        onCheckedChange={() => toggleStationSelection(station.id, hasPC)}
-                                                        aria-label={`Select station ${station.station_number}`}
-                                                    />
-                                                )}
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedStationIds.includes(station.id)}
+                                                    onChange={e => handleSelectStation(station.id, e.target.checked)}
+                                                    className="cursor-pointer"
+                                                />
                                             </TableCell>
+                                            {/* Floating progress indicators for QR ZIP */}
+                                            {bulkProgress.running && (
+                                                <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-900 border border-blue-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                                                    <div className="font-semibold text-blue-700 dark:text-blue-200">
+                                                        Bulk QR Code ZIP Progress
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 rounded h-3 mb-2">
+                                                        <div className="bg-blue-600 h-3 rounded" style={{ width: `${bulkProgress.percent}%` }} />
+                                                    </div>
+                                                    <div className="text-xs text-gray-700 dark:text-gray-300">
+                                                        {bulkProgress.status} ({bulkProgress.percent}%)
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {selectedZipProgress.running && (
+                                                <div className="fixed bottom-24 right-6 z-50 bg-white dark:bg-gray-900 border border-green-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                                                    <div className="font-semibold text-green-700 dark:text-green-200">
+                                                        Selected QR Code ZIP Progress
+                                                    </div>
+                                                    <div className="w-full bg-gray-200 rounded h-3 mb-2">
+                                                        <div className="bg-green-600 h-3 rounded" style={{ width: `${selectedZipProgress.percent}%` }} />
+                                                    </div>
+                                                    <div className="text-xs text-gray-700 dark:text-gray-300">
+                                                        {selectedZipProgress.status} ({selectedZipProgress.percent}%)
+                                                    </div>
+                                                </div>
+                                            )}
                                             <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
                                             <TableCell>{station.site}</TableCell>
                                             <TableCell>{station.station_number}</TableCell>

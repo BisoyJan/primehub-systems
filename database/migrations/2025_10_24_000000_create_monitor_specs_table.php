@@ -19,20 +19,10 @@ return new class extends Migration
             $table->text('notes')->nullable();
             $table->timestamps();
         });
-
-        // Pivot table for PC-Monitor relationship
-        Schema::create('monitor_pc_spec', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('pc_spec_id')->constrained('pc_specs')->onDelete('cascade');
-            $table->foreignId('monitor_spec_id')->constrained('monitor_specs')->onDelete('cascade');
-            $table->integer('quantity')->default(1);
-            $table->timestamps();
-        });
     }
 
     public function down(): void
     {
-        Schema::dropIfExists('monitor_pc_spec');
         Schema::dropIfExists('monitor_specs');
     }
 };

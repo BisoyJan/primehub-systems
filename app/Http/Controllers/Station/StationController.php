@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Station;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\GenerateAllStationQRCodesZip;
 use App\Models\MonitorSpec;
 use App\Models\Station;
 use App\Models\Site;
@@ -11,14 +12,115 @@ use App\Models\Campaign;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Utils\StationNumberUtil;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Response;
 
 class StationController extends Controller
+
 {
+
+
+    // Bulk all stations QR ZIP
+    public function bulkAllQRCodes(Request $request)
+    {
+        $request->validate([
+            'format' => 'required|string|in:png,svg',
+            'size' => 'required|integer|min:64|max:1024',
+            'metadata' => 'required|integer|in:0,1',
+        ]);
+        $jobId = (string)Str::uuid();
+       Bus::dispatch(new GenerateAllStationQRCodesZip(
+            $jobId,
+            $request->input('format'),
+            $request->input('size'),
+            $request->input('metadata')
+        ));
+        return response()->json(['jobId' => $jobId]);
+    }
+
+    public function bulkProgress($jobId)
+    {
+        $statusKey = "station_qrcode_zip_job:{$jobId}";
+        $progress = Cache::get($statusKey, [
+            'percent' => 0,
+            'status' => 'Not started',
+            'finished' => false,
+            'downloadUrl' => null,
+        ]);
+        return response()->json($progress);
+    }
+
+    public function downloadZip($jobId)
+    {
+        $zipFileName = "station-qrcodes-{$jobId}.zip";
+        $zipPath = storage_path("app/temp/{$zipFileName}");
+        if (!file_exists($zipPath)) {
+            abort(404, 'ZIP file not found');
+        }
+        return Response::download($zipPath, $zipFileName);
+    }
+
+    public function zipSelected(Request $request)
+    {
+        $request->validate([
+            'station_ids' => 'required|array',
+            'station_ids.*' => 'integer|exists:stations,id',
+            'format' => 'required|string|in:png,svg',
+            'size' => 'required|integer|min:64|max:1024',
+            'metadata' => 'required|integer|in:0,1',
+        ]);
+        $jobId = (string)Str::uuid();
+        Bus::dispatch(new \App\Jobs\GenerateSelectedStationQRCodesZip(
+            $jobId,
+            $request->input('station_ids'),
+            $request->input('format'),
+            $request->input('size'),
+            $request->input('metadata')
+        ));
+        return response()->json(['jobId' => $jobId]);
+    }
+
+    public function selectedZipProgress($jobId)
+    {
+        $statusKey = "station_qrcode_zip_selected_job:{$jobId}";
+        $progress = Cache::get($statusKey, [
+            'percent' => 0,
+            'status' => 'Not started',
+            'finished' => false,
+            'downloadUrl' => null,
+        ]);
+        return response()->json($progress);
+    }
+
+    public function downloadSelectedZip($jobId)
+    {
+        $zipFileName = "station-qrcodes-selected-{$jobId}.zip";
+        $zipPath = storage_path("app/temp/{$zipFileName}");
+        if (!file_exists($zipPath)) {
+            abort(404, 'ZIP file not found');
+        }
+        return Response::download($zipPath, $zipFileName);
+    }
+
+    public function json(Station $station)
+    {
+        $station->load(['site', 'campaign', 'pcSpec']);
+        return response()->json($station);
+    }
     // Paginated, searchable index
     public function index(Request $request)
     {
         $paginated = Station::query()
-            ->with(['site', 'pcSpec', 'campaign', 'monitors'])
+            ->with([
+                'site',
+                'pcSpec.ramSpecs',
+                'pcSpec.diskSpecs',
+                'pcSpec.processorSpecs',
+                'campaign',
+                'monitors'
+            ])
             ->search($request->query('search'))
             ->filterBySite($request->query('site'))
             ->filterByCampaign($request->query('campaign'))
@@ -40,6 +142,9 @@ class StationController extends Controller
                 ];
             });
 
+            // Ensure pcSpec is loaded with all specs
+            $pcSpecDetails = $station->pcSpec ? $station->pcSpec->getFormattedDetails() : null;
+
             return [
                 'id' => $station->id,
                 'site' => $station->site?->name,
@@ -48,7 +153,7 @@ class StationController extends Controller
                 'status' => $station->status,
                 'monitor_type' => $station->monitor_type,
                 'pc_spec' => $station->pcSpec?->model,
-                'pc_spec_details' => $station->pcSpec?->getFormattedDetails(),
+                'pc_spec_details' => $pcSpecDetails,
                 'monitors' => $monitors,
                 'created_at' => optional($station->created_at)->toDateTimeString(),
                 'updated_at' => optional($station->updated_at)->toDateTimeString(),
@@ -329,6 +434,18 @@ class StationController extends Controller
         return redirect()->back()->with('flash', ['message' => 'Station deleted', 'type' => 'success']);
     }
 
+    // ScanResult page for a station
+    public function scanResult($stationId)
+    {
+        $station = Station::with(['site', 'campaign', 'pcSpec.ramSpecs', 'pcSpec.diskSpecs', 'pcSpec.processorSpecs', 'monitors'])->find($stationId);
+        if (!$station) {
+            return Inertia::render('Station/ScanResult', ['error' => 'Station not found.']);
+        }
+        $pcSpecDetails = $station->pcSpec ? $station->pcSpec->getFormattedDetails() : null;
+        $stationArr = $station->toArray();
+        $stationArr['pcSpec'] = $pcSpecDetails;
+        return Inertia::render('Station/ScanResult', ['station' => $stationArr]);
+    }
     // Private helper methods
 
     /**

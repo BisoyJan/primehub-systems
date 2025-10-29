@@ -8,8 +8,6 @@ use Illuminate\Database\Eloquent\Builder;
 
 class Campaign extends Model
 {
-    use HasFactory;
-
     protected $fillable = ['name'];
 
     // Scope for search functionality

@@ -44,10 +44,10 @@ class AccountSeeder extends Seeder
                 'email_verified_at' => now(),
             ],
             [
-                'name' => 'IT User',
-                'email' => 'it@example.com',
+                'name' => 'Test Example User',
+                'email' => 'test@example.com',
                 'password' => Hash::make('password'),
-                'role' => 'IT',
+                'role' => 'Super Admin',
                 'email_verified_at' => now(),
             ],
         ];

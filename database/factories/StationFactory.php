@@ -23,9 +23,9 @@ class StationFactory extends Factory
     public function definition(): array
     {
         return [
-            'site_id' => Site::factory(),
             'station_number' => 'ST-' . fake()->unique()->numberBetween(1, 9999),
-            'campaign_id' => Campaign::factory(),
+            'site_id' => Site::inRandomOrder()->first()?->id,
+            'campaign_id' => Campaign::inRandomOrder()->first()?->id,
             'status' => fake()->randomElement(['active', 'inactive', 'maintenance']),
             'monitor_type' => fake()->randomElement(['dual', 'single']), // lowercase to match seeder
             'pc_spec_id' => PcSpec::factory(),

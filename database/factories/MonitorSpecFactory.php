@@ -31,4 +31,18 @@ class MonitorSpecFactory extends Factory
             'notes' => fake()->optional(0.3)->sentence(),
         ];
     }
+
+    public function configure()
+    {
+        return $this->afterCreating(function (MonitorSpec $monitor) {
+            \App\Models\Stock::create([
+                'stockable_type' => MonitorSpec::class,
+                'stockable_id' => $monitor->id,
+                'quantity' => fake()->numberBetween(1, 50),
+                'reserved' => 0,
+                'location' => fake()->optional()->word(),
+                'notes' => fake()->optional(0.2)->sentence(),
+            ]);
+        });
+    }
 }
