@@ -34,7 +34,7 @@ class StationSeeder extends Seeder
             for ($i = 1; $i <= 10; $i++) {
                 $stationNumber = strtoupper(($site->code ?? $site->name) . '-' . str_pad($i, 3, '0', STR_PAD_LEFT));
 
-                // Assign unique PC spec if available, 50% chance of having no PC spec
+                // Assign unique PC spec if available, 70% chance of having a PC spec
                 $pcSpecId = null;
                 if ($pcSpecIndex < $availablePcSpecs->count() && fake()->boolean(70)) {
                     $pcSpecId = $availablePcSpecs[$pcSpecIndex]->id;
@@ -42,12 +42,13 @@ class StationSeeder extends Seeder
                 }
 
                 $monitorType = fake()->randomElement(['single', 'dual']);
+                $status = $pcSpecId === null ? 'No Pc' : fake()->randomElement(['Occupied', 'Vacant', 'Admin']);
                 $station = Station::create([
                     'site_id' => $site->id,
                     'station_number' => $stationNumber,
                     'pc_spec_id' => $pcSpecId,
                     'campaign_id' => $campaigns->random()->id,
-                    'status' => fake()->randomElement(['active', 'inactive', 'maintenance']),
+                    'status' => $status,
                     'monitor_type' => $monitorType,
                 ]);
 

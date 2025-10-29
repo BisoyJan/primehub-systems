@@ -13,7 +13,7 @@ class PcSpecSeeder extends Seeder
     public function run(): void
     {
         PcSpec::factory()
-            ->count(15)
+            ->count(40)
             ->create()
             ->each(function (PcSpec $pc) {
                 // Only pick RAM that matches the motherboard memory_type

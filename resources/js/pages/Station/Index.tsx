@@ -745,7 +745,21 @@ export default function StationIndex() {
                                     </div>
                                     <div className="text-right">
                                         <div className="text-xs text-muted-foreground">Status</div>
-                                        <div className="font-medium">{station.status}</div>
+                                        <Badge
+                                            className={
+                                                station.status.toLowerCase() === 'occupied'
+                                                    ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                    : station.status.toLowerCase() === 'vacant'
+                                                        ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                        : station.status.toLowerCase() === 'no pc'
+                                                            ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                            : station.status.toLowerCase() === 'admin'
+                                                                ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                                : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                            }
+                                        >
+                                            {station.status}
+                                        </Badge>
                                     </div>
                                 </div>
 
