@@ -262,6 +262,10 @@ export default function Index() {
 
     useEffect(() => {
         if (bulkProgress.running && bulkProgress.jobId) {
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+                progressIntervalRef.current = null;
+            }
             progressIntervalRef.current = setInterval(() => {
                 fetch(`/pcspecs/qrcode/bulk-progress/${bulkProgress.jobId}`)
                     .then(res => res.json())
@@ -273,9 +277,11 @@ export default function Index() {
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
-                        if (data.finished && progressIntervalRef.current) {
-                            clearInterval(progressIntervalRef.current);
-                            progressIntervalRef.current = null;
+                        if (data.finished) {
+                            if (progressIntervalRef.current) {
+                                clearInterval(progressIntervalRef.current);
+                                progressIntervalRef.current = null;
+                            }
                             if (data.downloadUrl) {
                                 window.location.href = data.downloadUrl;
                                 toast.success('Download started');
@@ -341,6 +347,10 @@ export default function Index() {
     // Poll progress for selected ZIP every 2 seconds
     useEffect(() => {
         if (selectedZipProgress.running && selectedZipProgress.jobId) {
+            if (selectedZipIntervalRef.current) {
+                clearInterval(selectedZipIntervalRef.current);
+                selectedZipIntervalRef.current = null;
+            }
             selectedZipIntervalRef.current = setInterval(() => {
                 fetch(`/pcspecs/qrcode/selected-progress/${selectedZipProgress.jobId}`)
                     .then(res => res.json())
@@ -352,9 +362,11 @@ export default function Index() {
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
-                        if (data.finished && selectedZipIntervalRef.current) {
-                            clearInterval(selectedZipIntervalRef.current);
-                            selectedZipIntervalRef.current = null;
+                        if (data.finished) {
+                            if (selectedZipIntervalRef.current) {
+                                clearInterval(selectedZipIntervalRef.current);
+                                selectedZipIntervalRef.current = null;
+                            }
                             if (data.downloadUrl) {
                                 window.location.href = data.downloadUrl;
                                 toast.success('Download started');

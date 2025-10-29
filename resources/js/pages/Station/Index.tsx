@@ -136,6 +136,10 @@ export default function StationIndex() {
 
     useEffect(() => {
         if (bulkProgress.running && bulkProgress.jobId) {
+            if (bulkIntervalRef.current) {
+                clearInterval(bulkIntervalRef.current);
+                bulkIntervalRef.current = null;
+            }
             bulkIntervalRef.current = setInterval(() => {
                 fetch(`/stations/qrcode/bulk-progress/${bulkProgress.jobId}`)
                     .then(res => res.json())
@@ -147,9 +151,11 @@ export default function StationIndex() {
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
-                        if (data.finished && bulkIntervalRef.current) {
-                            clearInterval(bulkIntervalRef.current);
-                            bulkIntervalRef.current = null;
+                        if (data.finished) {
+                            if (bulkIntervalRef.current) {
+                                clearInterval(bulkIntervalRef.current);
+                                bulkIntervalRef.current = null;
+                            }
                             if (data.downloadUrl) {
                                 window.location.href = data.downloadUrl;
                                 toast.success('Download started');
@@ -158,7 +164,12 @@ export default function StationIndex() {
                     });
             }, 2000);
         }
-        return () => { if (bulkIntervalRef.current) clearInterval(bulkIntervalRef.current); };
+        return () => {
+            if (bulkIntervalRef.current) {
+                clearInterval(bulkIntervalRef.current);
+                bulkIntervalRef.current = null;
+            }
+        };
     }, [bulkProgress.running, bulkProgress.jobId]);
 
     // Selected QR ZIP
@@ -181,6 +192,10 @@ export default function StationIndex() {
 
     useEffect(() => {
         if (selectedZipProgress.running && selectedZipProgress.jobId) {
+            if (selectedZipIntervalRef.current) {
+                clearInterval(selectedZipIntervalRef.current);
+                selectedZipIntervalRef.current = null;
+            }
             selectedZipIntervalRef.current = setInterval(() => {
                 fetch(`/stations/qrcode/selected-progress/${selectedZipProgress.jobId}`)
                     .then(res => res.json())
@@ -192,9 +207,11 @@ export default function StationIndex() {
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
-                        if (data.finished && selectedZipIntervalRef.current) {
-                            clearInterval(selectedZipIntervalRef.current);
-                            selectedZipIntervalRef.current = null;
+                        if (data.finished) {
+                            if (selectedZipIntervalRef.current) {
+                                clearInterval(selectedZipIntervalRef.current);
+                                selectedZipIntervalRef.current = null;
+                            }
                             if (data.downloadUrl) {
                                 window.location.href = data.downloadUrl;
                                 toast.success('Download started');
@@ -203,7 +220,12 @@ export default function StationIndex() {
                     });
             }, 2000);
         }
-        return () => { if (selectedZipIntervalRef.current) clearInterval(selectedZipIntervalRef.current); };
+        return () => {
+            if (selectedZipIntervalRef.current) {
+                clearInterval(selectedZipIntervalRef.current);
+                selectedZipIntervalRef.current = null;
+            }
+        };
     }, [selectedZipProgress.running, selectedZipProgress.jobId]);
     const { stations, filters } = usePage<{ stations: StationsPayload; flash?: Flash; filters: Filters }>().props;
 
