@@ -84,13 +84,32 @@ interface Filters {
 
 export default function StationIndex() {
     // QR Code ZIP state
-    const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+    // Persist selectedStationIds in localStorage
+    const LOCAL_STORAGE_KEY = 'station_selected_ids';
+    const [selectedStationIds, setSelectedStationIds] = useState<number[]>(() => {
+        try {
+            const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [];
+        } catch {
+            // Ignore localStorage errors
+            return [];
+        }
+    });
     const [bulkProgress, setBulkProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
     const [selectedZipProgress, setSelectedZipProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
     const bulkIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const selectedZipIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
     // Selection logic
+    // Save selectedStationIds to localStorage on change
+    useEffect(() => {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(selectedStationIds));
+        } catch {
+            // Ignore localStorage errors
+        }
+    }, [selectedStationIds]);
+
     const handleSelectAllStations = (checked: boolean) => {
         setSelectedStationIds(checked ? stations.data.map(s => s.id) : []);
     };

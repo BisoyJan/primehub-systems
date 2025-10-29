@@ -136,8 +136,25 @@ export default function Index() {
 
     const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-    // QR Code functionality
-    const [selectedPcIds, setSelectedPcIds] = useState<number[]>([]);
+    // QR Code functionality - persist selection in localStorage
+    const LOCAL_STORAGE_KEY = 'pcspec_selected_ids';
+    const [selectedPcIds, setSelectedPcIds] = useState<number[]>(() => {
+        try {
+            const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+            return stored ? JSON.parse(stored) : [];
+        } catch {
+            // Ignore localStorage errors
+            return [];
+        }
+    });
+
+    useEffect(() => {
+        try {
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(selectedPcIds));
+        } catch {
+            // Ignore localStorage errors
+        }
+    }, [selectedPcIds]);
 
     const selectedZipIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
