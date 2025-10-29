@@ -1,8 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import { toast } from 'sonner';
-import { QRCodePrintView } from '@/components/QRCodePrintView';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -110,6 +109,8 @@ interface Props extends InertiaPageProps {
     search?: string;
 }
 
+
+
 export default function Index() {
     const { pcspecs, search: initialSearch } = usePage<Props>().props;
     const form = useForm({ search: initialSearch || '' });
@@ -117,9 +118,28 @@ export default function Index() {
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
 
+    const [selectedZipProgress, setSelectedZipProgress] = useState<{
+        running: boolean;
+        percent: number;
+        status: string;
+        downloadUrl?: string;
+        jobId?: string;
+    }>({ running: false, percent: 0, status: '' });
+
+    const [bulkProgress, setBulkProgress] = useState<{
+        running: boolean;
+        percent: number;
+        status: string;
+        downloadUrl?: string;
+        jobId?: string;
+    }>({ running: false, percent: 0, status: '' });
+
+    const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
     // QR Code functionality
     const [selectedPcIds, setSelectedPcIds] = useState<number[]>([]);
-    const [showQRPrintView, setShowQRPrintView] = useState(false);
+
+    const selectedZipIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
@@ -183,95 +203,156 @@ export default function Index() {
         }
     };
 
-    const handleGenerateQRCodes = () => {
-        if (selectedPcIds.length === 0) {
-            toast.error('Please select at least one PC to generate QR codes');
-            return;
-        }
-        setShowQRPrintView(true);
-    };
 
-    const handleDownloadQRCodes = () => {
-        if (selectedPcIds.length === 0) {
-            toast.error('Please select at least one PC to download QR codes');
-            return;
-        }
-
+    const handleBulkDownloadAllQRCodes = () => {
         // Get CSRF token
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
-
-        console.log('CSRF Token found:', csrfToken ? 'Yes' : 'No');
-        console.log('CSRF Token value:', csrfToken);
-
         if (!csrfToken) {
             toast.error('CSRF token not found. Please refresh the page.');
             return;
         }
 
-        toast.info('Generating QR codes...');
+        toast.info('Preparing bulk QR code ZIP...');
 
-        // Create a form and submit it to trigger file download
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/pcspecs/qrcode/bulk';
-        form.style.display = 'none';
-
-        // Add CSRF token
-        const csrfInput = document.createElement('input');
-        csrfInput.type = 'hidden';
-        csrfInput.name = '_token';
-        csrfInput.value = csrfToken;
-        form.appendChild(csrfInput);
-
-        console.log('Form CSRF input:', csrfInput.name, '=', csrfInput.value);
-
-        // Add PC IDs as array
-        selectedPcIds.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'pc_spec_ids[]';
-            input.value = id.toString();
-            form.appendChild(input);
-        });
-
-        console.log('PC IDs to send:', selectedPcIds);
-
-        // Add format
-        const formatInput = document.createElement('input');
-        formatInput.type = 'hidden';
-        formatInput.name = 'format';
-        formatInput.value = 'png';
-        form.appendChild(formatInput);
-
-        // Add size
-        const sizeInput = document.createElement('input');
-        sizeInput.type = 'hidden';
-        sizeInput.name = 'size';
-        sizeInput.value = '256';
-        form.appendChild(sizeInput);
-
-        // Add metadata
-        const metadataInput = document.createElement('input');
-        metadataInput.type = 'hidden';
-        metadataInput.name = 'metadata';
-        metadataInput.value = '0';
-        form.appendChild(metadataInput);
-
-        // Submit form
-        document.body.appendChild(form);
-
-        console.log('Form contents before submit:', new FormData(form));
-
-        form.submit();
-
-        // Clean up after a delay
-        setTimeout(() => {
-            document.body.removeChild(form);
-            toast.success('Download started');
-        }, 1000);
+        // Start bulk job
+        fetch('/pcspecs/qrcode/bulk-all', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify({
+                format: 'png',
+                size: 256,
+                metadata: 0,
+            }),
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.jobId) {
+                    setBulkProgress({
+                        running: true,
+                        percent: 0,
+                        status: 'Starting...',
+                        jobId: data.jobId,
+                    });
+                } else {
+                    toast.error('Failed to start bulk download');
+                }
+            })
+            .catch(() => toast.error('Failed to start bulk download'));
     };
 
-    const selectedPcSpecs = pcspecs.data.filter(pc => selectedPcIds.includes(pc.id));
+    useEffect(() => {
+        if (bulkProgress.running && bulkProgress.jobId) {
+            progressIntervalRef.current = setInterval(() => {
+                fetch(`/pcspecs/qrcode/bulk-progress/${bulkProgress.jobId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setBulkProgress(prev => ({
+                            ...prev,
+                            percent: data.percent,
+                            status: data.status,
+                            downloadUrl: data.downloadUrl,
+                            running: !data.finished,
+                        }));
+                        if (data.finished && progressIntervalRef.current) {
+                            clearInterval(progressIntervalRef.current);
+                            progressIntervalRef.current = null;
+                            if (data.downloadUrl) {
+                                window.location.href = data.downloadUrl;
+                                toast.success('Download started');
+                            }
+                        }
+                    });
+            }, 2000);
+        }
+        return () => {
+            if (progressIntervalRef.current) {
+                clearInterval(progressIntervalRef.current);
+                progressIntervalRef.current = null;
+            }
+        };
+    }, [bulkProgress.running, bulkProgress.jobId]);
+
+    const handleDownloadSelectedQRCodes = () => {
+        if (selectedPcIds.length === 0) {
+            toast.error('No PCs selected');
+            return;
+        }
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) {
+            toast.error('CSRF token not found. Please refresh the page.');
+            return;
+        }
+
+        toast.info('Preparing selected QR code ZIP...');
+
+        fetch('/pcspecs/qrcode/zip-selected', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify({
+                pc_ids: selectedPcIds,
+                format: 'png',
+                size: 256,
+                metadata: 0,
+            }),
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.jobId) {
+                    setSelectedZipProgress({
+                        running: true,
+                        percent: 0,
+                        status: 'Starting...',
+                        jobId: data.jobId,
+                    });
+                } else if (data.downloadUrl) {
+                    window.location.href = data.downloadUrl;
+                    toast.success('Download started');
+                } else {
+                    toast.error('Failed to start selected ZIP download');
+                }
+            })
+            .catch(() => toast.error('Failed to start selected ZIP download'));
+    };
+
+    // Poll progress for selected ZIP every 2 seconds
+    useEffect(() => {
+        if (selectedZipProgress.running && selectedZipProgress.jobId) {
+            selectedZipIntervalRef.current = setInterval(() => {
+                fetch(`/pcspecs/qrcode/selected-progress/${selectedZipProgress.jobId}`)
+                    .then(res => res.json())
+                    .then(data => {
+                        setSelectedZipProgress(prev => ({
+                            ...prev,
+                            percent: data.percent,
+                            status: data.status,
+                            downloadUrl: data.downloadUrl,
+                            running: !data.finished,
+                        }));
+                        if (data.finished && selectedZipIntervalRef.current) {
+                            clearInterval(selectedZipIntervalRef.current);
+                            selectedZipIntervalRef.current = null;
+                            if (data.downloadUrl) {
+                                window.location.href = data.downloadUrl;
+                                toast.success('Download started');
+                            }
+                        }
+                    });
+            }, 2000);
+        }
+        return () => {
+            if (selectedZipIntervalRef.current) {
+                clearInterval(selectedZipIntervalRef.current);
+                selectedZipIntervalRef.current = null;
+            }
+        };
+    }, [selectedZipProgress.running, selectedZipProgress.jobId]);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -280,6 +361,42 @@ export default function Index() {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
                 {/* Loading overlay for page transitions */}
                 <LoadingOverlay isLoading={isLoading} />
+
+                {/* Floating progress indicator for ALL */}
+                {bulkProgress.running && (
+                    <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-900 border border-blue-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                        <div className="font-semibold text-blue-700 dark:text-blue-200">
+                            Bulk QR Code ZIP Progress
+                        </div>
+                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
+                            <div
+                                className="bg-blue-600 h-3 rounded"
+                                style={{ width: `${bulkProgress.percent}%` }}
+                            />
+                        </div>
+                        <div className="text-xs text-gray-700 dark:text-gray-300">
+                            {bulkProgress.status} ({bulkProgress.percent}%)
+                        </div>
+                    </div>
+                )}
+
+                {/* Floating progress indicator for SELECTED */}
+                {selectedZipProgress.running && (
+                    <div className="fixed bottom-24 right-6 z-50 bg-white dark:bg-gray-900 border border-green-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                        <div className="font-semibold text-green-700 dark:text-green-200">
+                            Selected QR Code ZIP Progress
+                        </div>
+                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
+                            <div
+                                className="bg-green-600 h-3 rounded"
+                                style={{ width: `${selectedZipProgress.percent}%` }}
+                            />
+                        </div>
+                        <div className="text-xs text-gray-700 dark:text-gray-300">
+                            {selectedZipProgress.status} ({selectedZipProgress.percent}%)
+                        </div>
+                    </div>
+                )}
 
                 {/* Reusable page header with create button */}
                 <PageHeader
@@ -314,17 +431,19 @@ export default function Index() {
                         </div>
                         <div className="flex gap-2">
                             <Button
-                                onClick={handleDownloadQRCodes}
+                                onClick={handleDownloadSelectedQRCodes}
                                 variant="outline"
-                                className="border-blue-600 text-blue-600 hover:bg-blue-600 hover:text-white dark:hover:text-white"
+                                className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white dark:hover:text-white"
+                                disabled={selectedZipProgress.running}
                             >
-                                Download as ZIP
+                                Download Selected QR Codes as ZIP
                             </Button>
                             <Button
-                                onClick={handleGenerateQRCodes}
-                                className="bg-blue-600 hover:bg-blue-700 text-white"
+                                onClick={handleBulkDownloadAllQRCodes}
+                                className="bg-blue-700 hover:bg-blue-800 text-white"
+                                disabled={bulkProgress.running}
                             >
-                                Generate QR Codes for Print
+                                Download All QR Codes as ZIP
                             </Button>
                         </div>
                     </div>
@@ -874,13 +993,6 @@ export default function Index() {
                     </DialogContent>
                 </Dialog>
 
-                {/* QR Code Print View */}
-                {showQRPrintView && (
-                    <QRCodePrintView
-                        pcSpecs={selectedPcSpecs}
-                        onClose={() => setShowQRPrintView(false)}
-                    />
-                )}
             </div>
         </AppLayout>
     );

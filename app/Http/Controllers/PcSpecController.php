@@ -9,14 +9,20 @@ use App\Models\ProcessorSpec;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
-use Inertia\Inertia;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Facades\Storage;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\Writer\PngWriter;
 use Endroid\QrCode\Writer\SvgWriter;
-use Endroid\QrCode\QrCode;
-use Endroid\QrCode\Label\Label;
+use Inertia\Inertia;
+use App\Jobs\GenerateAllPcSpecQRCodesZip;
+use App\Jobs\GenerateSelectedPcSpecQRCodesZip;
+
 
 class PcSpecController extends Controller
 {
@@ -551,147 +557,6 @@ class PcSpecController extends Controller
     }
 
     /**
-     * GET /pcspecs/{pcspec}/qrcode
-     * Generate QR code for a single PC Spec (PNG or SVG)
-     */
-    public function generateQRCode(PcSpec $pcspec, Request $request)
-    {
-        $format = $request->query('format', 'png'); // png or svg
-        $size = (int) $request->query('size', 256);
-        $includeMetadata = $request->query('metadata', 'false') === 'true';
-
-        // Generate URL or metadata
-        $data = $includeMetadata
-            ? json_encode([
-                'url' => route('pcspecs.edit', $pcspec),
-                'pc_number' => $pcspec->pc_number ?? "PC-{$pcspec->id}",
-                'manufacturer' => $pcspec->manufacturer,
-                'model' => $pcspec->model,
-                'form_factor' => $pcspec->form_factor,
-                'memory_type' => $pcspec->memory_type,
-            ])
-            : route('pcspecs.edit', $pcspec);
-
-        $writer = $format === 'svg' ? new SvgWriter() : new PngWriter();
-
-        $builder = new Builder(
-            writer: $writer,
-            data: $data,
-            encoding: new Encoding('UTF-8'),
-            errorCorrectionLevel: ErrorCorrectionLevel::High,
-            size: $size,
-            margin: 10
-        );
-
-        $result = $builder->build();
-
-        $mimeType = $format === 'svg' ? 'image/svg+xml' : 'image/png';
-        $filename = ($pcspec->pc_number ?? "pc-{$pcspec->id}") . "-qrcode.{$format}";
-
-        return response($result->getString())
-            ->header('Content-Type', $mimeType)
-            ->header('Content-Disposition', "inline; filename=\"{$filename}\"");
-    }
-
-    /**
-     * POST /pcspecs/qrcode/bulk
-     * Generate QR codes for multiple PC Specs as a ZIP file
-     */
-    public function generateBulkQRCodes(Request $request)
-    {
-        try {
-            \Log::info('Bulk QR Code Generation Started', [
-                'request_data' => $request->all(),
-                'csrf_token' => $request->header('X-CSRF-TOKEN'),
-            ]);
-
-            $request->validate([
-                'pc_spec_ids' => 'required|array',
-                'pc_spec_ids.*' => 'exists:pc_specs,id',
-                'format' => 'nullable|in:png,svg',
-                'size' => 'nullable|integer|min:64|max:1024',
-                'metadata' => 'nullable|boolean',
-            ]);
-
-            $pcSpecIds = $request->input('pc_spec_ids');
-            $format = $request->input('format', 'png');
-            $size = (int) $request->input('size', 256);
-            $includeMetadata = $request->input('metadata', false);
-
-            $pcSpecs = PcSpec::whereIn('id', $pcSpecIds)->get();
-
-        if ($pcSpecs->isEmpty()) {
-            return response()->json(['error' => 'No PC Specs found'], 404);
-        }
-
-        // Check if ZipArchive is available
-        if (!class_exists('ZipArchive')) {
-            \Log::error('ZipArchive class not found. Please enable the PHP zip extension.');
-            return response()->json(['error' => 'ZIP extension not available. Please enable the PHP zip extension in your php.ini file.'], 500);
-        }
-
-        // Create a temporary ZIP file
-        $zipFileName = 'pc-qrcodes-' . date('Y-m-d-His') . '.zip';
-        $zipPath = storage_path('app/temp/' . $zipFileName);
-
-        // Ensure temp directory exists
-        if (!file_exists(storage_path('app/temp'))) {
-            mkdir(storage_path('app/temp'), 0755, true);
-        }
-
-        $zip = new \ZipArchive();
-        if ($zip->open($zipPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
-            return response()->json(['error' => 'Could not create ZIP file'], 500);
-        }
-
-        foreach ($pcSpecs as $pcspec) {
-            $data = $includeMetadata
-                ? json_encode([
-                    'url' => route('pcspecs.edit', $pcspec),
-                    'pc_number' => $pcspec->pc_number ?? "PC-{$pcspec->id}",
-                    'manufacturer' => $pcspec->manufacturer,
-                    'model' => $pcspec->model,
-                    'form_factor' => $pcspec->form_factor,
-                    'memory_type' => $pcspec->memory_type,
-                ])
-                : route('pcspecs.edit', $pcspec);
-
-            $writer = $format === 'svg' ? new SvgWriter() : new PngWriter();
-
-            // PC Number to display
-            $pcNumber = $pcspec->pc_number ?? "PC-{$pcspec->id}";
-
-            $builder = new Builder(
-                writer: $writer,
-                data: $data,
-                encoding: new Encoding('UTF-8'),
-                errorCorrectionLevel: ErrorCorrectionLevel::High,
-                size: $size,
-                margin: 10,
-                labelText: $pcNumber
-            );
-
-            $result = $builder->build();
-
-            $filename = $pcNumber . ".{$format}";
-            $zip->addFromString($filename, $result->getString());
-        }
-
-        $zip->close();
-
-        \Log::info('ZIP file created successfully', ['path' => $zipPath, 'size' => filesize($zipPath)]);
-
-        return response()->download($zipPath, $zipFileName)->deleteFileAfterSend(true);
-        } catch (\Exception $e) {
-            \Log::error('Bulk QR Code Generation Failed', [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-            ]);
-            return response()->json(['error' => 'Failed to generate QR codes: ' . $e->getMessage()], 500);
-        }
-    }
-
-    /**
      * GET /pcspecs/{pcspec}
      */
     public function show(PcSpec $pcspec)
@@ -702,4 +567,103 @@ class PcSpecController extends Controller
             'pcspec' => $pcspec,
         ]);
     }
+
+
+
+    public function bulkAll(Request $request)
+{
+    $request->validate([
+        'format' => 'required|string|in:png,svg',
+        'size' => 'required|integer|min:64|max:1024',
+        'metadata' => 'required|integer|in:0,1',
+    ]);
+
+    // Generate a unique job ID
+    $jobId = (string) Str::uuid();
+
+    // Dispatch the job (queue should be configured)
+    Bus::dispatch(
+        new GenerateAllPcSpecQRCodesZip(
+            $jobId,
+            $request->input('format'),
+            $request->input('size'),
+            $request->input('metadata')
+        )
+    );
+
+    return response()->json(['jobId' => $jobId]);
+}
+
+public function bulkProgress($jobId)
+{
+    $statusKey = "qrcode_zip_job:{$jobId}";
+    $progress = Cache::get($statusKey, [
+        'percent' => 0,
+        'status' => 'Not started',
+        'finished' => false,
+        'downloadUrl' => null,
+    ]);
+    return response()->json($progress);
+}
+
+public function downloadZip($jobId)
+{
+    $zipFileName = "pc-qrcodes-{$jobId}.zip";
+    $zipPath = storage_path("app/temp/{$zipFileName}");
+
+    if (!file_exists($zipPath)) {
+        abort(404, 'ZIP file not found');
+    }
+
+    return Response::download($zipPath, $zipFileName);
+}
+
+public function zipSelected(Request $request)
+{
+    $request->validate([
+        'pc_ids' => 'required|array',
+        'pc_ids.*' => 'integer|exists:pc_specs,id',
+        'format' => 'required|string|in:png,svg',
+        'size' => 'required|integer|min:64|max:1024',
+        'metadata' => 'required|integer|in:0,1',
+    ]);
+
+    $jobId = (string) Str::uuid();
+
+    // Dispatch a job similar to GenerateAllPcSpecQRCodesZip, but for selected IDs
+    dispatch(new GenerateSelectedPcSpecQRCodesZip(
+        $jobId,
+        $request->input('pc_ids'),
+        $request->input('format'),
+        $request->input('size'),
+        $request->input('metadata')
+    ));
+
+    return response()->json(['jobId' => $jobId]);
+}
+
+public function selectedZipProgress($jobId)
+{
+    $statusKey = "qrcode_zip_selected_job:{$jobId}";
+    $progress = Cache::get($statusKey, [
+        'percent' => 0,
+        'status' => 'Not started',
+        'finished' => false,
+        'downloadUrl' => null,
+    ]);
+    return response()->json($progress);
+}
+
+public function downloadSelectedZip($jobId)
+{
+    $zipFileName = "pc-qrcodes-selected-{$jobId}.zip";
+    $zipPath = storage_path("app/temp/{$zipFileName}");
+
+    if (!file_exists($zipPath)) {
+        abort(404, 'ZIP file not found');
+    }
+
+    return Response::download($zipPath, $zipFileName);
+}
+
 }

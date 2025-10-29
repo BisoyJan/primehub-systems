@@ -32,9 +32,15 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // PC Specs
     Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])->name('pcspecs.updateIssue');
-    Route::get('pcspecs/{pcspec}/qrcode', [PcSpecController::class, 'generateQRCode'])->name('pcspecs.qrcode');
-    Route::post('pcspecs/qrcode/bulk', [PcSpecController::class, 'generateBulkQRCodes'])->name('pcspecs.qrcode.bulk');
     Route::resource('pcspecs', PcSpecController::class);
+
+    // QR Code ZIP features
+    Route::post('/pcspecs/qrcode/zip-selected', [PcSpecController::class, 'zipSelected']);
+    Route::post('/pcspecs/qrcode/bulk-all', [PcSpecController::class, 'bulkAll']);
+    Route::get('/pcspecs/qrcode/bulk-progress/{jobId}', [PcSpecController::class, 'bulkProgress']);
+    Route::get('/pcspecs/qrcode/zip/{jobId}/download', [PcSpecController::class, 'downloadZip'])->name('pcspecs.qrcode.zip.download');
+    Route::get('/pcspecs/qrcode/selected-progress/{jobId}', [PcSpecController::class, 'selectedZipProgress']);
+    Route::get('/pcspecs/qrcode/selected-zip/{jobId}/download', [PcSpecController::class, 'downloadSelectedZip'])->name('pcspecs.qrcode.selected.download');
 
     // Sites & Campaigns
     Route::resource('sites', SiteController::class)->except(['show']);
