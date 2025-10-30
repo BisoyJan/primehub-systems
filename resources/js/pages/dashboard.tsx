@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { Head } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -86,21 +87,29 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, icon: Icon, descripti
     };
 
     return (
-        <Card
-            className={`cursor-pointer transition-all hover:shadow-md ${variantStyles[variant]}`}
-            onClick={onClick}
+        <motion.div
+            layout
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            whileHover={{ scale: 1.04, boxShadow: '0 4px 24px rgba(0,0,0,0.08)' }}
+            transition={{ duration: 0.4, type: 'spring', stiffness: 120 }}
         >
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{value}</div>
-                {description && (
-                    <p className="text-xs text-muted-foreground mt-1">{description}</p>
-                )}
-            </CardContent>
-        </Card>
+            <Card
+                className={`cursor-pointer transition-all hover:shadow-md ${variantStyles[variant]}`}
+                onClick={onClick}
+            >
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                    <CardTitle className="text-sm font-medium">{title}</CardTitle>
+                    <Icon className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                    <div className="text-2xl font-bold">{value}</div>
+                    {description && (
+                        <p className="text-xs text-muted-foreground mt-1">{description}</p>
+                    )}
+                </CardContent>
+            </Card>
+        </motion.div>
     );
 };
 
@@ -115,13 +124,21 @@ interface DetailDialogProps {
 const DetailDialog: React.FC<DetailDialogProps> = ({ open, onClose, title, description, children }) => {
     return (
         <Dialog open={open} onOpenChange={onClose}>
-            <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
-                <DialogHeader>
-                    <DialogTitle>{title}</DialogTitle>
-                    {description && <DialogDescription>{description}</DialogDescription>}
-                </DialogHeader>
-                <div className="mt-4">{children}</div>
-            </DialogContent>
+            <motion.div
+                layout
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.95 }}
+                transition={{ duration: 0.3, type: 'spring', stiffness: 120 }}
+            >
+                <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>{title}</DialogTitle>
+                        {description && <DialogDescription>{description}</DialogDescription>}
+                    </DialogHeader>
+                    <div className="mt-4">{children}</div>
+                </DialogContent>
+            </motion.div>
         </Dialog>
     );
 };
