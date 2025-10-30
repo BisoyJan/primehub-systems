@@ -38,6 +38,7 @@ interface DashboardProps {
     vacantStations: {
         total: number;
         bysite: Array<{ site: string; count: number }>;
+        stations: Array<{ site: string; station_number: string }>; // <-- add this
     };
     ssdPcs: {
         total: number;
@@ -125,6 +126,13 @@ const DetailDialog: React.FC<DetailDialogProps> = ({ open, onClose, title, descr
     );
 };
 
+// Extend the Window interface to include vacantStationsData
+declare global {
+    interface Window {
+        vacantStationsData?: Array<{ site: string; station_number: string }>;
+    }
+}
+
 export default function Dashboard({
     totalStations,
     noPcs,
@@ -137,8 +145,14 @@ export default function Dashboard({
     avgDaysOverdue,
 }: DashboardProps) {
     const [activeDialog, setActiveDialog] = useState<string | null>(null);
+    const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(null);
+    const [selectedNoPcSite, setSelectedNoPcSite] = useState<string | null>(null);
 
-    const closeDialog = () => setActiveDialog(null);
+    const closeDialog = () => {
+        setActiveDialog(null);
+        setSelectedVacantSite(null);
+        setSelectedNoPcSite(null);
+    };
 
     const [currentDateTime, setCurrentDateTime] = useState<string>("");
 
@@ -160,6 +174,54 @@ export default function Dashboard({
 
         return () => clearInterval(interval);
     }, []);
+
+    const VacantStationNumbers: React.FC<{ site: string; onBack: () => void }> = ({ site, onBack }) => {
+        const stationNumbers = vacantStations.stations
+            .filter((s) => s.site === site)
+            .map((s) => s.station_number);
+
+        return (
+            <div>
+                <button className="mb-4 text-sm text-primary underline" onClick={onBack}>&larr; Back to sites</button>
+                {stationNumbers.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-8">No vacant stations found for {site}</div>
+                ) : (
+                    <div>
+                        <div className="mb-2 font-semibold">Vacant Station Numbers:</div>
+                        <div className="flex flex-wrap gap-2">
+                            {stationNumbers.map((num, idx) => (
+                                <Badge key={idx} variant="outline">{num}</Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const NoPcStationNumbers: React.FC<{ site: string; onBack: () => void }> = ({ site, onBack }) => {
+        const stationNumbers = noPcs.stations
+            .filter((s) => s.site === site)
+            .map((s) => s.station);
+
+        return (
+            <div>
+                <button className="mb-4 text-sm text-primary underline" onClick={onBack}>&larr; Back to sites</button>
+                {stationNumbers.length === 0 ? (
+                    <div className="text-center text-muted-foreground py-8">No stations without PCs found for {site}</div>
+                ) : (
+                    <div>
+                        <div className="mb-2 font-semibold">Stations Without PCs:</div>
+                        <div className="flex flex-wrap gap-2">
+                            {stationNumbers.map((num, idx) => (
+                                <Badge key={idx} variant="outline">{num}</Badge>
+                            ))}
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -296,60 +358,69 @@ export default function Dashboard({
                 <DetailDialog
                     open={activeDialog === 'noPcs'}
                     onClose={closeDialog}
-                    title="Stations Without PCs"
-                    description="Stations that need PC assignment"
+                    title={selectedNoPcSite ? `Stations Without PCs in ${selectedNoPcSite}` : "Stations Without PCs"}
+                    description={selectedNoPcSite ? "Station numbers needing PC assignment" : "Stations that need PC assignment"}
                 >
-                    <div className="space-y-2">
-                        {noPcs.total === 0 ? (
-                            <div className="text-center text-muted-foreground py-8">
-                                All stations have PCs assigned
-                            </div>
-                        ) : (
-                            <>
-                                {noPcs.stations.slice(0, 10).map((station, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
-                                        <div>
-                                            <div className="font-medium">{station.station}</div>
-                                            <div className="text-sm text-muted-foreground">
-                                                {station.site} • {station.campaign}
-                                            </div>
+                    {!selectedNoPcSite ? (
+                        <div className="space-y-2">
+                            {noPcs.total === 0 ? (
+                                <div className="text-center text-muted-foreground py-8">
+                                    All stations have PCs assigned
+                                </div>
+                            ) : (
+                                Array.from(new Set(noPcs.stations.map(s => s.site))).map((site, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted"
+                                        onClick={() => setSelectedNoPcSite(site)}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-medium">{site}</span>
                                         </div>
-                                        <Badge variant="outline">No PC</Badge>
+                                        <Badge variant="secondary">{
+                                            noPcs.stations.filter(s => s.site === site).length
+                                        } without PC</Badge>
                                     </div>
-                                ))}
-                                {noPcs.stations.length > 10 && (
-                                    <div className="text-center text-sm text-muted-foreground pt-2">
-                                        ... and {noPcs.total - 10} more
-                                    </div>
-                                )}
-                            </>
-                        )}
-                    </div>
+                                ))
+                            )}
+                        </div>
+                    ) : (
+                        <NoPcStationNumbers site={selectedNoPcSite} onBack={() => setSelectedNoPcSite(null)} />
+                    )}
                 </DetailDialog>
 
                 <DetailDialog
                     open={activeDialog === 'vacantStations'}
                     onClose={closeDialog}
-                    title="Vacant Stations by Site"
-                    description="Available stations ready for deployment"
+                    title={selectedVacantSite ? `Vacant Stations in ${selectedVacantSite}` : "Vacant Stations by Site"}
+                    description={selectedVacantSite ? "Station numbers available for deployment" : "Available stations ready for deployment"}
                 >
-                    <div className="space-y-3">
-                        {vacantStations.bysite.length === 0 ? (
-                            <div className="text-center text-muted-foreground py-8">
-                                No vacant stations
-                            </div>
-                        ) : (
-                            vacantStations.bysite.map((site, idx) => (
-                                <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
-                                    <div className="flex items-center gap-2">
-                                        <MapPin className="h-4 w-4 text-muted-foreground" />
-                                        <span className="font-medium">{site.site}</span>
-                                    </div>
-                                    <Badge variant="secondary">{site.count} vacant</Badge>
+                    {!selectedVacantSite ? (
+                        <div className="space-y-3">
+                            {vacantStations.bysite.length === 0 ? (
+                                <div className="text-center text-muted-foreground py-8">
+                                    No vacant stations
                                 </div>
-                            ))
-                        )}
-                    </div>
+                            ) : (
+                                vacantStations.bysite.map((site, idx) => (
+                                    <div
+                                        key={idx}
+                                        className="flex items-center justify-between p-3 rounded-lg border cursor-pointer hover:bg-muted"
+                                        onClick={() => setSelectedVacantSite(site.site)}
+                                    >
+                                        <div className="flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-medium">{site.site}</span>
+                                        </div>
+                                        <Badge variant="secondary">{site.count} vacant</Badge>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+                    ) : (
+                        <VacantStationNumbers site={selectedVacantSite} onBack={() => setSelectedVacantSite(null)} />
+                    )}
                 </DetailDialog>
 
                 <DetailDialog

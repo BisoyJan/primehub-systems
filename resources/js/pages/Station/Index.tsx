@@ -998,44 +998,39 @@ export default function StationIndex() {
                             <DialogTitle>Monitor Details</DialogTitle>
                             <DialogDescription>
                                 {selectedMonitors && selectedMonitors.length > 0 ? (
-                                    <div className="space-y-4 text-left mt-4">
+                                    <div className="space-y-3 text-left mt-4">
                                         {selectedMonitors.map((monitor, idx) => (
-                                            <div key={monitor.id} className="border-b pb-4 last:border-b-0 last:pb-0">
-                                                <div className="space-y-3">
-                                                    <div className="flex items-center justify-between">
-                                                        <h3 className="font-semibold text-foreground text-lg">
-                                                            Monitor {idx + 1}
-                                                            {monitor.quantity > 1 && (
-                                                                <span className="ml-2 text-sm text-blue-600 font-medium">
-                                                                    (Quantity: {monitor.quantity})
-                                                                </span>
-                                                            )}
-                                                        </h3>
+                                            <div key={monitor.id} className="border-b pb-3 last:border-b-0 last:pb-0">
+                                                <div className="flex items-center justify-between mb-2">
+                                                    <h3 className="font-semibold text-foreground text-base">
+                                                        Monitor {idx + 1}
+                                                        {monitor.quantity > 1 && (
+                                                            <span className="ml-2 text-sm text-blue-600 font-medium">
+                                                                (Qty: {monitor.quantity})
+                                                            </span>
+                                                        )}
+                                                    </h3>
+                                                </div>
+                                                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                                                    <div className="flex gap-1 items-center">
+                                                        <span className="font-semibold text-foreground">Brand:</span>
+                                                        <span className="text-foreground">{monitor.brand}</span>
                                                     </div>
-
-                                                    <div>
-                                                        <div className="font-semibold text-foreground mb-1">Brand:</div>
-                                                        <div className="text-foreground pl-2">{monitor.brand}</div>
+                                                    <div className="flex gap-1 items-center">
+                                                        <span className="font-semibold text-foreground">Model:</span>
+                                                        <span className="text-foreground">{monitor.model}</span>
                                                     </div>
-
-                                                    <div>
-                                                        <div className="font-semibold text-foreground mb-1">Model:</div>
-                                                        <div className="text-foreground pl-2">{monitor.model}</div>
+                                                    <div className="flex gap-1 items-center">
+                                                        <span className="font-semibold text-foreground">Size:</span>
+                                                        <span className="text-foreground">{monitor.screen_size}"</span>
                                                     </div>
-
-                                                    <div>
-                                                        <div className="font-semibold text-foreground mb-1">Screen Size:</div>
-                                                        <div className="text-foreground pl-2">{monitor.screen_size}"</div>
+                                                    <div className="flex gap-1 items-center">
+                                                        <span className="font-semibold text-foreground">Res:</span>
+                                                        <span className="text-foreground">{monitor.resolution}</span>
                                                     </div>
-
-                                                    <div>
-                                                        <div className="font-semibold text-foreground mb-1">Resolution:</div>
-                                                        <div className="text-foreground pl-2">{monitor.resolution}</div>
-                                                    </div>
-
-                                                    <div>
-                                                        <div className="font-semibold text-foreground mb-1">Panel Type:</div>
-                                                        <div className="text-foreground pl-2">{monitor.panel_type}</div>
+                                                    <div className="flex gap-1 items-center">
+                                                        <span className="font-semibold text-foreground">Panel:</span>
+                                                        <span className="text-foreground">{monitor.panel_type}</span>
                                                     </div>
                                                 </div>
                                             </div>

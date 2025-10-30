@@ -8,6 +8,7 @@ use App\Models\Site;
 use App\Models\PcMaintenance;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
 use Carbon\Carbon;
 
@@ -15,7 +16,8 @@ class DashboardController extends Controller
 {
     public function index()
     {
-        $dashboardData = [
+        $dashboardData = Cache::remember('dashboard_stats', 150, function () {
+       return [
             'totalStations' => $this->getTotalStations(),
             'noPcs' => $this->getStationsWithoutPcs(),
             'vacantStations' => $this->getVacantStations(),
@@ -26,14 +28,15 @@ class DashboardController extends Controller
             'lastMaintenance' => $this->getLastMaintenance(),
             'avgDaysOverdue' => $this->getAverageDaysOverdue(),
         ];
+    });
 
-        return Inertia::render('dashboard', $dashboardData);
+    return Inertia::render('dashboard', $dashboardData);
     }
 
     /**
      * Get total stations count and breakdown by site
      */
-    private function getTotalStations(): array
+    public function getTotalStations(): array
     {
         $total = Station::count();
 
@@ -57,7 +60,7 @@ class DashboardController extends Controller
     /**
      * Get stations without PCs assigned
      */
-    private function getStationsWithoutPcs(): array
+    public function getStationsWithoutPcs(): array
     {
         $stations = Station::with(['site', 'campaign'])
             ->whereNull('pc_spec_id')
@@ -79,7 +82,7 @@ class DashboardController extends Controller
     /**
      * Get vacant stations breakdown by site
      */
-    private function getVacantStations(): array
+    public function getVacantStations(): array
     {
         $total = Station::where('status', 'Vacant')->count();
 
@@ -95,16 +98,26 @@ class DashboardController extends Controller
             ])
             ->toArray();
 
+        $stations = Station::with('site')
+            ->where('status', 'Vacant')
+            ->get()
+            ->map(fn($station) => [
+                'site' => $station->site->name,
+                'station_number' => $station->station_number
+            ])
+            ->toArray();
+
         return [
             'total' => $total,
-            'bysite' => $bySite
+            'bysite' => $bySite,
+            'stations' => $stations
         ];
     }
 
     /**
      * Get PCs with SSD drives
      */
-    private function getPcsWithSsd(): array
+    public function getPcsWithSsd(): array
     {
         $pcIds = DB::table('pc_spec_disk_spec')
             ->join('disk_specs', 'pc_spec_disk_spec.disk_spec_id', '=', 'disk_specs.id')
@@ -136,7 +149,7 @@ class DashboardController extends Controller
     /**
      * Get PCs with HDD drives
      */
-    private function getPcsWithHdd(): array
+    public function getPcsWithHdd(): array
     {
         $pcIds = DB::table('pc_spec_disk_spec')
             ->join('disk_specs', 'pc_spec_disk_spec.disk_spec_id', '=', 'disk_specs.id')
@@ -168,7 +181,7 @@ class DashboardController extends Controller
     /**
      * Get stations with dual monitor setup
      */
-    private function getDualMonitorStations(): array
+    public function getDualMonitorStations(): array
     {
         $total = Station::where('monitor_type', 'dual')->count();
 
@@ -193,7 +206,7 @@ class DashboardController extends Controller
     /**
      * Get stations with maintenance due/overdue
      */
-    private function getMaintenanceDue(): array
+    public function getMaintenanceDue(): array
     {
         $now = Carbon::now();
 
@@ -229,7 +242,7 @@ class DashboardController extends Controller
     /**
      * Get last maintenance record
      */
-    private function getLastMaintenance(): array
+    public function getLastMaintenance(): array
     {
         $lastMaintenance = PcMaintenance::with(['station.site'])
             ->where('status', 'completed')
@@ -256,7 +269,7 @@ class DashboardController extends Controller
     /**
      * Get average days overdue for maintenance by site
      */
-    private function getAverageDaysOverdue(): array
+    public function getAverageDaysOverdue(): array
     {
         $now = Carbon::now();
 

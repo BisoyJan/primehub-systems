@@ -24,6 +24,9 @@ class Kernel extends ConsoleKernel
 				}
 			}
 		})->dailyAt('2:00');
+
+		// Schedule dashboard stats calculation every five minutes
+		$schedule->job(new \App\Jobs\CalculateDashboardStats)->everyFiveMinutes();
 	}
 
 	/**
