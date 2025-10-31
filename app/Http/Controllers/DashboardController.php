@@ -31,8 +31,6 @@ class DashboardController extends Controller
                 'hddPcs' => $this->getPcsWithHdd(),
                 'dualMonitor' => $this->getDualMonitorStations(),
                 'maintenanceDue' => $this->getMaintenanceDue(),
-                'lastMaintenance' => $this->getLastMaintenance(),
-                'avgDaysOverdue' => $this->getAverageDaysOverdue(),
                 'unassignedPcSpecs' => $this->getUnassignedPcSpecs(),
             ];
         });
@@ -248,83 +246,6 @@ class DashboardController extends Controller
         ];
     }
 
-    /**
-     * Get last maintenance record
-     */
-    public function getLastMaintenance(): array
-    {
-        $lastMaintenance = PcMaintenance::with(['station.site'])
-            ->where('status', 'completed')
-            ->orderBy('last_maintenance_date', 'desc')
-            ->first();
-
-        if (!$lastMaintenance) {
-            return [
-                'date' => 'N/A',
-                'station' => 'N/A',
-                'site' => 'N/A',
-                'performedBy' => 'N/A'
-            ];
-        }
-
-        return [
-            'date' => Carbon::parse($lastMaintenance->last_maintenance_date)->format('Y-m-d'),
-            'station' => $lastMaintenance->station->station_number,
-            'site' => $lastMaintenance->station->site->name,
-            'performedBy' => $lastMaintenance->performed_by ?? 'N/A'
-        ];
-    }
-
-    /**
-     * Get average days overdue for maintenance by site
-     */
-    public function getAverageDaysOverdue(): array
-    {
-        $now = Carbon::now();
-
-        $overdueMaintenance = PcMaintenance::with(['station.site'])
-            ->where('status', 'overdue')
-            ->orWhere(function($q) use ($now) {
-                $q->where('status', 'pending')
-                  ->where('next_due_date', '<', $now);
-            })
-            ->get();
-
-        if ($overdueMaintenance->isEmpty()) {
-            return [
-                'average' => 0,
-                'bySite' => []
-            ];
-        }
-
-        // Calculate by site
-        $bySite = $overdueMaintenance->groupBy(function($item) {
-            return $item->station->site->name;
-        })->map(function($siteMaintenances) use ($now) {
-            $totalDays = $siteMaintenances->sum(function($maintenance) use ($now) {
-                $dueDate = Carbon::parse($maintenance->next_due_date);
-                return abs($now->diffInDays($dueDate, false));
-            });
-
-            return round($totalDays / $siteMaintenances->count());
-        });
-
-        // Calculate overall average
-        $totalOverdueDays = $overdueMaintenance->sum(function($maintenance) use ($now) {
-            $dueDate = Carbon::parse($maintenance->next_due_date);
-            return abs($now->diffInDays($dueDate, false));
-        });
-
-        $average = round($totalOverdueDays / $overdueMaintenance->count());
-
-        return [
-            'average' => $average,
-            'bySite' => $bySite->map(fn($days, $site) => [
-                'site' => $site,
-                'days' => $days
-            ])->values()->toArray()
-        ];
-    }
 
     /**
      * Get available PC specs not assigned to any station

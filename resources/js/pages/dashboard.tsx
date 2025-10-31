@@ -6,16 +6,23 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+
+// Example Philippine holidays for November 2025
+const holidays = [
+    { date: '2025-11-01', name: 'All Saints’ Day' },
+    { date: '2025-11-30', name: 'Bonifacio Day' },
+    // Add more holidays as needed
+];
 import {
     Monitor,
     AlertCircle,
     HardDrive,
     Wrench,
-    Calendar,
     MapPin,
     Server,
-    CheckCircle,
-    XCircle
+    XCircle,
+    Calendar
 } from 'lucide-react';
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
@@ -39,7 +46,7 @@ interface DashboardProps {
     vacantStations: {
         total: number;
         bysite: Array<{ site: string; count: number }>;
-        stations: Array<{ site: string; station_number: string }>; // <-- add this
+        stations: Array<{ site: string; station_number: string }>;
     };
     ssdPcs: {
         total: number;
@@ -56,16 +63,6 @@ interface DashboardProps {
     maintenanceDue: {
         total: number;
         stations: Array<{ station: string; site: string; dueDate: string; daysOverdue: number }>;
-    };
-    lastMaintenance: {
-        date: string;
-        station: string;
-        site: string;
-        performedBy: string;
-    };
-    avgDaysOverdue: {
-        average: number;
-        bySite: Array<{ site: string; days: number }>;
     };
     unassignedPcSpecs: Array<{
         id: number;
@@ -172,11 +169,10 @@ export default function Dashboard({
     hddPcs,
     dualMonitor,
     maintenanceDue,
-    lastMaintenance,
-    avgDaysOverdue,
     unassignedPcSpecs,
 }: DashboardProps) {
     const [activeDialog, setActiveDialog] = useState<string | null>(null);
+    const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(new Date());
     const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(null);
     const [selectedNoPcSite, setSelectedNoPcSite] = useState<string | null>(null);
 
@@ -186,24 +182,26 @@ export default function Dashboard({
         setSelectedNoPcSite(null);
     };
 
-    const [currentDateTime, setCurrentDateTime] = useState<string>("");
+    const [currentDateTime, setCurrentDateTime] = useState<{ date: string; time: string }>({ date: '', time: '' });
 
     useEffect(() => {
-        const interval = setInterval(() => {
+        const updateDateTime = () => {
             const now = new Date();
-            setCurrentDateTime(
-                now.toLocaleString("en-US", {
-                    weekday: "short",
-                    year: "numeric",
-                    month: "short",
-                    day: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                    second: "2-digit",
-                })
-            );
-        }, 1000);
-
+            const date = now.toLocaleDateString("en-US", {
+                weekday: "long",
+                year: "numeric",
+                month: "long",
+                day: "numeric",
+            });
+            const time = now.toLocaleTimeString("en-US", {
+                hour: "2-digit",
+                minute: "2-digit",
+                hour12: true,
+            });
+            setCurrentDateTime({ date, time });
+        };
+        updateDateTime();
+        const interval = setInterval(updateDateTime, 10000); // update every 10s
         return () => clearInterval(interval);
     }, []);
 
@@ -267,35 +265,43 @@ export default function Dashboard({
                             Overview of all stations and PC specifications
                         </p>
                     </div>
-                    <div className="text-lg text-muted-foreground">
-                        {currentDateTime}
-                    </div>
                 </div>
 
                 {/* Stats Grid */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
 
-                    {/* Total Stations & Available PC Specs Combined */}
+                    {/* Current Date & Time */}
                     <StatCard
-                        title="Stations & Available PCs"
+                        title="Current Date & Time"
                         value={
-                            <div className="flex flex-row gap-2">
-                                <span>
-                                    <span className="font-semibold">{totalStations.total}</span>
-                                    <span className="text-xs text-muted-foreground ml-1">Stations</span>
-                                </span>
-                                <span>
-                                    <span className="font-semibold text-green-600 dark:text-green-400">{unassignedPcSpecs.length}</span>
-                                    <span className="text-xs text-muted-foreground ml-1">Available PCs</span>
-                                </span>
+                            <div className="flex flex-col">
+                                <span className="font-semibold text-base">{currentDateTime.date}</span>
+                                <span className="text-lg text-muted-foreground">{currentDateTime.time}</span>
                             </div>
                         }
-                        icon={Server}
-                        description="Click for breakdowns"
-                        onClick={() => setActiveDialog('stationsAndAvailablePcs')}
-                        variant={unassignedPcSpecs.length > 0 ? "success" : "default"}
+                        icon={Calendar}
+                        description="System date and time (auto-updates)"
+                        onClick={() => setActiveDialog('dateTime')}
                     />
 
+                    {/* Total Stations */}
+                    <StatCard
+                        title="Total Stations"
+                        value={totalStations.total}
+                        icon={Server}
+                        description="Click for breakdown by site"
+                        onClick={() => setActiveDialog('stations')}
+                    />
+
+                    {/* Available PC Specs */}
+                    <StatCard
+                        title="Available PCs"
+                        value={unassignedPcSpecs.length}
+                        icon={Server}
+                        description="PC specs not assigned to any station"
+                        onClick={() => setActiveDialog('availablePcs')}
+                        variant={unassignedPcSpecs.length > 0 ? "success" : "default"}
+                    />
                     {/* No PCs */}
                     <StatCard
                         title="Stations Without PCs"
@@ -355,82 +361,109 @@ export default function Dashboard({
                         variant={maintenanceDue.total > 0 ? "danger" : "default"}
                     />
 
-                    {/* Last Maintenance */}
-                    <StatCard
-                        title="Last Maintenance"
-                        value={lastMaintenance.date}
-                        icon={Calendar}
-                        description={`Station ${lastMaintenance.station}`}
-                        onClick={() => setActiveDialog('lastMaintenance')}
-                    />
-
-                    {/* Avg Days Overdue */}
-                    <StatCard
-                        title="Avg Days Overdue"
-                        value={`${avgDaysOverdue.average} days`}
-                        icon={AlertCircle}
-                        description="Maintenance past due"
-                        onClick={() => setActiveDialog('avgDaysOverdue')}
-                        variant={avgDaysOverdue.average > 0 ? "warning" : "default"}
-                    />
+                    {/* Cards removed as requested */}
                 </div>
 
                 <DetailDialog
-                    open={activeDialog === 'stationsAndAvailablePcs'}
+                    open={activeDialog === 'dateTime'}
                     onClose={closeDialog}
-                    title="Stations & Available PCs Breakdown"
-                    description="Breakdown of all stations and available PC specs not assigned to any station"
+                    title="Calendar"
+                    description="View the current month and date. Holidays are highlighted."
                 >
-                    <div className="space-y-6">
-                        <div>
-                            <div className="text-lg font-semibold mb-2 flex items-center gap-2">
-                                <Server className="h-5 w-5 text-muted-foreground" />
-                                Stations by Site
-                            </div>
-                            <div className="space-y-3">
-                                {totalStations.bysite.map((site, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
-                                        <div className="flex items-center gap-2">
-                                            <MapPin className="h-4 w-4 text-muted-foreground" />
-                                            <span className="font-medium">{site.site}</span>
-                                        </div>
-                                        <Badge variant="secondary">{site.count} stations</Badge>
+                    <div className="flex flex-col items-center py-4">
+                        <div style={{ width: '420px', maxWidth: '100%' }}>
+                            <CalendarComponent
+                                selected={selectedCalendarDate ?? undefined}
+                                onSelect={setSelectedCalendarDate}
+                                mode="single"
+                                required={true}
+                                className="rounded-lg border shadow-md w-full"
+                                modifiers={{
+                                    holiday: holidays.map(h => new Date(h.date)),
+                                }}
+                                modifiersClassNames={{
+                                    holiday: 'bg-yellow-200 text-yellow-900 font-bold',
+                                }}
+                                footer={
+                                    <div className="mt-2">
+                                        <div className="font-semibold mb-1">Upcoming Holidays:</div>
+                                        <ul className="list-disc pl-5 text-sm">
+                                            {holidays.map(h => (
+                                                <li key={h.date}>
+                                                    <span className="font-bold">{h.name}</span> &mdash; {h.date}
+                                                </li>
+                                            ))}
+                                        </ul>
                                     </div>
-                                ))}
-                                <Separator />
-                                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                                    <span className="font-semibold">Total</span>
-                                    <Badge>{totalStations.total} stations</Badge>
+                                }
+                            />
+                        </div>
+                        {/* Show holiday details if selected date is a holiday */}
+                        {(() => {
+                            const selectedISO = selectedCalendarDate ? selectedCalendarDate.toISOString().slice(0, 10) : null;
+                            const holiday = holidays.find(h => h.date === selectedISO);
+                            if (holiday) {
+                                return (
+                                    <div className="mt-4 px-4 py-2 rounded bg-yellow-100 text-yellow-900 font-semibold">
+                                        {holiday.name} ({holiday.date})
+                                    </div>
+                                );
+                            }
+                            return null;
+                        })()}
+                    </div>
+                </DetailDialog>
+
+                <DetailDialog
+                    open={activeDialog === 'stations'}
+                    onClose={closeDialog}
+                    title="Stations Breakdown by Site"
+                    description="Breakdown of all stations by site"
+                >
+                    <div className="space-y-3">
+                        {totalStations.bysite.map((site, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
+                                <div className="flex items-center gap-2">
+                                    <MapPin className="h-4 w-4 text-muted-foreground" />
+                                    <span className="font-medium">{site.site}</span>
                                 </div>
+                                <Badge variant="secondary">{site.count} stations</Badge>
                             </div>
+                        ))}
+                        <Separator />
+                        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                            <span className="font-semibold">Total</span>
+                            <Badge>{totalStations.total} stations</Badge>
                         </div>
-                        <div>
-                            <div className="text-lg font-semibold mb-2 flex items-center gap-2">
-                                <Server className="h-5 w-5 text-green-600 dark:text-green-400" />
-                                Available PC Specs
+                    </div>
+                </DetailDialog>
+
+                <DetailDialog
+                    open={activeDialog === 'availablePcs'}
+                    onClose={closeDialog}
+                    title="Available PC Specs"
+                    description="PC specs not assigned to any station"
+                >
+                    <div className="space-y-2">
+                        {unassignedPcSpecs.length === 0 ? (
+                            <div className="text-center text-muted-foreground py-8">
+                                All PC specs are assigned to stations
                             </div>
-                            <div className="space-y-2">
-                                {unassignedPcSpecs.length === 0 ? (
-                                    <div className="text-center text-muted-foreground py-8">
-                                        All PC specs are assigned to stations
-                                    </div>
-                                ) : (
-                                    unassignedPcSpecs.map((pc) => (
-                                        <div key={pc.id} className="flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border">
-                                            <div>
-                                                <div className="font-medium">{pc.pc_number} - {pc.model}</div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    RAM: {pc.ram_gb} GB ({pc.ram_count} module{pc.ram_count !== 1 ? 's' : ''})
-                                                    | Disk: {pc.disk_tb} TB ({pc.disk_count} drive{pc.disk_count !== 1 ? 's' : ''})
-                                                    | CPU: {pc.processor} ({pc.cpu_count} processor{pc.cpu_count !== 1 ? 's' : ''})
-                                                </div>
-                                                {pc.issue && <div className="text-xs text-red-500">Issue: {pc.issue}</div>}
-                                            </div>
+                        ) : (
+                            unassignedPcSpecs.map((pc) => (
+                                <div key={pc.id} className="flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border">
+                                    <div>
+                                        <div className="font-medium">{pc.pc_number} - {pc.model}</div>
+                                        <div className="text-xs text-muted-foreground">
+                                            RAM: {pc.ram_gb} GB ({pc.ram_count} module{pc.ram_count !== 1 ? 's' : ''})
+                                            | Disk: {pc.disk_tb} TB ({pc.disk_count} drive{pc.disk_count !== 1 ? 's' : ''})
+                                            | CPU: {pc.processor} ({pc.cpu_count} processor{pc.cpu_count !== 1 ? 's' : ''})
                                         </div>
-                                    ))
-                                )}
-                            </div>
-                        </div>
+                                        {pc.issue && <div className="text-xs text-red-500">Issue: {pc.issue}</div>}
+                                    </div>
+                                </div>
+                            ))
+                        )}
                     </div>
                 </DetailDialog>
 
@@ -615,75 +648,7 @@ export default function Dashboard({
                     </div>
                 </DetailDialog>
 
-                <DetailDialog
-                    open={activeDialog === 'lastMaintenance'}
-                    onClose={closeDialog}
-                    title="Last Maintenance Record"
-                    description="Most recent maintenance activity"
-                >
-                    {lastMaintenance.date === 'N/A' ? (
-                        <div className="text-center text-muted-foreground py-8">
-                            No maintenance records found
-                        </div>
-                    ) : (
-                        <div className="space-y-4">
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <div className="text-sm text-muted-foreground">Date</div>
-                                    <div className="font-medium">{lastMaintenance.date}</div>
-                                </div>
-                                <div>
-                                    <div className="text-sm text-muted-foreground">Station</div>
-                                    <div className="font-medium">{lastMaintenance.station}</div>
-                                </div>
-                                <div>
-                                    <div className="text-sm text-muted-foreground">Site</div>
-                                    <div className="font-medium">{lastMaintenance.site}</div>
-                                </div>
-                                <div>
-                                    <div className="text-sm text-muted-foreground">Performed By</div>
-                                    <div className="font-medium">{lastMaintenance.performedBy}</div>
-                                </div>
-                            </div>
-                            <div className="flex items-center gap-2 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
-                                <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
-                                <span className="text-sm">Maintenance completed successfully</span>
-                            </div>
-                        </div>
-                    )}
-                </DetailDialog>
-
-                <DetailDialog
-                    open={activeDialog === 'avgDaysOverdue'}
-                    onClose={closeDialog}
-                    title="Average Days Overdue by Site"
-                    description="Average maintenance delay across sites"
-                >
-                    <div className="space-y-3">
-                        {avgDaysOverdue.bySite.length === 0 ? (
-                            <div className="text-center text-muted-foreground py-8">
-                                No overdue maintenance
-                            </div>
-                        ) : (
-                            <>
-                                {avgDaysOverdue.bySite.map((site, idx) => (
-                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
-                                        <div className="flex items-center gap-2">
-                                            <Calendar className="h-4 w-4 text-muted-foreground" />
-                                            <span className="font-medium">{site.site}</span>
-                                        </div>
-                                        <Badge variant="outline">{site.days} days</Badge>
-                                    </div>
-                                ))}
-                                <Separator />
-                                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                                    <span className="font-semibold">Overall Average</span>
-                                    <Badge>{avgDaysOverdue.average} days</Badge>
-                                </div>
-                            </>
-                        )}
-                    </div>
-                </DetailDialog>
+                {/* DetailDialogs removed as requested */}
             </div>
         </AppLayout>
     );
