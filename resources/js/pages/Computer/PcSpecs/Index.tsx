@@ -300,14 +300,19 @@ export default function Index() {
                 clearInterval(progressIntervalRef.current);
                 progressIntervalRef.current = null;
             }
-            progressIntervalRef.current = setInterval(() => {
+
+            // Poll immediately first, then every 500ms
+            const pollProgress = () => {
                 fetch(`/pcspecs/qrcode/bulk-progress/${bulkProgress.jobId}`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error('Failed to fetch progress');
+                        return res.json();
+                    })
                     .then(data => {
                         setBulkProgress(prev => ({
                             ...prev,
-                            percent: data.percent,
-                            status: data.status,
+                            percent: data.percent || 0,
+                            status: data.status || 'Processing...',
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
@@ -321,8 +326,18 @@ export default function Index() {
                                 toast.success('Download started');
                             }
                         }
+                    })
+                    .catch(err => {
+                        console.error('Progress fetch error:', err);
+                        toast.error('Failed to fetch progress');
                     });
-            }, 2000);
+            };
+
+            // Poll immediately
+            pollProgress();
+
+            // Then poll every 500ms for faster updates
+            progressIntervalRef.current = setInterval(pollProgress, 500);
         }
         return () => {
             if (progressIntervalRef.current) {
@@ -378,21 +393,26 @@ export default function Index() {
             .catch(() => toast.error('Failed to start selected ZIP download'));
     };
 
-    // Poll progress for selected ZIP every 2 seconds
+    // Poll progress for selected ZIP every 500ms
     useEffect(() => {
         if (selectedZipProgress.running && selectedZipProgress.jobId) {
             if (selectedZipIntervalRef.current) {
                 clearInterval(selectedZipIntervalRef.current);
                 selectedZipIntervalRef.current = null;
             }
-            selectedZipIntervalRef.current = setInterval(() => {
+
+            // Poll immediately first, then every 500ms
+            const pollProgress = () => {
                 fetch(`/pcspecs/qrcode/selected-progress/${selectedZipProgress.jobId}`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error('Failed to fetch progress');
+                        return res.json();
+                    })
                     .then(data => {
                         setSelectedZipProgress(prev => ({
                             ...prev,
-                            percent: data.percent,
-                            status: data.status,
+                            percent: data.percent || 0,
+                            status: data.status || 'Processing...',
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
@@ -406,8 +426,18 @@ export default function Index() {
                                 toast.success('Download started');
                             }
                         }
+                    })
+                    .catch(err => {
+                        console.error('Progress fetch error:', err);
+                        toast.error('Failed to fetch progress');
                     });
-            }, 2000);
+            };
+
+            // Poll immediately
+            pollProgress();
+
+            // Then poll every 500ms for faster updates
+            selectedZipIntervalRef.current = setInterval(pollProgress, 500);
         }
         return () => {
             if (selectedZipIntervalRef.current) {

@@ -32,13 +32,15 @@ export default defineConfig({
         },
     },
     server: {
-        host: '0.0.0.0', // Listen on all network interfaces
-        port: 5173,
+        host: process.env.VITE_HOST || '0.0.0.0',
+        port: parseInt(process.env.VITE_PORT || '5173'),
         strictPort: true,
         hmr: {
-            host: 'localhost', // Will use current hostname
+            host: process.env.VITE_HMR_HOST || 'localhost',
             protocol: 'ws'
         },
+        watch: {
+            usePolling: true, // Enable polling for Docker
+        }
     }
-
 });

@@ -22,7 +22,7 @@ class ProcessorSpecsController extends Controller
             ->search($search)
             ->latest()
             ->paginate(10)
-            ->appends(['search' => $search]);
+            ->withQueryString();
 
         return inertia('Computer/ProcessorSpecs/Index', [
             'processorspecs' => $processorspecs,

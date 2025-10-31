@@ -16,6 +16,16 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware) {
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // Trust all proxies (needed for ngrok, load balancers, etc.)
+        $middleware->trustProxies(
+            at: '*',
+            headers: \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_FOR |
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_HOST |
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PORT |
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PROTO |
+                    \Symfony\Component\HttpFoundation\Request::HEADER_X_FORWARDED_PREFIX
+        );
+
         $middleware->web(append: [
             HandleAppearance::class,
             HandleInertiaRequests::class,

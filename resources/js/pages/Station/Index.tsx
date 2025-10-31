@@ -174,14 +174,19 @@ export default function StationIndex() {
                 clearInterval(bulkIntervalRef.current);
                 bulkIntervalRef.current = null;
             }
-            bulkIntervalRef.current = setInterval(() => {
+
+            // Poll immediately first, then every 500ms
+            const pollProgress = () => {
                 fetch(`/stations/qrcode/bulk-progress/${bulkProgress.jobId}`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error('Failed to fetch progress');
+                        return res.json();
+                    })
                     .then(data => {
                         setBulkProgress(prev => ({
                             ...prev,
-                            percent: data.percent,
-                            status: data.status,
+                            percent: data.percent || 0,
+                            status: data.status || 'Processing...',
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
@@ -195,8 +200,18 @@ export default function StationIndex() {
                                 toast.success('Download started');
                             }
                         }
+                    })
+                    .catch(err => {
+                        console.error('Progress fetch error:', err);
+                        toast.error('Failed to fetch progress');
                     });
-            }, 2000);
+            };
+
+            // Poll immediately
+            pollProgress();
+
+            // Then poll every 500ms for faster updates
+            bulkIntervalRef.current = setInterval(pollProgress, 500);
         }
         return () => {
             if (bulkIntervalRef.current) {
@@ -230,14 +245,19 @@ export default function StationIndex() {
                 clearInterval(selectedZipIntervalRef.current);
                 selectedZipIntervalRef.current = null;
             }
-            selectedZipIntervalRef.current = setInterval(() => {
+
+            // Poll immediately first, then every 500ms
+            const pollProgress = () => {
                 fetch(`/stations/qrcode/selected-progress/${selectedZipProgress.jobId}`)
-                    .then(res => res.json())
+                    .then(res => {
+                        if (!res.ok) throw new Error('Failed to fetch progress');
+                        return res.json();
+                    })
                     .then(data => {
                         setSelectedZipProgress(prev => ({
                             ...prev,
-                            percent: data.percent,
-                            status: data.status,
+                            percent: data.percent || 0,
+                            status: data.status || 'Processing...',
                             downloadUrl: data.downloadUrl,
                             running: !data.finished,
                         }));
@@ -251,8 +271,18 @@ export default function StationIndex() {
                                 toast.success('Download started');
                             }
                         }
+                    })
+                    .catch(err => {
+                        console.error('Progress fetch error:', err);
+                        toast.error('Failed to fetch progress');
                     });
-            }, 2000);
+            };
+
+            // Poll immediately
+            pollProgress();
+
+            // Then poll every 500ms for faster updates
+            selectedZipIntervalRef.current = setInterval(pollProgress, 500);
         }
         return () => {
             if (selectedZipIntervalRef.current) {
@@ -261,6 +291,7 @@ export default function StationIndex() {
             }
         };
     }, [selectedZipProgress.running, selectedZipProgress.jobId]);
+
     const { stations, filters } = usePage<{ stations: StationsPayload; flash?: Flash; filters: Filters }>().props;
 
     // Use new hooks for cleaner code

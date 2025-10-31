@@ -20,7 +20,7 @@ class RamSpecsController extends Controller
             ->search($request->input('search'))
             ->latest()
             ->paginate(10)
-            ->appends(['search' => $request->input('search')]);
+            ->withQueryString();
 
         return inertia('Computer/RamSpecs/Index', [
             'ramspecs' => $ramspecs,
@@ -45,7 +45,7 @@ class RamSpecsController extends Controller
                 $this->createStock($ramSpec, $stockQuantity);
             });
 
-            return $this->redirectWithFlash('ramspecs.index', 'RAM specification created successfully.');
+            return $this->redirectWithFlash('ramspecs.index', 'RAM specification created successfully.',);
         } catch (\Exception $e) {
             Log::error('RamSpec Store Error: ' . $e->getMessage());
             return $this->redirectWithFlash('ramspecs.index', 'Failed to create RAM specification.', 'error');
