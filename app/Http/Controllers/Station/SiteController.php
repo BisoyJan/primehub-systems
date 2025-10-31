@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Station;
 use App\Http\Controllers\Controller;
 use App\Models\Site;
 use Illuminate\Http\Request;
+use App\Http\Requests\SiteRequest;
 use Inertia\Inertia;
 
 class SiteController extends Controller
@@ -47,10 +48,9 @@ class SiteController extends Controller
     }
 
     // Store a newly created site
-    public function store(Request $request)
+    public function store(SiteRequest $request)
     {
-        $data = $this->validateSite($request);
-        Site::create($data);
+        Site::create($request->validated());
         return redirect()->back()->with('flash', ['message' => 'Site saved', 'type' => 'success']);
     }
 
@@ -69,10 +69,9 @@ class SiteController extends Controller
     }
 
     // Update the specified site
-    public function update(Request $request, Site $site)
+    public function update(SiteRequest $request, Site $site)
     {
-        $data = $this->validateSite($request);
-        $site->update($data);
+        $site->update($request->validated());
         return redirect()->back()->with('flash', ['message' => 'Site updated', 'type' => 'success']);
     }
 
@@ -84,10 +83,4 @@ class SiteController extends Controller
     }
 
     // Private helper methods
-    private function validateSite(Request $request): array
-    {
-        return $request->validate([
-            'name' => 'required|string|max:255',
-        ]);
-    }
 }

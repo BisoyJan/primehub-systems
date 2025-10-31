@@ -3,13 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\MonitorSpec;
-use App\Http\Requests\StoreMonitorSpecRequest;
-use App\Http\Requests\UpdateMonitorSpecRequest;
+use App\Http\Requests\MonitorSpecRequest;
+use App\Http\Traits\HandlesStockOperations;
+use App\Http\Traits\RedirectsWithFlashMessages;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class MonitorSpecsController extends Controller
 {
+    use HandlesStockOperations, RedirectsWithFlashMessages;
+
     public function index(Request $request)
     {
         $query = MonitorSpec::query()->with('stock');
@@ -41,7 +44,7 @@ class MonitorSpecsController extends Controller
         ]);
     }
 
-    public function store(StoreMonitorSpecRequest $request)
+    public function store(MonitorSpecRequest $request)
     {
         try {
             MonitorSpec::create($request->validated());
@@ -66,7 +69,7 @@ class MonitorSpecsController extends Controller
         ]);
     }
 
-    public function update(UpdateMonitorSpecRequest $request, MonitorSpec $monitorspec)
+    public function update(MonitorSpecRequest $request, MonitorSpec $monitorspec)
     {
         try {
             $monitorspec->update($request->validated());
@@ -86,50 +89,17 @@ class MonitorSpecsController extends Controller
 
     public function destroy(MonitorSpec $monitorspec)
     {
-        // Check if there's stock
-        if ($monitorspec->stock && $monitorspec->stock->quantity > 0) {
-            return redirect()
-                ->route('monitorspecs.index')
-                ->with('message', "Cannot delete monitor specification. It has {$monitorspec->stock->quantity} units in stock. Please remove or transfer the stock first.")
-                ->with('type', 'error');
-        }
-
-        // Check if it's being used in any PC specs
-        $pcSpecCount = $monitorspec->pcSpecs()->count();
-        if ($pcSpecCount > 0) {
-            return redirect()
-                ->route('monitorspecs.index')
-                ->with('message', "Cannot delete monitor specification. It is being used in {$pcSpecCount} PC specification(s).")
-                ->with('type', 'error');
-        }
-
-        // Check if it's being used in any stations
-        $stationCount = $monitorspec->stations()->count();
-        if ($stationCount > 0) {
-            return redirect()
-                ->route('monitorspecs.index')
-                ->with('message', "Cannot delete monitor specification. It is assigned to {$stationCount} station(s).")
-                ->with('type', 'error');
+            // Check if spec can be deleted
+            if ($error = $this->canDeleteSpec($monitorspec, 'monitor specification')) {
+                return $this->redirectWithFlash('monitorspecs.index', $error['message'], $error['type']);
         }
 
         try {
-            // Delete the stock record if it exists
-            if ($monitorspec->stock) {
-                $monitorspec->stock->delete();
-            }
-
-            $monitorspec->delete();
-
-            return redirect()
-                ->route('monitorspecs.index')
-                ->with('message', 'Monitor specification deleted successfully.')
-                ->with('type', 'success');
+                $this->deleteSpecWithStock($monitorspec);
+                return $this->redirectWithFlash('monitorspecs.index', 'Monitor specification deleted successfully.');
         } catch (\Exception $e) {
             Log::error('MonitorSpec Delete Error: ' . $e->getMessage());
-            return redirect()
-                ->route('monitorspecs.index')
-                ->with('message', 'Failed to delete monitor specification.')
-                ->with('type', 'error');
+                return $this->redirectWithFlash('monitorspecs.index', 'Failed to delete monitor specification.', 'error');
         }
     }
 }

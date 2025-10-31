@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Station;
 use App\Http\Controllers\Controller;
 use App\Models\Campaign;
 use Illuminate\Http\Request;
+use App\Http\Requests\CampaignRequest;
 use Inertia\Inertia;
 
 class CampaignController extends Controller
@@ -41,18 +42,16 @@ class CampaignController extends Controller
     }
 
     // Store a newly created campaign
-    public function store(Request $request)
+    public function store(CampaignRequest $request)
     {
-        $data = $this->validateCampaign($request);
-        Campaign::create($data);
+        Campaign::create($request->validated());
         return redirect()->back()->with('flash', ['message' => 'Campaign saved', 'type' => 'success']);
     }
 
     // Update the specified campaign
-    public function update(Request $request, Campaign $campaign)
+    public function update(CampaignRequest $request, Campaign $campaign)
     {
-        $data = $this->validateCampaign($request);
-        $campaign->update($data);
+        $campaign->update($request->validated());
         return redirect()->back()->with('flash', ['message' => 'Campaign updated', 'type' => 'success']);
     }
 
@@ -64,10 +63,4 @@ class CampaignController extends Controller
     }
 
     // Private helper methods
-    private function validateCampaign(Request $request): array
-    {
-        return $request->validate([
-            'name' => 'required|string|max:255',
-        ]);
-    }
 }

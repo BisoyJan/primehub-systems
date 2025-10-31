@@ -9,6 +9,8 @@ use App\Models\Station;
 use App\Models\Site;
 use App\Models\PcSpec;
 use App\Models\Campaign;
+use App\Http\Requests\StationRequest;
+use App\Http\Requests\StationBulkRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use App\Utils\StationNumberUtil;
@@ -18,10 +20,7 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Response;
 
 class StationController extends Controller
-
 {
-
-
     // Bulk all stations QR ZIP
     public function bulkAllQRCodes(Request $request)
     {
@@ -31,7 +30,7 @@ class StationController extends Controller
             'metadata' => 'required|integer|in:0,1',
         ]);
         $jobId = (string)Str::uuid();
-       Bus::dispatch(new GenerateAllStationQRCodesZip(
+        Bus::dispatch(new GenerateAllStationQRCodesZip(
             $jobId,
             $request->input('format'),
             $request->input('size'),
@@ -189,12 +188,9 @@ class StationController extends Controller
     }
 
     // Store new station
-    public function store(Request $request)
+    public function store(StationRequest $request)
     {
-        $data = $this->validateStation($request);
-
-        // Convert any letters in station_number to uppercase
-        $data['station_number'] = $this->normalizeStationNumber($data['station_number']);
+        $data = $request->validated();
 
         // Convert empty pc_spec_id to null
         if (empty($data['pc_spec_id'])) {
@@ -221,28 +217,9 @@ class StationController extends Controller
     }
 
     // Store multiple stations at once
-    public function storeBulk(Request $request)
+    public function storeBulk(StationBulkRequest $request)
     {
-        $validated = $request->validate([
-            'site_id' => 'required|exists:sites,id',
-            'starting_number' => 'required|string|max:255',
-            'campaign_id' => 'required|exists:campaigns,id',
-            'status' => 'required|string|max:255',
-            'monitor_type' => 'required|in:single,dual',
-            'pc_spec_id' => 'nullable|exists:pc_specs,id',
-            'pc_spec_ids' => 'nullable|array',
-            'pc_spec_ids.*' => 'exists:pc_specs,id',
-            'quantity' => 'required|integer|min:1|max:100',
-            'increment_type' => 'required|in:number,letter,both',
-        ], [], [
-            'site_id' => 'site',
-            'starting_number' => 'starting station number',
-            'campaign_id' => 'campaign',
-            'monitor_type' => 'monitor type',
-            'pc_spec_id' => 'PC spec',
-            'pc_spec_ids' => 'PC specs',
-            'increment_type' => 'increment type',
-        ]);
+        $validated = $request->validated();
 
         $quantity = (int) $validated['quantity'];
         $startingNumber = $this->normalizeStationNumber($validated['starting_number']);
@@ -396,12 +373,9 @@ class StationController extends Controller
     }
 
     // Update station
-    public function update(Request $request, Station $station)
+    public function update(StationRequest $request, Station $station)
     {
-        $data = $this->validateStation($request, $station);
-
-        // Convert any letters in station_number to uppercase
-        $data['station_number'] = $this->normalizeStationNumber($data['station_number']);
+        $data = $request->validated();
 
         // Convert empty pc_spec_id to null
         if (empty($data['pc_spec_id'])) {
@@ -473,31 +447,5 @@ class StationController extends Controller
             ->map(fn($pc) => $pc->getFormSelectionData());
     }
 
-    private function validateStation(Request $request, ?Station $station = null): array
-    {
-        $uniqueRule = $station
-            ? "unique:stations,station_number,{$station->id}"
-            : 'unique:stations,station_number';
-
-        return $request->validate([
-            'site_id' => 'required|exists:sites,id',
-            'station_number' => "required|string|max:255|{$uniqueRule}",
-            'campaign_id' => 'required|exists:campaigns,id',
-            'status' => 'required|string|max:255',
-            'monitor_type' => 'required|in:single,dual',
-            'pc_spec_id' => 'nullable|exists:pc_specs,id',
-            'monitor_ids' => 'nullable|array',
-            'monitor_ids.*.id' => 'required|exists:monitor_specs,id',
-            'monitor_ids.*.quantity' => 'required|integer|min:1|max:2',
-        ], [
-            'station_number.unique' => 'The station number has already been used.',
-        ], [
-            'site_id' => 'site',
-            'station_number' => 'station number',
-            'campaign_id' => 'campaign',
-            'monitor_type' => 'monitor type',
-            'pc_spec_id' => 'PC spec',
-            'monitor_ids' => 'monitors',
-        ]);
-    }
+    
 }

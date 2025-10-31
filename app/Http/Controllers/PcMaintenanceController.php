@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\PcMaintenance;
-use App\Models\PcSpec;
 use App\Models\Site;
 use App\Models\Station;
+use App\Http\Requests\PcMaintenanceRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
+use Inertia\Response;
 use Carbon\Carbon;
 
 class PcMaintenanceController extends Controller
@@ -15,29 +16,27 @@ class PcMaintenanceController extends Controller
     /**
      * Display a listing of the resource.
      */
-    public function index(Request $request)
+    public function index(Request $request): Response
     {
         $query = PcMaintenance::with(['station.site', 'station.pcSpec']);
 
         // Filter by status
-        if ($request->has('status') && $request->status !== '') {
+        if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
         // Filter by site
-        if ($request->has('site') && $request->site !== '') {
-            $query->whereHas('station', function ($q) use ($request) {
-                $q->where('site_id', $request->site);
-            });
+        if ($request->filled('site')) {
+            $query->whereHas('station', fn($q) => $q->where('site_id', $request->site));
         }
 
         // Filter by Station number or PC number
-        if ($request->has('search') && $request->search !== '') {
+        if ($request->filled('search')) {
             $query->whereHas('station', function ($q) use ($request) {
-                $q->where('station_number', 'like', '%' . $request->search . '%')
-                  ->orWhereHas('pcSpec', function ($pcQ) use ($request) {
-                      $pcQ->where('pc_number', 'like', '%' . $request->search . '%');
-                  });
+                $q->where('station_number', 'like', "%{$request->search}%")
+                  ->orWhereHas('pcSpec', fn($pcQ) => 
+                      $pcQ->where('pc_number', 'like', "%{$request->search}%")
+                  );
             });
         }
 
@@ -60,11 +59,10 @@ class PcMaintenanceController extends Controller
     /**
      * Show the form for creating a new resource.
      */
-    public function create()
+    public function create(): Response
     {
-        // Get all stations with PC specs and site info
         $stations = Station::with(['pcSpec', 'site'])
-            ->whereNotNull('pc_spec_id') // Only stations with assigned PCs
+        ->whereNotNull('pc_spec_id')
             ->orderBy('station_number')
             ->get();
 
@@ -79,34 +77,21 @@ class PcMaintenanceController extends Controller
     /**
      * Store a newly created resource in storage.
      */
-    public function store(Request $request)
+    public function store(PcMaintenanceRequest $request)
     {
-        $validated = $request->validate([
-            'station_ids' => 'required|array|min:1',
-            'station_ids.*' => 'exists:stations,id',
-            'last_maintenance_date' => 'required|date',
-            'next_due_date' => 'required|date|after:last_maintenance_date',
-            'maintenance_type' => 'nullable|string|max:255',
-            'notes' => 'nullable|string',
-            'performed_by' => 'nullable|string|max:255',
-            'status' => 'required|in:completed,pending,overdue',
-        ]);
+        $validated = $request->validated();
 
-        // Create maintenance record for each selected station
-        $records = [];
-        foreach ($validated['station_ids'] as $stationId) {
-            $records[] = [
-                'station_id' => $stationId,
-                'last_maintenance_date' => $validated['last_maintenance_date'],
-                'next_due_date' => $validated['next_due_date'],
-                'maintenance_type' => $validated['maintenance_type'] ?? null,
-                'notes' => $validated['notes'] ?? null,
-                'performed_by' => $validated['performed_by'] ?? null,
-                'status' => $validated['status'],
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
-        }
+        $records = collect($validated['station_ids'])->map(fn($stationId) => [
+            'station_id' => $stationId,
+            'last_maintenance_date' => $validated['last_maintenance_date'],
+            'next_due_date' => $validated['next_due_date'],
+            'maintenance_type' => $validated['maintenance_type'] ?? null,
+            'notes' => $validated['notes'] ?? null,
+            'performed_by' => $validated['performed_by'] ?? null,
+            'status' => $validated['status'],
+            'created_at' => now(),
+            'updated_at' => now(),
+        ])->toArray();
 
         PcMaintenance::insert($records);
 
@@ -117,9 +102,9 @@ class PcMaintenanceController extends Controller
     /**
      * Display the specified resource.
      */
-    public function show(PcMaintenance $pcMaintenance)
+    public function show(PcMaintenance $pcMaintenance): Response
     {
-        $pcMaintenance->load('pcSpec');
+        $pcMaintenance->load('station.site', 'station.pcSpec');
 
         return Inertia::render('Station/PcMaintenance/Show', [
             'maintenance' => $pcMaintenance,
@@ -129,7 +114,7 @@ class PcMaintenanceController extends Controller
     /**
      * Show the form for editing the specified resource.
      */
-    public function edit(PcMaintenance $pcMaintenance)
+    public function edit(PcMaintenance $pcMaintenance): Response
     {
         $stations = Station::with(['pcSpec', 'site'])
             ->whereNotNull('pc_spec_id')
@@ -148,19 +133,9 @@ class PcMaintenanceController extends Controller
     /**
      * Update the specified resource in storage.
      */
-    public function update(Request $request, PcMaintenance $pcMaintenance)
+    public function update(PcMaintenanceRequest $request, PcMaintenance $pcMaintenance)
     {
-        $validated = $request->validate([
-            'station_id' => 'required|exists:stations,id',
-            'last_maintenance_date' => 'required|date',
-            'next_due_date' => 'required|date|after:last_maintenance_date',
-            'maintenance_type' => 'nullable|string|max:255',
-            'notes' => 'nullable|string',
-            'performed_by' => 'nullable|string|max:255',
-            'status' => 'required|in:completed,pending,overdue',
-        ]);
-
-        $pcMaintenance->update($validated);
+        $pcMaintenance->update($request->validated());
 
         return redirect()->route('pc-maintenance.index')
             ->with('success', 'PC Maintenance record updated successfully.');
@@ -180,7 +155,7 @@ class PcMaintenanceController extends Controller
     /**
      * Update overdue statuses
      */
-    private function updateOverdueStatuses()
+    private function updateOverdueStatuses(): void
     {
         PcMaintenance::where('next_due_date', '<', Carbon::now())
             ->where('status', '!=', 'completed')

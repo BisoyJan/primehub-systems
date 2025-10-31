@@ -6,24 +6,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 
-// Example Philippine holidays for November 2025
-const holidays = [
-    { date: '2025-11-01', name: 'All Saints’ Day' },
-    { date: '2025-11-30', name: 'Bonifacio Day' },
-    // Add more holidays as needed
-];
-import {
-    Monitor,
-    AlertCircle,
-    HardDrive,
-    Wrench,
-    MapPin,
-    Server,
-    XCircle,
-    Calendar
-} from 'lucide-react';
+import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar } from 'lucide-react';
+
+//
 import { dashboard } from '@/routes';
 import type { BreadcrumbItem } from '@/types';
 
@@ -172,7 +159,7 @@ export default function Dashboard({
     unassignedPcSpecs,
 }: DashboardProps) {
     const [activeDialog, setActiveDialog] = useState<string | null>(null);
-    const [selectedCalendarDate, setSelectedCalendarDate] = useState<Date | null>(new Date());
+    //
     const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(null);
     const [selectedNoPcSite, setSelectedNoPcSite] = useState<string | null>(null);
 
@@ -181,6 +168,8 @@ export default function Dashboard({
         setSelectedVacantSite(null);
         setSelectedNoPcSite(null);
     };
+
+    // calendar and holidays handled inside CalendarWithHolidays component
 
     const [currentDateTime, setCurrentDateTime] = useState<{ date: string; time: string }>({ date: '', time: '' });
 
@@ -370,47 +359,8 @@ export default function Dashboard({
                     title="Calendar"
                     description="View the current month and date. Holidays are highlighted."
                 >
-                    <div className="flex flex-col items-center py-4">
-                        <div style={{ width: '420px', maxWidth: '100%' }}>
-                            <CalendarComponent
-                                selected={selectedCalendarDate ?? undefined}
-                                onSelect={setSelectedCalendarDate}
-                                mode="single"
-                                required={true}
-                                className="rounded-lg border shadow-md w-full"
-                                modifiers={{
-                                    holiday: holidays.map(h => new Date(h.date)),
-                                }}
-                                modifiersClassNames={{
-                                    holiday: 'bg-yellow-200 text-yellow-900 font-bold',
-                                }}
-                                footer={
-                                    <div className="mt-2">
-                                        <div className="font-semibold mb-1">Upcoming Holidays:</div>
-                                        <ul className="list-disc pl-5 text-sm">
-                                            {holidays.map(h => (
-                                                <li key={h.date}>
-                                                    <span className="font-bold">{h.name}</span> &mdash; {h.date}
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                }
-                            />
-                        </div>
-                        {/* Show holiday details if selected date is a holiday */}
-                        {(() => {
-                            const selectedISO = selectedCalendarDate ? selectedCalendarDate.toISOString().slice(0, 10) : null;
-                            const holiday = holidays.find(h => h.date === selectedISO);
-                            if (holiday) {
-                                return (
-                                    <div className="mt-4 px-4 py-2 rounded bg-yellow-100 text-yellow-900 font-semibold">
-                                        {holiday.name} ({holiday.date})
-                                    </div>
-                                );
-                            }
-                            return null;
-                        })()}
+                    <div className="flex flex-col items-center py-4 w-full">
+                        <CalendarWithHolidays countryCode="PH" width={420} />
                     </div>
                 </DetailDialog>
 
