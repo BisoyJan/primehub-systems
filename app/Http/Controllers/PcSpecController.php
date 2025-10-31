@@ -29,11 +29,29 @@ class PcSpecController extends Controller
     /**
      * GET /motherboards
      */
-    public function index()
+    public function index(Request $request)
     {
-        $pcspecs = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
-            ->orderBy('id', 'desc')
+        $search = trim((string) $request->input('search', ''));
+
+        $query = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
+            ->orderBy('id', 'desc');
+
+            if ($search !== '') {
+                $query->where(function ($q) use ($search) {
+                    $q->where('manufacturer', 'like', "%{$search}%")
+                      ->orWhere('model', 'like', "%{$search}%")
+                      ->orWhere('pc_number', 'like', "%{$search}%")
+                      // Search by processor model/manufacturer
+                      ->orWhereHas('processorSpecs', function ($procQ) use ($search) {
+                          $procQ->where('model', 'like', "%{$search}%")
+                                ->orWhere('manufacturer', 'like', "%{$search}%");
+                      });
+                });
+            }
+
+        $pcspecs = $query
             ->paginate(10)
+            ->appends($request->only('search'))
             ->through(fn($pc) => [
                 'id'              => $pc->id,
                 'pc_number'       => $pc->pc_number,
@@ -76,6 +94,7 @@ class PcSpecController extends Controller
 
         return Inertia::render('Computer/PcSpecs/Index', [
             'pcspecs' => $pcspecs,
+            'search' => $request->input('search', ''),
         ]);
     }
 

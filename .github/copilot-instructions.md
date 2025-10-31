@@ -35,8 +35,9 @@ This is a full-stack Laravel + React (TypeScript) application. Backend logic res
 - **Backend Routing:**
   - Routes are split by concern: `routes/web.php`, `routes/api.php`, etc.
 - **Integration:**
-  - Inertia.js bridges Laravel backend and React frontend.
-  - Fortify is used for authentication (`config/fortify.php`).
+  - **Inertia.js** bridges Laravel backend and React frontend. Backend controllers return Inertia responses (see `app/Http/Controllers/`), which map to React pages in `resources/js/pages/`. Props are passed from PHP to React via Inertia, enabling seamless SPA navigation and server-side data hydration.
+  - **Frontend/Backend Communication:** API endpoints are defined in Laravel controllers and exposed via routes in `routes/api.php` or `routes/web.php`. React components use Inertia or fetch/axios for data operations. For example, see how `resources/js/pages/Computer/RamSpecs/Index.tsx` interacts with backend endpoints for RAM specs.
+  - **Fortify** is used for authentication (`config/fortify.php`). Custom authentication logic and user management are handled via Fortify's configuration and service provider.
 
 ## External Dependencies
 - **Laravel packages:** See `composer.json` for installed packages (e.g., Fortify, Inertia).
@@ -44,11 +45,15 @@ This is a full-stack Laravel + React (TypeScript) application. Backend logic res
 
 ## Examples of Patterns
 - **Eloquent Relationships:**
-  - Many-to-many: See `app/Models/PcSpec.php` and related migration files for pivot tables.
+  - Many-to-many: See `app/Models/PcSpec.php` and related migration files for pivot tables. Eloquent relationships are used for hardware specs and stations.
 - **Validation:**
-  - Form requests in `app/Http/Requests/` encapsulate validation logic.
+  - Form requests in `app/Http/Requests/` encapsulate validation logic. Example: `RamSpecRequest.php` for validating RAM spec forms.
 - **Frontend State:**
-  - React components use hooks and props for state management.
+  - React components use hooks and props for state management. Example: `resources/js/pages/Computer/RamSpecs/Index.tsx` uses React hooks to manage RAM spec data and UI state.
+- **Inertia Page Props:**
+  - Backend controllers return Inertia responses with props, which are consumed by React pages. See `app/Http/Controllers/RamSpecController.php` and corresponding React page for data flow.
+- **Custom Middleware:**
+  - Middleware in `app/Http/Middleware/` can be used for request filtering, access control, or custom logic. Register in `app/Http/Kernel.php`.
 
 ## Key Files & Directories
 - `app/Models/`, `app/Http/Controllers/`, `resources/js/pages/`, `database/migrations/`, `config/`

@@ -35,6 +35,7 @@ class DatabaseSeeder extends Seeder
             MonitorSpecSeeder::class,   // Creates 15 monitor specs via factory with relationships
             CampaignSeeder::class,      // Creates unique campaigns (hardcoded)
             StationSeeder::class,       // Creates 30 site-based stations + 20 random via factory
+            PcMaintenanceSeeder::class, // Creates 10 sample PC maintenance records
         ]);
     }
 }

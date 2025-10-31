@@ -67,6 +67,20 @@ interface DashboardProps {
         average: number;
         bySite: Array<{ site: string; days: number }>;
     };
+    unassignedPcSpecs: Array<{
+        id: number;
+        pc_number: string;
+        model: string;
+        ram: string;
+        ram_gb: number;
+        ram_count: number;
+        disk: string;
+        disk_tb: number;
+        disk_count: number;
+        processor: string;
+        cpu_count: number;
+        issue: string | null;
+    }>;
 }
 
 interface StatCardProps {
@@ -160,6 +174,7 @@ export default function Dashboard({
     maintenanceDue,
     lastMaintenance,
     avgDaysOverdue,
+    unassignedPcSpecs,
 }: DashboardProps) {
     const [activeDialog, setActiveDialog] = useState<string | null>(null);
     const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(null);
@@ -259,13 +274,26 @@ export default function Dashboard({
 
                 {/* Stats Grid */}
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                    {/* Total Stations */}
+
+                    {/* Total Stations & Available PC Specs Combined */}
                     <StatCard
-                        title="Total Stations"
-                        value={totalStations.total}
+                        title="Stations & Available PCs"
+                        value={
+                            <div className="flex flex-row gap-2">
+                                <span>
+                                    <span className="font-semibold">{totalStations.total}</span>
+                                    <span className="text-xs text-muted-foreground ml-1">Stations</span>
+                                </span>
+                                <span>
+                                    <span className="font-semibold text-green-600 dark:text-green-400">{unassignedPcSpecs.length}</span>
+                                    <span className="text-xs text-muted-foreground ml-1">Available PCs</span>
+                                </span>
+                            </div>
+                        }
                         icon={Server}
-                        description="Click for site breakdown"
-                        onClick={() => setActiveDialog('totalStations')}
+                        description="Click for breakdowns"
+                        onClick={() => setActiveDialog('stationsAndAvailablePcs')}
+                        variant={unassignedPcSpecs.length > 0 ? "success" : "default"}
                     />
 
                     {/* No PCs */}
@@ -293,18 +321,18 @@ export default function Dashboard({
                         value={
                             <div className="flex flex-row gap-2">
                                 <span>
-                                    <span className="font-semibold text-green-600 dark:text-green-400">{ssdPcs.total}</span>
-                                    <span className="text-xs text-muted-foreground ml-1">SSD</span>
-                                </span>
-                                <span>
                                     <span className="font-semibold">{hddPcs.total}</span>
                                     <span className="text-xs text-muted-foreground ml-1">HDD</span>
+                                </span>
+                                <span>
+                                    <span className="font-semibold text-green-600 dark:text-green-400">{ssdPcs.total}</span>
+                                    <span className="text-xs text-muted-foreground ml-1">SSD</span>
                                 </span>
                             </div>
                         }
                         icon={HardDrive}
                         description="Solid State & Hard Disk Drives"
-                        onClick={() => setActiveDialog('ssdPcs')}
+                        onClick={() => setActiveDialog('diskPcs')}
                         variant="success"
                     />
 
@@ -347,27 +375,61 @@ export default function Dashboard({
                     />
                 </div>
 
-                {/* Dialogs */}
                 <DetailDialog
-                    open={activeDialog === 'totalStations'}
+                    open={activeDialog === 'stationsAndAvailablePcs'}
                     onClose={closeDialog}
-                    title="Total Stations by Site"
-                    description="Breakdown of all stations across different sites"
+                    title="Stations & Available PCs Breakdown"
+                    description="Breakdown of all stations and available PC specs not assigned to any station"
                 >
-                    <div className="space-y-3">
-                        {totalStations.bysite.map((site, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
-                                <div className="flex items-center gap-2">
-                                    <MapPin className="h-4 w-4 text-muted-foreground" />
-                                    <span className="font-medium">{site.site}</span>
-                                </div>
-                                <Badge variant="secondary">{site.count} stations</Badge>
+                    <div className="space-y-6">
+                        <div>
+                            <div className="text-lg font-semibold mb-2 flex items-center gap-2">
+                                <Server className="h-5 w-5 text-muted-foreground" />
+                                Stations by Site
                             </div>
-                        ))}
-                        <Separator />
-                        <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                            <span className="font-semibold">Total</span>
-                            <Badge>{totalStations.total} stations</Badge>
+                            <div className="space-y-3">
+                                {totalStations.bysite.map((site, idx) => (
+                                    <div key={idx} className="flex items-center justify-between p-3 rounded-lg border">
+                                        <div className="flex items-center gap-2">
+                                            <MapPin className="h-4 w-4 text-muted-foreground" />
+                                            <span className="font-medium">{site.site}</span>
+                                        </div>
+                                        <Badge variant="secondary">{site.count} stations</Badge>
+                                    </div>
+                                ))}
+                                <Separator />
+                                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
+                                    <span className="font-semibold">Total</span>
+                                    <Badge>{totalStations.total} stations</Badge>
+                                </div>
+                            </div>
+                        </div>
+                        <div>
+                            <div className="text-lg font-semibold mb-2 flex items-center gap-2">
+                                <Server className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                Available PC Specs
+                            </div>
+                            <div className="space-y-2">
+                                {unassignedPcSpecs.length === 0 ? (
+                                    <div className="text-center text-muted-foreground py-8">
+                                        All PC specs are assigned to stations
+                                    </div>
+                                ) : (
+                                    unassignedPcSpecs.map((pc) => (
+                                        <div key={pc.id} className="flex flex-col md:flex-row md:items-center justify-between p-3 rounded-lg border">
+                                            <div>
+                                                <div className="font-medium">{pc.pc_number} - {pc.model}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    RAM: {pc.ram_gb} GB ({pc.ram_count} module{pc.ram_count !== 1 ? 's' : ''})
+                                                    | Disk: {pc.disk_tb} TB ({pc.disk_count} drive{pc.disk_count !== 1 ? 's' : ''})
+                                                    | CPU: {pc.processor} ({pc.cpu_count} processor{pc.cpu_count !== 1 ? 's' : ''})
+                                                </div>
+                                                {pc.issue && <div className="text-xs text-red-500">Issue: {pc.issue}</div>}
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
                         </div>
                     </div>
                 </DetailDialog>
@@ -441,7 +503,7 @@ export default function Dashboard({
                 </DetailDialog>
 
                 <DetailDialog
-                    open={activeDialog === 'ssdPcs' || activeDialog === 'hddPcs'}
+                    open={activeDialog === 'diskPcs'}
                     onClose={closeDialog}
                     title="PCs with SSD & HDD by Site"
                     description="Stations equipped with Solid State Drives and Hard Disk Drives"
@@ -540,7 +602,7 @@ export default function Dashboard({
                                                 {station.site} • Due: {station.dueDate}
                                             </div>
                                         </div>
-                                        <Badge variant="destructive">{station.daysOverdue} days overdue</Badge>
+                                        <Badge variant="destructive">{station.daysOverdue}</Badge>
                                     </div>
                                 ))}
                                 {maintenanceDue.stations.length > 10 && (

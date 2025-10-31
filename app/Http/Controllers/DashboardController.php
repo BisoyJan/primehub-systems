@@ -16,21 +16,28 @@ class DashboardController extends Controller
 {
     public function index()
     {
+        /**
+         * Retrieves dashboard statistics from the cache or computes them if not present.
+         * The cached data is stored under the key 'dashboard_stats' for 15 minutes.
+         *
+         * @return mixed The dashboard statistics data.
+         */
         $dashboardData = Cache::remember('dashboard_stats', 150, function () {
-       return [
-            'totalStations' => $this->getTotalStations(),
-            'noPcs' => $this->getStationsWithoutPcs(),
-            'vacantStations' => $this->getVacantStations(),
-            'ssdPcs' => $this->getPcsWithSsd(),
-            'hddPcs' => $this->getPcsWithHdd(),
-            'dualMonitor' => $this->getDualMonitorStations(),
-            'maintenanceDue' => $this->getMaintenanceDue(),
-            'lastMaintenance' => $this->getLastMaintenance(),
-            'avgDaysOverdue' => $this->getAverageDaysOverdue(),
-        ];
-    });
+            return [
+                'totalStations' => $this->getTotalStations(),
+                'noPcs' => $this->getStationsWithoutPcs(),
+                'vacantStations' => $this->getVacantStations(),
+                'ssdPcs' => $this->getPcsWithSsd(),
+                'hddPcs' => $this->getPcsWithHdd(),
+                'dualMonitor' => $this->getDualMonitorStations(),
+                'maintenanceDue' => $this->getMaintenanceDue(),
+                'lastMaintenance' => $this->getLastMaintenance(),
+                'avgDaysOverdue' => $this->getAverageDaysOverdue(),
+                'unassignedPcSpecs' => $this->getUnassignedPcSpecs(),
+            ];
+        });
 
-    return Inertia::render('dashboard', $dashboardData);
+        return Inertia::render('dashboard', $dashboardData);
     }
 
     /**
@@ -224,11 +231,13 @@ class DashboardController extends Controller
                 $dueDate = Carbon::parse($maintenance->next_due_date);
                 $daysOverdue = $now->diffInDays($dueDate, false);
 
+                $days = abs((int) $daysOverdue);
+                $daysText = $days === 1 ? '1 day overdue' : "$days days overdue";
                 return [
                     'station' => $maintenance->station->station_number,
                     'site' => $maintenance->station->site->name,
                     'dueDate' => $dueDate->format('Y-m-d'),
-                    'daysOverdue' => abs($daysOverdue)
+                    'daysOverdue' => $daysText
                 ];
             })
             ->toArray();
@@ -316,4 +325,27 @@ class DashboardController extends Controller
             ])->values()->toArray()
         ];
     }
+
+    /**
+     * Get available PC specs not assigned to any station
+     */
+    public function getUnassignedPcSpecs(): array
+    {
+        $unassigned = PcSpec::whereDoesntHave('stations')->get();
+        return $unassigned->map(fn($pc) => [
+            'id' => $pc->id,
+            'pc_number' => $pc->pc_number,
+            'model' => $pc->model,
+            'ram' => $pc->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
+            'ram_gb' => $pc->ramSpecs->sum('capacity_gb'),
+            'ram_count' => $pc->ramSpecs->count(),
+            'disk' => $pc->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
+            'disk_tb' => round($pc->diskSpecs->sum('capacity_gb') / 1024, 2),
+            'disk_count' => $pc->diskSpecs->count(),
+            'processor' => $pc->processorSpecs->pluck('model')->implode(', '),
+            'cpu_count' => $pc->processorSpecs->count(),
+            'issue' => $pc->issue,
+        ])->toArray();
+    }
+
 }
