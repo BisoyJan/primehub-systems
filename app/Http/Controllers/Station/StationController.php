@@ -447,5 +447,5 @@ class StationController extends Controller
             ->map(fn($pc) => $pc->getFormSelectionData());
     }
 
-    
+
 }

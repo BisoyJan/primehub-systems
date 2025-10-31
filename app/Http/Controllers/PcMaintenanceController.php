@@ -34,7 +34,7 @@ class PcMaintenanceController extends Controller
         if ($request->filled('search')) {
             $query->whereHas('station', function ($q) use ($request) {
                 $q->where('station_number', 'like', "%{$request->search}%")
-                  ->orWhereHas('pcSpec', fn($pcQ) => 
+                  ->orWhereHas('pcSpec', fn($pcQ) =>
                       $pcQ->where('pc_number', 'like', "%{$request->search}%")
                   );
             });
