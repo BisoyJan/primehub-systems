@@ -269,7 +269,6 @@ export default function Dashboard({
                             </div>
                         }
                         icon={Calendar}
-                        description="System date and time (auto-updates)"
                         onClick={() => setActiveDialog('dateTime')}
                     />
 

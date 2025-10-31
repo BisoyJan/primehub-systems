@@ -138,10 +138,25 @@ export default function Index() {
 
     // QR Code functionality - persist selection in localStorage
     const LOCAL_STORAGE_KEY = 'pcspec_selected_ids';
+    const LOCAL_STORAGE_TIMESTAMP_KEY = 'pcspec_selected_ids_timestamp';
+    const EXPIRY_TIME_MS = 15 * 60 * 1000; // 15 minutes
+
     const [selectedPcIds, setSelectedPcIds] = useState<number[]>(() => {
         try {
             const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
-            return stored ? JSON.parse(stored) : [];
+            const timestamp = localStorage.getItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+            
+            if (stored && timestamp) {
+                const age = Date.now() - parseInt(timestamp, 10);
+                if (age < EXPIRY_TIME_MS) {
+                    return JSON.parse(stored);
+                } else {
+                    // Clear expired data
+                    localStorage.removeItem(LOCAL_STORAGE_KEY);
+                    localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+                }
+            }
+            return [];
         } catch {
             // Ignore localStorage errors
             return [];
@@ -150,10 +165,29 @@ export default function Index() {
 
     useEffect(() => {
         try {
-            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(selectedPcIds));
+            if (selectedPcIds.length > 0) {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(selectedPcIds));
+                localStorage.setItem(LOCAL_STORAGE_TIMESTAMP_KEY, Date.now().toString());
+            } else {
+                localStorage.removeItem(LOCAL_STORAGE_KEY);
+                localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+            }
         } catch {
             // Ignore localStorage errors
         }
+    }, [selectedPcIds]);
+
+    // Auto-clear selection after 15 minutes of inactivity
+    useEffect(() => {
+        const expiryTime = 15 * 60 * 1000; // 15 minutes
+        const clearTimer = setTimeout(() => {
+            if (selectedPcIds.length > 0) {
+                setSelectedPcIds([]);
+                toast.info('QR code selection cleared after 15 minutes of inactivity');
+            }
+        }, expiryTime);
+
+        return () => clearTimeout(clearTimer);
     }, [selectedPcIds]);
 
     const selectedZipIntervalRef = useRef<NodeJS.Timeout | null>(null);
