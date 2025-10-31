@@ -93,7 +93,7 @@ export default function StationIndex() {
         try {
             const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
             const timestamp = localStorage.getItem(LOCAL_STORAGE_TIMESTAMP_KEY);
-            
+
             if (stored && timestamp) {
                 const age = Date.now() - parseInt(timestamp, 10);
                 if (age < EXPIRY_TIME_MS) {
