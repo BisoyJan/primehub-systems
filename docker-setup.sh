@@ -56,6 +56,10 @@ echo "🗄️  Running database migrations..."
 docker-compose exec -T app php artisan migrate --force
 
 echo ""
+echo "🔧 Generating Wayfinder types..."
+docker-compose exec -T app php artisan wayfinder:generate --with-form
+
+echo ""
 echo "🔐 Setting permissions..."
 docker-compose exec -T app chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 docker-compose exec -T app chmod -R 775 /var/www/storage /var/www/bootstrap/cache

@@ -227,6 +227,9 @@ docker-compose up -d --build
 # If there are new migrations
 docker-compose exec app php artisan migrate
 
+# Regenerate Wayfinder types (if routes changed)
+docker-compose exec app php artisan wayfinder:generate --with-form
+
 # If there are new dependencies
 docker-compose exec app composer install
 docker-compose exec node npm install
@@ -259,6 +262,9 @@ docker-compose exec -T node npm install
 
 # Run migrations
 docker-compose exec -T app php artisan migrate
+
+# Generate Wayfinder types
+docker-compose exec -T app php artisan wayfinder:generate --with-form
 
 # Clear caches
 docker-compose exec -T app php artisan optimize:clear
@@ -561,6 +567,24 @@ docker-compose restart node
 # Verify vite is running on port 5173
 # Access via http://localhost (not :5173)
 ```
+
+### Vite Dev Server Won't Start
+
+**Error**: "Error generating types: php: not found"
+
+**Solution**:
+```bash
+# Generate Wayfinder types first
+docker-compose exec app php artisan wayfinder:generate --with-form
+
+# Restart node container
+docker-compose restart node
+
+# Check logs
+docker-compose logs node
+```
+
+The vite.config.ts is configured to skip Wayfinder plugin if PHP is not available in the Node container.
 
 ---
 

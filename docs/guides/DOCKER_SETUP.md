@@ -56,20 +56,30 @@ docker-compose exec node npm install
 docker-compose exec app php artisan migrate
 ```
 
-### 6. Seed Database (Optional)
+### 6. Generate Wayfinder Types
+
+**Important:** This step is required before starting the Vite dev server to prevent errors.
+
+```bash
+docker-compose exec app php artisan wayfinder:generate --with-form
+```
+
+This generates TypeScript route types for the frontend. The Vite dev server will fail to start without these files.
+
+### 7. Seed Database (Optional)
 
 ```bash
 docker-compose exec app php artisan db:seed
 ```
 
-### 7. Set Permissions
+### 8. Set Permissions
 
 ```bash
 docker-compose exec app chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 docker-compose exec app chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 ```
 
-### 8. Access the Application
+### 9. Access the Application
 
 - **Frontend**: http://localhost
 - **Vite Dev Server**: http://localhost:5173
@@ -104,6 +114,7 @@ docker-compose exec app php artisan db:seed
 docker-compose exec app php artisan cache:clear
 docker-compose exec app php artisan config:clear
 docker-compose exec app php artisan route:list
+docker-compose exec app php artisan wayfinder:generate --with-form
 ```
 
 ### Access Container Shell
@@ -204,6 +215,34 @@ docker-compose exec app php artisan queue:work --tries=3
 ```
 
 ## Troubleshooting
+
+### Vite Dev Server Errors
+
+**Error: "php: not found" or "Error generating types"**
+
+This occurs when the Vite dev server tries to run PHP commands (for Wayfinder plugin) but PHP is not available in the Node.js container.
+
+**Solution:**
+1. Generate Wayfinder types manually in the PHP container:
+   ```bash
+   docker-compose exec app php artisan wayfinder:generate --with-form
+   ```
+
+2. Restart the Node container:
+   ```bash
+   docker-compose restart node
+   ```
+
+3. The Vite configuration automatically detects if PHP is unavailable and skips the Wayfinder plugin.
+
+**When to regenerate Wayfinder types:**
+- After adding/modifying routes
+- After changing form request validation classes
+- Before starting the dev server for the first time
+
+```bash
+docker-compose exec app php artisan wayfinder:generate --with-form
+```
 
 ### Port Already in Use
 

@@ -86,6 +86,7 @@ docker-compose restart         # Restart all services
 ### Laravel Commands
 ```bash
 docker-compose exec app php artisan migrate
+docker-compose exec app php artisan wayfinder:generate --with-form
 docker-compose exec app php artisan db:seed
 docker-compose exec app php artisan cache:clear
 docker-compose exec app php artisan test

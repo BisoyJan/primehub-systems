@@ -82,6 +82,9 @@ docker-compose exec node npm install
 docker-compose exec app php artisan key:generate
 docker-compose exec app php artisan migrate
 
+# Generate Wayfinder types (required for Vite dev server)
+docker-compose exec app php artisan wayfinder:generate --with-form
+
 # Build assets
 docker-compose exec node npm run build
 ```
@@ -165,6 +168,9 @@ php artisan migrate
 
 # Seed database
 php artisan db:seed
+
+# Generate Wayfinder types (if using Wayfinder plugin)
+php artisan wayfinder:generate --with-form
 
 # Run tests
 php artisan test
@@ -338,6 +344,26 @@ php artisan queue:listen
 ```
 
 ## Troubleshooting
+
+### Vite Dev Server Issues
+
+**Error: "php: not found" when starting Vite dev server**
+
+This happens because the Wayfinder plugin tries to run PHP commands during Vite startup, but PHP is not available in the Node.js container.
+
+**Solution:**
+1. Generate Wayfinder types in the PHP container first:
+   ```bash
+   docker-compose exec app php artisan wayfinder:generate --with-form
+   ```
+
+2. The Vite configuration automatically detects if PHP is unavailable and skips the Wayfinder plugin, showing a warning instead.
+
+3. If you make route changes, regenerate Wayfinder types:
+   ```bash
+   docker-compose exec app php artisan wayfinder:generate --with-form
+   docker-compose restart node  # Restart Vite dev server
+   ```
 
 ### Docker Issues
 See **[docs/guides/DOCKER_SUMMARY.md](./docs/guides/DOCKER_SUMMARY.md)** troubleshooting section.

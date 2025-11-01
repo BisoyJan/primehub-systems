@@ -155,10 +155,20 @@ php artisan migrate:fresh --seed
 
 This will create all tables and populate them with sample data.
 
-### Step 8: Generate Wayfinder Types (Optional)
+### Step 8: Generate Wayfinder Types
+
+**Important:** Generate TypeScript route types for the frontend before starting Vite dev server.
+
 ```bash
 php artisan wayfinder:generate --with-form
 ```
+
+This creates route type files in `resources/js/routes/` and `resources/js/actions/` that Vite needs.
+
+**When to regenerate:**
+- After adding/modifying routes
+- After changing form request validation
+- Before running the dev server for the first time
 
 ### Step 9: Create Storage Symlink
 ```bash
@@ -240,6 +250,22 @@ php artisan queue:work database --tries=3 --timeout=300
 **Solution:**
 - Make sure Vite dev server is running (`npm run dev`)
 - Check if port 5173 is available
+
+### Issue 3.1: Vite Dev Server Error - "php: not found"
+**Error:** Vite fails to start with "Error generating types: php: not found"
+
+**Solution:**
+1. Generate Wayfinder types manually first:
+   ```bash
+   php artisan wayfinder:generate --with-form
+   ```
+
+2. The vite.config.ts automatically detects if PHP is unavailable and skips the Wayfinder plugin
+
+3. Restart Vite dev server:
+   ```bash
+   npm run dev
+   ```
 
 ### Issue 4: MySQL Connection Failed
 **Solution:**

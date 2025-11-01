@@ -23,6 +23,9 @@ docker-compose exec node npm install
 # 4. Generate key and migrate
 docker-compose exec app php artisan key:generate
 docker-compose exec app php artisan migrate
+
+# 5. Generate Wayfinder types (required for Vite)
+docker-compose exec app php artisan wayfinder:generate --with-form
 ```
 
 ### Option 3: Using Make (if you have Make installed)
@@ -67,6 +70,7 @@ docker-compose down            # Stop all services
 ### Laravel Commands
 ```bash
 docker-compose exec app php artisan migrate
+docker-compose exec app php artisan wayfinder:generate --with-form
 docker-compose exec app php artisan db:seed
 docker-compose exec app php artisan cache:clear
 docker-compose exec app php artisan queue:work
