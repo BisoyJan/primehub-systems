@@ -37,6 +37,15 @@ Welcome to the PrimeHub Systems documentation! This directory contains comprehen
 - Service URLs
 - Maintenance tasks
 
+#### [DOCKER_DEPLOYMENT_GUIDE.md](./DOCKER_DEPLOYMENT_GUIDE.md)
+**Deploying to multiple computers (RECOMMENDED)**
+- Using Docker on multiple PCs
+- Syncing between computers
+- Git-based deployment workflow
+- Database transfer guide
+- Docker Hub alternatives
+- Best practices for multi-PC setup
+
 ---
 
 ### 💻 Local Development Setup
@@ -223,6 +232,7 @@ docs/
 │   ├── DOCKER_SETUP.md              ← Docker installation
 │   ├── DOCKER_ARCHITECTURE.md       ← Docker internals
 │   ├── DOCKER_SUMMARY.md            ← Docker quick reference
+│   ├── DOCKER_DEPLOYMENT_GUIDE.md   ← Multi-PC deployment
 │   ├── LOCAL_SETUP_GUIDE.md         ← Local development
 │   └── NGROK_GUIDE.md               ← Remote access
 │
@@ -272,6 +282,7 @@ When making changes to the project:
 | DOCKER_SETUP.md | 2025-11-01 | Development Team |
 | DOCKER_ARCHITECTURE.md | 2025-11-01 | Development Team |
 | DOCKER_SUMMARY.md | 2025-11-01 | Development Team |
+| DOCKER_DEPLOYMENT_GUIDE.md | 2025-11-01 | Development Team |
 | LOCAL_SETUP_GUIDE.md | 2025-11-01 | Development Team |
 | NGROK_GUIDE.md | 2025-11-01 | Development Team |
 

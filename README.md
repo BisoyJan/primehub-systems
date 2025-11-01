@@ -264,6 +264,7 @@ All guides are organized in the **[docs/guides/](./docs/guides/)** directory:
 
 #### Setup Guides
 - **[Docker Setup Guide](./docs/guides/DOCKER_SETUP.md)** - Complete Docker installation & configuration
+- **[Docker Deployment Guide](./docs/guides/DOCKER_DEPLOYMENT_GUIDE.md)** - Using Docker on multiple computers
 - **[Local Setup Guide](./docs/guides/LOCAL_SETUP_GUIDE.md)** - Running without Docker
 - **[Docker Quick Reference](./docs/guides/DOCKER_README.md)** - Docker commands & overview
 - **[Docker Architecture](./docs/guides/DOCKER_ARCHITECTURE.md)** - Understanding the container structure
@@ -281,6 +282,7 @@ All guides are organized in the **[docs/guides/](./docs/guides/)** directory:
 ### 🚀 Quick Links
 - **New to the project?** → Start with [docs/guides/README.md](./docs/guides/README.md)
 - **Using Docker?** → See [Docker Setup Guide](./docs/guides/DOCKER_SETUP.md)
+- **Multiple PCs?** → See [Docker Deployment Guide](./docs/guides/DOCKER_DEPLOYMENT_GUIDE.md)
 - **Running locally?** → See [Local Setup Guide](./docs/guides/LOCAL_SETUP_GUIDE.md)
 - **Need remote access?** → See [Ngrok Guide](./docs/guides/NGROK_GUIDE.md)
 
