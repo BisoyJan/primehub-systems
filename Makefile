@@ -24,6 +24,7 @@ help:
 	@echo "  make seed         - Seed database"
 	@echo "  make test         - Run tests"
 	@echo "  make clear        - Clear all caches"
+	@echo "  make wayfinder    - Regenerate Wayfinder client actions"
 	@echo "  make key          - Generate app key"
 	@echo ""
 	@echo "Asset Commands:"
@@ -48,6 +49,7 @@ setup:
 	docker-compose exec -T node npm install
 	docker-compose exec -T app php artisan key:generate
 	docker-compose exec -T app php artisan migrate --force
+	@make wayfinder
 	@make permissions
 	@echo "✅ Setup complete!"
 
@@ -80,9 +82,11 @@ mysql:
 # Laravel Commands
 migrate:
 	docker-compose exec app php artisan migrate
+	@make wayfinder
 
 fresh:
 	docker-compose exec app php artisan migrate:fresh
+	@make wayfinder
 
 seed:
 	docker-compose exec app php artisan db:seed
@@ -104,6 +108,7 @@ dev:
 	docker-compose exec node npm run dev
 
 build-assets:
+	@make wayfinder
 	docker-compose exec node npm run build
 
 # Queue Management
@@ -117,6 +122,9 @@ queue-restart:
 permissions:
 	docker-compose exec app chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 	docker-compose exec app chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+
+wayfinder:
+	docker-compose exec app php artisan wayfinder:generate --with-form
 
 clean:
 	docker-compose down -v
