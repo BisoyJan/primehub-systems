@@ -1,9 +1,5 @@
 import { NavFooter } from '@/components/nav-footer';
-import { NavMain } from '@/components/nav-main';
-import { NavComputer } from '@/components/nav-computer-group';
-import { NavStation } from '@/components/nav-station-group';
-import { NavAccount } from '@/components/nav-account-group';
-import { NavAttendance } from '@/components/nav-attendance-group';
+import { NavGroup } from '@/components/nav-group';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -27,80 +23,94 @@ import { Link } from '@inertiajs/react';
 import { ArrowUpDown, BookOpen, CalendarCheck, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
-const mainNavItems: NavItem[] = [
-    {
-        title: 'Dashboard',
-        href: dashboard(),
-        icon: LayoutGrid,
+// Navigation configuration
+const navigationConfig = {
+    main: {
+        label: 'Platform',
+        items: [
+            {
+                title: 'Dashboard',
+                href: dashboard(),
+                icon: LayoutGrid,
+            },
+        ],
     },
-];
-
-const computerNavItems: NavItem[] = [
-    {
-        title: 'Ram Specs',
-        href: ramIndex.url(),
-        icon: MemoryStick
+    computer: {
+        label: 'Computer Specs',
+        items: [
+            {
+                title: 'Ram Specs',
+                href: ramIndex.url(),
+                icon: MemoryStick
+            },
+            {
+                title: 'Disk Specs',
+                href: diskIndex.url(),
+                icon: HardDrive
+            },
+            {
+                title: 'Processor Specs',
+                href: processorIndex.url(),
+                icon: CpuIcon
+            },
+            {
+                title: 'Monitor Specs',
+                href: monitorIndex.url(),
+                icon: Monitor
+            },
+            {
+                title: 'PC Specs',
+                href: pcIndex.url(),
+                icon: Microchip
+            },
+            {
+                title: 'Stocks',
+                href: stocksIndex.url(),
+                icon: Folder
+            }
+        ],
     },
-    {
-        title: 'Disk Specs',
-        href: diskIndex.url(),
-        icon: HardDrive
+    station: {
+        label: 'Station Details',
+        items: [
+            {
+                title: 'Stations',
+                href: stationIndex.url(),
+                icon: Computer,
+            },
+            {
+                title: 'PC Transfer',
+                href: '/pc-transfers',
+                icon: ArrowUpDown,
+            },
+            {
+                title: 'PC Maintenance',
+                href: '/pc-maintenance',
+                icon: Wrench,
+            },
+        ],
     },
-    {
-        title: 'Processor Specs',
-        href: processorIndex.url(),
-        icon: CpuIcon
+    attendance: {
+        label: 'Attendance',
+        items: [
+            {
+                title: 'Attendance',
+                href: '/attendance',
+                icon: CalendarCheck,
+            },
+        ],
     },
-    {
-        title: 'Monitor Specs',
-        href: monitorIndex.url(),
-        icon: Monitor
+    account: {
+        label: 'Account Management',
+        items: [
+            {
+                title: 'Accounts',
+                href: '/accounts',
+                icon: User,
+            },
+        ],
     },
-    {
-        title: 'PC Specs',
-        href: pcIndex.url(),
-        icon: Microchip
-    },
-    {
-        title: 'Stocks',
-        href: stocksIndex.url(),
-        icon: Folder
-    }
-]
-
-const stationNavItems: NavItem[] = [
-    {
-        title: 'Stations',
-        href: stationIndex.url(),
-        icon: Computer,
-    },
-    {
-        title: 'PC Transfer',
-        href: '/pc-transfers',
-        icon: ArrowUpDown,
-    },
-    {
-        title: 'PC Maintenance',
-        href: '/pc-maintenance',
-        icon: Wrench,
-    },
-];
-
-const attendanceNavItems: NavItem[] = [
-    {
-        title: 'Attendance',
-        href: '/attendance',
-        icon: CalendarCheck,
-    },
-];
-
-const accountNavItems: NavItem[] = [
-    {
-        title: 'Accounts',
-        href: '/accounts',
-        icon: User,
-    },
-];
+} as const;
 
 const footerNavItems: NavItem[] = [
     {
@@ -131,11 +141,11 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
-                <NavComputer items={computerNavItems} />
-                <NavStation items={stationNavItems} />
-                <NavAttendance items={attendanceNavItems} />
-                <NavAccount items={accountNavItems} />
+                <NavGroup label={navigationConfig.main.label} items={navigationConfig.main.items} />
+                <NavGroup label={navigationConfig.computer.label} items={navigationConfig.computer.items} />
+                <NavGroup label={navigationConfig.station.label} items={navigationConfig.station.items} />
+                <NavGroup label={navigationConfig.attendance.label} items={navigationConfig.attendance.items} />
+                <NavGroup label={navigationConfig.account.label} items={navigationConfig.account.items} />
             </SidebarContent>
 
             <SidebarFooter>

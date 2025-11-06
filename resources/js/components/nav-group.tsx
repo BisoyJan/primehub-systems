@@ -8,11 +8,21 @@ import {
 import { type NavItem } from '@/types';
 import { Link, usePage } from '@inertiajs/react';
 
-export function NavAttendance({ items = [] }: { items: NavItem[] }) {
+interface NavGroupProps {
+    label: string;
+    items: readonly NavItem[];
+}
+
+export function NavGroup({ label, items = [] }: NavGroupProps) {
     const page = usePage();
+
+    if (items.length === 0) {
+        return null;
+    }
+
     return (
         <SidebarGroup className="px-2 py-0">
-            <SidebarGroupLabel>Attendance</SidebarGroupLabel>
+            <SidebarGroupLabel>{label}</SidebarGroupLabel>
             <SidebarMenu>
                 {items.map((item) => (
                     <SidebarMenuItem key={item.title}>
