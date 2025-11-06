@@ -13,6 +13,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\PcTransferController;
 use App\Http\Controllers\PcMaintenanceController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\AttendanceController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -83,6 +84,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // PC Maintenance
     Route::resource('pc-maintenance', PcMaintenanceController::class);
+
+    // Attendance
+    Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
 });
 
 require __DIR__ . '/settings.php';

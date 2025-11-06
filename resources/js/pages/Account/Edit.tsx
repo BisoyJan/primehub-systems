@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import type { BreadcrumbItem } from "@/types";
-import { index as accountsIndex, edit as accountsEdit } from "@/routes/accounts";
+import { index as accountsIndex } from "@/routes/accounts";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: "Accounts", href: accountsIndex().url },
@@ -16,7 +16,9 @@ const breadcrumbs: BreadcrumbItem[] = [
 
 interface User {
     id: number;
-    name: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
     email: string;
     role: string;
 }
@@ -25,7 +27,9 @@ export default function AccountEdit() {
     const { user, roles } = usePage<{ user: User; roles: string[] }>().props;
 
     const { data, setData, patch, processing, errors } = useForm({
-        name: user.name,
+        first_name: user.first_name,
+        middle_name: user.middle_name || "",
+        last_name: user.last_name,
         email: user.email,
         password: "",
         password_confirmation: "",
@@ -54,16 +58,42 @@ export default function AccountEdit() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>
-                        <Label htmlFor="name">Full Name</Label>
+                        <Label htmlFor="first_name">First Name</Label>
                         <Input
-                            id="name"
+                            id="first_name"
                             type="text"
-                            value={data.name}
-                            onChange={e => setData("name", e.target.value)}
-                            placeholder="John Doe"
+                            value={data.first_name}
+                            onChange={e => setData("first_name", e.target.value)}
+                            placeholder="John"
                             required
                         />
-                        {errors.name && <p className="text-red-600 text-sm mt-1">{errors.name}</p>}
+                        {errors.first_name && <p className="text-red-600 text-sm mt-1">{errors.first_name}</p>}
+                    </div>
+
+                    <div>
+                        <Label htmlFor="middle_name">Middle Initial (Optional)</Label>
+                        <Input
+                            id="middle_name"
+                            type="text"
+                            value={data.middle_name}
+                            onChange={e => setData("middle_name", e.target.value.toUpperCase().charAt(0))}
+                            placeholder="M"
+                            maxLength={1}
+                        />
+                        {errors.middle_name && <p className="text-red-600 text-sm mt-1">{errors.middle_name}</p>}
+                    </div>
+
+                    <div>
+                        <Label htmlFor="last_name">Last Name</Label>
+                        <Input
+                            id="last_name"
+                            type="text"
+                            value={data.last_name}
+                            onChange={e => setData("last_name", e.target.value)}
+                            placeholder="Doe"
+                            required
+                        />
+                        {errors.last_name && <p className="text-red-600 text-sm mt-1">{errors.last_name}</p>}
                     </div>
 
                     <div>

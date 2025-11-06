@@ -17,7 +17,9 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 
 interface User {
     id: number;
-    name: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
     email: string;
     role: string;
     created_at: string;
@@ -177,7 +179,9 @@ export default function AccountIndex() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>ID</TableHead>
-                                    <TableHead>Name</TableHead>
+                                    <TableHead>First Name</TableHead>
+                                    <TableHead>M.I.</TableHead>
+                                    <TableHead>Last Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
                                     <TableHead>Created At</TableHead>
@@ -188,7 +192,9 @@ export default function AccountIndex() {
                                 {users.data.map((user) => (
                                     <TableRow key={user.id}>
                                         <TableCell>{user.id}</TableCell>
-                                        <TableCell className="font-medium">{user.name}</TableCell>
+                                        <TableCell className="font-medium">{user.first_name}</TableCell>
+                                        <TableCell>{user.middle_name || '-'}</TableCell>
+                                        <TableCell className="font-medium">{user.last_name}</TableCell>
                                         <TableCell>{user.email}</TableCell>
                                         <TableCell>
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
@@ -207,7 +213,7 @@ export default function AccountIndex() {
                                                 <DeleteConfirmDialog
                                                     onConfirm={() => handleDelete(user.id)}
                                                     title="Delete User Account"
-                                                    description={`Are you sure you want to delete the account for "${user.name}"? This action cannot be undone.`}
+                                                    description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
                                                     disabled={loading || user.id === currentUserId}
                                                 />
                                             </div>
@@ -216,7 +222,7 @@ export default function AccountIndex() {
                                 ))}
                                 {users.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={6} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={8} className="py-8 text-center text-gray-500">
                                             No user accounts found
                                         </TableCell>
                                     </TableRow>
@@ -232,7 +238,9 @@ export default function AccountIndex() {
                         <div key={user.id} className="rounded-lg shadow p-4 space-y-3">
                             <div className="flex justify-between items-start">
                                 <div className="flex-1">
-                                    <h3 className="font-semibold text-lg">{user.name}</h3>
+                                    <h3 className="font-semibold text-lg">
+                                        {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
+                                    </h3>
                                     <p className="text-sm text-gray-600">{user.email}</p>
                                 </div>
                                 <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
@@ -253,7 +261,7 @@ export default function AccountIndex() {
                                     <DeleteConfirmDialog
                                         onConfirm={() => handleDelete(user.id)}
                                         title="Delete User Account"
-                                        description={`Are you sure you want to delete the account for "${user.name}"? This action cannot be undone.`}
+                                        description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
                                         disabled={loading || user.id === currentUserId}
                                         triggerClassName="w-full"
                                     />

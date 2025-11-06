@@ -23,7 +23,7 @@ export default defineConfig({
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             ssr: 'resources/js/ssr.tsx',
-            refresh: false, // Disable auto-refresh to prevent cursor-triggered reloads
+            refresh: true,
         }),
         react(),
         tailwindcss(),

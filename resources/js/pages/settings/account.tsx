@@ -71,19 +71,53 @@ export default function AccountManagement({
                                 {({ processing, recentlySuccessful, errors }) => (
                                     <>
                                         <div className="grid gap-2">
-                                            <Label htmlFor="name">Full Name</Label>
+                                            <Label htmlFor="first_name">First Name</Label>
                                             <Input
-                                                id="name"
+                                                id="first_name"
                                                 className="mt-1 block w-full"
-                                                defaultValue={auth.user.name}
-                                                name="name"
+                                                defaultValue={auth.user.first_name}
+                                                name="first_name"
                                                 required
-                                                autoComplete="name"
-                                                placeholder="Enter your full name"
+                                                autoComplete="given-name"
+                                                placeholder="Enter your first name"
                                             />
                                             <InputError
                                                 className="mt-2"
-                                                message={errors.name}
+                                                message={errors.first_name}
+                                            />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="middle_name">Middle Initial (Optional)</Label>
+                                            <Input
+                                                id="middle_name"
+                                                className="mt-1 block w-full"
+                                                defaultValue={auth.user.middle_name || ''}
+                                                name="middle_name"
+                                                maxLength={1}
+                                                autoComplete="additional-name"
+                                                placeholder="M"
+                                            />
+                                            <InputError
+                                                className="mt-2"
+                                                message={errors.middle_name}
+                                            />
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="last_name">Last Name</Label>
+                                            <Input
+                                                id="last_name"
+                                                className="mt-1 block w-full"
+                                                defaultValue={auth.user.last_name}
+                                                name="last_name"
+                                                required
+                                                autoComplete="family-name"
+                                                placeholder="Enter your last name"
+                                            />
+                                            <InputError
+                                                className="mt-2"
+                                                message={errors.last_name}
                                             />
                                         </div>
 

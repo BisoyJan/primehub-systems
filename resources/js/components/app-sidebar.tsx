@@ -3,6 +3,7 @@ import { NavMain } from '@/components/nav-main';
 import { NavComputer } from '@/components/nav-computer-group';
 import { NavStation } from '@/components/nav-station-group';
 import { NavAccount } from '@/components/nav-account-group';
+import { NavAttendance } from '@/components/nav-attendance-group';
 import { NavUser } from '@/components/nav-user';
 import {
     Sidebar,
@@ -23,7 +24,7 @@ import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, BookOpen, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench } from 'lucide-react';
+import { ArrowUpDown, BookOpen, CalendarCheck, Computer, CpuIcon, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench } from 'lucide-react';
 import AppLogo from './app-logo';
 
 const mainNavItems: NavItem[] = [
@@ -85,6 +86,14 @@ const stationNavItems: NavItem[] = [
     },
 ];
 
+const attendanceNavItems: NavItem[] = [
+    {
+        title: 'Attendance',
+        href: '/attendance',
+        icon: CalendarCheck,
+    },
+];
+
 const accountNavItems: NavItem[] = [
     {
         title: 'Accounts',
@@ -125,6 +134,7 @@ export function AppSidebar() {
                 <NavMain items={mainNavItems} />
                 <NavComputer items={computerNavItems} />
                 <NavStation items={stationNavItems} />
+                <NavAttendance items={attendanceNavItems} />
                 <NavAccount items={accountNavItems} />
             </SidebarContent>
 
