@@ -14,6 +14,7 @@ use App\Http\Controllers\PcTransferController;
 use App\Http\Controllers\PcMaintenanceController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\AttendanceImportController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -87,6 +88,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // Attendance
     Route::get('attendance', [AttendanceController::class, 'index'])->name('attendance.index');
+    Route::get('attendance/import', [AttendanceImportController::class, 'create'])->name('attendance.import');
+    Route::post('attendance/import', [AttendanceImportController::class, 'store'])->name('attendance.import.store');
 });
 
 require __DIR__ . '/settings.php';

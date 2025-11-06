@@ -23,7 +23,13 @@ export default defineConfig({
         laravel({
             input: ['resources/css/app.css', 'resources/js/app.tsx'],
             ssr: 'resources/js/ssr.tsx',
-            refresh: true,
+            refresh: [
+                'app/**/*.php',
+                'routes/**/*.php',
+                'resources/views/**/*.blade.php',
+                'resources/js/**/*.{ts,tsx}',
+                'resources/css/**/*.css',
+            ],
         }),
         react(),
         tailwindcss(),
@@ -53,12 +59,10 @@ export default defineConfig({
         },
     },
     server: {
-        host: '0.0.0.0', // Listen on all network interfaces
+        host: 'localhost',
         port: 5173,
-        strictPort: true,
         hmr: {
-            host: 'localhost', // Will use current hostname
-            protocol: 'ws'
+            host: 'localhost',
         },
     }
 });

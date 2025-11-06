@@ -81,7 +81,11 @@ const formatDateTime = (value: string) => {
 
 export default function AttendanceIndex() {
     const { attendances, filters } = usePage<PageProps>().props;
-    const attendanceData = attendances ?? { data: [], links: [], meta: DEFAULT_META };
+    const attendanceData = {
+        data: attendances?.data ?? [],
+        links: attendances?.links ?? [],
+        meta: attendances?.meta ?? DEFAULT_META,
+    };
     const filterOptions = filters ?? DEFAULT_FILTERS;
 
     const { title, breadcrumbs } = usePageMeta({
@@ -236,8 +240,12 @@ export default function AttendanceIndex() {
                             <Button onClick={() => router.get("/attendance/create")} className="w-full sm:w-auto">
                                 Add Attendance
                             </Button>
-                            <Button onClick={() => router.get("/attendance/import")} className="w-full sm:w-auto">
-                                Import Logs
+                            <Button
+                                onClick={() => router.get("/attendance/import")}
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                            >
+                                Import Attendance File (.txt)
                             </Button>
                         </div>
                     </div>

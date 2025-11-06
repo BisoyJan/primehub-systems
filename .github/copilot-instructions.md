@@ -32,7 +32,10 @@ Key features include: PC/Station inventory management, hardware spec tracking (R
 - **Debug:**
   - Laravel: Use `php artisan serve` for local dev, logs in `storage/logs/`
   - React: Use Vite dev server (`npm run dev`)
-  - Docker: See `docs/guides/` for Docker setup and deployment guides
+- **Local Development:**
+  - Run `php artisan serve` for backend (default: http://127.0.0.1:8000)
+  - Run `npm run dev` for frontend with hot reload (Vite dev server on port 5173)
+  - Requires local MySQL and Redis servers
 - **Code Quality:**
   - TypeScript: `npm run types` for type checking
   - Formatting: `npm run format` (Prettier with Tailwind plugin)
