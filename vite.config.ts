@@ -27,8 +27,6 @@ export default defineConfig({
                 'app/**/*.php',
                 'routes/**/*.php',
                 'resources/views/**/*.blade.php',
-                'resources/js/**/*.{ts,tsx}',
-                'resources/css/**/*.css',
             ],
         }),
         react(),
@@ -39,7 +37,6 @@ export default defineConfig({
                 formVariants: true,
             })]
             : (() => {
-                console.warn('⚠️  PHP not available - skipping wayfinder plugin. Run "php artisan wayfinder:generate --with-form" manually.');
                 return [];
             })()
         ),
@@ -48,7 +45,34 @@ export default defineConfig({
         jsx: 'automatic',
     },
     build: {
+        // Optimize chunk size to prevent memory issues
+        chunkSizeWarningLimit: 1000,
         rollupOptions: {
+            output: {
+                manualChunks: {
+                    // Split vendor chunks to reduce memory pressure
+                    'react-vendor': ['react', 'react-dom'],
+                    'radix-ui': [
+                        '@radix-ui/react-alert-dialog',
+                        '@radix-ui/react-avatar',
+                        '@radix-ui/react-checkbox',
+                        '@radix-ui/react-collapsible',
+                        '@radix-ui/react-dialog',
+                        '@radix-ui/react-dropdown-menu',
+                        '@radix-ui/react-label',
+                        '@radix-ui/react-navigation-menu',
+                        '@radix-ui/react-popover',
+                        '@radix-ui/react-select',
+                        '@radix-ui/react-separator',
+                        '@radix-ui/react-slot',
+                        '@radix-ui/react-toggle',
+                        '@radix-ui/react-toggle-group',
+                        '@radix-ui/react-tooltip',
+                    ],
+                    'animations': ['framer-motion', 'gsap', 'react-useanimations'],
+                    'utils': ['clsx', 'tailwind-merge', 'class-variance-authority', 'date-fns'],
+                },
+            },
             onwarn(warning: RollupLog, warn: LoggingFunction) {
                 // Suppress eval warnings from lottie-web (used by react-useanimations)
                 if (warning.code === 'EVAL' && warning.id?.includes('lottie')) {
@@ -57,12 +81,31 @@ export default defineConfig({
                 warn(warning);
             },
         },
+        // Optimize source maps for development
+        sourcemap: false,
     },
     server: {
-        host: 'localhost',
-        port: 5173,
+        host: 'localhost', // Use localhost instead of 0.0.0.0 for ngrok
+        port: 5174,
+        strictPort: true,
         hmr: {
             host: 'localhost',
         },
-    }
+        // Optimize file watching
+        watch: {
+            // Ignore node_modules and vendor to reduce memory
+            ignored: ['**/node_modules/**', '**/vendor/**', '**/storage/**'],
+        },
+    },
+    // Optimize dependency pre-bundling
+    optimizeDeps: {
+        include: [
+            'react',
+            'react-dom',
+            '@inertiajs/react',
+        ],
+        exclude: [
+            // Exclude large dependencies from pre-bundling if causing issues
+        ],
+    },
 });
