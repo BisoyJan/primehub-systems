@@ -42,14 +42,14 @@ export default function AuthSplitAnimatedLayout({
                 ease: 'back.out(1.7)',
             });
 
-            // Animate logo with scale and rotation
+            // Animate logo with blur to focus
             gsap.from(logoRef.current, {
-                scale: 0.5,
-                rotation: -180,
+                filter: 'blur(20px)',
+                scale: 1.2,
                 opacity: 0,
-                duration: 1.2,
+                duration: 1.5,
                 delay: 0.3,
-                ease: 'back.out(1.7)',
+                ease: 'power2.out',
             });
 
             // Animate title
