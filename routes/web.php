@@ -14,6 +14,8 @@ use App\Http\Controllers\PcTransferController;
 use App\Http\Controllers\PcMaintenanceController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\EmployeeScheduleController;
+use App\Http\Controllers\BiometricRecordController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -84,6 +86,31 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     // PC Maintenance
     Route::resource('pc-maintenance', PcMaintenanceController::class);
+
+    // Attendance Management
+    Route::prefix('attendance')->name('attendance.')->group(function () {
+        Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::get('import', [AttendanceController::class, 'import'])->name('import');
+        Route::post('upload', [AttendanceController::class, 'upload'])->name('upload');
+        Route::get('review', [AttendanceController::class, 'review'])->name('review');
+        Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify');
+        Route::post('{attendance}/mark-advised', [AttendanceController::class, 'markAdvised'])->name('markAdvised');
+        Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics');
+        Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete');
+    });
+
+    // Employee Schedules
+    Route::resource('employee-schedules', EmployeeScheduleController::class);
+    Route::post('employee-schedules/{employeeSchedule}/toggle-active', [EmployeeScheduleController::class, 'toggleActive'])
+        ->name('employee-schedules.toggleActive');
+    Route::get('employee-schedules/get-schedule', [EmployeeScheduleController::class, 'getSchedule'])
+        ->name('employee-schedules.getSchedule');
+
+    // Biometric Records
+    Route::prefix('biometric-records')->name('biometric-records.')->group(function () {
+        Route::get('/', [BiometricRecordController::class, 'index'])->name('index');
+        Route::get('/{user}/{date}', [BiometricRecordController::class, 'show'])->name('show');
+    });
 });
 
 require __DIR__ . '/settings.php';

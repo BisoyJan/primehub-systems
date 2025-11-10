@@ -38,6 +38,13 @@ class User extends Authenticatable
     ];
 
     /**
+     * The accessors to append to the model's array form.
+     *
+     * @var array
+     */
+    protected $appends = ['name'];
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -63,5 +70,35 @@ class User extends Authenticatable
         }
         $name .= ' ' . $this->last_name;
         return $name;
+    }
+
+    /**
+     * Get the employee schedules for the user.
+     */
+    public function employeeSchedules()
+    {
+        return $this->hasMany(EmployeeSchedule::class);
+    }
+
+    /**
+     * Get the active employee schedule for the user.
+     */
+    public function activeSchedule()
+    {
+        return $this->hasOne(EmployeeSchedule::class)
+            ->where('is_active', true)
+            ->where('effective_date', '<=', now())
+            ->where(function ($q) {
+                $q->whereNull('end_date')
+                    ->orWhere('end_date', '>=', now());
+            });
+    }
+
+    /**
+     * Get the attendances for the user.
+     */
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
     }
 }

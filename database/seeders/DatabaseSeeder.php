@@ -36,6 +36,7 @@ class DatabaseSeeder extends Seeder
             CampaignSeeder::class,      // Creates unique campaigns (hardcoded)
             StationSeeder::class,       // Creates 30 site-based stations + 20 random via factory
             PcMaintenanceSeeder::class, // Creates 10 sample PC maintenance records
+            EmployeeScheduleSeeder::class, // Creates sample employee schedules
         ]);
     }
 }
