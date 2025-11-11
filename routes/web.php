@@ -16,6 +16,10 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\EmployeeScheduleController;
 use App\Http\Controllers\BiometricRecordController;
+use App\Http\Controllers\BiometricReprocessingController;
+use App\Http\Controllers\BiometricAnomalyController;
+use App\Http\Controllers\BiometricExportController;
+use App\Http\Controllers\BiometricRetentionPolicyController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -110,6 +114,35 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('biometric-records')->name('biometric-records.')->group(function () {
         Route::get('/', [BiometricRecordController::class, 'index'])->name('index');
         Route::get('/{user}/{date}', [BiometricRecordController::class, 'show'])->name('show');
+    });
+
+    // Biometric Reprocessing
+    Route::prefix('biometric-reprocessing')->name('biometric-reprocessing.')->group(function () {
+        Route::get('/', [BiometricReprocessingController::class, 'index'])->name('index');
+        Route::post('preview', [BiometricReprocessingController::class, 'preview'])->name('preview');
+        Route::post('reprocess', [BiometricReprocessingController::class, 'reprocess'])->name('reprocess');
+        Route::post('fix-statuses', [BiometricReprocessingController::class, 'fixStatuses'])->name('fix-statuses');
+    });
+
+    // Biometric Anomalies
+    Route::prefix('biometric-anomalies')->name('biometric-anomalies.')->group(function () {
+        Route::get('/', [BiometricAnomalyController::class, 'index'])->name('index');
+        Route::post('detect', [BiometricAnomalyController::class, 'detect'])->name('detect');
+    });
+
+    // Biometric Export
+    Route::prefix('biometric-export')->name('biometric-export.')->group(function () {
+        Route::get('/', [BiometricExportController::class, 'index'])->name('index');
+        Route::get('export', [BiometricExportController::class, 'export'])->name('export');
+    });
+
+    // Biometric Retention Policies
+    Route::prefix('biometric-retention-policies')->name('biometric-retention-policies.')->group(function () {
+        Route::get('/', [BiometricRetentionPolicyController::class, 'index'])->name('index');
+        Route::post('/', [BiometricRetentionPolicyController::class, 'store'])->name('store');
+        Route::put('/{policy}', [BiometricRetentionPolicyController::class, 'update'])->name('update');
+        Route::delete('/{policy}', [BiometricRetentionPolicyController::class, 'destroy'])->name('destroy');
+        Route::post('/{policy}/toggle', [BiometricRetentionPolicyController::class, 'toggle'])->name('toggle');
     });
 });
 

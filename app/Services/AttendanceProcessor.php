@@ -262,6 +262,19 @@ class AttendanceProcessor
     }
 
     /**
+     * Public wrapper to allow reprocessing from external callers (artisan commands, etc.).
+     *
+     * @param string $normalizedName
+     * @param Collection $records
+     * @param Carbon $shiftDate
+     * @return array
+     */
+    public function reprocessEmployeeRecords(string $normalizedName, Collection $records, Carbon $shiftDate): array
+    {
+        return $this->processEmployeeRecords($normalizedName, $records, $shiftDate);
+    }
+
+    /**
      * Determine shift type based on employee's schedule.
      *
      * @param EmployeeSchedule|null $schedule
@@ -501,10 +514,13 @@ class AttendanceProcessor
         $isNextDayTimeOut = false;
 
         if ($schedInHour >= 0 && $schedInHour < 5 && $schedOutHour > $schedInHour) {
-            // Graveyard shift (00:00-04:59 start time) that ends later in morning
-            $isNextDayTimeOut = true;
+            // Early morning shift (00:00-04:59 start time) that ends later in morning on SAME day
+            // Example: 00:00-09:00, 01:00-10:00
+            // Both IN and OUT happen on the same calendar date
+            $isNextDayTimeOut = false;
         } else {
             // Standard check: time out <= time in means next day
+            // Example: 22:00-07:00 (time out 07:00 < time in 22:00, so next day)
             $isNextDayTimeOut = $schedTimeOut->lessThanOrEqualTo($schedTimeIn);
         }
 
@@ -561,34 +577,80 @@ class AttendanceProcessor
         }
 
         // Get or create attendance record
-        $attendance = Attendance::firstOrCreate(
+        $attendance = Attendance::firstOrNew(
             [
                 'user_id' => $user->id,
                 'shift_date' => $shiftDate,
-            ],
-            [
-                'employee_schedule_id' => $schedule->id,
-                'scheduled_time_in' => $schedule->scheduled_time_in,
-                'scheduled_time_out' => $schedule->scheduled_time_out,
-                'status' => 'ncns', // Default to NCNS
             ]
         );
+
+        // If creating new record, set defaults
+        if (!$attendance->exists) {
+            $attendance->employee_schedule_id = $schedule->id;
+            $attendance->scheduled_time_in = $schedule->scheduled_time_in;
+            $attendance->scheduled_time_out = $schedule->scheduled_time_out;
+            $attendance->status = 'ncns'; // Default to NCNS
+            $attendance->save();
+        }
+
+        // Reset actual times to null at the start of processing
+        // This ensures we don't carry over old values from previous processing
+        $attendance->actual_time_in = null;
+        $attendance->actual_time_out = null;
+        $attendance->bio_in_site_id = null;
+        $attendance->bio_out_site_id = null;
+        $attendance->tardy_minutes = null;
+        $attendance->undertime_minutes = null;
+        $attendance->is_cross_site_bio = false;
+
+        // Check if time in and time out are the same record (single bio scan)
+        $sameRecord = false;
+        if ($timeInRecord && $timeOutRecord) {
+            $sameRecord = $timeInRecord['datetime']->equalTo($timeOutRecord['datetime']);
+        }
+
+        // If same record, determine if it's TIME IN or TIME OUT based on timing
+        if ($sameRecord) {
+            $scanTime = $timeInRecord['datetime'];
+
+            // If scan is significantly after scheduled TIME OUT (more than 2 hours),
+            // it's likely a very late TIME IN, not an early TIME OUT
+            $hoursAfterScheduledOut = $scheduledTimeOut->diffInHours($scanTime, false);
+            if ($hoursAfterScheduledOut > 2) {
+                // Treat as very late TIME IN
+                $timeOutRecord = null;
+            } else {
+                // Calculate midpoint between scheduled IN and OUT
+                $midpoint = $scheduledTimeIn->copy()->addMinutes(
+                    $scheduledTimeIn->diffInMinutes($scheduledTimeOut) / 2
+                );
+
+                // If scan is before midpoint, treat as TIME IN (closer to start of shift)
+                // If scan is after midpoint, treat as TIME OUT (closer to end of shift)
+                if ($scanTime->lessThan($midpoint)) {
+                    $timeOutRecord = null;
+                } else {
+                    $timeInRecord = null;
+                }
+            }
+        }
 
         // Process time in
         if ($timeInRecord) {
             $actualTimeIn = $timeInRecord['datetime'];
             $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn, false);
+
+            // diffInMinutes with false gives positive if actualTimeIn is after scheduledTimeIn
+            // We only want to set tardy_minutes if they are actually late (positive value)
             $status = $this->determineTimeInStatus($tardyMinutes);
 
             $isCrossSite = $biometricSiteId && $schedule->site_id && ($biometricSiteId != $schedule->site_id);
 
-            $attendance->update([
-                'actual_time_in' => $actualTimeIn,
-                'bio_in_site_id' => $biometricSiteId,
-                'status' => $status,
-                'tardy_minutes' => $tardyMinutes > 0 ? $tardyMinutes : null,
-                'is_cross_site_bio' => $isCrossSite,
-            ]);
+            $attendance->actual_time_in = $actualTimeIn;
+            $attendance->bio_in_site_id = $biometricSiteId;
+            $attendance->status = $status;
+            $attendance->tardy_minutes = ($tardyMinutes > 0 && $actualTimeIn->greaterThan($scheduledTimeIn)) ? $tardyMinutes : null;
+            $attendance->is_cross_site_bio = $isCrossSite;
         }
 
         // Process time out
@@ -601,32 +663,48 @@ class AttendanceProcessor
                           ($biometricSiteId && $schedule->site_id && ($biometricSiteId != $schedule->site_id)) ||
                           ($biometricSiteId && $bioInSiteId && ($biometricSiteId != $bioInSiteId));
 
-            $updates = [
-                'actual_time_out' => $actualTimeOut,
-                'bio_out_site_id' => $biometricSiteId,
-                'is_cross_site_bio' => $isCrossSite,
-            ];
+            $attendance->actual_time_out = $actualTimeOut;
+            $attendance->bio_out_site_id = $biometricSiteId;
+            $attendance->is_cross_site_bio = $isCrossSite;
 
             // Check for undertime (> 60 minutes early)
             if ($undertimeMinutes < -60) {
-                $updates['undertime_minutes'] = abs($undertimeMinutes);
+                $attendance->undertime_minutes = abs($undertimeMinutes);
                 if ($attendance->status === 'on_time') {
-                    $updates['status'] = 'undertime';
+                    $attendance->status = 'undertime';
                 }
             }
-
-            // Update status if no time in but has time out
-            if (!$attendance->actual_time_in) {
-                $updates['status'] = 'failed_bio_in';
-            }
-
-            $attendance->update($updates);
-        } else {
-            // No time out record
-            if ($attendance->actual_time_in) {
-                $attendance->update(['status' => 'failed_bio_out']);
-            }
         }
+
+        // Determine final status based on what biometric records were found
+        // Priority: Handle missing bio scenarios
+        if (!$timeInRecord && !$timeOutRecord) {
+            // No bio at all
+            $attendance->status = 'ncns';
+            $attendance->secondary_status = null;
+        } elseif (!$timeInRecord && $timeOutRecord) {
+            // Has time OUT but missing time IN
+            $attendance->status = 'failed_bio_in';
+            $attendance->secondary_status = null;
+        } elseif ($timeInRecord && !$timeOutRecord) {
+            // Has time IN but missing time OUT
+            // Keep the time-in status (tardy, half_day_absence) as primary
+            // Add failed_bio_out as secondary status
+            if ($attendance->status === 'on_time') {
+                $attendance->status = 'failed_bio_out';
+                $attendance->secondary_status = null;
+            } else {
+                // tardy, half_day_absence, or undertime - keep as primary, add missing bio out as secondary
+                $attendance->secondary_status = 'failed_bio_out';
+            }
+        } else {
+            // Both records exist - no secondary status needed
+            $attendance->secondary_status = null;
+        }
+        // If both exist, status was already set during time in processing
+
+        // Save all changes
+        $attendance->save();
 
         return [
             'matched' => true,

@@ -63,7 +63,7 @@ class AttendanceController extends Controller
             ->paginate(50)
             ->withQueryString();
 
-        return Inertia::render('Attendance/Index', [
+        return Inertia::render('Attendance/Main/Index', [
             'attendances' => $attendances,
             'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'needs_verification']),
         ]);
@@ -81,7 +81,7 @@ class AttendanceController extends Controller
 
         $sites = \App\Models\Site::orderBy('name')->get();
 
-        return Inertia::render('Attendance/Import', [
+        return Inertia::render('Attendance/Main/Import', [
             'recentUploads' => $recentUploads,
             'sites' => $sites,
         ]);
@@ -202,7 +202,7 @@ class AttendanceController extends Controller
 
         $attendances = $query->orderBy('shift_date', 'desc')->paginate(50);
 
-        return Inertia::render('Attendance/Review', [
+        return Inertia::render('Attendance/Main/Review', [
             'attendances' => $attendances,
             'filters' => [
                 'search' => $request->search,

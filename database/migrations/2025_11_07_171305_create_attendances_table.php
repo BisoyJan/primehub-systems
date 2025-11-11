@@ -33,6 +33,7 @@ return new class extends Migration
                 'failed_bio_out',
                 'present_no_bio'
             ])->default('on_time');
+            $table->string('secondary_status')->nullable();
             $table->integer('tardy_minutes')->nullable();
             $table->integer('undertime_minutes')->nullable();
             $table->boolean('is_advised')->default(false); // Pre-notified absence

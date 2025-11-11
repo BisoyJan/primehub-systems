@@ -57,6 +57,7 @@ interface AttendanceRecord {
     actual_time_in?: string;
     actual_time_out?: string;
     status: string;
+    secondary_status?: string;
     tardy_minutes?: number;
     undertime_minutes?: number;
     is_advised: boolean;
@@ -150,6 +151,23 @@ const formatDate = (dateString: string) => {
     });
 };
 
+const formatTime12Hour = (timeString: string) => {
+    if (!timeString) return "-";
+
+    // Parse time string (HH:MM:SS format)
+    const [hours, minutes] = timeString.split(':');
+    const hour = parseInt(hours);
+    const minute = parseInt(minutes);
+
+    if (isNaN(hour) || isNaN(minute)) return timeString;
+
+    // Convert to 12-hour format
+    const period = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12; // Convert 0 to 12 for midnight
+
+    return `${hour12}:${minutes} ${period}`;
+};
+
 const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
         on_time: { label: "On Time", className: "bg-green-500" },
@@ -158,13 +176,34 @@ const getStatusBadge = (status: string) => {
         advised_absence: { label: "Advised Absence", className: "bg-blue-500" },
         ncns: { label: "NCNS", className: "bg-red-500" },
         undertime: { label: "Undertime", className: "bg-orange-400" },
-        failed_bio_in: { label: "Failed Bio In", className: "bg-purple-500" },
-        failed_bio_out: { label: "Failed Bio Out", className: "bg-purple-500" },
+        failed_bio_in: { label: "No Bio In", className: "bg-purple-500" },
+        failed_bio_out: { label: "No Bio Out", className: "bg-purple-400" },
         present_no_bio: { label: "Present (No Bio)", className: "bg-gray-500" },
     };
 
     const config = statusConfig[status] || { label: status, className: "bg-gray-500" };
     return <Badge className={config.className}>{config.label}</Badge>;
+};
+
+const getStatusBadges = (record: AttendanceRecord) => {
+    return (
+        <div className="flex gap-1 flex-wrap">
+            {getStatusBadge(record.status)}
+            {record.secondary_status && getStatusBadge(record.secondary_status)}
+        </div>
+    );
+};
+
+const getShiftTypeBadge = (shiftType: string) => {
+    const config: Record<string, { label: string; className: string }> = {
+        night_shift: { label: "Night Shift", className: "bg-blue-500" },
+        morning_shift: { label: "Morning Shift", className: "bg-yellow-500" },
+        afternoon_shift: { label: "Afternoon Shift", className: "bg-orange-500" },
+        utility_24h: { label: "24H Utility", className: "bg-purple-500" },
+    };
+
+    const { label, className } = config[shiftType] || { label: shiftType, className: "bg-gray-500" };
+    return <Badge className={className}>{label}</Badge>;
 };
 
 export default function AttendanceIndex() {
@@ -427,6 +466,8 @@ export default function AttendanceIndex() {
                                     </TableHead>
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Shift Date</TableHead>
+                                    <TableHead>Shift Type</TableHead>
+                                    <TableHead>Schedule</TableHead>
                                     <TableHead>Time In</TableHead>
                                     <TableHead>Time Out</TableHead>
                                     <TableHead>Status</TableHead>
@@ -453,6 +494,22 @@ export default function AttendanceIndex() {
                                         </TableCell>
                                         <TableCell>{formatDate(record.shift_date)}</TableCell>
                                         <TableCell className="text-sm">
+                                            {record.employee_schedule?.shift_type ? (
+                                                getShiftTypeBadge(record.employee_schedule.shift_type)
+                                            ) : (
+                                                "-"
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                            {record.employee_schedule ? (
+                                                <div className="whitespace-nowrap">
+                                                    {formatTime12Hour(record.employee_schedule.scheduled_time_in)} - {formatTime12Hour(record.employee_schedule.scheduled_time_out)}
+                                                </div>
+                                            ) : (
+                                                "-"
+                                            )}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
                                             {formatDateTime(record.actual_time_in)}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <div className="text-xs text-muted-foreground">
@@ -468,7 +525,7 @@ export default function AttendanceIndex() {
                                                 </div>
                                             )}
                                         </TableCell>
-                                        <TableCell>{getStatusBadge(record.status)}</TableCell>
+                                        <TableCell>{getStatusBadges(record)}</TableCell>
                                         <TableCell className="text-sm">
                                             {record.tardy_minutes ? (
                                                 <span className="text-orange-600">+{record.tardy_minutes}m</span>
@@ -489,7 +546,7 @@ export default function AttendanceIndex() {
                                 ))}
                                 {attendanceData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                                             No attendance records found
                                         </TableCell>
                                     </TableRow>
@@ -521,10 +578,26 @@ export default function AttendanceIndex() {
                                             </div>
                                             <div className="text-sm text-muted-foreground">{formatDate(record.shift_date)}</div>
                                         </div>
-                                        {getStatusBadge(record.status)}
+                                        {getStatusBadges(record)}
                                     </div>
 
                                     <div className="space-y-2 text-sm mt-3">
+                                        <div>
+                                            <span className="font-medium">Shift Type:</span>{" "}
+                                            {record.employee_schedule?.shift_type ? (
+                                                getShiftTypeBadge(record.employee_schedule.shift_type)
+                                            ) : (
+                                                "-"
+                                            )}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Schedule:</span>{" "}
+                                            {record.employee_schedule ? (
+                                                <span>{formatTime12Hour(record.employee_schedule.scheduled_time_in)} - {formatTime12Hour(record.employee_schedule.scheduled_time_out)}</span>
+                                            ) : (
+                                                "-"
+                                            )}
+                                        </div>
                                         <div>
                                             <span className="font-medium">Time In:</span> {formatDateTime(record.actual_time_in)}
                                             {record.bio_in_site && record.is_cross_site_bio && (

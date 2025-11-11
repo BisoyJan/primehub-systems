@@ -35,7 +35,7 @@ class AttendanceControllerTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) =>
-            $page->component('Attendance/Index')
+            $page->component('Attendance/Main/Index')
                 ->has('attendances')
         );
     }
@@ -95,7 +95,7 @@ class AttendanceControllerTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) =>
-            $page->component('Attendance/Import')
+            $page->component('Attendance/Main/Import')
                 ->has('recentUploads')
                 ->has('sites')
         );
@@ -189,7 +189,7 @@ class AttendanceControllerTest extends TestCase
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) =>
-            $page->component('Attendance/Review')
+            $page->component('Attendance/Main/Review')
                 ->has('attendances')
         );
     }

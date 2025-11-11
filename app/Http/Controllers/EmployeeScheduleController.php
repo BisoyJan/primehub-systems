@@ -52,7 +52,7 @@ class EmployeeScheduleController extends Controller
         $campaigns = Campaign::orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('EmployeeSchedule/Index', [
+        return Inertia::render('Attendance/EmployeeSchedules/Index', [
             'schedules' => $schedules,
             'users' => $users,
             'campaigns' => $campaigns,
@@ -70,7 +70,7 @@ class EmployeeScheduleController extends Controller
         $campaigns = Campaign::orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('EmployeeSchedule/Create', [
+        return Inertia::render('Attendance/EmployeeSchedules/Create', [
             'users' => $users,
             'campaigns' => $campaigns,
             'sites' => $sites,
@@ -130,7 +130,7 @@ class EmployeeScheduleController extends Controller
         $campaigns = Campaign::orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('EmployeeSchedule/Edit', [
+        return Inertia::render('Attendance/EmployeeSchedules/Edit', [
             'schedule' => $employeeSchedule,
             'users' => $users,
             'campaigns' => $campaigns,

@@ -441,6 +441,257 @@ class AttendanceProcessorTest extends TestCase
         $this->assertTrue($attendance->is_cross_site_bio);
     }
 
+    /** @test */
+    public function it_handles_missing_time_out_record()
+    {
+        $user = User::factory()->create();
+        $site = \App\Models\Site::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'scheduled_time_in' => '09:00:00',
+            'scheduled_time_out' => '18:00:00',
+            'work_days' => ['tuesday'],
+            'is_active' => true,
+        ]);
+
+        $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
+        $records = collect([
+            ['datetime' => Carbon::parse('2025-11-05 09:00:00')], // Only TIME IN on time, no TIME OUT
+        ]);
+
+        $this->invokeMethod($this->processor, 'processAttendance', [
+            $user,
+            $schedule,
+            $records,
+            $shiftDate,
+            $site->id
+        ]);
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $shiftDate)
+            ->first();
+
+        $this->assertNotNull($attendance);
+        // Status is on_time since employee came on time
+        $this->assertEquals('on_time', $attendance->status);
+        $this->assertNotNull($attendance->actual_time_in);
+        $this->assertEquals('09:00:00', $attendance->actual_time_in->format('H:i:s'));
+        // CRITICAL: time out should be NULL when no time out record exists
+        $this->assertNull($attendance->actual_time_out);
+    }
+
+    /** @test */
+    public function it_handles_missing_time_in_record()
+    {
+        $user = User::factory()->create();
+        $site = \App\Models\Site::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'scheduled_time_in' => '09:00:00',
+            'scheduled_time_out' => '18:00:00',
+            'work_days' => ['tuesday'],
+            'is_active' => true,
+        ]);
+
+        $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
+        $records = collect([
+            ['datetime' => Carbon::parse('2025-11-05 18:07:00')], // Only TIME OUT, no TIME IN
+        ]);
+
+        $this->invokeMethod($this->processor, 'processAttendance', [
+            $user,
+            $schedule,
+            $records,
+            $shiftDate,
+            $site->id
+        ]);
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $shiftDate)
+            ->first();
+
+        $this->assertNotNull($attendance);
+        // Status stays at default 'ncns' since no time in was recorded
+        $this->assertEquals('ncns', $attendance->status);
+        // CRITICAL: time in should be NULL when no time in record exists
+        $this->assertNull($attendance->actual_time_in);
+        $this->assertNotNull($attendance->actual_time_out);
+        $this->assertEquals('18:07:00', $attendance->actual_time_out->format('H:i:s'));
+    }
+
+    /** @test */
+    public function it_handles_no_biometric_records()
+    {
+        $user = User::factory()->create();
+        $site = \App\Models\Site::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'scheduled_time_in' => '09:00:00',
+            'scheduled_time_out' => '18:00:00',
+            'work_days' => ['tuesday'],
+            'is_active' => true,
+        ]);
+
+        $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
+        $records = collect([]); // No records at all
+
+        $this->invokeMethod($this->processor, 'processAttendance', [
+            $user,
+            $schedule,
+            $records,
+            $shiftDate,
+            $site->id
+        ]);
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $shiftDate)
+            ->first();
+
+        $this->assertNotNull($attendance);
+        $this->assertEquals('ncns', $attendance->status); // No Call No Show
+        $this->assertNull($attendance->actual_time_in);
+        $this->assertNull($attendance->actual_time_out);
+    }
+
+    /** @test */
+    public function it_resets_old_values_when_reprocessing()
+    {
+        $user = User::factory()->create();
+        $site = \App\Models\Site::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'scheduled_time_in' => '09:00:00',
+            'scheduled_time_out' => '18:00:00',
+            'work_days' => ['tuesday'],
+            'is_active' => true,
+        ]);
+
+        $shiftDate = Carbon::parse('2025-11-05');
+
+        // First processing: Create attendance with both time in and time out
+        $firstRecords = collect([
+            ['datetime' => Carbon::parse('2025-11-05 09:00:00')],
+            ['datetime' => Carbon::parse('2025-11-05 18:00:00')],
+        ]);
+
+        $this->invokeMethod($this->processor, 'processAttendance', [
+            $user,
+            $schedule,
+            $firstRecords,
+            $shiftDate,
+            $site->id
+        ]);
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $shiftDate)
+            ->first();
+
+        $this->assertNotNull($attendance->actual_time_in);
+        $this->assertNotNull($attendance->actual_time_out);
+        $this->assertEquals('on_time', $attendance->status);
+
+        // Second processing: Reprocess with only TIME IN (missing TIME OUT)
+        $secondRecords = collect([
+            ['datetime' => Carbon::parse('2025-11-05 09:00:00')], // Only TIME IN on time
+        ]);
+
+        $this->invokeMethod($this->processor, 'processAttendance', [
+            $user,
+            $schedule,
+            $secondRecords,
+            $shiftDate,
+            $site->id
+        ]);
+
+        $attendance->refresh();
+
+        // CRITICAL FIX: Should reset old values - time out should be NULL now, not old 18:00 value
+        $this->assertNotNull($attendance->actual_time_in);
+        $this->assertEquals('09:00:00', $attendance->actual_time_in->format('H:i:s'));
+        $this->assertNull($attendance->actual_time_out); // Should be NULL, not old value
+        $this->assertEquals('on_time', $attendance->status);
+    }
+
+    /** @test */
+    public function it_handles_graveyard_shift_with_only_time_in()
+    {
+        $user = User::factory()->create();
+        $site = \App\Models\Site::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'scheduled_time_in' => '00:00:00',  // Graveyard shift
+            'scheduled_time_out' => '09:00:00',
+            'work_days' => ['tuesday'],
+            'is_active' => true,
+        ]);
+
+        $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
+        $records = collect([
+            ['datetime' => Carbon::parse('2025-11-05 20:00:00')], // Only TIME IN (evening before) - 20 hours late
+        ]);
+
+        $this->invokeMethod($this->processor, 'processAttendance', [
+            $user,
+            $schedule,
+            $records,
+            $shiftDate,
+            $site->id
+        ]);
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $shiftDate)
+            ->first();
+
+        $this->assertNotNull($attendance);
+        // Very late, so half_day_absence
+        $this->assertEquals('half_day_absence', $attendance->status);
+        $this->assertNotNull($attendance->actual_time_in);
+        $this->assertNull($attendance->actual_time_out);
+    }
+
+    /** @test */
+    public function it_handles_graveyard_shift_with_only_time_out()
+    {
+        $user = User::factory()->create();
+        $site = \App\Models\Site::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'scheduled_time_in' => '00:00:00',  // Graveyard shift
+            'scheduled_time_out' => '09:00:00',
+            'work_days' => ['tuesday'],
+            'is_active' => true,
+        ]);
+
+        $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
+        $records = collect([
+            ['datetime' => Carbon::parse('2025-11-05 08:00:00')], // Only TIME OUT (morning)
+        ]);
+
+        $this->invokeMethod($this->processor, 'processAttendance', [
+            $user,
+            $schedule,
+            $records,
+            $shiftDate,
+            $site->id
+        ]);
+
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $shiftDate)
+            ->first();
+
+        $this->assertNotNull($attendance);
+        // No time in means status stays ncns
+        $this->assertEquals('ncns', $attendance->status);
+        $this->assertNull($attendance->actual_time_in);
+        $this->assertNotNull($attendance->actual_time_out);
+    }
+
     /**
      * Helper method to invoke protected/private methods for testing.
      */

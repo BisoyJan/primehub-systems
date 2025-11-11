@@ -44,7 +44,8 @@ class BiometricRecordController extends Controller
                 $q->where('employee_name', 'like', "%{$search}%")
                   ->orWhereHas('user', function ($userQuery) use ($search) {
                       $userQuery->where('first_name', 'like', "%{$search}%")
-                               ->orWhere('last_name', 'like', "%{$search}%");
+                               ->orWhere('last_name', 'like', "%{$search}%")
+                               ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
                   });
             });
         }
@@ -68,7 +69,7 @@ class BiometricRecordController extends Controller
             });
         $sites = Site::orderBy('name')->get(['id', 'name']);
 
-        return Inertia::render('BiometricRecords/Index', [
+        return Inertia::render('Attendance/BiometricRecords/Index', [
             'records' => $records,
             'stats' => $stats,
             'filters' => [
@@ -138,7 +139,7 @@ class BiometricRecordController extends Controller
             ->orderBy('datetime')
             ->get();
 
-        return Inertia::render('BiometricRecords/Show', [
+        return Inertia::render('Attendance/BiometricRecords/Show', [
             'user' => $user,
             'date' => $targetDate->format('Y-m-d'),
             'records' => $records,
