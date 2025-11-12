@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
@@ -77,23 +78,34 @@ interface SchedulePayload {
     path: string;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     schedules: SchedulePayload;
-    users: User[];
-    campaigns: Campaign[];
-    sites: Site[];
+    users: Array<{ id: number; name: string }>;
+    sites: Array<{ id: number; name: string }>;
+    campaigns: Array<{ id: number; name: string }>;
     filters?: {
         search?: string;
         user_id?: string;
         campaign_id?: string;
+        site_id?: string;
+        shift_type?: string;
         is_active?: string;
         active_only?: boolean;
     };
     [key: string]: unknown;
 }
 
-const formatTime = (time: string) => {
-    return time; // Return as-is in 24-hour format (HH:MM)
+const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
+    if (timeFormat === '24') {
+        return time; // Return as-is in 24-hour format (HH:MM)
+    }
+
+    // Convert to 12-hour format
+    const [hours, minutes] = time.split(':');
+    const hour = parseInt(hours);
+    const ampm = hour >= 12 ? 'PM' : 'AM';
+    const hour12 = hour % 12 || 12;
+    return `${hour12}:${minutes} ${ampm}`;
 };
 
 const getShiftTypeBadge = (shiftType: string) => {
@@ -108,8 +120,9 @@ const getShiftTypeBadge = (shiftType: string) => {
     return <Badge className={className}>{label}</Badge>;
 };
 
-export default function EmployeeScheduleIndex() {
-    const { schedules, users, campaigns, filters } = usePage<PageProps>().props;
+export default function EmployeeSchedulesIndex() {
+    const { schedules, users, campaigns, filters, auth } = usePage<PageProps>().props;
+    const timeFormat = (auth.user as { time_format?: '12' | '24' })?.time_format || '24';
     const scheduleData = {
         data: schedules?.data ?? [],
         links: schedules?.links ?? [],
@@ -335,8 +348,8 @@ export default function EmployeeScheduleIndex() {
                                         <TableCell>{schedule.campaign?.name || "-"}</TableCell>
                                         <TableCell>{schedule.site?.name || "-"}</TableCell>
                                         <TableCell>{getShiftTypeBadge(schedule.shift_type)}</TableCell>
-                                        <TableCell>{formatTime(schedule.scheduled_time_in)}</TableCell>
-                                        <TableCell>{formatTime(schedule.scheduled_time_out)}</TableCell>
+                                        <TableCell>{formatTime(schedule.scheduled_time_in, timeFormat)}</TableCell>
+                                        <TableCell>{formatTime(schedule.scheduled_time_out, timeFormat)}</TableCell>
                                         <TableCell className="text-xs">
                                             {schedule.work_days.slice(0, 3).map(day => day.substring(0, 3)).join(", ")}
                                             {schedule.work_days.length > 3 && ` +${schedule.work_days.length - 3}`}
@@ -421,7 +434,7 @@ export default function EmployeeScheduleIndex() {
                                 </div>
                                 <div>
                                     <span className="font-medium">Time:</span>{" "}
-                                    {formatTime(schedule.scheduled_time_in)} - {formatTime(schedule.scheduled_time_out)}
+                                    {formatTime(schedule.scheduled_time_in, timeFormat)} - {formatTime(schedule.scheduled_time_out, timeFormat)}
                                 </div>
                                 <div>
                                     <span className="font-medium">Work Days:</span>{" "}

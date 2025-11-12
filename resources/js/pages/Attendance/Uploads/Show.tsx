@@ -1,5 +1,5 @@
 import React from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import { format } from 'date-fns';
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage } from "@/hooks";
@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, FileText, AlertTriangle, Calendar, Users, CheckCircle, XCircle, Clock, MapPin } from "lucide-react";
-import type { BreadcrumbItem } from "@/types";
+import type { BreadcrumbItem, SharedData } from "@/types";
 
 interface Upload {
     id: number;
@@ -37,12 +37,14 @@ interface Upload {
     updated_at: string;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     upload: Upload;
 }
 
 const UploadShow: React.FC<PageProps> = ({ upload }) => {
     useFlashMessage();
+    const { auth } = usePage<PageProps>().props;
+    const timeFormat = auth.user.time_format || '24';
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Recent Uploads', href: '/attendance-uploads' },
@@ -203,7 +205,7 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                                     <p className="text-sm font-medium text-muted-foreground">Upload Date</p>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Clock className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-base">{format(new Date(upload.created_at), 'MMM dd, yyyy h:mm a')}</span>
+                                        <span className="text-base">{format(new Date(upload.created_at), timeFormat === '12' ? 'MMM dd, yyyy h:mm a' : 'MMM dd, yyyy HH:mm')}</span>
                                     </div>
                                 </div>
                             </div>

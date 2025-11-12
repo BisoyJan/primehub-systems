@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { AlertTriangle, Search, Loader2 } from 'lucide-react';
@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Checkbox } from '@/components/ui/checkbox';
+import { type SharedData } from '@/types';
 
 interface Anomaly {
     type: string;
@@ -65,7 +66,14 @@ const severityColors = {
     low: 'bg-blue-100 text-blue-800 border-blue-200',
 };
 
-export default function Anomalies({ stats, results }: { stats: Stats; results?: DetectionResults }) {
+interface PageProps extends SharedData {
+    stats: Stats;
+    results?: DetectionResults;
+}
+
+export default function Anomalies({ stats, results }: PageProps) {
+    const { auth } = usePage<PageProps>().props;
+    const timeFormat = auth.user.time_format || '24';
     const { title, breadcrumbs } = usePageMeta({
         title: 'Anomaly Detection',
         breadcrumbs: [
@@ -370,7 +378,7 @@ export default function Anomalies({ stats, results }: { stats: Stats; results?: 
                                                                             {anomaly.records.map((record) => (
                                                                                 <TableRow key={record.id}>
                                                                                     <TableCell>
-                                                                                        {format(new Date(record.scan_datetime), 'MMM d, yyyy h:mm:ss a')}
+                                                                                        {format(new Date(record.scan_datetime), timeFormat === '12' ? 'MMM d, yyyy h:mm:ss a' : 'MMM d, yyyy HH:mm:ss')}
                                                                                     </TableCell>
                                                                                     <TableCell>{record.site}</TableCell>
                                                                                 </TableRow>

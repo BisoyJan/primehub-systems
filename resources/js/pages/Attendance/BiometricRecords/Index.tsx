@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
+import { type SharedData } from "@/types";
 import { useFlashMessage } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
@@ -49,7 +50,7 @@ interface BiometricRecord {
     record_time: string;
 }
 
-interface BiometricRecordPayload {
+interface RecordPayload {
     data: BiometricRecord[];
     links: PaginationLink[];
     current_page: number;
@@ -81,10 +82,10 @@ interface Filters {
     search?: string;
 }
 
-interface PageProps {
-    records?: BiometricRecordPayload;
-    stats?: Stats;
-    filters?: Filters;
+interface PageProps extends SharedData {
+    records: RecordPayload;
+    stats: Stats;
+    filters: Filters;
     [key: string]: unknown;
 }
 
@@ -96,12 +97,24 @@ const formatDate = (date: string) => {
     });
 };
 
-const formatTime = (time: string) => {
-    return time; // Return as-is in 24-hour format (HH:MM)
+const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
+    if (timeFormat === '24') {
+        return time; // Return as-is in 24-hour format (HH:MM or HH:MM:SS)
+    }
+
+    // Convert to 12-hour format
+    const timeParts = time.split(':');
+    const hours = parseInt(timeParts[0]);
+    const minutes = timeParts[1];
+    const seconds = timeParts[2] || '';
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    return seconds ? `${hour12}:${minutes}:${seconds} ${ampm}` : `${hour12}:${minutes} ${ampm}`;
 };
 
 export default function BiometricRecordsIndex() {
-    const { records, stats, filters } = usePage<PageProps>().props;
+    const { records, stats, filters, auth } = usePage<PageProps>().props;
+    const timeFormat = auth.user.time_format || '24';
 
     useFlashMessage();
 
@@ -236,7 +249,7 @@ export default function BiometricRecordsIndex() {
                                 <SelectValue placeholder="All Employees" />
                             </SelectTrigger>
                             <SelectContent>
-                                {filters?.users.map((user) => (
+                                {filters?.users.map((user: User) => (
                                     <SelectItem key={user.id} value={String(user.id)}>
                                         {user.name}
                                     </SelectItem>
@@ -249,7 +262,7 @@ export default function BiometricRecordsIndex() {
                                 <SelectValue placeholder="All Sites" />
                             </SelectTrigger>
                             <SelectContent>
-                                {filters?.sites.map((site) => (
+                                {filters?.sites.map((site: Site) => (
                                     <SelectItem key={site.id} value={String(site.id)}>
                                         {site.name}
                                     </SelectItem>
@@ -320,7 +333,7 @@ export default function BiometricRecordsIndex() {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    recordsData.data.map((record) => (
+                                    recordsData.data.map((record: BiometricRecord) => (
                                         <TableRow key={record.id}>
                                             <TableCell>
                                                 <div className="flex flex-col">
@@ -328,7 +341,7 @@ export default function BiometricRecordsIndex() {
                                                         {formatDate(record.record_date)}
                                                     </span>
                                                     <span className="text-sm text-muted-foreground">
-                                                        {formatTime(record.record_time)}
+                                                        {formatTime(record.record_time, timeFormat)}
                                                     </span>
                                                 </div>
                                             </TableCell>
@@ -380,7 +393,7 @@ export default function BiometricRecordsIndex() {
                                     <div>
                                         <div className="text-lg font-semibold">{record.user.name}</div>
                                         <div className="text-sm text-muted-foreground">
-                                            {formatDate(record.record_date)} at {formatTime(record.record_time)}
+                                            {formatDate(record.record_date)} at {formatTime(record.record_time, timeFormat)}
                                         </div>
                                     </div>
                                     <Badge variant="outline">{record.site.name}</Badge>

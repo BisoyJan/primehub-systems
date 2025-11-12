@@ -4,6 +4,7 @@ import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { type SharedData } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -60,6 +61,8 @@ interface AttendanceRecord {
     secondary_status?: string;
     tardy_minutes?: number;
     undertime_minutes?: number;
+    overtime_minutes?: number;
+    overtime_approved?: boolean;
     is_advised: boolean;
     is_cross_site_bio?: boolean;
     bio_in_site?: Site;
@@ -82,7 +85,7 @@ interface AttendancePayload {
     meta: Meta;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     attendances?: AttendancePayload;
     filters?: {
         search?: string;
@@ -102,14 +105,14 @@ const DEFAULT_META: Meta = {
     total: 0,
 };
 
-const formatDateTime = (value: string | undefined) => {
+const formatDateTime = (value: string | undefined, timeFormat: '12' | '24' = '24') => {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
         return value;
     }
 
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: timeFormat === '12' })}`;
 };
 
 const formatDate = (dateString: string) => {
@@ -151,21 +154,22 @@ const formatDate = (dateString: string) => {
     });
 };
 
-const formatTime12Hour = (timeString: string) => {
+const formatTime = (timeString: string, timeFormat: '12' | '24' = '24') => {
     if (!timeString) return "-";
 
     // Parse time string (HH:MM:SS format)
     const [hours, minutes] = timeString.split(':');
-    const hour = parseInt(hours);
-    const minute = parseInt(minutes);
 
-    if (isNaN(hour) || isNaN(minute)) return timeString;
+    if (!hours || !minutes) return timeString;
 
-    // Convert to 12-hour format
-    const period = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12; // Convert 0 to 12 for midnight
+    if (timeFormat === '12') {
+        const hour = parseInt(hours);
+        const period = hour >= 12 ? 'PM' : 'AM';
+        const hour12 = hour % 12 || 12;
+        return `${hour12}:${minutes} ${period}`;
+    }
 
-    return `${hour12}:${minutes} ${period}`;
+    return `${hours}:${minutes}`;
 };
 
 const getStatusBadge = (status: string) => {
@@ -207,7 +211,8 @@ const getShiftTypeBadge = (shiftType: string) => {
 };
 
 export default function AttendanceIndex() {
-    const { attendances, filters } = usePage<PageProps>().props;
+    const { attendances, filters, auth } = usePage<PageProps>().props;
+    const timeFormat = auth.user.time_format || '24';
 
     // Ensure we have proper data structure
     const attendanceData = {
@@ -471,7 +476,7 @@ export default function AttendanceIndex() {
                                     <TableHead>Time In</TableHead>
                                     <TableHead>Time Out</TableHead>
                                     <TableHead>Status</TableHead>
-                                    <TableHead>Tardy/UT</TableHead>
+                                    <TableHead>Tardy/UT/OT</TableHead>
                                     <TableHead>Verified</TableHead>
                                 </TableRow>
                             </TableHeader>
@@ -503,14 +508,14 @@ export default function AttendanceIndex() {
                                         <TableCell className="text-sm">
                                             {record.employee_schedule ? (
                                                 <div className="whitespace-nowrap">
-                                                    {formatTime12Hour(record.employee_schedule.scheduled_time_in)} - {formatTime12Hour(record.employee_schedule.scheduled_time_out)}
+                                                    {formatTime(record.employee_schedule.scheduled_time_in, timeFormat)} - {formatTime(record.employee_schedule.scheduled_time_out, timeFormat)}
                                                 </div>
                                             ) : (
                                                 "-"
                                             )}
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                            {formatDateTime(record.actual_time_in)}
+                                            {formatDateTime(record.actual_time_in, timeFormat)}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <div className="text-xs text-muted-foreground">
                                                     @ {record.bio_in_site.name}
@@ -518,7 +523,7 @@ export default function AttendanceIndex() {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                            {formatDateTime(record.actual_time_out)}
+                                            {formatDateTime(record.actual_time_out, timeFormat)}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <div className="text-xs text-muted-foreground">
                                                     @ {record.bio_out_site.name}
@@ -527,13 +532,21 @@ export default function AttendanceIndex() {
                                         </TableCell>
                                         <TableCell>{getStatusBadges(record)}</TableCell>
                                         <TableCell className="text-sm">
-                                            {record.tardy_minutes ? (
-                                                <span className="text-orange-600">+{record.tardy_minutes}m</span>
-                                            ) : record.undertime_minutes ? (
-                                                <span className="text-orange-600">-{record.undertime_minutes}m</span>
-                                            ) : (
-                                                "-"
-                                            )}
+                                            <div className="space-y-1">
+                                                {record.tardy_minutes ? (
+                                                    <div className="text-orange-600">+{record.tardy_minutes}m</div>
+                                                ) : record.undertime_minutes ? (
+                                                    <div className="text-orange-600">-{record.undertime_minutes}m</div>
+                                                ) : (
+                                                    <div>-</div>
+                                                )}
+                                                {record.overtime_minutes && record.overtime_minutes > 0 && (
+                                                    <div className={`text-xs ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
+                                                        +{record.overtime_minutes}m OT
+                                                        {record.overtime_approved && ' ✓'}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>
                                             {record.admin_verified ? (
@@ -593,19 +606,19 @@ export default function AttendanceIndex() {
                                         <div>
                                             <span className="font-medium">Schedule:</span>{" "}
                                             {record.employee_schedule ? (
-                                                <span>{formatTime12Hour(record.employee_schedule.scheduled_time_in)} - {formatTime12Hour(record.employee_schedule.scheduled_time_out)}</span>
+                                                <span>{formatTime(record.employee_schedule.scheduled_time_in, timeFormat)} - {formatTime(record.employee_schedule.scheduled_time_out, timeFormat)}</span>
                                             ) : (
                                                 "-"
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time In:</span> {formatDateTime(record.actual_time_in)}
+                                            <span className="font-medium">Time In:</span> {formatDateTime(record.actual_time_in, timeFormat)}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time Out:</span> {formatDateTime(record.actual_time_out)}
+                                            <span className="font-medium">Time Out:</span> {formatDateTime(record.actual_time_out, timeFormat)}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
                                             )}
@@ -620,6 +633,15 @@ export default function AttendanceIndex() {
                                             <div>
                                                 <span className="font-medium">Undertime:</span>{" "}
                                                 <span className="text-orange-600">-{record.undertime_minutes} minutes</span>
+                                            </div>
+                                        )}
+                                        {record.overtime_minutes && record.overtime_minutes > 0 && (
+                                            <div>
+                                                <span className="font-medium">Overtime:</span>{" "}
+                                                <span className={record.overtime_approved ? 'text-green-600' : 'text-blue-600'}>
+                                                    +{record.overtime_minutes} minutes
+                                                    {record.overtime_approved && ' (Approved)'}
+                                                </span>
                                             </div>
                                         )}
                                         <div>

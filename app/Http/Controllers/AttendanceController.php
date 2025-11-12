@@ -175,8 +175,20 @@ class AttendanceController extends Controller
             'employeeSchedule.site',
             'bioInSite',
             'bioOutSite'
-        ])
-            ->needsVerification();
+        ]);
+
+        // Filter by verification status
+        if ($request->filled('verified')) {
+            if ($request->verified === 'verified') {
+                $query->where('admin_verified', true);
+            } elseif ($request->verified === 'pending') {
+                $query->where('admin_verified', false);
+            }
+            // 'all' means no filter
+        } else {
+            // Default: only show unverified records (needsVerification scope)
+            $query->needsVerification();
+        }
 
         // Search by employee name
         if ($request->filled('search')) {
@@ -208,6 +220,7 @@ class AttendanceController extends Controller
             'filters' => [
                 'search' => $request->search,
                 'status' => $request->status,
+                'verified' => $request->verified,
                 'date_from' => $request->date_from,
                 'date_to' => $request->date_to,
             ],
@@ -219,24 +232,42 @@ class AttendanceController extends Controller
      */
     public function verify(Request $request, Attendance $attendance)
     {
+        // Load employee schedule for shift type checking
+        $attendance->load('employeeSchedule');
+
         $request->validate([
             'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio',
             'actual_time_in' => 'nullable|date',
             'actual_time_out' => 'nullable|date',
             'verification_notes' => 'required|string|max:1000',
+            'overtime_approved' => 'nullable|boolean',
         ]);
 
         $oldStatus = $attendance->status;
 
-        $attendance->update([
+        $updates = [
             'status' => $request->status,
             'actual_time_in' => $request->actual_time_in,
             'actual_time_out' => $request->actual_time_out,
             'admin_verified' => true,
             'verification_notes' => $request->verification_notes,
-        ]);
+        ];
 
-        // Recalculate tardy/undertime if times provided
+        // Handle overtime approval
+        if ($request->has('overtime_approved')) {
+            $updates['overtime_approved'] = $request->overtime_approved;
+            if ($request->overtime_approved) {
+                $updates['overtime_approved_at'] = now();
+                $updates['overtime_approved_by'] = auth()->id();
+            } else {
+                $updates['overtime_approved_at'] = null;
+                $updates['overtime_approved_by'] = null;
+            }
+        }
+
+        $attendance->update($updates);
+
+        // Recalculate tardy/undertime/overtime if times provided
         if ($request->actual_time_in && $attendance->scheduled_time_in) {
             $shiftDate = Carbon::parse($attendance->shift_date);
             $scheduled = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attendance->scheduled_time_in);
@@ -245,6 +276,44 @@ class AttendanceController extends Controller
 
             if ($tardyMinutes > 0) {
                 $attendance->update(['tardy_minutes' => $tardyMinutes]);
+            } else {
+                $attendance->update(['tardy_minutes' => null]);
+            }
+        }
+
+        // Recalculate undertime and overtime if time out provided
+        if ($request->actual_time_out && $attendance->scheduled_time_out) {
+            $shiftDate = Carbon::parse($attendance->shift_date);
+            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attendance->scheduled_time_out);
+
+            // Handle night shift - scheduled time out is next day
+            if ($attendance->employeeSchedule && $attendance->employeeSchedule->shift_type === 'night') {
+                $scheduledTimeOut->addDay();
+            }
+
+            $actualTimeOut = Carbon::parse($request->actual_time_out);
+            $timeDiff = $scheduledTimeOut->diffInMinutes($actualTimeOut, false);
+
+            // If negative (left early), it's undertime
+            if ($timeDiff < -60) {
+                $attendance->update([
+                    'undertime_minutes' => abs($timeDiff),
+                    'overtime_minutes' => null,
+                ]);
+            }
+            // If positive (left late), it's overtime
+            elseif ($timeDiff > 0) {
+                $attendance->update([
+                    'undertime_minutes' => null,
+                    'overtime_minutes' => $timeDiff,
+                ]);
+            }
+            // If within threshold, clear both
+            else {
+                $attendance->update([
+                    'undertime_minutes' => null,
+                    'overtime_minutes' => null,
+                ]);
             }
         }
 

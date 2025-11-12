@@ -4,6 +4,7 @@ import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { type SharedData } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -60,8 +61,13 @@ interface AttendanceRecord {
     actual_time_in?: string;
     actual_time_out?: string;
     status: string;
+    secondary_status?: string;
     tardy_minutes?: number;
     undertime_minutes?: number;
+    overtime_minutes?: number;
+    overtime_approved?: boolean;
+    overtime_approved_at?: string;
+    overtime_approved_by?: number;
     is_advised: boolean;
     is_cross_site_bio?: boolean;
     bio_in_site?: Site;
@@ -84,13 +90,14 @@ interface AttendancePayload {
     meta: Meta;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     attendances?: AttendancePayload;
     filters?: {
         search?: string;
         status?: string;
         date_from?: string;
         date_to?: string;
+        verified?: string;
     };
     [key: string]: unknown;
 }
@@ -102,13 +109,13 @@ const DEFAULT_META: Meta = {
     total: 0,
 };
 
-const formatDateTime = (value: string | undefined) => {
+const formatDateTime = (value: string | undefined, timeFormat: '12' | '24' = '24') => {
     if (!value) return "-";
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) {
         return value;
     }
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`;
+    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: timeFormat === '12' })}`;
 };
 
 const formatDate = (dateString: string) => {
@@ -142,13 +149,24 @@ const getStatusBadge = (status: string) => {
     return <Badge className={config.className}>{config.label}</Badge>;
 };
 
+const getStatusBadges = (record: AttendanceRecord) => {
+    return (
+        <div className="flex gap-1 flex-wrap">
+            {getStatusBadge(record.status)}
+            {record.secondary_status && getStatusBadge(record.secondary_status)}
+        </div>
+    );
+};
+
 export default function AttendanceReview() {
-    const { attendances, filters } = usePage<PageProps>().props;
+    const { attendances, filters, auth } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
         meta: attendances?.meta ?? DEFAULT_META,
     };
+
+    const timeFormat = auth.user.time_format || '24';
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Review Flagged Records",
@@ -167,6 +185,7 @@ export default function AttendanceReview() {
     // Search state
     const [searchQuery, setSearchQuery] = useState(filters?.search || "");
     const [statusFilter, setStatusFilter] = useState(filters?.status || "all");
+    const [verifiedFilter, setVerifiedFilter] = useState(filters?.verified || "all");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
 
@@ -175,6 +194,7 @@ export default function AttendanceReview() {
         actual_time_in: "",
         actual_time_out: "",
         verification_notes: "",
+        overtime_approved: false,
     });
 
     const handleSearch = () => {
@@ -183,6 +203,7 @@ export default function AttendanceReview() {
             {
                 search: searchQuery,
                 status: statusFilter === "all" ? "" : statusFilter,
+                verified: verifiedFilter === "all" ? "" : verifiedFilter,
                 date_from: dateFrom,
                 date_to: dateTo,
             },
@@ -196,6 +217,7 @@ export default function AttendanceReview() {
     const handleClearFilters = () => {
         setSearchQuery("");
         setStatusFilter("all");
+        setVerifiedFilter("all");
         setDateFrom("");
         setDateTo("");
         router.get("/attendance/review", {}, { preserveState: true });
@@ -208,6 +230,7 @@ export default function AttendanceReview() {
             actual_time_in: record.actual_time_in ? new Date(record.actual_time_in).toISOString().slice(0, 16) : "",
             actual_time_out: record.actual_time_out ? new Date(record.actual_time_out).toISOString().slice(0, 16) : "",
             verification_notes: record.verification_notes || "",
+            overtime_approved: record.overtime_approved || false,
         });
         setIsDialogOpen(true);
     };
@@ -269,6 +292,21 @@ export default function AttendanceReview() {
                                             <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
                                             <SelectItem value="tardy">Tardy</SelectItem>
                                             <SelectItem value="undertime">Undertime</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Verified Filter */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="verified-filter">Verification Status</Label>
+                                    <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
+                                        <SelectTrigger id="verified-filter">
+                                            <SelectValue placeholder="All records" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Records</SelectItem>
+                                            <SelectItem value="pending">Pending Verification</SelectItem>
+                                            <SelectItem value="verified">Verified</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -340,6 +378,7 @@ export default function AttendanceReview() {
                                             <TableHead>Time In</TableHead>
                                             <TableHead>Time Out</TableHead>
                                             <TableHead>Status</TableHead>
+                                            <TableHead>Tardy/UT/OT</TableHead>
                                             <TableHead>Issue</TableHead>
                                             <TableHead>Actions</TableHead>
                                         </TableRow>
@@ -358,7 +397,7 @@ export default function AttendanceReview() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="text-sm">
-                                                    {formatDateTime(record.actual_time_in)}
+                                                    {formatDateTime(record.actual_time_in, timeFormat)}
                                                     {record.bio_in_site && record.is_cross_site_bio && (
                                                         <div className="text-xs text-muted-foreground">
                                                             @ {record.bio_in_site.name}
@@ -366,24 +405,52 @@ export default function AttendanceReview() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="text-sm">
-                                                    {formatDateTime(record.actual_time_out)}
+                                                    {formatDateTime(record.actual_time_out, timeFormat)}
                                                     {record.bio_out_site && record.is_cross_site_bio && (
                                                         <div className="text-xs text-muted-foreground">
                                                             @ {record.bio_out_site.name}
                                                         </div>
                                                     )}
                                                 </TableCell>
-                                                <TableCell>{getStatusBadge(record.status)}</TableCell>
+                                                <TableCell>{getStatusBadges(record)}</TableCell>
+                                                <TableCell className="text-sm">
+                                                    <div className="space-y-1">
+                                                        {record.tardy_minutes ? (
+                                                            <div className="text-orange-600">+{record.tardy_minutes}m</div>
+                                                        ) : record.undertime_minutes ? (
+                                                            <div className="text-orange-600">-{record.undertime_minutes}m</div>
+                                                        ) : (
+                                                            <div>-</div>
+                                                        )}
+                                                        {record.overtime_minutes && record.overtime_minutes > 0 && (
+                                                            <div className={`text-xs ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
+                                                                +{record.overtime_minutes}m OT
+                                                                {record.overtime_approved && ' ✓'}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell>
-                                                    {record.status === 'failed_bio_in' && (
-                                                        <span className="text-sm text-red-600">No Time In</span>
-                                                    )}
-                                                    {record.status === 'failed_bio_out' && (
-                                                        <span className="text-sm text-red-600">No Time Out</span>
-                                                    )}
-                                                    {record.status === 'ncns' && (
-                                                        <span className="text-sm text-red-600">No Show</span>
-                                                    )}
+                                                    <div className="space-y-1">
+                                                        {(record.status === 'failed_bio_in' || record.secondary_status === 'failed_bio_in') && (
+                                                            <span className="text-sm text-red-600 block">No Time In</span>
+                                                        )}
+                                                        {(record.status === 'failed_bio_out' || record.secondary_status === 'failed_bio_out') && (
+                                                            <span className="text-sm text-red-600 block">No Time Out</span>
+                                                        )}
+                                                        {(record.status === 'ncns' || record.secondary_status === 'ncns') && (
+                                                            <span className="text-sm text-red-600 block">No Show</span>
+                                                        )}
+                                                        {(record.status === 'tardy' || record.secondary_status === 'tardy') && (
+                                                            <span className="text-sm text-orange-600 block">Late Arrival</span>
+                                                        )}
+                                                        {(record.status === 'undertime' || record.secondary_status === 'undertime') && (
+                                                            <span className="text-sm text-orange-600 block">Early Leave</span>
+                                                        )}
+                                                        {(record.status === 'half_day_absence' || record.secondary_status === 'half_day_absence') && (
+                                                            <span className="text-sm text-orange-600 block">Half Day</span>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>
                                                     <Button
@@ -413,7 +480,7 @@ export default function AttendanceReview() {
                                                 {formatDate(record.shift_date)}
                                             </div>
                                         </div>
-                                        {getStatusBadge(record.status)}
+                                        {getStatusBadges(record)}
                                     </div>
 
                                     <div className="space-y-2 text-sm">
@@ -428,24 +495,60 @@ export default function AttendanceReview() {
                                         </div>
                                         <div>
                                             <span className="font-medium">Time In:</span>{" "}
-                                            {formatDateTime(record.actual_time_in)}
+                                            {formatDateTime(record.actual_time_in, timeFormat)}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
                                             )}
                                         </div>
                                         <div>
                                             <span className="font-medium">Time Out:</span>{" "}
-                                            {formatDateTime(record.actual_time_out)}
+                                            {formatDateTime(record.actual_time_out, timeFormat)}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Issue:</span>{" "}
-                                            {record.status === 'failed_bio_in' && <span className="text-red-600">No Time In</span>}
-                                            {record.status === 'failed_bio_out' && <span className="text-red-600">No Time Out</span>}
-                                            {record.status === 'ncns' && <span className="text-red-600">No Show</span>}
+                                            <span className="font-medium">Issues:</span>
+                                            <div className="mt-1 space-y-1">
+                                                {(record.status === 'failed_bio_in' || record.secondary_status === 'failed_bio_in') && (
+                                                    <span className="text-red-600 block">• No Time In</span>
+                                                )}
+                                                {(record.status === 'failed_bio_out' || record.secondary_status === 'failed_bio_out') && (
+                                                    <span className="text-red-600 block">• No Time Out</span>
+                                                )}
+                                                {(record.status === 'ncns' || record.secondary_status === 'ncns') && (
+                                                    <span className="text-red-600 block">• No Show</span>
+                                                )}
+                                                {(record.status === 'tardy' || record.secondary_status === 'tardy') && (
+                                                    <span className="text-orange-600 block">• Late Arrival</span>
+                                                )}
+                                                {(record.status === 'undertime' || record.secondary_status === 'undertime') && (
+                                                    <span className="text-orange-600 block">• Early Leave</span>
+                                                )}
+                                                {(record.status === 'half_day_absence' || record.secondary_status === 'half_day_absence') && (
+                                                    <span className="text-orange-600 block">• Half Day</span>
+                                                )}
+                                            </div>
                                         </div>
+                                        {(record.tardy_minutes || record.undertime_minutes || (record.overtime_minutes && record.overtime_minutes > 0)) && (
+                                            <div>
+                                                <span className="font-medium">Time Adjustments:</span>
+                                                <div className="mt-1 space-y-1">
+                                                    {record.tardy_minutes && (
+                                                        <span className="text-orange-600 block">• Tardy: +{record.tardy_minutes} minutes</span>
+                                                    )}
+                                                    {record.undertime_minutes && (
+                                                        <span className="text-orange-600 block">• Undertime: -{record.undertime_minutes} minutes</span>
+                                                    )}
+                                                    {record.overtime_minutes && record.overtime_minutes > 0 && (
+                                                        <span className={`block ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
+                                                            • Overtime: +{record.overtime_minutes} minutes
+                                                            {record.overtime_approved && ' (Approved)'}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
 
                                     <Button
@@ -550,12 +653,118 @@ export default function AttendanceReview() {
                         {/* Time In */}
                         <div className="space-y-2">
                             <Label htmlFor="actual_time_in">Actual Time In</Label>
-                            <Input
-                                id="actual_time_in"
-                                type="datetime-local"
-                                value={data.actual_time_in}
-                                onChange={e => setData("actual_time_in", e.target.value)}
-                            />
+                            <div className="flex gap-2">
+                                <Input
+                                    type="date"
+                                    value={data.actual_time_in ? data.actual_time_in.slice(0, 10) : ""}
+                                    onChange={e => {
+                                        const date = e.target.value;
+                                        const time = data.actual_time_in ? data.actual_time_in.slice(11, 16) : "00:00";
+                                        setData("actual_time_in", date ? `${date}T${time}` : "");
+                                    }}
+                                    className="flex-1"
+                                />
+                                {timeFormat === '24' ? (
+                                    <div className="flex gap-1">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="23"
+                                            placeholder="HH"
+                                            value={data.actual_time_in ? data.actual_time_in.slice(11, 13) : "00"}
+                                            onChange={e => {
+                                                const hour = e.target.value.padStart(2, '0');
+                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
+                                                const minute = data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00";
+                                                setData("actual_time_in", date ? `${date}T${hour}:${minute}` : "");
+                                            }}
+                                            className="w-16 text-center"
+                                        />
+                                        <span className="flex items-center">:</span>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="59"
+                                            placeholder="MM"
+                                            value={data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00"}
+                                            onChange={e => {
+                                                const minute = e.target.value.padStart(2, '0');
+                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
+                                                const hour = data.actual_time_in ? data.actual_time_in.slice(11, 13) : "00";
+                                                setData("actual_time_in", date ? `${date}T${hour}:${minute}` : "");
+                                            }}
+                                            className="w-16 text-center"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-1">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="12"
+                                            placeholder="HH"
+                                            value={(() => {
+                                                if (!data.actual_time_in) return "12";
+                                                const hour24 = parseInt(data.actual_time_in.slice(11, 13));
+                                                const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+                                                return hour12.toString();
+                                            })()}
+                                            onChange={e => {
+                                                const hour12 = parseInt(e.target.value) || 1;
+                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
+                                                const minute = data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00";
+                                                const currentHour24 = data.actual_time_in ? parseInt(data.actual_time_in.slice(11, 13)) : 0;
+                                                const isPM = currentHour24 >= 12;
+                                                let hour24 = hour12;
+                                                if (isPM && hour12 !== 12) hour24 = hour12 + 12;
+                                                else if (!isPM && hour12 === 12) hour24 = 0;
+                                                setData("actual_time_in", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
+                                            }}
+                                            className="w-14 text-center"
+                                        />
+                                        <span className="flex items-center">:</span>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="59"
+                                            placeholder="MM"
+                                            value={data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00"}
+                                            onChange={e => {
+                                                const minute = e.target.value.padStart(2, '0');
+                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
+                                                const hour = data.actual_time_in ? data.actual_time_in.slice(11, 13) : "00";
+                                                setData("actual_time_in", date ? `${date}T${hour}:${minute}` : "");
+                                            }}
+                                            className="w-14 text-center"
+                                        />
+                                        <Select
+                                            value={(() => {
+                                                if (!data.actual_time_in) return "AM";
+                                                const hour24 = parseInt(data.actual_time_in.slice(11, 13));
+                                                return hour24 >= 12 ? "PM" : "AM";
+                                            })()}
+                                            onValueChange={period => {
+                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
+                                                const minute = data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00";
+                                                const currentHour24 = data.actual_time_in ? parseInt(data.actual_time_in.slice(11, 13)) : 0;
+                                                const currentHour12 = currentHour24 === 0 ? 12 : currentHour24 > 12 ? currentHour24 - 12 : currentHour24;
+                                                let hour24 = currentHour12;
+                                                if (period === 'PM' && currentHour12 !== 12) hour24 = currentHour12 + 12;
+                                                else if (period === 'AM' && currentHour12 === 12) hour24 = 0;
+                                                setData("actual_time_in", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-20">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="AM">AM</SelectItem>
+                                                <SelectItem value="PM">PM</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+                            </div>
                             {errors.actual_time_in && (
                                 <p className="text-sm text-red-500">{errors.actual_time_in}</p>
                             )}
@@ -564,16 +773,158 @@ export default function AttendanceReview() {
                         {/* Time Out */}
                         <div className="space-y-2">
                             <Label htmlFor="actual_time_out">Actual Time Out</Label>
-                            <Input
-                                id="actual_time_out"
-                                type="datetime-local"
-                                value={data.actual_time_out}
-                                onChange={e => setData("actual_time_out", e.target.value)}
-                            />
+                            <div className="flex gap-2">
+                                <Input
+                                    type="date"
+                                    value={data.actual_time_out ? data.actual_time_out.slice(0, 10) : ""}
+                                    onChange={e => {
+                                        const date = e.target.value;
+                                        const time = data.actual_time_out ? data.actual_time_out.slice(11, 16) : "00:00";
+                                        setData("actual_time_out", date ? `${date}T${time}` : "");
+                                    }}
+                                    className="flex-1"
+                                />
+                                {timeFormat === '24' ? (
+                                    <div className="flex gap-1">
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="23"
+                                            placeholder="HH"
+                                            value={data.actual_time_out ? data.actual_time_out.slice(11, 13) : "00"}
+                                            onChange={e => {
+                                                const hour = e.target.value.padStart(2, '0');
+                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
+                                                const minute = data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00";
+                                                setData("actual_time_out", date ? `${date}T${hour}:${minute}` : "");
+                                            }}
+                                            className="w-16 text-center"
+                                        />
+                                        <span className="flex items-center">:</span>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="59"
+                                            placeholder="MM"
+                                            value={data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00"}
+                                            onChange={e => {
+                                                const minute = e.target.value.padStart(2, '0');
+                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
+                                                const hour = data.actual_time_out ? data.actual_time_out.slice(11, 13) : "00";
+                                                setData("actual_time_out", date ? `${date}T${hour}:${minute}` : "");
+                                            }}
+                                            className="w-16 text-center"
+                                        />
+                                    </div>
+                                ) : (
+                                    <div className="flex gap-1">
+                                        <Input
+                                            type="number"
+                                            min="1"
+                                            max="12"
+                                            placeholder="HH"
+                                            value={(() => {
+                                                if (!data.actual_time_out) return "12";
+                                                const hour24 = parseInt(data.actual_time_out.slice(11, 13));
+                                                const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
+                                                return hour12.toString();
+                                            })()}
+                                            onChange={e => {
+                                                const hour12 = parseInt(e.target.value) || 1;
+                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
+                                                const minute = data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00";
+                                                const currentHour24 = data.actual_time_out ? parseInt(data.actual_time_out.slice(11, 13)) : 0;
+                                                const isPM = currentHour24 >= 12;
+                                                let hour24 = hour12;
+                                                if (isPM && hour12 !== 12) hour24 = hour12 + 12;
+                                                else if (!isPM && hour12 === 12) hour24 = 0;
+                                                setData("actual_time_out", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
+                                            }}
+                                            className="w-14 text-center"
+                                        />
+                                        <span className="flex items-center">:</span>
+                                        <Input
+                                            type="number"
+                                            min="0"
+                                            max="59"
+                                            placeholder="MM"
+                                            value={data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00"}
+                                            onChange={e => {
+                                                const minute = e.target.value.padStart(2, '0');
+                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
+                                                const hour = data.actual_time_out ? data.actual_time_out.slice(11, 13) : "00";
+                                                setData("actual_time_out", date ? `${date}T${hour}:${minute}` : "");
+                                            }}
+                                            className="w-14 text-center"
+                                        />
+                                        <Select
+                                            value={(() => {
+                                                if (!data.actual_time_out) return "AM";
+                                                const hour24 = parseInt(data.actual_time_out.slice(11, 13));
+                                                return hour24 >= 12 ? "PM" : "AM";
+                                            })()}
+                                            onValueChange={period => {
+                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
+                                                const minute = data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00";
+                                                const currentHour24 = data.actual_time_out ? parseInt(data.actual_time_out.slice(11, 13)) : 0;
+                                                const currentHour12 = currentHour24 === 0 ? 12 : currentHour24 > 12 ? currentHour24 - 12 : currentHour24;
+                                                let hour24 = currentHour12;
+                                                if (period === 'PM' && currentHour12 !== 12) hour24 = currentHour12 + 12;
+                                                else if (period === 'AM' && currentHour12 === 12) hour24 = 0;
+                                                setData("actual_time_out", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
+                                            }}
+                                        >
+                                            <SelectTrigger className="w-20">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="AM">AM</SelectItem>
+                                                <SelectItem value="PM">PM</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                )}
+                            </div>
                             {errors.actual_time_out && (
                                 <p className="text-sm text-red-500">{errors.actual_time_out}</p>
                             )}
                         </div>
+
+                        {/* Overtime Approval */}
+                        {selectedRecord?.overtime_minutes && selectedRecord.overtime_minutes > 0 && (
+                            <div className="space-y-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className="flex items-center justify-between">
+                                    <div>
+                                        <Label className="text-sm font-semibold text-blue-900">
+                                            Overtime Detected: {selectedRecord.overtime_minutes} minutes
+                                        </Label>
+                                        <p className="text-xs text-blue-700 mt-1">
+                                            Employee worked beyond scheduled time out
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            id="overtime_approved"
+                                            checked={data.overtime_approved}
+                                            onChange={e => setData("overtime_approved", e.target.checked)}
+                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        />
+                                        <Label htmlFor="overtime_approved" className="text-sm font-medium cursor-pointer">
+                                            Approve Overtime
+                                        </Label>
+                                    </div>
+                                </div>
+                                {selectedRecord.overtime_approved && (
+                                    <div className="text-xs text-green-700 mt-2">
+                                        ✓ Overtime was approved
+                                        {selectedRecord.overtime_approved_at && (
+                                            <span> on {new Date(selectedRecord.overtime_approved_at).toLocaleString()}</span>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        )}
 
                         {/* Verification Notes */}
                         <div className="space-y-2">

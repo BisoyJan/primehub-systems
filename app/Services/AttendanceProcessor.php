@@ -859,6 +859,12 @@ class AttendanceProcessor
                 }
             }
 
+            // Check for overtime (worked beyond scheduled time out)
+            // Only count overtime if they left after scheduled time out
+            if ($undertimeMinutes > 0) { // Positive means left late (overtime)
+                $updates['overtime_minutes'] = $undertimeMinutes;
+            }
+
             $attendance->update($updates);
         } else {
             // No time out record found

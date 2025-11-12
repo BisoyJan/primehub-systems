@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
+import type { BreadcrumbItem, SharedData } from "@/types";
 import { toast } from "sonner";
 import {
     Select,
@@ -23,6 +24,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     DropdownMenu,
     DropdownMenuContent,
@@ -44,8 +46,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, Filter, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText } from "lucide-react";
-import type { BreadcrumbItem } from "@/types";
+import { AlertCircle, Filter, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download } from "lucide-react";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Attendance Points', href: '/attendance-points' }
@@ -115,9 +116,11 @@ interface Filters {
     status?: string;
     date_from?: string;
     date_to?: string;
+    expiring_soon?: string;
+    gbro_eligible?: string;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     points?: PointsPayload;
     users?: User[];
     stats?: Stats;
@@ -131,6 +134,21 @@ const formatDate = (date: string) => {
         day: 'numeric',
         year: 'numeric'
     });
+};
+
+const formatDateTime = (value: string, timeFormat: '12' | '24' = '24') => {
+    const date = new Date(value);
+    const dateStr = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
+    });
+    const timeStr = date.toLocaleTimeString('en-US', {
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: timeFormat === '12'
+    });
+    return `${dateStr} ${timeStr}`;
 };
 
 const getPointTypeBadge = (type: string) => {
@@ -152,6 +170,8 @@ const getPointTypeBadge = (type: string) => {
 
 export default function AttendancePointsIndex({ points, users, stats, filters }: PageProps) {
     useFlashMessage();
+    const { auth } = usePage<PageProps>().props;
+    const timeFormat = auth.user.time_format as '12' | '24';
 
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
     const [employeeSearch, setEmployeeSearch] = useState("");
@@ -159,6 +179,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
     const [selectedStatus, setSelectedStatus] = useState(filters?.status || "");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
+    const [filterExpiringSoon, setFilterExpiringSoon] = useState(filters?.expiring_soon === 'true' || false);
+    const [filterGbroEligible, setFilterGbroEligible] = useState(filters?.gbro_eligible === 'true' || false);
     const [isRescanOpen, setIsRescanOpen] = useState(false);
     const [rescanDateFrom, setRescanDateFrom] = useState("");
     const [rescanDateTo, setRescanDateTo] = useState("");
@@ -194,7 +216,9 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                 point_type: selectedPointType,
                 status: selectedStatus,
                 date_from: dateFrom,
-                date_to: dateTo
+                date_to: dateTo,
+                expiring_soon: filterExpiringSoon ? 'true' : undefined,
+                gbro_eligible: filterGbroEligible ? 'true' : undefined,
             },
             { preserveState: true }
         );
@@ -207,6 +231,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
         setSelectedStatus("");
         setDateFrom("");
         setDateTo("");
+        setFilterExpiringSoon(false);
+        setFilterGbroEligible(false);
         router.get("/attendance-points");
     };
 
@@ -238,6 +264,32 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                 }
             }
         );
+    };
+
+    const handleExportAllCSV = () => {
+        const params = new URLSearchParams({
+            ...(selectedUserId && { user_id: selectedUserId }),
+            ...(selectedPointType && { point_type: selectedPointType }),
+            ...(selectedStatus && { status: selectedStatus }),
+            ...(dateFrom && { date_from: dateFrom }),
+            ...(dateTo && { date_to: dateTo }),
+            ...(filterExpiringSoon && { expiring_soon: 'true' }),
+            ...(filterGbroEligible && { gbro_eligible: 'true' }),
+        });
+        window.location.href = `/attendance-points/export-all?${params.toString()}`;
+    };
+
+    const handleExportAllExcel = () => {
+        const params = new URLSearchParams({
+            ...(selectedUserId && { user_id: selectedUserId }),
+            ...(selectedPointType && { point_type: selectedPointType }),
+            ...(selectedStatus && { status: selectedStatus }),
+            ...(dateFrom && { date_from: dateFrom }),
+            ...(dateTo && { date_to: dateTo }),
+            ...(filterExpiringSoon && { expiring_soon: 'true' }),
+            ...(filterGbroEligible && { gbro_eligible: 'true' }),
+        });
+        window.location.href = `/attendance-points/export-all-excel?${params.toString()}`;
     };
 
     const viewUserDetails = (userId: number) => {
@@ -308,7 +360,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
         );
     };
 
-    const showClearFilters = selectedUserId || selectedPointType || selectedStatus || dateFrom || dateTo || employeeSearch;
+    const showClearFilters = selectedUserId || selectedPointType || selectedStatus || dateFrom || dateTo || employeeSearch || filterExpiringSoon || filterGbroEligible;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -380,14 +432,34 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg font-medium">Filters</h3>
-                        <Button
-                            variant="outline"
-                            onClick={() => setIsRescanOpen(true)}
-                            className="gap-2"
-                        >
-                            <RefreshCw className="h-4 w-4" />
-                            Rescan Points
-                        </Button>
+                        <div className="flex items-center gap-2">
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Export
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={handleExportAllCSV}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        Export as CSV
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={handleExportAllExcel}>
+                                        <FileText className="mr-2 h-4 w-4" />
+                                        Export as Excel
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                            <Button
+                                variant="outline"
+                                onClick={() => setIsRescanOpen(true)}
+                                className="gap-2"
+                            >
+                                <RefreshCw className="h-4 w-4" />
+                                Rescan Points
+                            </Button>
+                        </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
@@ -452,6 +524,37 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                             <Filter className="h-4 w-4 mr-2" />
                             Apply Filters
                         </Button>
+                    </div>
+
+                    {/* Additional Filters Row */}
+                    <div className="flex flex-wrap gap-4 items-center">
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="expiring-soon"
+                                checked={filterExpiringSoon}
+                                onCheckedChange={(checked) => setFilterExpiringSoon(checked as boolean)}
+                            />
+                            <label
+                                htmlFor="expiring-soon"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                                Expiring within 30 days
+                            </label>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                            <Checkbox
+                                id="gbro-eligible"
+                                checked={filterGbroEligible}
+                                onCheckedChange={(checked) => setFilterGbroEligible(checked as boolean)}
+                            />
+                            <label
+                                htmlFor="gbro-eligible"
+                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                            >
+                                GBRO Eligible Only
+                            </label>
+                        </div>
                     </div>
 
                     {showClearFilters && (
@@ -872,7 +975,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                             <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md">
                                 <p>Excused by: <span className="font-medium">{selectedPoint.excused_by.name}</span></p>
                                 {selectedPoint.excused_at && (
-                                    <p>On: <span className="font-medium">{formatDate(selectedPoint.excused_at)}</span></p>
+                                    <p>On: <span className="font-medium">{formatDateTime(selectedPoint.excused_at, timeFormat)}</span></p>
                                 )}
                             </div>
                         )}
@@ -1074,9 +1177,9 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                                 <div className="pt-4 border-t">
                                     <Label className="text-sm font-medium text-muted-foreground">Excuse Reason</Label>
                                     <p className="text-sm mt-1">{selectedViolationPoint.excuse_reason}</p>
-                                    {selectedViolationPoint.excused_by && (
+                                    {selectedViolationPoint.excused_by && selectedViolationPoint.excused_at && (
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            Excused by: {selectedViolationPoint.excused_by.name}
+                                            Excused by: {selectedViolationPoint.excused_by.name} on {formatDateTime(selectedViolationPoint.excused_at, timeFormat)}
                                         </p>
                                     )}
                                 </div>

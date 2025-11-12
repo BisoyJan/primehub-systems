@@ -1,6 +1,7 @@
 import React from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
+import { type SharedData } from "@/types";
 import { useFlashMessage } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -48,7 +49,7 @@ interface UploadPayload {
     to: number;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     uploads?: UploadPayload;
     [key: string]: unknown;
 }
@@ -61,19 +62,20 @@ const formatDate = (date: string) => {
     });
 };
 
-const formatDateTime = (datetime: string) => {
+const formatDateTime = (datetime: string, timeFormat: '12' | '24' = '24') => {
     return new Date(datetime).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric',
         hour: 'numeric',
         minute: '2-digit',
-        hour12: true
+        hour12: timeFormat === '12'
     });
 };
 
-export default function UploadsIndex({ uploads }: PageProps) {
+export default function UploadsIndex({ uploads, auth }: PageProps) {
     useFlashMessage();
+    const timeFormat = auth.user.time_format || '24';
 
     const uploadsData = {
         data: uploads?.data || [],
@@ -186,7 +188,7 @@ export default function UploadsIndex({ uploads }: PageProps) {
                                             <TableCell>{getStatusBadge(upload.status)}</TableCell>
                                             <TableCell>{upload.uploader?.name || 'Unknown'}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
-                                                {formatDateTime(upload.created_at)}
+                                                {formatDateTime(upload.created_at, timeFormat)}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <button
@@ -260,8 +262,8 @@ export default function UploadsIndex({ uploads }: PageProps) {
                                     </div>
                                 </div>
 
-                                <div className="text-xs text-muted-foreground pt-2 border-t">
-                                    {formatDateTime(upload.created_at)}
+                                <div className="text-sm text-muted-foreground mt-1">
+                                    {formatDateTime(upload.created_at, timeFormat)}
                                 </div>
                             </div>
                         ))

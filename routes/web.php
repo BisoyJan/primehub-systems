@@ -148,9 +148,14 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('attendance-points')->name('attendance-points.')->group(function () {
         Route::get('/', [AttendancePointController::class, 'index'])->name('index');
         Route::post('/rescan', [AttendancePointController::class, 'rescan'])->name('rescan');
+        Route::get('/export-all', [AttendancePointController::class, 'exportAll'])->name('export-all');
+        Route::get('/export-all-excel', [AttendancePointController::class, 'exportAllExcel'])->name('export-all-excel');
         Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
+        Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])->name('statistics');
+        Route::get('/{user}/export', [AttendancePointController::class, 'export'])->name('export');
+        Route::get('/{user}/export-excel', [AttendancePointController::class, 'exportExcel'])->name('export-excel');
         Route::post('/{point}/excuse', [AttendancePointController::class, 'excuse'])->name('excuse');
-        Route::post('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])->name('unexcuse');
+        Route::delete('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])->name('unexcuse');
     });
 
     // Biometric Retention Policies

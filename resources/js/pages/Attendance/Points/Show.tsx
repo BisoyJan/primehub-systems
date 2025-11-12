@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
@@ -34,8 +34,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, MoreVertical, CheckCircle, XCircle, FileText } from "lucide-react";
-import type { BreadcrumbItem } from "@/types";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, MoreVertical, CheckCircle, XCircle, FileText, Download, BarChart3 } from "lucide-react";
+import type { BreadcrumbItem, SharedData } from "@/types";
 
 interface User {
     id: number;
@@ -104,7 +104,7 @@ interface GbroStats {
     is_gbro_ready: boolean;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     user: User;
     points: AttendancePoint[];
     totals: Totals;
@@ -118,6 +118,18 @@ const formatDate = (date: string) => {
         day: 'numeric',
         year: 'numeric'
     });
+};
+
+const formatDateTime = (dateTime: string, timeFormat: '12' | '24' = '24') => {
+    const date = new Date(dateTime);
+    return new Intl.DateTimeFormat('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: timeFormat === '12'
+    }).format(date);
 };
 
 const getPointTypeBadge = (type: string) => {
@@ -139,6 +151,8 @@ const getPointTypeBadge = (type: string) => {
 
 const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats }) => {
     useFlashMessage();
+    const { auth } = usePage<PageProps>().props;
+    const timeFormat = auth.user.time_format || '24';
 
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
     const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(null);
@@ -149,6 +163,20 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     const [pointToUnexcuse, setPointToUnexcuse] = useState<number | null>(null);
     const [isViolationDetailsOpen, setIsViolationDetailsOpen] = useState(false);
     const [selectedViolationPoint, setSelectedViolationPoint] = useState<AttendancePoint | null>(null);
+    const [isStatisticsDialogOpen, setIsStatisticsDialogOpen] = useState(false);
+    const [statistics, setStatistics] = useState<{
+        total_points: number;
+        active_points: number;
+        expired_points: number;
+        excused_points: number;
+        by_type: {
+            whole_day_absence: number;
+            half_day_absence: number;
+            undertime: number;
+            tardy: number;
+        };
+    } | null>(null);
+    const [isLoadingStats, setIsLoadingStats] = useState(false);
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Attendance Points', href: '/attendance-points' },
@@ -157,6 +185,30 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
     const goBack = () => {
         router.get("/attendance-points");
+    };
+
+    const handleExportCSV = () => {
+        window.location.href = `/attendance-points/${user.id}/export`;
+    };
+
+    const handleExportExcel = () => {
+        window.location.href = `/attendance-points/${user.id}/export-excel`;
+    };
+
+    const handleViewStatistics = async () => {
+        setIsLoadingStats(true);
+        setIsStatisticsDialogOpen(true);
+
+        try {
+            const response = await fetch(`/attendance-points/${user.id}/statistics`);
+            const data = await response.json();
+            setStatistics(data);
+        } catch {
+            toast.error("Failed to load statistics");
+            setIsStatisticsDialogOpen(false);
+        } finally {
+            setIsLoadingStats(false);
+        }
     };
 
     const openExcuseDialog = (point: AttendancePoint) => {
@@ -243,11 +295,36 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
             <Head title={`Attendance Points - ${user.name}`} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
-                <div className="flex items-center gap-4">
+                <div className="flex items-center justify-between gap-4">
                     <Button variant="ghost" size="sm" onClick={goBack}>
                         <ArrowLeft className="h-4 w-4 mr-2" />
                         Back to Points
                     </Button>
+
+                    <div className="flex items-center gap-2">
+                        <Button variant="outline" size="sm" onClick={handleViewStatistics}>
+                            <BarChart3 className="h-4 w-4 mr-2" />
+                            View Statistics
+                        </Button>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="outline" size="sm">
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Export
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem onClick={handleExportCSV}>
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Export as CSV
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={handleExportExcel}>
+                                    <FileText className="mr-2 h-4 w-4" />
+                                    Export as Excel
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
                 </div>
 
                 <PageHeader
@@ -588,7 +665,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <div className="text-sm text-green-600">
                                         <span className="text-muted-foreground">On:</span>{' '}
                                         {selectedPoint.excused_at
-                                            ? new Date(selectedPoint.excused_at).toLocaleString()
+                                            ? formatDateTime(selectedPoint.excused_at, timeFormat)
                                             : 'Unknown'}
                                     </div>
                                 </div>
@@ -829,9 +906,9 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 <div className="pt-4 border-t">
                                     <Label className="text-sm font-medium text-muted-foreground">Excuse Reason</Label>
                                     <p className="text-sm mt-1">{selectedViolationPoint.excuse_reason}</p>
-                                    {selectedViolationPoint.excused_by && (
+                                    {selectedViolationPoint.excused_by && selectedViolationPoint.excused_at && (
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            Excused by: {selectedViolationPoint.excused_by.name}
+                                            Excused by: {selectedViolationPoint.excused_by.name} on {formatDateTime(selectedViolationPoint.excused_at, timeFormat)}
                                         </p>
                                     )}
                                 </div>
@@ -847,6 +924,136 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 setSelectedViolationPoint(null);
                             }}
                         >
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Statistics Dialog */}
+            <Dialog open={isStatisticsDialogOpen} onOpenChange={setIsStatisticsDialogOpen}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Detailed Statistics - {user.name}</DialogTitle>
+                        <DialogDescription>
+                            Comprehensive breakdown of attendance points
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {isLoadingStats ? (
+                        <div className="flex items-center justify-center py-8">
+                            <div className="text-muted-foreground">Loading statistics...</div>
+                        </div>
+                    ) : statistics ? (
+                        <div className="space-y-6">
+                            {/* Overview Section */}
+                            <div>
+                                <h3 className="text-sm font-semibold mb-3">Overview</h3>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                                Total Active Points
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-red-600">
+                                                {Number(statistics.total_points).toFixed(2)}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                                Active Violations
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold">
+                                                {statistics.active_points}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                                Expired Points
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-gray-500">
+                                                {statistics.expired_points}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+
+                                    <Card>
+                                        <CardHeader className="pb-2">
+                                            <CardTitle className="text-sm font-medium text-muted-foreground">
+                                                Excused Points
+                                            </CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-green-600">
+                                                {statistics.excused_points}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+                            </div>
+
+                            {/* By Type Section */}
+                            <div>
+                                <h3 className="text-sm font-semibold mb-3">Points by Type</h3>
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between p-3 rounded-lg border bg-red-50 dark:bg-red-950 border-red-200">
+                                        <div className="flex items-center gap-2">
+                                            <AlertCircle className="h-4 w-4 text-red-600" />
+                                            <span className="text-sm font-medium">Whole Day Absence</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-red-600">
+                                            {Number(statistics.by_type.whole_day_absence).toFixed(2)}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-3 rounded-lg border bg-orange-50 dark:bg-orange-950 border-orange-200">
+                                        <div className="flex items-center gap-2">
+                                            <AlertCircle className="h-4 w-4 text-orange-600" />
+                                            <span className="text-sm font-medium">Half Day Absence</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-orange-600">
+                                            {Number(statistics.by_type.half_day_absence).toFixed(2)}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-3 rounded-lg border bg-yellow-50 dark:bg-yellow-950 border-yellow-200">
+                                        <div className="flex items-center gap-2">
+                                            <TrendingUp className="h-4 w-4 text-yellow-600" />
+                                            <span className="text-sm font-medium">Tardy</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-yellow-600">
+                                            {Number(statistics.by_type.tardy).toFixed(2)}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-3 rounded-lg border bg-yellow-50 dark:bg-yellow-950 border-yellow-200">
+                                        <div className="flex items-center gap-2">
+                                            <TrendingUp className="h-4 w-4 text-yellow-600" />
+                                            <span className="text-sm font-medium">Undertime</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-yellow-600">
+                                            {Number(statistics.by_type.undertime).toFixed(2)}
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsStatisticsDialogOpen(false)}>
                             Close
                         </Button>
                     </DialogFooter>

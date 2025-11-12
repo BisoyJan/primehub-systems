@@ -24,9 +24,9 @@ class BiometricAnomalyController extends Controller
     {
         return Inertia::render('Attendance/BiometricRecords/Anomalies', [
             'stats' => [
-                'total_records' => \App\Models\BiometricRecord::count(),
-                'oldest_record' => \App\Models\BiometricRecord::orderBy('datetime')->first()?->datetime,
-                'newest_record' => \App\Models\BiometricRecord::orderBy('datetime', 'desc')->first()?->datetime,
+                'total_records' => BiometricRecord::count(),
+                'oldest_record' => BiometricRecord::orderBy('datetime')->first()?->datetime,
+                'newest_record' => BiometricRecord::orderBy('datetime', 'desc')->first()?->datetime,
             ],
         ]);
     }

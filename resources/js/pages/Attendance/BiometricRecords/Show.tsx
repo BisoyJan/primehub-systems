@@ -1,5 +1,5 @@
 import React from "react";
-import { Head, router } from "@inertiajs/react";
+import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
@@ -8,7 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Clock, MapPin, Calendar } from "lucide-react";
-import type { BreadcrumbItem } from "@/types";
+import type { BreadcrumbItem, SharedData } from "@/types";
 
 interface User {
     id: number;
@@ -37,13 +37,13 @@ interface BiometricRecord {
     record_time: string;
 }
 
-interface PageProps {
+interface PageProps extends SharedData {
     user: User;
     date: string;
     records: BiometricRecord[];
 }
 
-const formatDateTime = (dateTime: string) => {
+const formatDateTime = (dateTime: string, timeFormat: '12' | '24' = '24') => {
     const date = new Date(dateTime);
     return new Intl.DateTimeFormat('en-US', {
         month: 'short',
@@ -52,16 +52,29 @@ const formatDateTime = (dateTime: string) => {
         hour: 'numeric',
         minute: '2-digit',
         second: '2-digit',
-        hour12: true
+        hour12: timeFormat === '12'
     }).format(date);
 };
 
-const formatTime = (time: string) => {
-    return time; // Return as-is in 24-hour format (HH:MM:SS)
+const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
+    if (timeFormat === '24') {
+        return time; // Return as-is in 24-hour format (HH:MM:SS)
+    }
+
+    // Convert to 12-hour format
+    const timeParts = time.split(':');
+    const hours = parseInt(timeParts[0]);
+    const minutes = timeParts[1];
+    const seconds = timeParts[2] || '';
+    const ampm = hours >= 12 ? 'PM' : 'AM';
+    const hour12 = hours % 12 || 12;
+    return seconds ? `${hour12}:${minutes}:${seconds} ${ampm}` : `${hour12}:${minutes} ${ampm}`;
 };
 
-const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
+export default function BiometricRecordsShow() {
+    const { user, date, records, auth } = usePage<PageProps>().props;
     useFlashMessage();
+    const timeFormat = auth.user.time_format || '24';
 
     const breadcrumbs: BreadcrumbItem[] = [
         { title: 'Biometric Records', href: '/biometric-records' },
@@ -94,10 +107,18 @@ const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
             <Head title={`Biometric Records - ${user.name}`} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
-                <div className="flex items-center gap-4">{/* Changed from gap-4 mb-6 */}
+                <div className="flex items-center justify-between">
                     <Button variant="ghost" size="sm" onClick={goBack}>
                         <ArrowLeft className="h-4 w-4 mr-2" />
                         Back to Records
+                    </Button>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => router.get("/biometric-records", { user_id: user.id })}
+                    >
+                        <Clock className="h-4 w-4 mr-2" />
+                        View All Records
                     </Button>
                 </div>
 
@@ -127,8 +148,8 @@ const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <div className="text-lg font-bold">
-                                {records.length > 0 ? formatTime(records[0].record_time) : 'N/A'}
+                            <div className="text-sm text-muted-foreground">
+                                {records.length > 0 ? formatTime(records[0].record_time, timeFormat) : 'N/A'}
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 Likely time in
@@ -143,7 +164,7 @@ const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
                         </CardHeader>
                         <CardContent>
                             <div className="text-lg font-bold">
-                                {records.length > 0 ? formatTime(records[records.length - 1].record_time) : 'N/A'}
+                                {records.length > 0 ? formatTime(records[records.length - 1].record_time, timeFormat) : 'N/A'}
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 Likely time out
@@ -186,11 +207,11 @@ const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
                                                     {index + 1}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {formatDateTime(record.datetime)}
+                                                    {formatDateTime(record.datetime, timeFormat)}
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Badge variant={index === 0 ? "default" : index === uploadRecords.length - 1 ? "secondary" : "outline"}>
-                                                        {formatTime(record.record_time)}
+                                                    <Badge variant="secondary">
+                                                        {formatTime(record.record_time, timeFormat)}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="font-mono text-sm">
@@ -245,7 +266,7 @@ const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <div className="font-semibold">
-                                                        {formatTime(record.record_time)}
+                                                        {formatTime(record.record_time, timeFormat)}
                                                     </div>
                                                     <div className="text-sm text-muted-foreground">
                                                         {record.site.name}
@@ -272,6 +293,4 @@ const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
             </div>
         </AppLayout>
     );
-};
-
-export default BiometricRecordsShow;
+}

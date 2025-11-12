@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils';
 import { edit as editAccount } from '@/routes/account';
 import { edit as editAppearance } from '@/routes/appearance';
 import { edit as editPassword } from '@/routes/password';
+import { edit as editPreferences } from '@/routes/preferences';
 import { show } from '@/routes/two-factor';
 import { type NavItem } from '@/types';
 import { Link } from '@inertiajs/react';
@@ -19,6 +20,11 @@ const sidebarNavItems: NavItem[] = [
     {
         title: 'Password',
         href: editPassword(),
+        icon: null,
+    },
+    {
+        title: 'Preferences',
+        href: editPreferences(),
         icon: null,
     },
     {

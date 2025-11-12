@@ -23,6 +23,10 @@ class Attendance extends Model
         'secondary_status',
         'tardy_minutes',
         'undertime_minutes',
+        'overtime_minutes',
+        'overtime_approved',
+        'overtime_approved_at',
+        'overtime_approved_by',
         'is_advised',
         'admin_verified',
         'is_cross_site_bio',
@@ -34,11 +38,14 @@ class Attendance extends Model
         'shift_date' => 'date:Y-m-d',
         'actual_time_in' => 'datetime',
         'actual_time_out' => 'datetime',
+        'overtime_approved_at' => 'datetime',
         'is_advised' => 'boolean',
         'admin_verified' => 'boolean',
         'is_cross_site_bio' => 'boolean',
+        'overtime_approved' => 'boolean',
         'tardy_minutes' => 'integer',
         'undertime_minutes' => 'integer',
+        'overtime_minutes' => 'integer',
     ];
 
     /**
@@ -71,6 +78,14 @@ class Attendance extends Model
     public function bioOutSite(): BelongsTo
     {
         return $this->belongsTo(Site::class, 'bio_out_site_id');
+    }
+
+    /**
+     * Get the user who approved the overtime.
+     */
+    public function overtimeApprovedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'overtime_approved_by');
     }
 
     /**

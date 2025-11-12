@@ -2,6 +2,7 @@ import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { Calendar, AlertCircle, CheckCircle, Loader2, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -11,8 +12,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface Stats {
     total_records: number;
@@ -81,10 +92,13 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
     const [reprocessResult, setReprocessResult] = useState<ReprocessResult | null>(null);
     const [fixStatusResult, setFixStatusResult] = useState<FixStatusResult | null>(fixResults || null);
     const [deleteExisting, setDeleteExisting] = useState(true);
+    const [rescanPoints, setRescanPoints] = useState(true);
+    const [showReprocessConfirm, setShowReprocessConfirm] = useState(false);
+    const [showFixStatusConfirm, setShowFixStatusConfirm] = useState(false);
 
     const handlePreview = () => {
         if (!startDate || !endDate) {
-            alert('Please select both start and end dates');
+            toast.error('Please select both start and end dates');
             return;
         }
 
@@ -96,15 +110,15 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                 end_date: endDate,
             },
             {
-                preserveState: true,
-                preserveScroll: true,
+                preserveState: false,
+                preserveScroll: false,
                 onSuccess: (page) => {
                     setPreviewData(page.props.preview as PreviewData);
                     setShowPreview(true);
                     setIsLoading(false);
                 },
                 onError: () => {
-                    alert('Failed to load preview');
+                    toast.error('Failed to load preview');
                     setIsLoading(false);
                 },
             }
@@ -113,14 +127,15 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
 
     const handleReprocess = () => {
         if (!startDate || !endDate) {
-            alert('Please select both start and end dates');
+            toast.error('Please select both start and end dates');
             return;
         }
 
-        if (!confirm('Are you sure you want to reprocess attendance for this date range? This action cannot be undone.')) {
-            return;
-        }
+        setShowReprocessConfirm(true);
+    };
 
+    const confirmReprocess = () => {
+        setShowReprocessConfirm(false);
         setIsLoading(true);
         setShowPreview(false);
         router.post(
@@ -129,6 +144,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                 start_date: startDate,
                 end_date: endDate,
                 delete_existing: deleteExisting,
+                rescan_points: rescanPoints,
             },
             {
                 preserveState: true,
@@ -136,9 +152,10 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                 onSuccess: (page) => {
                     setReprocessResult(page.props.results as ReprocessResult);
                     setIsLoading(false);
+                    toast.success('Attendance reprocessing completed successfully');
                 },
                 onError: () => {
-                    alert('Failed to reprocess attendance');
+                    toast.error('Failed to reprocess attendance');
                     setIsLoading(false);
                 },
             }
@@ -147,14 +164,15 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
 
     const handleFixStatuses = () => {
         if (!startDate || !endDate) {
-            alert('Please select both start and end dates');
+            toast.error('Please select both start and end dates');
             return;
         }
 
-        if (!confirm('Fix attendance statuses based on existing time in/out records for this date range?')) {
-            return;
-        }
+        setShowFixStatusConfirm(true);
+    };
 
+    const confirmFixStatuses = () => {
+        setShowFixStatusConfirm(false);
         setIsLoading(true);
         router.post(
             '/biometric-reprocessing/fix-statuses',
@@ -163,14 +181,15 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                 end_date: endDate,
             },
             {
-                preserveState: true,
-                preserveScroll: true,
+                preserveState: false,
+                preserveScroll: false,
                 onSuccess: (page) => {
                     setFixStatusResult(page.props.fixResults as FixStatusResult);
                     setIsLoading(false);
+                    toast.success('Attendance statuses fixed successfully');
                 },
                 onError: () => {
-                    alert('Failed to fix statuses');
+                    toast.error('Failed to fix statuses');
                     setIsLoading(false);
                 },
             }
@@ -269,6 +288,19 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                     />
                                     <Label htmlFor="delete-existing" className="cursor-pointer">
                                         Delete existing attendance records before reprocessing
+                                    </Label>
+                                </div>
+
+                                <div className="flex items-center space-x-2">
+                                    <input
+                                        type="checkbox"
+                                        id="rescan-points"
+                                        checked={rescanPoints}
+                                        onChange={(e) => setRescanPoints(e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300"
+                                    />
+                                    <Label htmlFor="rescan-points" className="cursor-pointer">
+                                        Automatically rescan attendance points after reprocessing
                                     </Label>
                                 </div>
 
@@ -542,6 +574,42 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                     )}
                 </DialogContent>
             </Dialog>
+
+            {/* Reprocess Confirmation Dialog */}
+            <AlertDialog open={showReprocessConfirm} onOpenChange={setShowReprocessConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Reprocess Attendance</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to reprocess attendance for this date range? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmReprocess}>
+                            Proceed
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Fix Statuses Confirmation Dialog */}
+            <AlertDialog open={showFixStatusConfirm} onOpenChange={setShowFixStatusConfirm}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Fix Attendance Statuses</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Fix attendance statuses based on existing time in/out records for this date range?
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmFixStatuses}>
+                            Fix Statuses
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }
