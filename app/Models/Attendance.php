@@ -95,7 +95,7 @@ class Attendance extends Model
     public function scopeNeedsVerification($query)
     {
         return $query->where(function ($q) {
-            $q->whereIn('status', ['failed_bio_in', 'failed_bio_out', 'ncns', 'half_day_absence'])
+            $q->whereIn('status', ['failed_bio_in', 'failed_bio_out', 'ncns', 'half_day_absence', 'tardy', 'undertime'])
               ->orWhere('is_cross_site_bio', true);
         })->where('admin_verified', false);
     }

@@ -101,4 +101,12 @@ class User extends Authenticatable
     {
         return $this->hasMany(Attendance::class);
     }
+
+    /**
+     * Get the attendance points for the user.
+     */
+    public function attendancePoints()
+    {
+        return $this->hasMany(AttendancePoint::class);
+    }
 }

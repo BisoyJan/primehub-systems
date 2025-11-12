@@ -17,5 +17,11 @@ class Kernel extends ConsoleKernel
             ->dailyAt('02:00')
             ->withoutOverlapping()
             ->onOneServer();
+
+        // Process attendance point expirations (SRO and GBRO) - runs daily at 3:00 AM
+        $schedule->command('points:process-expirations')
+            ->dailyAt('03:00')
+            ->withoutOverlapping()
+            ->onOneServer();
     }
 }

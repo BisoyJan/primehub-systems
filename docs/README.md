@@ -7,8 +7,11 @@ Welcome to the PrimeHub Systems documentation! This directory contains comprehen
 ## 📂 Documentation Structure
 
 ### 📋 **Attendance System** (`attendance/`)
-Complete documentation for the attendance tracking system including biometric file processing, shift detection, and employee matching.
+Complete documentation for the attendance tracking system including biometric file processing, shift detection, point expiration, and employee matching.
 
+- **[EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** ⭐ **NEW** - Point expiration system overview (SRO/GBRO)
+- **[POINT_EXPIRATION_RULES.md](attendance/POINT_EXPIRATION_RULES.md)** - Complete expiration rules documentation
+- **[AUTOMATIC_POINT_GENERATION.md](attendance/AUTOMATIC_POINT_GENERATION.md)** - Automatic point generation rules
 - **[ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** - Universal shift detection algorithm (supports all 48 shift patterns)
 - **[CROSS_UPLOAD_TIMEOUT_HANDLING.md](attendance/CROSS_UPLOAD_TIMEOUT_HANDLING.md)** - How multi-upload handling works for night shifts
 
@@ -43,9 +46,10 @@ Environment setup, Docker configuration, and local development guides.
 
 ### For Attendance Feature
 1. **[ATTENDANCE_FEATURES_SUMMARY.md](../ATTENDANCE_FEATURES_SUMMARY.md)** - Quick feature overview (in root)
-2. **[ATTENDANCE_SYSTEM_ANALYSIS.md](../ATTENDANCE_SYSTEM_ANALYSIS.md)** - Complete analysis (in root)
+2. **[attendance/EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** ⭐ - Point expiration overview
 3. **[attendance/ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** - Algorithm deep dive
-4. **[ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)** - Testing documentation (in root)
+4. **[ATTENDANCE_SYSTEM_ANALYSIS.md](../ATTENDANCE_SYSTEM_ANALYSIS.md)** - Complete analysis (in root)
+5. **[ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)** - Testing documentation (in root)
 
 ### For Biometric Features
 1. **[biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** - Feature overview
@@ -127,6 +131,9 @@ docs/
 ├── README.md                          ← You are here
 │
 ├── attendance/                        ← Attendance System Documentation
+│   ├── EXPIRATION_SYSTEM_SUMMARY.md   ⭐ NEW - Point expiration overview
+│   ├── POINT_EXPIRATION_RULES.md
+│   ├── AUTOMATIC_POINT_GENERATION.md
 │   ├── ATTENDANCE_GROUPING_LOGIC.md
 │   └── CROSS_UPLOAD_TIMEOUT_HANDLING.md
 │
@@ -167,9 +174,10 @@ Root Level (../)                       ← Project Root Documentation
 
 ### Path 2: Understanding Attendance System
 1. **[../ATTENDANCE_FEATURES_SUMMARY.md](../ATTENDANCE_FEATURES_SUMMARY.md)** → Quick overview (10 min read)
-2. **[attendance/ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** → Algorithm details (20 min)
-3. **[../ATTENDANCE_SYSTEM_ANALYSIS.md](../ATTENDANCE_SYSTEM_ANALYSIS.md)** → Deep dive (45 min)
-4. **[../ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)** → Test coverage
+2. **[attendance/EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** ⭐ → Point expiration overview (15 min)
+3. **[attendance/ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** → Algorithm details (20 min)
+4. **[../ATTENDANCE_SYSTEM_ANALYSIS.md](../ATTENDANCE_SYSTEM_ANALYSIS.md)** → Deep dive (45 min)
+5. **[../ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)** → Test coverage
 
 ### Path 3: Working with Biometric Records
 1. **[biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** → Overview
@@ -228,6 +236,8 @@ See: [../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMP
 
 ### Attendance System
 - **Shift Patterns Supported:** 48 (universal algorithm)
+- **Point Expiration:** SRO (6 mo/1 yr) + GBRO (60 days clean)
+- **Automated Processing:** Daily at 3:00 AM
 - **Employee Matching Accuracy:** 98.5%
 - **Test Coverage:** 72 tests, 100% pass rate
 - **Average Processing Time:** ~2 seconds for 500 employees
@@ -289,7 +299,8 @@ When adding new documentation:
 
 | Category | Last Updated | Status |
 |----------|--------------|--------|
-| Attendance System | Nov 10, 2025 | ✅ Complete |
+| Attendance System | Nov 13, 2025 | ✅ Complete |
+| Point Expiration | Nov 13, 2025 | ✅ Complete |
 | Biometric Records | Nov 10, 2025 | ✅ Complete |
 | Setup Guides | Nov 10, 2025 | ✅ Complete |
 | Deployment Guides | Nov 1, 2025 | ✅ Complete |
@@ -323,4 +334,4 @@ When adding new documentation:
 
 For questions or documentation requests, please contact the development team.
 
-*Last updated: November 10, 2025*
+*Last updated: November 13, 2025*

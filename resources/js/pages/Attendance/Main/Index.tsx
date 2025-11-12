@@ -109,7 +109,7 @@ const formatDateTime = (value: string | undefined) => {
         return value;
     }
 
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`;
 };
 
 const formatDate = (dateString: string) => {

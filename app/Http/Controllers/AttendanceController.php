@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Models\AttendanceUpload;
+use App\Models\AttendancePoint;
 use App\Services\AttendanceProcessor;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -225,6 +226,8 @@ class AttendanceController extends Controller
             'verification_notes' => 'required|string|max:1000',
         ]);
 
+        $oldStatus = $attendance->status;
+
         $attendance->update([
             'status' => $request->status,
             'actual_time_in' => $request->actual_time_in,
@@ -242,6 +245,17 @@ class AttendanceController extends Controller
 
             if ($tardyMinutes > 0) {
                 $attendance->update(['tardy_minutes' => $tardyMinutes]);
+            }
+        }
+
+        // Regenerate attendance points if status changed
+        if ($oldStatus !== $request->status) {
+            // Delete existing points for this attendance record
+            AttendancePoint::where('attendance_id', $attendance->id)->delete();
+
+            // Generate new points if the new status requires them
+            if (in_array($request->status, ['ncns', 'half_day_absence', 'tardy', 'undertime'])) {
+                $this->processor->regeneratePointsForAttendance($attendance);
             }
         }
 

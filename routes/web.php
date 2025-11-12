@@ -19,6 +19,8 @@ use App\Http\Controllers\BiometricRecordController;
 use App\Http\Controllers\BiometricReprocessingController;
 use App\Http\Controllers\BiometricAnomalyController;
 use App\Http\Controllers\BiometricExportController;
+use App\Http\Controllers\AttendanceUploadController;
+use App\Http\Controllers\AttendancePointController;
 use App\Http\Controllers\BiometricRetentionPolicyController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -134,6 +136,21 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::prefix('biometric-export')->name('biometric-export.')->group(function () {
         Route::get('/', [BiometricExportController::class, 'index'])->name('index');
         Route::get('export', [BiometricExportController::class, 'export'])->name('export');
+    });
+
+    // Attendance Uploads
+    Route::prefix('attendance-uploads')->name('attendance-uploads.')->group(function () {
+        Route::get('/', [AttendanceUploadController::class, 'index'])->name('index');
+        Route::get('/{upload}', [AttendanceUploadController::class, 'show'])->name('show');
+    });
+
+    // Attendance Points
+    Route::prefix('attendance-points')->name('attendance-points.')->group(function () {
+        Route::get('/', [AttendancePointController::class, 'index'])->name('index');
+        Route::post('/rescan', [AttendancePointController::class, 'rescan'])->name('rescan');
+        Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
+        Route::post('/{point}/excuse', [AttendancePointController::class, 'excuse'])->name('excuse');
+        Route::post('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])->name('unexcuse');
     });
 
     // Biometric Retention Policies

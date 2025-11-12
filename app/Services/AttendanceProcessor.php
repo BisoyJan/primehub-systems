@@ -7,6 +7,7 @@ use App\Models\Attendance;
 use App\Models\EmployeeSchedule;
 use App\Models\AttendanceUpload;
 use App\Models\BiometricRecord;
+use App\Models\AttendancePoint;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +101,9 @@ class AttendanceProcessor
                 'date_warnings' => $stats['date_warnings'],
                 'dates_found' => $stats['dates_found'],
             ]);
+
+            // Automatically generate attendance points for this upload
+            $this->generateAttendancePoints(Carbon::parse($upload->shift_date));
 
             return $stats;
 
@@ -1020,5 +1024,223 @@ class AttendanceProcessor
 
         // If no schedule-based match found, return first user (or null if empty)
         return $users[0] ?? null;
+    }
+
+    /**
+     * Generate attendance points for violations from attendance records.
+     * This is called automatically after processing an upload.
+     *
+     * @param Carbon $shiftDate
+     * @return int Number of points created
+     */
+    protected function generateAttendancePoints(Carbon $shiftDate): int
+    {
+        \Log::info('Generating attendance points', [
+            'shift_date' => $shiftDate->format('Y-m-d'),
+        ]);
+
+        // Get attendance records for this shift date that need points
+        $attendances = Attendance::where('shift_date', $shiftDate)
+            ->whereIn('status', ['ncns', 'half_day_absence', 'tardy', 'undertime'])
+            ->get();
+
+        $pointsCreated = 0;
+        $pointsToInsert = [];
+
+        foreach ($attendances as $attendance) {
+            // Check if point already exists for this attendance record
+            $existingPoint = AttendancePoint::where('user_id', $attendance->user_id)
+                ->where('shift_date', $attendance->shift_date)
+                ->where('point_type', $this->mapStatusToPointType($attendance->status))
+                ->first();
+
+            if ($existingPoint) {
+                // Point already exists, skip
+                continue;
+            }
+
+            // Determine point type and value
+            $pointType = $this->mapStatusToPointType($attendance->status);
+            $pointValue = AttendancePoint::POINT_VALUES[$pointType] ?? 0;
+
+            if ($pointValue > 0) {
+                // Determine if NCNS/FTN (whole day absence without advice)
+                $isNcnsOrFtn = $pointType === 'whole_day_absence' && !$attendance->is_advised;
+
+                // Calculate expiration date (6 months for standard, 1 year for NCNS/FTN)
+                $expiresAt = $isNcnsOrFtn
+                    ? $shiftDate->copy()->addYear()
+                    : $shiftDate->copy()->addMonths(6);
+
+                // Generate violation details
+                $violationDetails = $this->generateViolationDetails($attendance);
+
+                $pointsToInsert[] = [
+                    'user_id' => $attendance->user_id,
+                    'attendance_id' => $attendance->id,
+                    'shift_date' => $attendance->shift_date,
+                    'point_type' => $pointType,
+                    'points' => $pointValue,
+                    'status' => $attendance->status,
+                    'is_advised' => $attendance->is_advised ?? false,
+                    'is_excused' => false,
+                    'expires_at' => $expiresAt,
+                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                    'is_expired' => false,
+                    'violation_details' => $violationDetails,
+                    'tardy_minutes' => $attendance->tardy_minutes,
+                    'undertime_minutes' => $attendance->undertime_minutes,
+                    'eligible_for_gbro' => !$isNcnsOrFtn, // NCNS/FTN not eligible for GBRO
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ];
+                $pointsCreated++;
+            }
+        }
+
+        // Bulk insert all points at once for performance
+        if (!empty($pointsToInsert)) {
+            AttendancePoint::insert($pointsToInsert);
+            \Log::info('Attendance points created', [
+                'shift_date' => $shiftDate->format('Y-m-d'),
+                'points_created' => $pointsCreated,
+            ]);
+        } else {
+            \Log::info('No attendance points needed', [
+                'shift_date' => $shiftDate->format('Y-m-d'),
+            ]);
+        }
+
+        return $pointsCreated;
+    }
+
+    /**
+     * Map attendance status to attendance point type.
+     *
+     * @param string $status
+     * @return string
+     */
+    protected function mapStatusToPointType(string $status): string
+    {
+        return match ($status) {
+            'ncns' => 'whole_day_absence',
+            'half_day_absence' => 'half_day_absence',
+            'tardy' => 'tardy',
+            'undertime' => 'undertime',
+            default => 'whole_day_absence',
+        };
+    }
+
+    /**
+     * Generate detailed violation description.
+     *
+     * @param Attendance $attendance
+     * @return string
+     */
+    protected function generateViolationDetails(Attendance $attendance): string
+    {
+        $scheduledIn = $attendance->scheduled_time_in ? Carbon::parse($attendance->scheduled_time_in)->format('H:i') : 'N/A';
+        $scheduledOut = $attendance->scheduled_time_out ? Carbon::parse($attendance->scheduled_time_out)->format('H:i') : 'N/A';
+        $actualIn = $attendance->actual_time_in ? $attendance->actual_time_in->format('H:i') : 'No scan';
+        $actualOut = $attendance->actual_time_out ? $attendance->actual_time_out->format('H:i') : 'No scan';
+
+        return match ($attendance->status) {
+            'ncns' => $attendance->is_advised
+                ? "Failed to Notify (FTN): Employee did not report for work despite being advised. Scheduled: {$scheduledIn} - {$scheduledOut}. No biometric scans recorded."
+                : "No Call, No Show (NCNS): Employee did not report for work and did not provide prior notice. Scheduled: {$scheduledIn} - {$scheduledOut}. No biometric scans recorded.",
+
+            'half_day_absence' => sprintf(
+                "Half-Day Absence: Arrived %d minutes late (more than 15 minutes). Scheduled: %s, Actual: %s.",
+                $attendance->tardy_minutes ?? 0,
+                $scheduledIn,
+                $actualIn
+            ),
+
+            'tardy' => sprintf(
+                "Tardy: Arrived %d minutes late. Scheduled time in: %s, Actual time in: %s.",
+                $attendance->tardy_minutes ?? 0,
+                $scheduledIn,
+                $actualIn
+            ),
+
+            'undertime' => sprintf(
+                "Undertime: Left %d minutes early (more than 1 hour before scheduled end). Scheduled: %s, Actual: %s.",
+                $attendance->undertime_minutes ?? 0,
+                $scheduledOut,
+                $actualOut
+            ),
+
+            default => sprintf("Attendance violation on %s", Carbon::parse($attendance->shift_date)->format('Y-m-d')),
+        };
+    }
+
+    /**
+     * Regenerate attendance points for a single attendance record.
+     * Used when attendance status is manually changed.
+     *
+     * @param Attendance $attendance
+     * @return void
+     */
+    public function regeneratePointsForAttendance(Attendance $attendance): void
+    {
+        \Log::info('Regenerating attendance points for single record', [
+            'attendance_id' => $attendance->id,
+            'user_id' => $attendance->user_id,
+            'status' => $attendance->status,
+            'shift_date' => $attendance->shift_date,
+        ]);
+
+        // Only generate points for statuses that require them
+        if (!in_array($attendance->status, ['ncns', 'half_day_absence', 'tardy', 'undertime'])) {
+            \Log::info('Status does not require points', ['status' => $attendance->status]);
+            return;
+        }
+
+        // Determine point type and value
+        $pointType = $this->mapStatusToPointType($attendance->status);
+        $pointValue = AttendancePoint::POINT_VALUES[$pointType] ?? 0;
+
+        if ($pointValue <= 0) {
+            \Log::info('No point value for this type', ['point_type' => $pointType]);
+            return;
+        }
+
+        $shiftDate = Carbon::parse($attendance->shift_date);
+
+        // Determine if NCNS/FTN (whole day absence without advice)
+        $isNcnsOrFtn = $pointType === 'whole_day_absence' && !$attendance->is_advised;
+
+        // Calculate expiration date (6 months for standard, 1 year for NCNS/FTN)
+        $expiresAt = $isNcnsOrFtn
+            ? $shiftDate->copy()->addYear()
+            : $shiftDate->copy()->addMonths(6);
+
+        // Generate violation details
+        $violationDetails = $this->generateViolationDetails($attendance);
+
+        // Create the attendance point
+        AttendancePoint::create([
+            'user_id' => $attendance->user_id,
+            'attendance_id' => $attendance->id,
+            'shift_date' => $attendance->shift_date,
+            'point_type' => $pointType,
+            'points' => $pointValue,
+            'status' => $attendance->status,
+            'is_advised' => $attendance->is_advised ?? false,
+            'is_excused' => false,
+            'expires_at' => $expiresAt,
+            'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+            'is_expired' => false,
+            'violation_details' => $violationDetails,
+            'tardy_minutes' => $attendance->tardy_minutes,
+            'undertime_minutes' => $attendance->undertime_minutes,
+            'eligible_for_gbro' => !$isNcnsOrFtn, // NCNS/FTN not eligible for GBRO
+        ]);
+
+        \Log::info('Attendance point created', [
+            'attendance_id' => $attendance->id,
+            'point_type' => $pointType,
+            'points' => $pointValue,
+        ]);
     }
 }

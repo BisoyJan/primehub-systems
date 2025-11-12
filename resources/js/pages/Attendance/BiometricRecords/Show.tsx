@@ -57,11 +57,7 @@ const formatDateTime = (dateTime: string) => {
 };
 
 const formatTime = (time: string) => {
-    const [hours, minutes, seconds] = time.split(':');
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const displayHour = hour % 12 || 12;
-    return `${displayHour}:${minutes}:${seconds} ${ampm}`;
+    return time; // Return as-is in 24-hour format (HH:MM:SS)
 };
 
 const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
@@ -238,8 +234,8 @@ const BiometricRecordsShow: React.FC<PageProps> = ({ user, date, records }) => {
                                     <div key={record.id} className="flex gap-4">
                                         <div className="flex flex-col items-center">
                                             <div className={`w-3 h-3 rounded-full ${index === 0 ? 'bg-green-500' :
-                                                    index === records.length - 1 ? 'bg-red-500' :
-                                                        'bg-blue-500'
+                                                index === records.length - 1 ? 'bg-red-500' :
+                                                    'bg-blue-500'
                                                 }`} />
                                             {index < records.length - 1 && (
                                                 <div className="w-0.5 h-12 bg-border" />

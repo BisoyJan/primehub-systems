@@ -19,7 +19,7 @@ import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award } from 'lucide-react';
 import AppLogo from './app-logo';
 
 // Navigation configuration
@@ -106,6 +106,16 @@ const navigationConfig = {
                 title: 'Biometric Records',
                 href: '/biometric-records',
                 icon: Database,
+            },
+            {
+                title: 'Recent Uploads',
+                href: '/attendance-uploads',
+                icon: FileText,
+            },
+            {
+                title: 'Attendance Points',
+                href: '/attendance-points',
+                icon: Award,
             },
             {
                 title: 'Reprocess Attendance',

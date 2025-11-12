@@ -38,6 +38,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Inactivity Timeout
+    |--------------------------------------------------------------------------
+    |
+    | This option specifies the number of minutes that a user can remain
+    | inactive before being automatically logged out. This is separate from
+    | session lifetime and tracks actual user activity.
+    |
+    */
+
+    'inactivity_timeout' => (int) env('INACTIVITY_TIMEOUT', 15),
+
+    /*
+    |--------------------------------------------------------------------------
     | Session Encryption
     |--------------------------------------------------------------------------
     |

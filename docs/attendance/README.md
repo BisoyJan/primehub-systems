@@ -6,6 +6,52 @@ This directory contains detailed documentation for the attendance tracking syste
 
 ## 📄 Documents
 
+### [POINT_EXPIRATION_RULES.md](POINT_EXPIRATION_RULES.md) ⭐ NEW
+**Attendance Point Expiration System**
+
+Comprehensive documentation for the automated point expiration system with SRO and GBRO rules.
+
+**Topics Covered:**
+- ✅ Standard Roll Off (SRO) - 6 months / 1 year automatic expiration
+- ✅ Good Behavior Roll Off (GBRO) - 60-day clean record rewards
+- ✅ Violation detail generation and tracking
+- ✅ Automated daily processing via scheduled command
+- ✅ Frontend UI for viewing expirations and violation details
+- ✅ Database schema and implementation checklist
+
+**Best For:**
+- Understanding point lifecycle and expiration rules
+- Managing employee attendance accountability
+- Configuring automated expiration processing
+- Learning GBRO eligibility and application
+
+**Key Features:**
+- Automatic 6-month expiration for standard violations
+- 1-year expiration for NCNS/FTN (not GBRO eligible)
+- GBRO removes last 2 eligible points after 60 clean days
+- Clean violation details dialog UI
+- Real-time expiration countdown
+
+---
+
+### [AUTOMATIC_POINT_GENERATION.md](AUTOMATIC_POINT_GENERATION.md)
+**Attendance Point Auto-Generation**
+
+Documentation for the automatic attendance point generation system based on violation rules.
+
+**Topics Covered:**
+- ✅ Point generation rules (Tardy: 0.25, Half-Day: 0.50, NCNS: 1.00)
+- ✅ Automatic calculation from attendance records
+- ✅ Violation type determination
+- ✅ Points accumulation and tracking
+
+**Best For:**
+- Understanding how points are calculated
+- Configuring point generation rules
+- Debugging point calculation issues
+
+---
+
 ### [ATTENDANCE_GROUPING_LOGIC.md](ATTENDANCE_GROUPING_LOGIC.md)
 **Universal Shift Detection Algorithm**
 
@@ -62,6 +108,10 @@ Explains how the system handles night shifts that span multiple days and require
 
 ## 🔗 Related Documentation
 
+### In This Folder
+- **[POINT_EXPIRATION_RULES.md](POINT_EXPIRATION_RULES.md)** - Point expiration system (SRO/GBRO)
+- **[AUTOMATIC_POINT_GENERATION.md](AUTOMATIC_POINT_GENERATION.md)** - Auto point generation
+
 ### In Project Root
 - **[ATTENDANCE_FEATURES_SUMMARY.md](../../ATTENDANCE_FEATURES_SUMMARY.md)** - Quick feature overview
 - **[ATTENDANCE_SYSTEM_ANALYSIS.md](../../ATTENDANCE_SYSTEM_ANALYSIS.md)** - Complete system analysis
@@ -95,10 +145,15 @@ Wednesday morning file (uploaded Wed morning):
 ```
 
 ### Key Files in Codebase
-- `app/Services/AttendanceProcessor.php` - Main processing logic
+- `app/Services/AttendanceProcessor.php` - Main processing logic & point generation
 - `app/Services/AttendanceFileParser.php` - File parsing
+- `app/Models/AttendancePoint.php` - Point model with expiration logic
 - `app/Models/BiometricRecord.php` - Stored scan records
 - `app/Models/Attendance.php` - Attendance records
+- `app/Console/Commands/ProcessPointExpirations.php` - Automated expiration command
+- `app/Http/Controllers/AttendancePointController.php` - Point management API
+- `resources/js/pages/Attendance/Points/Index.tsx` - Points list UI
+- `resources/js/pages/Attendance/Points/Show.tsx` - User points detail UI
 
 ---
 
@@ -141,17 +196,28 @@ See **[../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)** f
    - Learn shift classification
    - Study grouping logic
 
-2. **Then Read:** [CROSS_UPLOAD_TIMEOUT_HANDLING.md](CROSS_UPLOAD_TIMEOUT_HANDLING.md)
+2. **Point Generation:** [AUTOMATIC_POINT_GENERATION.md](AUTOMATIC_POINT_GENERATION.md)
+   - Learn how points are calculated
+   - Understand violation types
+   - See point assignment rules
+
+3. **Point Expiration:** [POINT_EXPIRATION_RULES.md](POINT_EXPIRATION_RULES.md) ⭐
+   - Understand SRO (Standard Roll Off)
+   - Learn GBRO (Good Behavior Roll Off)
+   - See automated processing details
+   - Explore frontend UI features
+
+4. **Multi-Upload:** [CROSS_UPLOAD_TIMEOUT_HANDLING.md](CROSS_UPLOAD_TIMEOUT_HANDLING.md)
    - Learn multi-upload scenarios
    - Understand biometric storage purpose
    - See real-world examples
 
-3. **Deep Dive:** [../../ATTENDANCE_SYSTEM_ANALYSIS.md](../../ATTENDANCE_SYSTEM_ANALYSIS.md)
+5. **Deep Dive:** [../../ATTENDANCE_SYSTEM_ANALYSIS.md](../../ATTENDANCE_SYSTEM_ANALYSIS.md)
    - Complete feature analysis
    - All status types
    - Performance metrics
 
-4. **Test It:** [../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)
+6. **Test It:** [../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)
    - Run test suite
    - Verify understanding
    - Add new tests
@@ -191,10 +257,12 @@ See **[../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)** f
 
 **Need Help?**
 - Algorithm questions → [ATTENDANCE_GROUPING_LOGIC.md](ATTENDANCE_GROUPING_LOGIC.md)
+- Point expiration → [POINT_EXPIRATION_RULES.md](POINT_EXPIRATION_RULES.md)
+- Point generation → [AUTOMATIC_POINT_GENERATION.md](AUTOMATIC_POINT_GENERATION.md)
 - Upload issues → [CROSS_UPLOAD_TIMEOUT_HANDLING.md](CROSS_UPLOAD_TIMEOUT_HANDLING.md)
 - Feature overview → [../../ATTENDANCE_FEATURES_SUMMARY.md](../../ATTENDANCE_FEATURES_SUMMARY.md)
 - Complete guide → [../../ATTENDANCE_SYSTEM_ANALYSIS.md](../../ATTENDANCE_SYSTEM_ANALYSIS.md)
 
 ---
 
-*Last updated: November 10, 2025*
+*Last updated: November 13, 2025*
