@@ -50,7 +50,7 @@ interface BiometricRecord {
     record_time: string;
 }
 
-interface RecordPayload {
+interface BiometricRecordPayload {
     data: BiometricRecord[];
     links: PaginationLink[];
     current_page: number;
@@ -85,7 +85,12 @@ interface Filters {
 interface PageProps extends SharedData {
     records: RecordPayload;
     stats: Stats;
-    filters: Filters;
+    filters?: {
+        search?: string;
+        user_id?: string;
+        site_id?: string;
+        date?: string;
+    };
     [key: string]: unknown;
 }
 
@@ -249,7 +254,7 @@ export default function BiometricRecordsIndex() {
                                 <SelectValue placeholder="All Employees" />
                             </SelectTrigger>
                             <SelectContent>
-                                {filters?.users.map((user: User) => (
+                                {filters?.users.map((user) => (
                                     <SelectItem key={user.id} value={String(user.id)}>
                                         {user.name}
                                     </SelectItem>
@@ -262,7 +267,7 @@ export default function BiometricRecordsIndex() {
                                 <SelectValue placeholder="All Sites" />
                             </SelectTrigger>
                             <SelectContent>
-                                {filters?.sites.map((site: Site) => (
+                                {filters?.sites.map((site) => (
                                     <SelectItem key={site.id} value={String(site.id)}>
                                         {site.name}
                                     </SelectItem>
@@ -333,7 +338,7 @@ export default function BiometricRecordsIndex() {
                                         </TableCell>
                                     </TableRow>
                                 ) : (
-                                    recordsData.data.map((record: BiometricRecord) => (
+                                    recordsData.data.map((record) => (
                                         <TableRow key={record.id}>
                                             <TableCell>
                                                 <div className="flex flex-col">

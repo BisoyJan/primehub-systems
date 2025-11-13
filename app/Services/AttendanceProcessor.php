@@ -31,6 +31,8 @@ class AttendanceProcessor
     public function processUpload(AttendanceUpload $upload, string $filePath): array
     {
         try {
+            DB::beginTransaction();
+
             $upload->update(['status' => 'processing']);
 
             // Parse the file
@@ -105,12 +107,28 @@ class AttendanceProcessor
             // Automatically generate attendance points for this upload
             $this->generateAttendancePoints(Carbon::parse($upload->shift_date));
 
+            DB::commit();
+
+            \Log::info('Attendance upload processing completed successfully', [
+                'upload_id' => $upload->id,
+                'total_records' => $stats['total_records'],
+                'matched_employees' => $stats['matched_employees'],
+            ]);
+
             return $stats;
 
         } catch (\Exception $e) {
+            DB::rollBack();
+
             $upload->update([
                 'status' => 'failed',
                 'error_message' => $e->getMessage(),
+            ]);
+
+            \Log::error('Attendance upload processing failed', [
+                'upload_id' => $upload->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
             throw $e;
@@ -756,7 +774,18 @@ class AttendanceProcessor
                 'scheduled_time_out' => $schedule->scheduled_time_out,
                 'status' => 'ncns', // Default to NCNS
             ]
-        );        if ($timeInRecord) {
+        );
+
+        // Skip updating if this is a verified record (manual entry, approved overtime, etc.)
+        if ($attendance->admin_verified) {
+            return [
+                'matched' => true,
+                'records_processed' => 0, // Skipped
+                'errors' => [],
+            ];
+        }
+
+        if ($timeInRecord) {
             // Calculate tardiness
             $actualTimeIn = $timeInRecord['datetime'];
             $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn, false);
@@ -820,6 +849,15 @@ class AttendanceProcessor
                 'scheduled_time_out' => $schedule->scheduled_time_out,
                 'status' => 'failed_bio_in',
             ]);
+        }
+
+        // Skip updating if this is a verified record (manual entry, approved overtime, etc.)
+        if ($attendance->admin_verified) {
+            return [
+                'matched' => true,
+                'records_processed' => 0, // Skipped
+                'errors' => [],
+            ];
         }
 
         // Build scheduled time out datetime (could be next day for night shift)

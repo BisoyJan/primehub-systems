@@ -64,15 +64,102 @@ class AttendanceController extends Controller
             ->paginate(50)
             ->withQueryString();
 
+        // Get all users for manual attendance creation
+        $users = \App\Models\User::select('id', 'first_name', 'last_name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'name' => $user->first_name . ' ' . $user->last_name,
+                ];
+            });
+
         return Inertia::render('Attendance/Main/Index', [
             'attendances' => $attendances,
+            'users' => $users,
             'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'needs_verification']),
         ]);
     }
 
     /**
-     * Show the upload form.
+     * Store a manually created attendance record.
      */
+    public function store(Request $request)
+    {
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'shift_date' => 'required|date',
+            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio',
+            'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
+            'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        // Get employee schedule for the date
+        $schedule = \App\Models\EmployeeSchedule::where('user_id', $validated['user_id'])
+            ->where('is_active', true)
+            ->where('effective_date', '<=', $validated['shift_date'])
+            ->where(function ($query) use ($validated) {
+                $query->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $validated['shift_date']);
+            })
+            ->first();
+
+        // Convert datetime strings to Carbon instances
+        $actualTimeIn = $validated['actual_time_in'] ? Carbon::parse($validated['actual_time_in']) : null;
+        $actualTimeOut = $validated['actual_time_out'] ? Carbon::parse($validated['actual_time_out']) : null;
+
+        // Calculate tardy, undertime, overtime if schedule exists and times are provided
+        $tardyMinutes = null;
+        $undertimeMinutes = null;
+        $overtimeMinutes = null;
+
+        if ($schedule && $actualTimeIn && $actualTimeOut) {
+            $shiftDate = Carbon::parse($validated['shift_date']);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+
+            // Handle night shift (time out is next day)
+            if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
+                $scheduledTimeOut->addDay();
+            }
+
+            // Calculate tardy (late arrival)
+            $gracePeriod = $schedule->grace_period_minutes ?? 0;
+            if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                $tardyMinutes = $actualTimeIn->diffInMinutes($scheduledTimeIn);
+            }
+
+            // Calculate undertime (early leave) and overtime (late leave)
+            if ($actualTimeOut->lt($scheduledTimeOut)) {
+                $undertimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+            } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+                $overtimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+            }
+        }
+
+        $attendance = Attendance::create([
+            'user_id' => $validated['user_id'],
+            'employee_schedule_id' => $schedule?->id,
+            'shift_date' => $validated['shift_date'],
+            'scheduled_time_in' => $schedule?->scheduled_time_in,
+            'scheduled_time_out' => $schedule?->scheduled_time_out,
+            'actual_time_in' => $actualTimeIn,
+            'actual_time_out' => $actualTimeOut,
+            'status' => $validated['status'],
+            'tardy_minutes' => $tardyMinutes,
+            'undertime_minutes' => $undertimeMinutes,
+            'overtime_minutes' => $overtimeMinutes,
+            'admin_verified' => true, // Manual entries are pre-verified
+            'verification_notes' => 'Manually created by ' . auth()->user()->name,
+            'notes' => $validated['notes'],
+        ]);
+
+        return redirect()->back()->with('success', 'Attendance record created successfully.');
+    }
+
     public function import()
     {
         $recentUploads = AttendanceUpload::with(['uploader', 'biometricSite'])
@@ -243,6 +330,9 @@ class AttendanceController extends Controller
             'overtime_approved' => 'nullable|boolean',
         ]);
 
+        // Note: Allow re-verification of already verified records
+        // This is intentional - admins can update verified records through this interface
+
         $oldStatus = $attendance->status;
 
         $updates = [
@@ -371,6 +461,31 @@ class AttendanceController extends Controller
         ];
 
         return response()->json($stats);
+    }
+
+    /**
+     * Display the attendance dashboard with statistics.
+     */
+    public function dashboard(Request $request)
+    {
+        $startDate = $request->input('start_date', now()->startOfMonth()->format('Y-m-d'));
+        $endDate = $request->input('end_date', now()->endOfMonth()->format('Y-m-d'));
+
+        $stats = [
+            'total' => Attendance::dateRange($startDate, $endDate)->count(),
+            'on_time' => Attendance::dateRange($startDate, $endDate)->byStatus('on_time')->count(),
+            'tardy' => Attendance::dateRange($startDate, $endDate)->byStatus('tardy')->count(),
+            'half_day' => Attendance::dateRange($startDate, $endDate)->byStatus('half_day_absence')->count(),
+            'ncns' => Attendance::dateRange($startDate, $endDate)->byStatus('ncns')->count(),
+            'advised' => Attendance::dateRange($startDate, $endDate)->byStatus('advised_absence')->count(),
+            'needs_verification' => Attendance::dateRange($startDate, $endDate)->needsVerification()->count(),
+        ];
+
+        return Inertia::render('Attendance/Dashboard', [
+            'statistics' => $stats,
+            'startDate' => $startDate,
+            'endDate' => $endDate,
+        ]);
     }
 
     /**

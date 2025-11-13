@@ -96,6 +96,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
     // Attendance Management
     Route::prefix('attendance')->name('attendance.')->group(function () {
         Route::get('/', [AttendanceController::class, 'index'])->name('index');
+        Route::post('/', [AttendanceController::class, 'store'])->name('store');
+        Route::get('dashboard', [AttendanceController::class, 'dashboard'])->name('dashboard');
         Route::get('import', [AttendanceController::class, 'import'])->name('import');
         Route::post('upload', [AttendanceController::class, 'upload'])->name('upload');
         Route::get('review', [AttendanceController::class, 'review'])->name('review');

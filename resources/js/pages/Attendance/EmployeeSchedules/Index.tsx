@@ -121,7 +121,7 @@ const getShiftTypeBadge = (shiftType: string) => {
 };
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns, filters, auth } = usePage<PageProps>().props;
+    const { schedules, users, campaigns = [], sites = [], filters, auth } = usePage<PageProps>().props;
     const timeFormat = (auth.user as { time_format?: '12' | '24' })?.time_format || '24';
     const scheduleData = {
         data: schedules?.data ?? [],

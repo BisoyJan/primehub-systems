@@ -36,6 +36,10 @@ return new class extends Migration
             $table->string('secondary_status')->nullable();
             $table->integer('tardy_minutes')->nullable();
             $table->integer('undertime_minutes')->nullable();
+            $table->integer('overtime_minutes')->nullable();
+            $table->boolean('overtime_approved')->default(false);
+            $table->timestamp('overtime_approved_at')->nullable();
+            $table->foreignId('overtime_approved_by')->nullable()->constrained('users');
             $table->boolean('is_advised')->default(false); // Pre-notified absence
             $table->boolean('admin_verified')->default(false); // For failed bio cases
             $table->boolean('is_cross_site_bio')->default(false); // Flag if bio'd at different site

@@ -14,6 +14,8 @@ return new class extends Migration {
             $table->foreignId('ram_spec_id')
                 ->constrained('ram_specs')
                 ->cascadeOnDelete();
+            $table->unsignedInteger('quantity')->default(1);
+            $table->timestamps();
 
             $table->primary(['pc_spec_id', 'ram_spec_id']);
         });

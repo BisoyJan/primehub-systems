@@ -473,11 +473,11 @@ class AttendanceProcessorTest extends TestCase
             ->first();
 
         $this->assertNotNull($attendance);
-        // Status is on_time since employee came on time
-        $this->assertEquals('on_time', $attendance->status);
+        // Status is failed_bio_out when no time out record exists (new behavior)
+        $this->assertEquals('failed_bio_out', $attendance->status);
         $this->assertNotNull($attendance->actual_time_in);
         $this->assertEquals('09:00:00', $attendance->actual_time_in->format('H:i:s'));
-        // CRITICAL: time out should be NULL when no time out record exists
+        // time out should be NULL when no time out record exists
         $this->assertNull($attendance->actual_time_out);
     }
 
@@ -513,9 +513,9 @@ class AttendanceProcessorTest extends TestCase
             ->first();
 
         $this->assertNotNull($attendance);
-        // Status stays at default 'ncns' since no time in was recorded
-        $this->assertEquals('ncns', $attendance->status);
-        // CRITICAL: time in should be NULL when no time in record exists
+        // Status is failed_bio_in when no time in was recorded (new behavior)
+        $this->assertEquals('failed_bio_in', $attendance->status);
+        // time in should be NULL when no time in record exists
         $this->assertNull($attendance->actual_time_in);
         $this->assertNotNull($attendance->actual_time_out);
         $this->assertEquals('18:07:00', $attendance->actual_time_out->format('H:i:s'));
@@ -609,11 +609,11 @@ class AttendanceProcessorTest extends TestCase
 
         $attendance->refresh();
 
-        // CRITICAL FIX: Should reset old values - time out should be NULL now, not old 18:00 value
+        // After reprocessing with only time_in, status should be failed_bio_out
         $this->assertNotNull($attendance->actual_time_in);
         $this->assertEquals('09:00:00', $attendance->actual_time_in->format('H:i:s'));
         $this->assertNull($attendance->actual_time_out); // Should be NULL, not old value
-        $this->assertEquals('on_time', $attendance->status);
+        $this->assertEquals('failed_bio_out', $attendance->status);
     }
 
     /** @test */
@@ -686,8 +686,8 @@ class AttendanceProcessorTest extends TestCase
             ->first();
 
         $this->assertNotNull($attendance);
-        // No time in means status stays ncns
-        $this->assertEquals('ncns', $attendance->status);
+        // No time in means status is failed_bio_in (new behavior)
+        $this->assertEquals('failed_bio_in', $attendance->status);
         $this->assertNull($attendance->actual_time_in);
         $this->assertNotNull($attendance->actual_time_out);
     }

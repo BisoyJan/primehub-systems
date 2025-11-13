@@ -39,25 +39,34 @@ class ProcessPointExpirationsCommandTest extends TestCase
                 'expires_at' => $oldDate->copy()->addMonths(6),
             ]);
 
-        // Create a point not yet expired
-        $recentPoint = AttendancePoint::factory()->tardy()->create([
-            'shift_date' => now()->subMonths(2),
-            'expires_at' => now()->addMonths(4),
+        // Create a point not yet expired (less than 60 days to avoid GBRO)
+        $recentPoint = AttendancePoint::factory()->create([
+            'point_type' => 'tardy',
+            'points' => 0.25,
+            'status' => 'tardy',
+            'shift_date' => now()->subDays(30), // Only 30 days ago
+            'expires_at' => now()->addMonths(5)->subDays(30), // Will expire in ~4.5 months
             'is_expired' => false,
+            'eligible_for_gbro' => true,
         ]);
 
         Artisan::call('points:process-expirations');
 
-        // Check that old points are expired
-        $this->assertTrue($tardy->fresh()->is_expired);
-        $this->assertEquals('sro', $tardy->fresh()->expiration_type);
-        $this->assertNotNull($tardy->fresh()->expired_at);
+        // Refresh points from database
+        $tardy->refresh();
+        $undertime->refresh();
+        $recentPoint->refresh();
 
-        $this->assertTrue($undertime->fresh()->is_expired);
-        $this->assertEquals('sro', $undertime->fresh()->expiration_type);
+        // Check that old points are expired
+        $this->assertTrue($tardy->is_expired);
+        $this->assertEquals('sro', $tardy->expiration_type);
+        $this->assertNotNull($tardy->expired_at);
+
+        $this->assertTrue($undertime->is_expired);
+        $this->assertEquals('sro', $undertime->expiration_type);
 
         // Check that recent point is still active
-        $this->assertFalse($recentPoint->fresh()->is_expired);
+        $this->assertFalse($recentPoint->is_expired);
     }
 
     /** @test */

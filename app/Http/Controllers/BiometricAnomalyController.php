@@ -41,6 +41,7 @@ class BiometricAnomalyController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'anomaly_types' => 'nullable|array',
             'min_severity' => 'nullable|in:low,medium,high',
+            'auto_flag' => 'nullable|boolean',
         ]);
 
         $startDate = Carbon::parse($request->start_date);
@@ -94,11 +95,18 @@ class BiometricAnomalyController extends Controller
             $bySeverity[$anomaly['severity']]++;
         }
 
+        // Auto-flag high severity anomalies if requested
+        $flaggedCount = 0;
+        if ($request->boolean('auto_flag')) {
+            $flaggedCount = $this->autoFlagHighSeverityAnomalies($formattedAnomalies, $startDate, $endDate);
+        }
+
         $results = [
             'total_anomalies' => count($formattedAnomalies),
             'by_type' => $byType,
             'by_severity' => $bySeverity,
             'anomalies' => $formattedAnomalies,
+            'flagged_count' => $flaggedCount,
         ];
 
         return Inertia::render('Attendance/BiometricRecords/Anomalies', [
@@ -212,5 +220,35 @@ class BiometricAnomalyController extends Controller
         }
 
         return $details;
+    }
+
+    /**
+     * Auto-flag attendance records with high severity anomalies
+     */
+    protected function autoFlagHighSeverityAnomalies(array $anomalies, Carbon $startDate, Carbon $endDate): int
+    {
+        $flaggedCount = 0;
+        $highSeverityUserIds = [];
+
+        // Collect user IDs with high severity anomalies
+        foreach ($anomalies as $anomaly) {
+            if ($anomaly['severity'] === 'high') {
+                $highSeverityUserIds[] = $anomaly['user']['id'];
+            }
+        }
+
+        if (empty($highSeverityUserIds)) {
+            return 0;
+        }
+
+        // Flag attendance records for these users in the date range
+        $flaggedCount = \App\Models\Attendance::whereIn('user_id', array_unique($highSeverityUserIds))
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->where('admin_verified', false) // Only flag unverified records
+            ->update([
+                'verification_notes' => \DB::raw("CONCAT(COALESCE(verification_notes, ''), '\\n[AUTO-FLAGGED] High severity biometric anomaly detected')"),
+            ]);
+
+        return $flaggedCount;
     }
 }
