@@ -95,7 +95,7 @@ class AttendancePointFactory extends Factory
                 'point_type' => 'half_day_absence',
                 'points' => 0.50,
                 'status' => 'half_day_absence',
-                'violation_details' => "Half-Day Absence: Arrived {$minutes} minutes late (more than 15 minutes).",
+                'violation_details' => "Half-Day Absence: Arrived {$minutes} minutes late (exceeding grace period).",
                 'tardy_minutes' => $minutes,
                 'eligible_for_gbro' => true,
             ];

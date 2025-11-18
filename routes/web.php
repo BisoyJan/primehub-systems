@@ -22,6 +22,7 @@ use App\Http\Controllers\BiometricExportController;
 use App\Http\Controllers\AttendanceUploadController;
 use App\Http\Controllers\AttendancePointController;
 use App\Http\Controllers\BiometricRetentionPolicyController;
+use App\Http\Controllers\LeaveRequestController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -32,20 +33,33 @@ Route::get('/', function () {
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Dashboard
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/dashboard', [DashboardController::class, 'index'])
+        ->middleware('permission:dashboard.view')
+        ->name('dashboard');
 
     // Hardware Specs
-    Route::resource('ramspecs', RamSpecsController::class)->except(['show']);
-    Route::resource('diskspecs', DiskSpecsController::class)->except(['show']);
-    Route::resource('processorspecs', ProcessorSpecsController::class)->except(['show']);
-    Route::resource('monitorspecs', MonitorSpecsController::class)->except(['show']);
+    Route::resource('ramspecs', RamSpecsController::class)
+        ->except(['show'])
+        ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
+    Route::resource('diskspecs', DiskSpecsController::class)
+        ->except(['show'])
+        ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
+    Route::resource('processorspecs', ProcessorSpecsController::class)
+        ->except(['show'])
+        ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
+    Route::resource('monitorspecs', MonitorSpecsController::class)
+        ->except(['show'])
+        ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
 
     // PC Specs
-    Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])->name('pcspecs.updateIssue');
-    Route::resource('pcspecs', PcSpecController::class);
+    Route::patch('pcspecs/{pcspec}/issue', [PcSpecController::class, 'updateIssue'])
+        ->middleware('permission:pcspecs.update_issue')
+        ->name('pcspecs.updateIssue');
+    Route::resource('pcspecs', PcSpecController::class)
+        ->middleware('permission:pcspecs.view,pcspecs.create,pcspecs.edit,pcspecs.delete');
 
     // QR Code ZIP features for PC Specs
-    Route::prefix('pcspecs/qrcode')->name('pcspecs.qrcode.')->group(function () {
+    Route::prefix('pcspecs/qrcode')->name('pcspecs.qrcode.')->middleware('permission:pcspecs.qrcode')->group(function () {
         Route::post('zip-selected', [PcSpecController::class, 'zipSelected']);
         Route::post('bulk-all', [PcSpecController::class, 'bulkAll']);
         Route::get('bulk-progress/{jobId}', [PcSpecController::class, 'bulkProgress']);
@@ -55,15 +69,23 @@ Route::middleware(['auth', 'verified'])->group(function () {
     });
 
     // Sites & Campaigns
-    Route::resource('sites', SiteController::class)->except(['show']);
-    Route::resource('campaigns', CampaignController::class)->except(['show']);
+    Route::resource('sites', SiteController::class)
+        ->except(['show'])
+        ->middleware('permission:sites.view,sites.create,sites.edit,sites.delete');
+    Route::resource('campaigns', CampaignController::class)
+        ->except(['show'])
+        ->middleware('permission:campaigns.view,campaigns.create,campaigns.edit,campaigns.delete');
 
     // Stations
-    Route::post('stations/bulk', [StationController::class, 'storeBulk'])->name('stations.bulk');
-    Route::resource('stations', StationController::class)->except(['show']);
+    Route::post('stations/bulk', [StationController::class, 'storeBulk'])
+        ->middleware('permission:stations.bulk')
+        ->name('stations.bulk');
+    Route::resource('stations', StationController::class)
+        ->except(['show'])
+        ->middleware('permission:stations.view,stations.create,stations.edit,stations.delete');
 
     // QR Code ZIP features for Stations
-    Route::prefix('stations/qrcode')->name('stations.qrcode.')->group(function () {
+    Route::prefix('stations/qrcode')->name('stations.qrcode.')->middleware('permission:stations.qrcode')->group(function () {
         Route::post('zip-selected', [StationController::class, 'zipSelected']);
         Route::post('bulk-all', [StationController::class, 'bulkAllQRCodes']);
         Route::get('bulk-progress/{jobId}', [StationController::class, 'bulkProgress']);
@@ -74,11 +96,16 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('stations/scan/{station}', [StationController::class, 'scanResult'])->name('stations.scanResult');
 
     // Stocks
-    Route::resource('stocks', StockController::class);
-    Route::post('stocks/adjust', [StockController::class, 'adjust'])->name('stocks.adjust');
+    Route::resource('stocks', StockController::class)
+        ->middleware('permission:stocks.view,stocks.create,stocks.edit,stocks.delete');
+    Route::post('stocks/adjust', [StockController::class, 'adjust'])
+        ->middleware('permission:stocks.adjust')
+        ->name('stocks.adjust');
 
     // Accounts
-    Route::resource('accounts', AccountController::class)->except(['show']);
+    Route::resource('accounts', AccountController::class)
+        ->except(['show'])
+        ->middleware('permission:accounts.view,accounts.create,accounts.edit,accounts.delete');
 
     // PC Transfer
     Route::prefix('pc-transfers')->name('pc-transfers.')->group(function () {
@@ -102,7 +129,10 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::post('upload', [AttendanceController::class, 'upload'])->name('upload');
         Route::get('review', [AttendanceController::class, 'review'])->name('review');
         Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify');
+        Route::post('batch-verify', [AttendanceController::class, 'batchVerify'])->name('batchVerify');
         Route::post('{attendance}/mark-advised', [AttendanceController::class, 'markAdvised'])->name('markAdvised');
+        Route::post('{attendance}/quick-approve', [AttendanceController::class, 'quickApprove'])->name('quickApprove');
+        Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove');
         Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics');
         Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete');
     });
@@ -167,6 +197,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::put('/{policy}', [BiometricRetentionPolicyController::class, 'update'])->name('update');
         Route::delete('/{policy}', [BiometricRetentionPolicyController::class, 'destroy'])->name('destroy');
         Route::post('/{policy}/toggle', [BiometricRetentionPolicyController::class, 'toggle'])->name('toggle');
+    });
+
+    // Leave Requests
+    Route::prefix('leave-requests')->name('leave-requests.')->group(function () {
+        Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
+        Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
+        Route::post('/', [LeaveRequestController::class, 'store'])->name('store');
+        Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->name('show');
+        Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
+        Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
+        Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
+        Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
+        Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
     });
 });
 

@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\PermissionService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -16,6 +17,13 @@ class HandleInertiaRequests extends Middleware
      * @var string
      */
     protected $rootView = 'app';
+
+    /**
+     * Permission service instance
+     */
+    public function __construct(
+        protected PermissionService $permissionService
+    ) {}
 
     /**
      * Determines the current asset version.
@@ -40,14 +48,17 @@ class HandleInertiaRequests extends Middleware
         $message = $quote[0] ?? '';
         $author = $quote[1] ?? 'Unknown';
 
+        $user = $request->user();
+
         return [
             ...parent::share($request),
             'name' => config('app.name'),
             'quote' => ['message' => trim($message), 'author' => trim($author)],
             'auth' => [
-                'user' => $request->user() ? [
-                    ...$request->user()->toArray(),
-                    'time_format' => $request->user()->time_format ?? '24',
+                'user' => $user ? [
+                    ...$user->toArray(),
+                    'time_format' => $user->time_format ?? '24',
+                    'permissions' => $this->permissionService->getPermissionsForRole($user->role),
                 ] : null,
             ],
             'flash' => [

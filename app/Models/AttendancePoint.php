@@ -231,12 +231,15 @@ class AttendancePoint extends Model
             return $this->attributes['violation_details'];
         }
 
+        // Get grace period from attendance's employee schedule
+        $gracePeriod = $this->attendance?->employeeSchedule?->grace_period_minutes ?? 15;
+
         // Generate violation details based on type
         return match ($this->point_type) {
             'whole_day_absence' => $this->is_advised
                 ? 'Advised absence (Failed to Notify - FTN)'
                 : 'No Call, No Show (NCNS) - Did not report for work without prior notice',
-            'half_day_absence' => 'Late arrival exceeding 15 minutes from scheduled time',
+            'half_day_absence' => sprintf('Late arrival exceeding %d minutes grace period from scheduled time', $gracePeriod),
             'tardy' => sprintf('Late arrival by %d minutes', $this->tardy_minutes ?? 0),
             'undertime' => sprintf('Early departure by %d minutes before scheduled end time', $this->undertime_minutes ?? 0),
             default => 'Attendance violation',

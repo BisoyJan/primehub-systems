@@ -108,10 +108,10 @@ export default function Preferences({ user }: PreferencesProps) {
                                                 </p>
                                             </div>
 
-                                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                                                <h4 className="font-medium text-blue-900 mb-2">Preview</h4>
+                                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-200/10 dark:bg-blue-700/10">
+                                                <h4 className="mb-2 font-medium text-blue-900 dark:text-blue-100">Preview</h4>
                                                 <div className="space-y-1 text-sm">
-                                                    <p className="text-blue-800">
+                                                    <p className="text-blue-800 dark:text-blue-200">
                                                         <span className="font-medium">Current format:</span>{' '}
                                                         {timeFormat === '24' ? (
                                                             <span>14:30 - 22:00</span>
@@ -132,7 +132,7 @@ export default function Preferences({ user }: PreferencesProps) {
                                             </Button>
 
                                             {recentlySuccessful && (
-                                                <p className="text-sm text-green-600">
+                                                <p className="text-sm text-green-600 dark:text-green-400">
                                                     Preferences saved successfully!
                                                 </p>
                                             )}

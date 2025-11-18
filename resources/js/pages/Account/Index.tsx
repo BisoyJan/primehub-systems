@@ -15,6 +15,10 @@ import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 
+// Authorization components and hooks
+import { Can } from "@/components/authorization";
+import { usePermission } from "@/hooks/useAuthorization";
+
 interface User {
     id: number;
     first_name: string;
@@ -22,6 +26,7 @@ interface User {
     last_name: string;
     email: string;
     role: string;
+    hired_date: string | null;
     created_at: string;
 }
 
@@ -50,6 +55,9 @@ export default function AccountIndex() {
     const [roleFilter, setRoleFilter] = useState(filters.role || "all");
     const auth = usePage().props.auth as { user?: { id: number } };
     const currentUserId = auth?.user?.id;
+
+    // Get permissions
+    const { can } = usePermission();
 
     // Track initial mount to prevent effect on first render
     const isInitialMount = useRef(true);
@@ -122,12 +130,19 @@ export default function AccountIndex() {
                 <LoadingOverlay isLoading={isPageLoading || loading} message="Loading accounts..." />
 
                 {/* Page header with create button */}
-                <PageHeader
-                    title="Account Management"
-                    description="Manage user accounts and permissions"
-                    createLink={accountsCreate().url}
-                    createLabel="Create Account"
-                />
+                <Can permission="accounts.create" fallback={
+                    <PageHeader
+                        title="Account Management"
+                        description="Manage user accounts and permissions"
+                    />
+                }>
+                    <PageHeader
+                        title="Account Management"
+                        description="Manage user accounts and permissions"
+                        createLink={accountsCreate().url}
+                        createLabel="Create Account"
+                    />
+                </Can>
 
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
@@ -184,6 +199,7 @@ export default function AccountIndex() {
                                     <TableHead>Last Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
+                                    <TableHead>Hired Date</TableHead>
                                     <TableHead>Created At</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
@@ -201,28 +217,35 @@ export default function AccountIndex() {
                                                 {user.role}
                                             </span>
                                         </TableCell>
+                                        <TableCell>
+                                            {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : '-'}
+                                        </TableCell>
                                         <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Link href={`/accounts/${user.id}/edit`}>
-                                                    <Button variant="outline" size="sm" disabled={loading}>
-                                                        Edit
-                                                    </Button>
-                                                </Link>
+                                                <Can permission="accounts.edit">
+                                                    <Link href={`/accounts/${user.id}/edit`}>
+                                                        <Button variant="outline" size="sm" disabled={loading}>
+                                                            Edit
+                                                        </Button>
+                                                    </Link>
+                                                </Can>
 
-                                                <DeleteConfirmDialog
-                                                    onConfirm={() => handleDelete(user.id)}
-                                                    title="Delete User Account"
-                                                    description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
-                                                    disabled={loading || user.id === currentUserId}
-                                                />
+                                                <Can permission="accounts.delete">
+                                                    <DeleteConfirmDialog
+                                                        onConfirm={() => handleDelete(user.id)}
+                                                        title="Delete User Account"
+                                                        description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
+                                                        disabled={loading || user.id === currentUserId}
+                                                    />
+                                                </Can>
                                             </div>
                                         </TableCell>
                                     </TableRow>
                                 ))}
                                 {users.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={8} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={9} className="py-8 text-center text-gray-500">
                                             No user accounts found
                                         </TableCell>
                                     </TableRow>
@@ -248,24 +271,31 @@ export default function AccountIndex() {
                                 </span>
                             </div>
                             <div className="text-xs text-gray-500">
+                                Hired: {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : 'Not set'}
+                            </div>
+                            <div className="text-xs text-gray-500">
                                 Created: {new Date(user.created_at).toLocaleDateString()}
                             </div>
                             <div className="flex gap-2 pt-2">
-                                <Link href={`/accounts/${user.id}/edit`} className="flex-1">
-                                    <Button variant="outline" size="sm" className="w-full" disabled={loading}>
-                                        Edit
-                                    </Button>
-                                </Link>
+                                <Can permission="accounts.edit">
+                                    <Link href={`/accounts/${user.id}/edit`} className="flex-1">
+                                        <Button variant="outline" size="sm" className="w-full" disabled={loading}>
+                                            Edit
+                                        </Button>
+                                    </Link>
+                                </Can>
 
-                                <div className="flex-1">
-                                    <DeleteConfirmDialog
-                                        onConfirm={() => handleDelete(user.id)}
-                                        title="Delete User Account"
-                                        description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
-                                        disabled={loading || user.id === currentUserId}
-                                        triggerClassName="w-full"
-                                    />
-                                </div>
+                                <Can permission="accounts.delete">
+                                    <div className="flex-1">
+                                        <DeleteConfirmDialog
+                                            onConfirm={() => handleDelete(user.id)}
+                                            title="Delete User Account"
+                                            description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
+                                            disabled={loading || user.id === currentUserId}
+                                            buttonProps={{ size: "sm", className: "w-full" }}
+                                        />
+                                    </div>
+                                </Can>
                             </div>
                         </div>
                     ))}

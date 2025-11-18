@@ -19,7 +19,7 @@ import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane } from 'lucide-react';
 import AppLogo from './app-logo';
 
 // Navigation configuration
@@ -136,6 +136,11 @@ const navigationConfig = {
                 title: 'Retention Policies',
                 href: '/biometric-retention-policies',
                 icon: Shield,
+            },
+            {
+                title: 'Leave Requests',
+                href: '/leave-requests',
+                icon: Plane,
             },
         ],
     },

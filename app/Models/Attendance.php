@@ -32,6 +32,7 @@ class Attendance extends Model
         'is_cross_site_bio',
         'verification_notes',
         'notes',
+        'warnings',
     ];
 
     protected $casts = [
@@ -46,6 +47,7 @@ class Attendance extends Model
         'tardy_minutes' => 'integer',
         'undertime_minutes' => 'integer',
         'overtime_minutes' => 'integer',
+        'warnings' => 'array',
     ];
 
     /**
@@ -110,9 +112,36 @@ class Attendance extends Model
     public function scopeNeedsVerification($query)
     {
         return $query->where(function ($q) {
-            $q->whereIn('status', ['failed_bio_in', 'failed_bio_out', 'ncns', 'half_day_absence', 'tardy', 'undertime'])
-              ->orWhere('is_cross_site_bio', true);
+            $q->whereIn('status', ['failed_bio_in', 'failed_bio_out', 'ncns', 'half_day_absence', 'tardy', 'undertime', 'needs_manual_review', 'non_work_day'])
+              ->orWhere('is_cross_site_bio', true)
+              ->orWhereNotNull('warnings')
+              ->orWhere(function ($subQ) {
+                  // Include records with unapproved overtime
+                  $subQ->where('overtime_minutes', '>', 0)
+                       ->where('overtime_approved', false);
+              });
         })->where('admin_verified', false);
+    }
+
+    /**
+     * Scope to get records flagged for manual review.
+     */
+    public function scopeNeedsManualReview($query)
+    {
+        return $query->where(function ($q) {
+            $q->where('status', 'needs_manual_review')
+              ->orWhereNotNull('warnings');
+        })->where('admin_verified', false);
+    }
+
+    /**
+     * Scope to get suspicious patterns (extreme scans, few scans far from schedule).
+     */
+    public function scopeSuspiciousPatterns($query)
+    {
+        return $query->whereNotNull('warnings')
+                     ->where('admin_verified', false)
+                     ->orderBy('shift_date', 'desc');
     }
 
     /**
@@ -126,8 +155,9 @@ class Attendance extends Model
             'ncns',
             'undertime',
             'failed_bio_in',
-            'failed_bio_out'
-        ]);
+            'failed_bio_out',
+            'needs_manual_review'
+        ]) || !empty($this->warnings);
     }
 
     /**
@@ -143,6 +173,7 @@ class Attendance extends Model
             'ncns' => 'red',
             'undertime' => 'orange',
             'failed_bio_in', 'failed_bio_out' => 'purple',
+            'needs_manual_review' => 'amber',
             'present_no_bio' => 'gray',
             default => 'gray',
         };

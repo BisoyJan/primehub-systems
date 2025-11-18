@@ -17,7 +17,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { CheckCircle, AlertCircle, Trash2 } from "lucide-react";
+import { CheckCircle, AlertCircle, Trash2, Check } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     AlertDialog,
@@ -70,6 +70,7 @@ interface AttendanceRecord {
     admin_verified: boolean;
     verification_notes?: string;
     notes?: string;
+    warnings?: string[];
 }
 
 interface Meta {
@@ -182,7 +183,9 @@ const getStatusBadge = (status: string) => {
         undertime: { label: "Undertime", className: "bg-orange-400" },
         failed_bio_in: { label: "No Bio In", className: "bg-purple-500" },
         failed_bio_out: { label: "No Bio Out", className: "bg-purple-400" },
+        needs_manual_review: { label: "Needs Review", className: "bg-amber-500" },
         present_no_bio: { label: "Present (No Bio)", className: "bg-gray-500" },
+        non_work_day: { label: "Non-Work Day", className: "bg-slate-500" },
     };
 
     const config = statusConfig[status] || { label: status, className: "bg-gray-500" };
@@ -191,15 +194,26 @@ const getStatusBadge = (status: string) => {
 
 const getStatusBadges = (record: AttendanceRecord) => {
     return (
-        <div className="flex gap-1 flex-wrap">
+        <div className="flex gap-1 flex-wrap items-center">
             {getStatusBadge(record.status)}
             {record.secondary_status && getStatusBadge(record.secondary_status)}
+            {record.overtime_minutes && record.overtime_minutes > 0 && (
+                <Badge className={record.overtime_approved ? "bg-green-500" : "bg-blue-500"}>
+                    Overtime{record.overtime_approved && " ✓"}
+                </Badge>
+            )}
+            {record.warnings && record.warnings.length > 0 && (
+                <span title="Has warnings - needs review">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                </span>
+            )}
         </div>
     );
 };
 
 const getShiftTypeBadge = (shiftType: string) => {
     const config: Record<string, { label: string; className: string }> = {
+        graveyard_shift: { label: "Graveyard Shift", className: "bg-indigo-500" },
         night_shift: { label: "Night Shift", className: "bg-blue-500" },
         morning_shift: { label: "Morning Shift", className: "bg-yellow-500" },
         afternoon_shift: { label: "Afternoon Shift", className: "bg-orange-500" },
@@ -334,6 +348,67 @@ export default function AttendanceIndex() {
         });
     };
 
+    const handleBulkQuickApprove = () => {
+        if (selectedRecords.length === 0) {
+            return;
+        }
+
+        // Filter only eligible records
+        const eligibleRecords = attendanceData.data
+            .filter(record => selectedRecords.includes(record.id))
+            .filter(canQuickApprove);
+
+        if (eligibleRecords.length === 0) {
+            return;
+        }
+
+        router.post("/attendance/bulk-quick-approve", {
+            ids: eligibleRecords.map(r => r.id),
+        }, {
+            preserveScroll: true,
+            preserveState: true,
+            onSuccess: () => {
+                setSelectedRecords([]);
+            },
+        });
+    };
+
+    const getEligibleQuickApproveCount = () => {
+        return attendanceData.data
+            .filter(record => selectedRecords.includes(record.id))
+            .filter(canQuickApprove)
+            .length;
+    };
+
+    const handleQuickApprove = (recordId: number) => {
+        router.post(`/attendance/${recordId}/quick-approve`, {}, {
+            preserveScroll: true,
+            preserveState: true,
+        });
+    };
+
+    const canQuickApprove = (record: AttendanceRecord) => {
+        // Can quick approve if:
+        // 1. Status is "on_time"
+        // 2. Not already verified
+        // 3. No overtime OR overtime is already approved
+        return (
+            record.status === 'on_time' &&
+            !record.admin_verified &&
+            (!record.overtime_minutes || record.overtime_minutes === 0 || record.overtime_approved)
+        );
+    };
+
+    const needsReview = (record: AttendanceRecord) => {
+        // Needs review if on_time with unapproved overtime
+        return (
+            record.status === 'on_time' &&
+            record.overtime_minutes &&
+            record.overtime_minutes > 0 &&
+            !record.overtime_approved
+        );
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
@@ -371,6 +446,7 @@ export default function AttendanceIndex() {
                                 <SelectItem value="undertime">Undertime</SelectItem>
                                 <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                 <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
+                                <SelectItem value="needs_manual_review">Needs Review</SelectItem>
                             </SelectContent>
                         </Select>
 
@@ -412,6 +488,16 @@ export default function AttendanceIndex() {
 
                     <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:justify-between min-w-0">
                         <div className="flex flex-col sm:flex-row gap-3">
+                            {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
+                                <Button
+                                    onClick={handleBulkQuickApprove}
+                                    variant="outline"
+                                    className="w-full sm:w-auto"
+                                >
+                                    <Check className="mr-2 h-4 w-4" />
+                                    Quick Approve ({getEligibleQuickApproveCount()})
+                                </Button>
+                            )}
                             {selectedRecords.length > 0 && (
                                 <Button
                                     onClick={handleBulkDelete}
@@ -478,6 +564,7 @@ export default function AttendanceIndex() {
                                     <TableHead>Status</TableHead>
                                     <TableHead>Tardy/UT/OT</TableHead>
                                     <TableHead>Verified</TableHead>
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -533,16 +620,24 @@ export default function AttendanceIndex() {
                                         <TableCell>{getStatusBadges(record)}</TableCell>
                                         <TableCell className="text-sm">
                                             <div className="space-y-1">
-                                                {record.tardy_minutes ? (
-                                                    <div className="text-orange-600">+{record.tardy_minutes}m</div>
-                                                ) : record.undertime_minutes ? (
-                                                    <div className="text-orange-600">-{record.undertime_minutes}m</div>
-                                                ) : (
-                                                    <div>-</div>
+                                                {record.tardy_minutes && record.tardy_minutes > 0 && (
+                                                    <div className="text-orange-600">
+                                                        +{record.tardy_minutes >= 60 ? `${Math.floor(record.tardy_minutes / 60)}h` : `${record.tardy_minutes}m`} T
+                                                    </div>
                                                 )}
+                                                {record.undertime_minutes && record.undertime_minutes > 0 && (
+                                                    <div className="text-orange-600">
+                                                        {record.undertime_minutes >= 60 ? `${Math.floor(record.undertime_minutes / 60)}h` : `${record.undertime_minutes}m`} UT
+                                                    </div>
+                                                )}
+                                                {(!record.tardy_minutes || record.tardy_minutes === 0) &&
+                                                    (!record.undertime_minutes || record.undertime_minutes === 0) &&
+                                                    (!record.overtime_minutes || record.overtime_minutes === 0) && (
+                                                        <div>-</div>
+                                                    )}
                                                 {record.overtime_minutes && record.overtime_minutes > 0 && (
                                                     <div className={`text-xs ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                        +{record.overtime_minutes}m OT
+                                                        +{record.overtime_minutes >= 60 ? `${Math.floor(record.overtime_minutes / 60)}h` : `${record.overtime_minutes}m`} OT
                                                         {record.overtime_approved && ' ✓'}
                                                     </div>
                                                 )}
@@ -555,11 +650,34 @@ export default function AttendanceIndex() {
                                                 <span className="text-muted-foreground text-xs">Pending</span>
                                             )}
                                         </TableCell>
+                                        <TableCell>
+                                            {canQuickApprove(record) ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleQuickApprove(record.id)}
+                                                    className="h-8"
+                                                >
+                                                    <Check className="h-3 w-3 mr-1" />
+                                                    Approve
+                                                </Button>
+                                            ) : needsReview(record) ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => router.get(`/attendance/review?verify=${record.id}`)}
+                                                    className="h-8 text-amber-600 border-amber-600"
+                                                >
+                                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                                    Review
+                                                </Button>
+                                            ) : null}
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                                 {attendanceData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
                                             No attendance records found
                                         </TableCell>
                                     </TableRow>
@@ -623,23 +741,27 @@ export default function AttendanceIndex() {
                                                 <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
                                             )}
                                         </div>
-                                        {record.tardy_minutes && (
+                                        {record.tardy_minutes && record.tardy_minutes > 0 && (
                                             <div>
                                                 <span className="font-medium">Tardy:</span>{" "}
-                                                <span className="text-orange-600">+{record.tardy_minutes} minutes</span>
+                                                <span className="text-orange-600">
+                                                    +{record.tardy_minutes >= 60 ? `${Math.floor(record.tardy_minutes / 60)}h` : `${record.tardy_minutes}m`} T
+                                                </span>
                                             </div>
                                         )}
-                                        {record.undertime_minutes && (
+                                        {record.undertime_minutes && record.undertime_minutes > 0 && (
                                             <div>
                                                 <span className="font-medium">Undertime:</span>{" "}
-                                                <span className="text-orange-600">-{record.undertime_minutes} minutes</span>
+                                                <span className="text-orange-600">
+                                                    {record.undertime_minutes >= 60 ? `${Math.floor(record.undertime_minutes / 60)}h` : `${record.undertime_minutes}m`} UT
+                                                </span>
                                             </div>
                                         )}
                                         {record.overtime_minutes && record.overtime_minutes > 0 && (
                                             <div>
                                                 <span className="font-medium">Overtime:</span>{" "}
                                                 <span className={record.overtime_approved ? 'text-green-600' : 'text-blue-600'}>
-                                                    +{record.overtime_minutes} minutes
+                                                    +{record.overtime_minutes >= 60 ? `${Math.floor(record.overtime_minutes / 60)}h` : `${record.overtime_minutes}m`} OT
                                                     {record.overtime_approved && ' (Approved)'}
                                                 </span>
                                             </div>
@@ -653,6 +775,32 @@ export default function AttendanceIndex() {
                                             )}
                                         </div>
                                     </div>
+
+                                    {(canQuickApprove(record) || needsReview(record)) && (
+                                        <div className="mt-3 pt-3 border-t">
+                                            {canQuickApprove(record) ? (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => handleQuickApprove(record.id)}
+                                                    className="w-full"
+                                                >
+                                                    <Check className="h-3 w-3 mr-1" />
+                                                    Quick Approve
+                                                </Button>
+                                            ) : (
+                                                <Button
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() => router.get(`/attendance/review?verify=${record.id}`)}
+                                                    className="w-full text-amber-600 border-amber-600"
+                                                >
+                                                    <AlertCircle className="h-3 w-3 mr-1" />
+                                                    Needs Review
+                                                </Button>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

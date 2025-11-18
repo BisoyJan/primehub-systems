@@ -200,27 +200,34 @@ class AttendanceFileParser
 
     /**
      * Find time in record for a specific date.
-     * Looks for the earliest record on the expected date.
+     * Looks for the earliest reasonable record on the expected date.
+     * Ignores scans that are too early (>2 hours before scheduled time).
      *
      * @param Collection $records Employee's bio records for a period
      * @param Carbon $expectedDate Expected date for time in
+     * @param string|null $scheduledTimeIn Scheduled time in (HH:MM:SS) to filter unreasonable early scans
      * @return array|null
      */
-    public function findTimeInRecord(Collection $records, Carbon $expectedDate): ?array
+    public function findTimeInRecord(Collection $records, Carbon $expectedDate, ?string $scheduledTimeIn = null): ?array
     {
         $targetDate = $expectedDate->format('Y-m-d');
 
-        // Find the first (earliest) record on the expected date
-        $record = $records
+        // Filter records on the target date and sort by time
+        $filteredRecords = $records
             ->filter(function ($record) use ($targetDate) {
                 return $record['datetime']->format('Y-m-d') === $targetDate;
             })
             ->sortBy(function ($record) {
                 return $record['datetime']->timestamp;
-            })
-            ->first();
+            });
 
-        return $record;
+        if ($filteredRecords->isEmpty()) {
+            return null;
+        }
+
+        // Return the first (earliest) record on the target date
+        // No longer filtering by time - let suspicious pattern detection handle extreme cases
+        return $filteredRecords->first();
     }
 
     /**
@@ -260,27 +267,110 @@ class AttendanceFileParser
 
     /**
      * Find time out record for a specific date.
-     * Looks for the latest record on the expected date.
+     * For morning time outs (night shift ending in AM), looks for the EARLIEST record.
+     * For afternoon/evening time outs, finds the record closest to scheduled time out
+     * within a reasonable range (ignores extra scans that are too late).
      *
      * @param Collection $records Employee's bio records for a period
      * @param Carbon $expectedDate Expected date for time out
+     * @param int|null $expectedHour Expected time out hour (0-23) to determine if morning or evening
+     * @param string|null $scheduledTimeOut Scheduled time out (HH:MM:SS) for better matching
      * @return array|null
      */
-    public function findTimeOutRecord(Collection $records, Carbon $expectedDate): ?array
-    {
+    public function findTimeOutRecord(
+        Collection $records,
+        Carbon $expectedDate,
+        ?int $expectedHour = null,
+        ?string $scheduledTimeOut = null
+    ): ?array {
         $targetDate = $expectedDate->format('Y-m-d');
 
-        // Find the last (latest) record on the expected date
-        $record = $records
+        // Filter records on the target date
+        $filteredRecords = $records
             ->filter(function ($record) use ($targetDate) {
                 return $record['datetime']->format('Y-m-d') === $targetDate;
             })
             ->sortBy(function ($record) {
                 return $record['datetime']->timestamp;
-            })
-            ->last();
+            });
 
-        return $record;
+        if ($filteredRecords->isEmpty()) {
+            return null;
+        }
+
+        // For morning time outs (0-11 hours), we need to be careful
+        // If expected hour is in early morning (0-5) without scheduled time,
+        // this is likely a graveyard shift ending early morning - get FIRST record
+        if ($expectedHour !== null && $expectedHour >= 0 && $expectedHour < 6 && $scheduledTimeOut === null) {
+            // Early morning time out without schedule reference - get the earliest record
+            return $filteredRecords->first();
+        }
+
+        // For all other cases (including morning time outs 0-11 with schedule),
+        // find the best match using scheduled time
+        if ($scheduledTimeOut !== null) {
+            $scheduledDateTime = Carbon::parse($targetDate . ' ' . $scheduledTimeOut);
+
+            // For graveyard/morning shifts where time out is in early/mid morning (0-11),
+            // filter out very early scans that are likely TIME IN, not TIME OUT
+            // Allow scans starting from 1 hour after midnight (01:00) to be considered
+            if ($expectedHour !== null && $expectedHour >= 0 && $expectedHour < 12) {
+                $earliestPossibleTimeOut = Carbon::parse($targetDate . ' 01:00:00');
+                $filteredRecords = $filteredRecords->filter(function ($record) use ($earliestPossibleTimeOut) {
+                    return $record['datetime']->greaterThanOrEqualTo($earliestPossibleTimeOut);
+                });
+            }
+
+            // Find the record closest to scheduled time out, but not too late
+            // Allow up to 6 hours after scheduled time (for extended overtime or unusual situations)
+            // Anything later is likely next shift or scanner error
+            $bestMatch = null;
+            $smallestDiff = PHP_INT_MAX;
+
+            foreach ($filteredRecords as $record) {
+                $recordTime = $record['datetime'];
+                $diffInMinutes = $scheduledDateTime->diffInMinutes($recordTime, false);
+
+                // For morning time outs, accept scans BEFORE or AFTER scheduled time
+                // (employee might leave early or late)
+                // For afternoon/evening time outs, be liberal with acceptance
+                // Let suspicious pattern detection handle extreme cases
+                $isFarAfterScheduled = $diffInMinutes > 360; // 6 hours after
+
+                if ($expectedHour !== null && $expectedHour >= 0 && $expectedHour < 12) {
+                    // Morning time out: Accept scans up to 6 hours before and 6 hours after
+                    // Very liberal to allow graveyard shift patterns
+                    if ($diffInMinutes < -360 || $diffInMinutes > 360) {
+                        continue;
+                    }
+                } else {
+                    // Afternoon/evening time out: Accept scans up to 6 hours before and 6 hours after
+                    // Liberal acceptance - let suspicious detection flag extreme cases
+                    if ($diffInMinutes < -360 || $isFarAfterScheduled) {
+                        continue;
+                    }
+                }
+
+                // Find the record with smallest absolute difference from scheduled time
+                $absDiff = abs($diffInMinutes);
+                if ($absDiff < $smallestDiff) {
+                    $smallestDiff = $absDiff;
+                    $bestMatch = $record;
+                }
+            }
+
+            // If we found a valid match within the time window, return it
+            if ($bestMatch !== null) {
+                return $bestMatch;
+            }
+
+            // No valid time out found within reasonable range
+            // Return null to indicate missing time out
+            return null;
+        }
+
+        // Fallback: get the last record (traditional behavior)
+        return $filteredRecords->last();
     }
 
     /**

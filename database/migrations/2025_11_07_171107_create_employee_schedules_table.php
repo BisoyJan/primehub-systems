@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('campaign_id')->nullable()->constrained()->onDelete('set null');
             $table->foreignId('site_id')->nullable()->constrained()->onDelete('set null');
-            $table->enum('shift_type', ['night_shift', 'morning_shift', 'afternoon_shift', 'utility_24h'])->default('night_shift');
+            $table->enum('shift_type', ['night_shift', 'morning_shift', 'afternoon_shift', 'graveyard_shift', 'utility_24h'])->default('night_shift');
             $table->time('scheduled_time_in'); // e.g., "22:00:00" for 10 PM
             $table->time('scheduled_time_out'); // e.g., "07:00:00" for 7 AM next day
             $table->json('work_days')->nullable(); // Days of the week they work

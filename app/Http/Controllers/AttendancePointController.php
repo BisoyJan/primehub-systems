@@ -212,9 +212,11 @@ class AttendancePointController extends Controller
         $endDate = Carbon::parse($request->date_to);
 
         // Get all attendance records in the date range with issues
+        // ONLY process verified attendance records
         $attendances = Attendance::with('user')
             ->whereBetween('shift_date', [$startDate, $endDate])
             ->whereIn('status', ['ncns', 'advised_absence', 'half_day_absence', 'tardy', 'undertime'])
+            ->where('admin_verified', true)
             ->get();
 
         $created = 0;
@@ -294,14 +296,18 @@ class AttendancePointController extends Controller
         $actualIn = $attendance->actual_time_in ? $attendance->actual_time_in->format('H:i') : 'No scan';
         $actualOut = $attendance->actual_time_out ? $attendance->actual_time_out->format('H:i') : 'No scan';
 
+        // Get grace period from employee schedule
+        $gracePeriod = $attendance->employeeSchedule?->grace_period_minutes ?? 15;
+
         return match ($attendance->status) {
             'ncns' => $attendance->is_advised
                 ? "Failed to Notify (FTN): Employee did not report for work despite being advised. Scheduled: {$scheduledIn} - {$scheduledOut}. No biometric scans recorded."
                 : "No Call, No Show (NCNS): Employee did not report for work and did not provide prior notice. Scheduled: {$scheduledIn} - {$scheduledOut}. No biometric scans recorded.",
 
             'half_day_absence' => sprintf(
-                "Half-Day Absence: Arrived %d minutes late (more than 15 minutes). Scheduled: %s, Actual: %s.",
+                "Half-Day Absence: Arrived %d minutes late (more than %d minutes grace period). Scheduled: %s, Actual: %s.",
                 $attendance->tardy_minutes ?? 0,
+                $gracePeriod,
                 $scheduledIn,
                 $actualIn
             ),

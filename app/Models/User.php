@@ -26,6 +26,7 @@ class User extends Authenticatable
         'password',
         'role',
         'time_format',
+        'hired_date',
     ];
 
     /**
@@ -55,6 +56,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'hired_date' => 'date',
         ];
     }
 
@@ -109,5 +111,83 @@ class User extends Authenticatable
     public function attendancePoints()
     {
         return $this->hasMany(AttendancePoint::class);
+    }
+
+    /**
+     * Get the leave credits for the user.
+     */
+    public function leaveCredits()
+    {
+        return $this->hasMany(LeaveCredit::class);
+    }
+
+    /**
+     * Get the leave requests for the user.
+     */
+    public function leaveRequests()
+    {
+        return $this->hasMany(LeaveRequest::class);
+    }
+
+    /**
+     * Get leave requests reviewed by this user.
+     */
+    public function reviewedLeaveRequests()
+    {
+        return $this->hasMany(LeaveRequest::class, 'reviewed_by');
+    }
+
+    /**
+     * Check if user has a specific permission
+     *
+     * @param string $permission
+     * @return bool
+     */
+    public function hasPermission(string $permission): bool
+    {
+        return app(\App\Services\PermissionService::class)->userHasPermission($this, $permission);
+    }
+
+    /**
+     * Check if user has any of the specified permissions
+     *
+     * @param array $permissions
+     * @return bool
+     */
+    public function hasAnyPermission(array $permissions): bool
+    {
+        return app(\App\Services\PermissionService::class)->userHasAnyPermission($this, $permissions);
+    }
+
+    /**
+     * Check if user has all of the specified permissions
+     *
+     * @param array $permissions
+     * @return bool
+     */
+    public function hasAllPermissions(array $permissions): bool
+    {
+        return app(\App\Services\PermissionService::class)->userHasAllPermissions($this, $permissions);
+    }
+
+    /**
+     * Check if user has a specific role
+     *
+     * @param string|array $roles
+     * @return bool
+     */
+    public function hasRole(string|array $roles): bool
+    {
+        return app(\App\Services\PermissionService::class)->userHasRole($this, $roles);
+    }
+
+    /**
+     * Get all permissions for this user
+     *
+     * @return array
+     */
+    public function getPermissions(): array
+    {
+        return app(\App\Services\PermissionService::class)->getPermissionsForRole($this->role);
     }
 }

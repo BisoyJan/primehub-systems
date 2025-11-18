@@ -7,34 +7,36 @@ use App\Models\User;
 use App\Models\AttendancePoint;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 
 class AttendancePointControllerTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+
+    #[Test]
     public function it_shows_user_attendance_points_index()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         AttendancePoint::factory()->tardy()->for($targetUser)->count(3)->create();
 
         $response = $this->actingAs($user)->get(route('attendance-points.index', $targetUser));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
-            $page->component('AttendancePoints/Index')
+        $response->assertInertia(fn ($page) =>
+            $page->component('Attendance/Points/Index')
                 ->has('points.data', 3)
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_points_by_status()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         AttendancePoint::factory()->tardy()->for($targetUser)->count(2)->create();
         AttendancePoint::factory()->tardy()->expiredSro()->for($targetUser)->count(1)->create();
 
@@ -44,17 +46,17 @@ class AttendancePointControllerTest extends TestCase
         ]));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
+        $response->assertInertia(fn ($page) =>
             $page->has('points.data', 2)
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_points_by_type()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         AttendancePoint::factory()->tardy()->for($targetUser)->count(2)->create();
         AttendancePoint::factory()->undertime()->for($targetUser)->count(1)->create();
 
@@ -64,17 +66,17 @@ class AttendancePointControllerTest extends TestCase
         ]));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
+        $response->assertInertia(fn ($page) =>
             $page->has('points.data', 2)
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_points_by_date_range()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         AttendancePoint::factory()->tardy()->for($targetUser)->create([
             'shift_date' => Carbon::parse('2025-01-15')
         ]);
@@ -83,33 +85,35 @@ class AttendancePointControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($user)->get(route('attendance-points.index', [
-            'user' => $targetUser,
-            'from_date' => '2025-02-01',
-            'to_date' => '2025-02-28'
+            'user_id' => $targetUser->id,
+            'date_from' => '2025-02-01',
+            'date_to' => '2025-02-28'
         ]));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
+        $response->assertInertia(fn ($page) =>
             $page->has('points.data', 1)
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_shows_individual_point_details()
     {
         $user = User::factory()->create(['role' => 'Admin']);
-        $point = AttendancePoint::factory()->tardy()->create();
+        $targetUser = User::factory()->create();
+        $point = AttendancePoint::factory()->tardy()->for($targetUser)->create();
 
-        $response = $this->actingAs($user)->get(route('attendance-points.show', $point));
+        $response = $this->actingAs($user)->get(route('attendance-points.show', $targetUser));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
-            $page->component('AttendancePoints/Show')
-                ->has('point')
+        $response->assertInertia(fn ($page) =>
+            $page->component('Attendance/Points/Show')
+                ->has('points')
+                ->has('user')
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_excuses_a_point()
     {
         $user = User::factory()->create(['role' => 'Admin']);
@@ -128,7 +132,7 @@ class AttendancePointControllerTest extends TestCase
         $this->assertEquals('Approved by HR due to emergency', $point->excuse_reason);
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_excuse_reason_is_required()
     {
         $user = User::factory()->create(['role' => 'Admin']);
@@ -141,7 +145,7 @@ class AttendancePointControllerTest extends TestCase
         $response->assertSessionHasErrors('excuse_reason');
     }
 
-    /** @test */
+    #[Test]
     public function it_unexcuses_a_point()
     {
         $admin = User::factory()->create(['role' => 'Admin']);
@@ -158,12 +162,12 @@ class AttendancePointControllerTest extends TestCase
         $this->assertNull($point->excuse_reason);
     }
 
-    /** @test */
+    #[Test]
     public function it_shows_user_point_statistics()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         AttendancePoint::factory()->tardy()->for($targetUser)->count(2)->create();
         AttendancePoint::factory()->undertime()->for($targetUser)->count(1)->create();
         AttendancePoint::factory()->tardy()->expiredSro()->for($targetUser)->count(1)->create();
@@ -178,7 +182,7 @@ class AttendancePointControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function it_prevents_non_admin_from_excusing_points()
     {
         $regularUser = User::factory()->create(['role' => 'Agent']);
@@ -191,7 +195,7 @@ class AttendancePointControllerTest extends TestCase
         $response->assertStatus(403);
     }
 
-    /** @test */
+    #[Test]
     public function it_prevents_non_admin_from_unexcusing_points()
     {
         $admin = User::factory()->create(['role' => 'Admin']);
@@ -203,7 +207,7 @@ class AttendancePointControllerTest extends TestCase
         $response->assertStatus(403);
     }
 
-    /** @test */
+    #[Test]
     public function it_allows_user_to_view_their_own_points()
     {
         $user = User::factory()->create();
@@ -212,44 +216,44 @@ class AttendancePointControllerTest extends TestCase
         $response = $this->actingAs($user)->get(route('attendance-points.index', $user));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
+        $response->assertInertia(fn ($page) =>
             $page->has('points.data', 2)
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_prevents_user_from_viewing_other_users_points()
     {
-        $user1 = User::factory()->create();
-        $user2 = User::factory()->create();
+        $user1 = User::factory()->create(['role' => 'Agent']); // Non-admin role
+        $user2 = User::factory()->create(['role' => 'Agent']);
         AttendancePoint::factory()->tardy()->for($user2)->count(2)->create();
 
-        $response = $this->actingAs($user1)->get(route('attendance-points.index', $user2));
+        $response = $this->actingAs($user1)->get(route('attendance-points.show', $user2));
 
         $response->assertStatus(403);
     }
 
-    /** @test */
+    #[Test]
     public function it_exports_user_points_to_excel()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         AttendancePoint::factory()->tardy()->for($targetUser)->count(3)->create();
 
         $response = $this->actingAs($user)->get(route('attendance-points.export', $targetUser));
 
         $response->assertStatus(200);
         $response->assertDownload();
-        $this->assertEquals('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $response->headers->get('Content-Type'));
+        $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
     }
 
-    /** @test */
+    #[Test]
     public function it_shows_points_expiring_soon()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         // Point expiring in 10 days
         AttendancePoint::factory()->tardy()->for($targetUser)->create([
             'expires_at' => Carbon::now()->addDays(10)
@@ -266,17 +270,17 @@ class AttendancePointControllerTest extends TestCase
         ]));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
+        $response->assertInertia(fn ($page) =>
             $page->has('points.data', 1) // Only the one expiring in 10 days
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_shows_gbro_eligible_points()
     {
         $user = User::factory()->create(['role' => 'Admin']);
         $targetUser = User::factory()->create();
-        
+
         AttendancePoint::factory()->tardy()->eligibleForGbro()->for($targetUser)->count(2)->create();
         AttendancePoint::factory()->ncns()->for($targetUser)->count(1)->create(); // Not eligible
 
@@ -286,7 +290,7 @@ class AttendancePointControllerTest extends TestCase
         ]));
 
         $response->assertStatus(200);
-        $response->assertInertia(fn ($page) => 
+        $response->assertInertia(fn ($page) =>
             $page->has('points.data', 2)
         );
     }

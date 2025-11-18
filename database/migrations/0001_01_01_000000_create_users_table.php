@@ -17,8 +17,9 @@ return new class extends Migration
             $table->string('middle_name', 1)->nullable();
             $table->string('last_name');
             $table->string('email')->unique();
-            $table->enum('role', ['Super Admin', 'Admin', 'Agent', 'HR', 'IT'])->default('Agent');
+            $table->enum('role', ['Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility'])->default('Agent');
             $table->enum('time_format', ['12', '24'])->default('24');
+            $table->date('hired_date')->nullable();
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->rememberToken();

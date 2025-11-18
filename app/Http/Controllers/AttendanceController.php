@@ -91,7 +91,7 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'shift_date' => 'required|date',
-            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio',
+            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio,non_work_day',
             'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
             'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
             'notes' => 'nullable|string|max:500',
@@ -182,7 +182,8 @@ class AttendanceController extends Controller
     {
         $request->validate([
             'file' => 'required|file|mimes:txt|max:10240', // Max 10MB
-            'shift_date' => 'required|date',
+            'date_from' => 'required|date|before_or_equal:today',
+            'date_to' => 'nullable|date|after_or_equal:date_from|before_or_equal:today',
             'biometric_site_id' => 'required|exists:sites,id',
             'notes' => 'nullable|string|max:1000',
         ]);
@@ -197,7 +198,9 @@ class AttendanceController extends Controller
             'uploaded_by' => auth()->id(),
             'original_filename' => $file->getClientOriginalName(),
             'stored_filename' => $filename,
-            'shift_date' => $request->shift_date,
+            'date_from' => $request->date_from,
+            'date_to' => $request->date_to ?? $request->date_from, // If null, use date_from (single day)
+            'shift_date' => $request->date_from, // Keep for backward compatibility
             'biometric_site_id' => $request->biometric_site_id,
             'notes' => $request->notes,
             'status' => 'pending',
@@ -343,6 +346,11 @@ class AttendanceController extends Controller
             'verification_notes' => $request->verification_notes,
         ];
 
+        // Set is_advised flag for advised_absence status
+        if ($request->status === 'advised_absence') {
+            $updates['is_advised'] = true;
+        }
+
         // Handle overtime approval
         if ($request->has('overtime_approved')) {
             $updates['overtime_approved'] = $request->overtime_approved;
@@ -373,32 +381,45 @@ class AttendanceController extends Controller
 
         // Recalculate undertime and overtime if time out provided
         if ($request->actual_time_out && $attendance->scheduled_time_out) {
+            $actualTimeOut = Carbon::parse($request->actual_time_out);
+
+            // Build scheduled time out based on shift date and scheduled time
             $shiftDate = Carbon::parse($attendance->shift_date);
             $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attendance->scheduled_time_out);
 
-            // Handle night shift - scheduled time out is next day
-            if ($attendance->employeeSchedule && $attendance->employeeSchedule->shift_type === 'night') {
-                $scheduledTimeOut->addDay();
+            // Handle night shift - if scheduled time out is earlier than scheduled time in,
+            // it means the shift ends the next day
+            if ($attendance->scheduled_time_in && $attendance->scheduled_time_out) {
+                $scheduledIn = Carbon::parse($attendance->scheduled_time_in);
+                $scheduledOut = Carbon::parse($attendance->scheduled_time_out);
+
+                // If time out is before time in (e.g., 07:00 < 22:00), shift crosses midnight
+                if ($scheduledOut->format('H:i:s') < $scheduledIn->format('H:i:s')) {
+                    $scheduledTimeOut->addDay();
+                }
             }
 
-            $actualTimeOut = Carbon::parse($request->actual_time_out);
+            // Calculate difference: positive means overtime (left late), negative means undertime (left early)
+            // Using scheduledTimeOut->diffInMinutes($actualTimeOut):
+            // - Positive if actualTimeOut > scheduledTimeOut (overtime)
+            // - Negative if actualTimeOut < scheduledTimeOut (undertime)
             $timeDiff = $scheduledTimeOut->diffInMinutes($actualTimeOut, false);
 
-            // If negative (left early), it's undertime
+            // If negative and more than 60 minutes (left early), it's undertime
             if ($timeDiff < -60) {
                 $attendance->update([
                     'undertime_minutes' => abs($timeDiff),
                     'overtime_minutes' => null,
                 ]);
             }
-            // If positive (left late), it's overtime
-            elseif ($timeDiff > 0) {
+            // If positive and more than 60 minutes (left late), it's overtime
+            elseif ($timeDiff > 60) {
                 $attendance->update([
                     'undertime_minutes' => null,
                     'overtime_minutes' => $timeDiff,
                 ]);
             }
-            // If within threshold, clear both
+            // If within threshold (-60 to 60), clear both
             else {
                 $attendance->update([
                     'undertime_minutes' => null,
@@ -407,19 +428,82 @@ class AttendanceController extends Controller
             }
         }
 
-        // Regenerate attendance points if status changed
-        if ($oldStatus !== $request->status) {
-            // Delete existing points for this attendance record
-            AttendancePoint::where('attendance_id', $attendance->id)->delete();
+        // Regenerate attendance points after verification
+        // Delete existing points for this attendance record
+        AttendancePoint::where('attendance_id', $attendance->id)->delete();
 
-            // Generate new points if the new status requires them
-            if (in_array($request->status, ['ncns', 'half_day_absence', 'tardy', 'undertime'])) {
-                $this->processor->regeneratePointsForAttendance($attendance);
-            }
+        // Generate points if the status requires them (and record is now verified)
+        if (in_array($request->status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'advised_absence'])) {
+            $this->processor->regeneratePointsForAttendance($attendance);
         }
 
         return redirect()->back()
             ->with('success', 'Attendance record verified and updated successfully.');
+    }
+
+    /**
+     * Batch verify multiple attendance records.
+     */
+    public function batchVerify(Request $request)
+    {
+        $validated = $request->validate([
+            'record_ids' => 'required|array|min:1',
+            'record_ids.*' => 'required|exists:attendances,id',
+            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio',
+            'verification_notes' => 'required|string|max:1000',
+            'overtime_approved' => 'nullable|boolean',
+        ]);
+
+        $recordIds = $validated['record_ids'];
+        $verifiedCount = 0;
+
+        foreach ($recordIds as $id) {
+            $attendance = Attendance::with('employeeSchedule')->find($id);
+            if (!$attendance) {
+                continue;
+            }
+
+            $oldStatus = $attendance->status;
+
+            $updates = [
+                'status' => $validated['status'],
+                'admin_verified' => true,
+                'verification_notes' => $validated['verification_notes'],
+            ];
+
+            // Set is_advised flag for advised_absence status
+            if ($validated['status'] === 'advised_absence') {
+                $updates['is_advised'] = true;
+            }
+
+            // Handle overtime approval
+            if (isset($validated['overtime_approved'])) {
+                $updates['overtime_approved'] = $validated['overtime_approved'];
+                if ($validated['overtime_approved']) {
+                    $updates['overtime_approved_at'] = now();
+                    $updates['overtime_approved_by'] = auth()->id();
+                } else {
+                    $updates['overtime_approved_at'] = null;
+                    $updates['overtime_approved_by'] = null;
+                }
+            }
+
+            $attendance->update($updates);
+
+            // Regenerate attendance points after verification
+            // Delete existing points for this attendance record
+            AttendancePoint::where('attendance_id', $attendance->id)->delete();
+
+            // Generate points if the status requires them (and record is now verified)
+            if (in_array($validated['status'], ['ncns', 'half_day_absence', 'tardy', 'undertime', 'advised_absence'])) {
+                $this->processor->regeneratePointsForAttendance($attendance);
+            }
+
+            $verifiedCount++;
+        }
+
+        return redirect()->back()
+            ->with('success', "Successfully verified {$verifiedCount} attendance record" . ($verifiedCount === 1 ? '' : 's') . ".");
     }
 
     /**
@@ -440,6 +524,93 @@ class AttendanceController extends Controller
 
         return redirect()->back()
             ->with('success', 'Attendance marked as advised absence.');
+    }
+
+    /**
+     * Quick approve an on-time attendance record without overtime issues.
+     */
+    public function quickApprove(Request $request, Attendance $attendance)
+    {
+        // Validate that the record is eligible for quick approval
+        if ($attendance->status !== 'on_time') {
+            return redirect()->back()
+                ->with('error', 'Only on-time records can be quick approved.');
+        }
+
+        if ($attendance->admin_verified) {
+            return redirect()->back()
+                ->with('error', 'This record has already been verified.');
+        }
+
+        // Check for unapproved overtime
+        if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && !$attendance->overtime_approved) {
+            return redirect()->back()
+                ->with('error', 'Records with unapproved overtime need manual review.');
+        }
+
+        $attendance->update([
+            'admin_verified' => true,
+            'verification_notes' => 'Quick approved by admin',
+        ]);
+
+        return redirect()->back()
+            ->with('success', 'Attendance record approved successfully.');
+    }
+
+    /**
+     * Bulk quick approve multiple on-time attendance records without overtime issues.
+     */
+    public function bulkQuickApprove(Request $request)
+    {
+        $request->validate([
+            'ids' => 'required|array',
+            'ids.*' => 'exists:attendances,id',
+        ]);
+
+        $attendances = Attendance::whereIn('id', $request->ids)->get();
+
+        $approved = 0;
+        $skipped = 0;
+        $skippedReasons = [];
+
+        foreach ($attendances as $attendance) {
+            // Check eligibility
+            if ($attendance->status !== 'on_time') {
+                $skipped++;
+                $skippedReasons[] = "{$attendance->user->name} - Not on-time status";
+                continue;
+            }
+
+            if ($attendance->admin_verified) {
+                $skipped++;
+                continue;
+            }
+
+            if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && !$attendance->overtime_approved) {
+                $skipped++;
+                $skippedReasons[] = "{$attendance->user->name} - Has unapproved overtime";
+                continue;
+            }
+
+            // Approve the record
+            $attendance->update([
+                'admin_verified' => true,
+                'verification_notes' => 'Bulk quick approved by admin',
+            ]);
+
+            $approved++;
+        }
+
+        $message = "Successfully approved {$approved} record(s).";
+        if ($skipped > 0) {
+            $message .= " Skipped {$skipped} ineligible record(s).";
+            if (!empty($skippedReasons)) {
+                $message .= " Reasons: " . implode('; ', $skippedReasons);
+            }
+        }
+
+        return redirect()->back()
+            ->with('success', $message);
     }
 
     /**

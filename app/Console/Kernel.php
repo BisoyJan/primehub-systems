@@ -23,5 +23,11 @@ class Kernel extends ConsoleKernel
             ->dailyAt('03:00')
             ->withoutOverlapping()
             ->onOneServer();
+
+        // Accrue monthly leave credits - runs on last day of month at 11:00 PM
+        $schedule->command('leave:accrue-credits')
+            ->monthlyOn(date('t'), '23:00') // Last day of the month at 11 PM
+            ->withoutOverlapping()
+            ->onOneServer();
     }
 }

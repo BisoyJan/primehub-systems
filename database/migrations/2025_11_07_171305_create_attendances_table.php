@@ -31,7 +31,9 @@ return new class extends Migration
                 'undertime',
                 'failed_bio_in',
                 'failed_bio_out',
-                'present_no_bio'
+                'present_no_bio',
+                'needs_manual_review',
+                'non_work_day'
             ])->default('on_time');
             $table->string('secondary_status')->nullable();
             $table->integer('tardy_minutes')->nullable();
@@ -45,6 +47,9 @@ return new class extends Migration
             $table->boolean('is_cross_site_bio')->default(false); // Flag if bio'd at different site
             $table->text('verification_notes')->nullable();
             $table->text('notes')->nullable();
+            $table->json('warnings')->nullable(); // Warnings for manual review
+            $table->date('date_from')->nullable();
+            $table->date('date_to')->nullable();
             $table->timestamps();
 
             // Indexes for performance
@@ -55,6 +60,8 @@ return new class extends Migration
             $table->index('status');
             $table->index('shift_date');
             $table->index('is_cross_site_bio');
+            $table->index('date_from');
+            $table->index('date_to');
         });
     }
 

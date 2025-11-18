@@ -22,6 +22,15 @@ Documentation for biometric record storage, audit trails, and management feature
 - **[BIOMETRIC_RECORDS_STORAGE.md](biometric/BIOMETRIC_RECORDS_STORAGE.md)** - Database schema and data lifecycle (3-month retention)
 - **[BIOMETRIC_RECORDS_UI.md](biometric/BIOMETRIC_RECORDS_UI.md)** - UI features for viewing and managing biometric records
 
+### 🏖️ **Leave Management System** (`leave/`)
+Complete documentation for the employee leave management system including credits accrual, request workflow, and approval process.
+
+- **[README.md](leave/README.md)** ⭐ **NEW** - Complete leave management system documentation
+  - Leave credits accrual (monthly automatic)
+  - Leave request submission and approval workflow
+  - Business rules and validations
+  - Console commands and backfilling system
+
 ### ⚙️ **Setup & Configuration** (`setup/`)
 Technical setup guides for server configuration and feature enablement.
 
@@ -57,6 +66,12 @@ Environment setup, Docker configuration, and local development guides.
 3. **[biometric/BIOMETRIC_RECORDS_UI.md](biometric/BIOMETRIC_RECORDS_UI.md)** - UI components
 4. **[BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)** - Recent enhancements (in root)
 5. **[BIOMETRIC_ENHANCEMENTS_STATUS.md](../BIOMETRIC_ENHANCEMENTS_STATUS.md)** - Implementation status (in root)
+
+### For Leave Management
+1. **[leave/README.md](leave/README.md)** ⭐ **NEW** - Complete system documentation
+2. Database schema (leave_credits, leave_requests tables)
+3. Business rules and validation logic
+4. Console commands (accrual + backfilling)
 
 ### For Setup & Deployment
 1. **[guides/README.md](guides/README.md)** - Start here
@@ -142,6 +157,9 @@ docs/
 │   ├── BIOMETRIC_RECORDS_STORAGE.md
 │   └── BIOMETRIC_RECORDS_UI.md
 │
+├── leave/                             ← Leave Management Documentation
+│   └── README.md                      ⭐ NEW - Complete leave system
+│
 ├── setup/                             ← Setup & Configuration Guides
 │   ├── PHP_EXTENSIONS_SETUP.md
 │   └── QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD
@@ -185,7 +203,14 @@ Root Level (../)                       ← Project Root Documentation
 3. **[biometric/BIOMETRIC_RECORDS_UI.md](biometric/BIOMETRIC_RECORDS_UI.md)** → UI features
 4. **[../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)** → Recent additions
 
-### Path 4: Production Deployment
+### Path 4: Understanding Leave Management ⭐ NEW
+1. **[leave/README.md](leave/README.md)** → Complete system overview (30 min)
+   - Leave types and credits accrual
+   - Business rules and validations
+   - Request workflow and approval process
+   - Console commands and setup
+
+### Path 5: Production Deployment
 1. **[setup/PHP_EXTENSIONS_SETUP.md](setup/PHP_EXTENSIONS_SETUP.md)** → Server requirements
 2. **[guides/LOCAL_SETUP_GUIDE.md](guides/LOCAL_SETUP_GUIDE.md)** → Environment setup
 3. **[guides/NGROK_GUIDE.md](guides/NGROK_GUIDE.md)** → Remote access (optional)
@@ -230,6 +255,27 @@ See: [biometric/BIOMETRIC_RECORDS_STORAGE.md](biometric/BIOMETRIC_RECORDS_STORAG
 
 See: [../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)
 
+### Managing Leave Credits ⭐ NEW
+```bash
+# Accrue credits for current month (runs monthly via cron)
+php artisan leave:accrue-credits
+
+# Backfill credits for all employees
+php artisan leave:backfill-credits
+
+# Backfill for specific employee
+php artisan leave:backfill-credits --user=123
+```
+See: [leave/README.md](leave/README.md)
+
+### Submitting Leave Requests
+1. Navigate to `/leave-requests/create`
+2. View available leave credits
+3. Select leave type and dates
+4. Submit for approval
+
+See: [leave/README.md](leave/README.md)
+
 ---
 
 ## 📊 Key Metrics & Statistics
@@ -249,6 +295,15 @@ See: [../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMP
 - **Cleanup Schedule:** Daily at 2:00 AM
 - **Audit Trail:** Complete scan history preserved
 
+### Leave Management System ⭐ NEW
+- **Leave Types:** 7 (VL, SL, BL, SPL, LOA, LDV, UPTO)
+- **Monthly Accrual:** 1.5 days (managers), 1.25 days (employees)
+- **Eligibility:** 6 months from hire date
+- **Automatic Backfilling:** Calculates all missing months
+- **Accrual Schedule:** Last day of month at 11:00 PM
+- **Validation Rules:** Points check, absence check, advance notice
+- **⚠️ Annual Reset:** Credits expire on Dec 31 and do NOT carry over
+
 ---
 
 ## 🆘 Getting Help
@@ -261,6 +316,7 @@ See: [../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMP
 ### Feature Questions
 - Attendance: Start with **ATTENDANCE_FEATURES_SUMMARY.md** (root)
 - Biometric: Start with **BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md** (root)
+- Leave: Start with **leave/README.md** ⭐
 - Setup: Check **guides/README.md**
 
 ### Technical Issues
@@ -302,6 +358,7 @@ When adding new documentation:
 | Attendance System | Nov 13, 2025 | ✅ Complete |
 | Point Expiration | Nov 13, 2025 | ✅ Complete |
 | Biometric Records | Nov 10, 2025 | ✅ Complete |
+| Leave Management | Nov 15, 2025 | ⭐ NEW |
 | Setup Guides | Nov 10, 2025 | ✅ Complete |
 | Deployment Guides | Nov 1, 2025 | ✅ Complete |
 | Test Documentation | Nov 10, 2025 | ✅ Complete |
@@ -325,8 +382,9 @@ When adding new documentation:
 ### For Product Managers
 1. Read **ATTENDANCE_FEATURES_SUMMARY.md** (root)
 2. Review **BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md** (root)
-3. Understand business value and metrics
-4. Plan future enhancements
+3. Check **leave/README.md** ⭐ for leave management features
+4. Understand business value and metrics
+5. Plan future enhancements
 
 ---
 
@@ -334,4 +392,4 @@ When adding new documentation:
 
 For questions or documentation requests, please contact the development team.
 
-*Last updated: November 13, 2025*
+*Last updated: November 15, 2025*

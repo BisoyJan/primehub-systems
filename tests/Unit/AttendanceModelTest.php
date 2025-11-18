@@ -9,12 +9,14 @@ use App\Models\Site;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 use Carbon\Carbon;
+use PHPUnit\Framework\Attributes\Test;
 
 class AttendanceModelTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+
+    #[Test]
     public function it_has_fillable_attributes()
     {
         $fillable = [
@@ -46,7 +48,7 @@ class AttendanceModelTest extends TestCase
         $this->assertEquals($fillable, $attendance->getFillable());
     }
 
-    /** @test */
+    #[Test]
     public function it_casts_attributes_correctly()
     {
         $attendance = Attendance::factory()->create([
@@ -64,7 +66,7 @@ class AttendanceModelTest extends TestCase
         $this->assertIsInt($attendance->tardy_minutes);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_user()
     {
         $user = User::factory()->create();
@@ -74,7 +76,7 @@ class AttendanceModelTest extends TestCase
         $this->assertEquals($user->id, $attendance->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_employee_schedule()
     {
         $schedule = EmployeeSchedule::factory()->create();
@@ -84,7 +86,7 @@ class AttendanceModelTest extends TestCase
         $this->assertEquals($schedule->id, $attendance->employeeSchedule->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_bio_in_site()
     {
         $site = Site::factory()->create();
@@ -94,7 +96,7 @@ class AttendanceModelTest extends TestCase
         $this->assertEquals($site->id, $attendance->bioInSite->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_bio_out_site()
     {
         $site = Site::factory()->create();
@@ -104,7 +106,7 @@ class AttendanceModelTest extends TestCase
         $this->assertEquals($site->id, $attendance->bioOutSite->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_by_status()
     {
         Attendance::factory()->create(['status' => 'on_time']);
@@ -116,7 +118,7 @@ class AttendanceModelTest extends TestCase
         $this->assertEquals('tardy', $tardyRecords->first()->status);
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_by_date_range()
     {
         Attendance::factory()->create(['shift_date' => '2025-11-01']);
@@ -131,7 +133,7 @@ class AttendanceModelTest extends TestCase
         $this->assertTrue($records->contains('shift_date', Carbon::parse('2025-11-10')));
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_records_needing_verification()
     {
         // Should be included
@@ -149,7 +151,7 @@ class AttendanceModelTest extends TestCase
         $this->assertCount(4, $needsVerification);
     }
 
-    /** @test */
+    #[Test]
     public function it_detects_if_attendance_has_issues()
     {
         $issueStatuses = [
@@ -173,7 +175,7 @@ class AttendanceModelTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_correct_status_badge_color()
     {
         $colorMap = [
@@ -194,14 +196,14 @@ class AttendanceModelTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_default_gray_color_for_unknown_status()
     {
         $attendance = Attendance::factory()->create(['status' => 'present_no_bio']);
         $this->assertEquals('gray', $attendance->status_color);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_null_tardy_and_undertime_minutes()
     {
         $attendance = Attendance::factory()->create([
@@ -213,7 +215,7 @@ class AttendanceModelTest extends TestCase
         $this->assertNull($attendance->undertime_minutes);
     }
 
-    /** @test */
+    #[Test]
     public function it_can_be_created_with_all_required_fields()
     {
         $user = User::factory()->create();

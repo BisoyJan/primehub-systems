@@ -33,6 +33,12 @@ return Application::configure(basePath: dirname(__DIR__))
             AddLinkHeadersForPreloadedAssets::class,
             UpdateLastActivity::class,
         ]);
+
+        // Register permission and role middleware aliases
+        $middleware->alias([
+            'permission' => \App\Http\Middleware\CheckPermission::class,
+            'role' => \App\Http\Middleware\CheckRole::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

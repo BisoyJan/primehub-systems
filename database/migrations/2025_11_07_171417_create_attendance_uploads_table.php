@@ -17,7 +17,9 @@ return new class extends Migration
             $table->foreignId('biometric_site_id')->nullable()->constrained('sites')->onDelete('set null');
             $table->string('original_filename');
             $table->string('stored_filename');
-            $table->date('shift_date'); // What shift date this file is for
+            $table->date('shift_date'); // What shift date this file is for (backward compatibility)
+            $table->date('date_from'); // Start date of the date range
+            $table->date('date_to'); // End date of the date range
             $table->integer('total_records')->default(0);
             $table->integer('processed_records')->default(0);
             $table->integer('matched_employees')->default(0);

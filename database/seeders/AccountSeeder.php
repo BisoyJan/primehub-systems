@@ -70,6 +70,6 @@ class AccountSeeder extends Seeder
         }
 
         // Create additional random users using the factory
-        User::factory()->count(10)->create();
+        //User::factory()->count(10)->create();
     }
 }

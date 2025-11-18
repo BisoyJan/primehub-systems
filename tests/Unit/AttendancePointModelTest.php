@@ -8,12 +8,13 @@ use App\Models\User;
 use App\Models\Attendance;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 
 class AttendancePointModelTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function it_has_fillable_attributes()
     {
         $point = new AttendancePoint();
@@ -46,7 +47,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($expected, $point->getFillable());
     }
 
-    /** @test */
+    #[Test]
     public function it_casts_attributes_correctly()
     {
         $point = AttendancePoint::factory()->create([
@@ -74,7 +75,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertInstanceOf(Carbon::class, $point->gbro_applied_at);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_user()
     {
         $user = User::factory()->create();
@@ -84,7 +85,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($user->id, $point->user->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_attendance()
     {
         $attendance = Attendance::factory()->create();
@@ -94,7 +95,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($attendance->id, $point->attendance->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_belongs_to_excused_by_user()
     {
         $supervisor = User::factory()->create();
@@ -104,7 +105,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($supervisor->id, $point->excusedBy->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_active_points()
     {
         AttendancePoint::factory()->count(3)->create(['is_excused' => false]);
@@ -118,7 +119,7 @@ class AttendancePointModelTest extends TestCase
         });
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_by_date_range()
     {
         AttendancePoint::factory()->create(['shift_date' => '2025-11-01']);
@@ -133,7 +134,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertCount(2, $points); // Only first two records
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_by_point_type()
     {
         AttendancePoint::factory()->tardy()->count(2)->create();
@@ -148,7 +149,7 @@ class AttendancePointModelTest extends TestCase
         });
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_non_expired_points()
     {
         AttendancePoint::factory()->count(3)->create(['is_expired' => false]);
@@ -162,7 +163,7 @@ class AttendancePointModelTest extends TestCase
         });
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_expired_points()
     {
         AttendancePoint::factory()->count(2)->create(['is_expired' => false]);
@@ -176,7 +177,7 @@ class AttendancePointModelTest extends TestCase
         });
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_points_eligible_for_gbro()
     {
         // Eligible: not expired, not excused, eligible_for_gbro = true, no gbro_applied_at
@@ -202,7 +203,7 @@ class AttendancePointModelTest extends TestCase
         });
     }
 
-    /** @test */
+    #[Test]
     public function it_detects_ncns_or_ftn()
     {
         $ncns = AttendancePoint::factory()->ncns()->create();
@@ -216,7 +217,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertFalse($tardy->isNcnsOrFtn());
     }
 
-    /** @test */
+    #[Test]
     public function it_calculates_expiration_date_for_standard_violations()
     {
         $shiftDate = Carbon::parse('2025-11-01');
@@ -227,7 +228,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($expectedExpiration->format('Y-m-d'), $point->calculateExpirationDate()->format('Y-m-d'));
     }
 
-    /** @test */
+    #[Test]
     public function it_calculates_expiration_date_for_ncns_ftn()
     {
         $shiftDate = Carbon::parse('2025-11-01');
@@ -238,7 +239,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($expectedExpiration->format('Y-m-d'), $point->calculateExpirationDate()->format('Y-m-d'));
     }
 
-    /** @test */
+    #[Test]
     public function it_determines_if_point_should_expire()
     {
         // Point past expiration date
@@ -258,7 +259,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertFalse($excused->shouldExpire());
     }
 
-    /** @test */
+    #[Test]
     public function it_marks_point_as_expired_with_sro()
     {
         $point = AttendancePoint::factory()->create([
@@ -274,7 +275,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals('sro', $point->fresh()->expiration_type);
     }
 
-    /** @test */
+    #[Test]
     public function it_marks_point_as_expired_with_gbro()
     {
         $point = AttendancePoint::factory()->create([
@@ -289,7 +290,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals('gbro', $point->fresh()->expiration_type);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_formatted_type_name()
     {
         $tardyPoint = AttendancePoint::factory()->tardy()->make();
@@ -305,7 +306,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals('Undertime', $undertimePoint->formatted_type);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_type_color_for_badge()
     {
         $this->assertEquals('red', AttendancePoint::factory()->ncns()->make()->type_color);
@@ -314,7 +315,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals('yellow', AttendancePoint::factory()->undertime()->make()->type_color);
     }
 
-    /** @test */
+    #[Test]
     public function it_generates_violation_details_text()
     {
         $tardyPoint = AttendancePoint::factory()->tardy(12)->create();
@@ -329,7 +330,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertStringContainsString('NCNS', $ncnsPoint->violation_details);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_expiration_status_message()
     {
         // Active point expiring soon
@@ -352,7 +353,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertStringContainsString('Pending expiration', $pastExpiration->expiration_status);
     }
 
-    /** @test */
+    #[Test]
     public function point_values_constant_is_defined()
     {
         $expected = [
@@ -365,7 +366,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($expected, AttendancePoint::POINT_VALUES);
     }
 
-    /** @test */
+    #[Test]
     public function it_has_correct_point_values_for_each_type()
     {
         $tardy = AttendancePoint::factory()->tardy()->create();
@@ -381,7 +382,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals(1.00, $ncns->points);
     }
 
-    /** @test */
+    #[Test]
     public function ncns_and_ftn_are_not_eligible_for_gbro()
     {
         $ncns = AttendancePoint::factory()->ncns()->create();
@@ -391,7 +392,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertFalse($ftn->eligible_for_gbro);
     }
 
-    /** @test */
+    #[Test]
     public function standard_violations_are_eligible_for_gbro()
     {
         $tardy = AttendancePoint::factory()->tardy()->create();
@@ -404,7 +405,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertTrue($halfDay->eligible_for_gbro);
     }
 
-    /** @test */
+    #[Test]
     public function ncns_and_ftn_expire_after_one_year()
     {
         $shiftDate = Carbon::parse('2025-11-01');
@@ -415,7 +416,7 @@ class AttendancePointModelTest extends TestCase
         $this->assertEquals($expectedExpiration->format('Y-m-d'), $ncns->calculateExpirationDate()->format('Y-m-d'));
     }
 
-    /** @test */
+    #[Test]
     public function standard_violations_expire_after_six_months()
     {
         $shiftDate = Carbon::parse('2025-11-01');

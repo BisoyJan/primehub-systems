@@ -14,6 +14,8 @@ class AttendanceUpload extends Model
         'original_filename',
         'stored_filename',
         'shift_date',
+        'date_from',
+        'date_to',
         'biometric_site_id',
         'total_records',
         'processed_records',
@@ -29,6 +31,8 @@ class AttendanceUpload extends Model
 
     protected $casts = [
         'shift_date' => 'date:Y-m-d',
+        'date_from' => 'date:Y-m-d',
+        'date_to' => 'date:Y-m-d',
         'unmatched_names_list' => 'array',
         'date_warnings' => 'array',
         'dates_found' => 'array',

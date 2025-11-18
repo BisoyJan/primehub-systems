@@ -110,6 +110,7 @@ const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
 
 const getShiftTypeBadge = (shiftType: string) => {
     const config: Record<string, { label: string; className: string }> = {
+        graveyard_shift: { label: "Graveyard Shift", className: "bg-indigo-500" },
         night_shift: { label: "Night Shift", className: "bg-blue-500" },
         morning_shift: { label: "Morning Shift", className: "bg-yellow-500" },
         afternoon_shift: { label: "Afternoon Shift", className: "bg-orange-500" },

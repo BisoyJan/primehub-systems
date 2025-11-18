@@ -53,6 +53,11 @@ interface PageProps {
     users: User[];
     campaigns: Campaign[];
     sites: Site[];
+    auth: {
+        user: {
+            time_format: string;
+        };
+    };
     [key: string]: unknown;
 }
 
@@ -66,8 +71,24 @@ const DAYS_OF_WEEK = [
     { value: "sunday", label: "Sunday" },
 ];
 
+// Helper function to format time range based on user preference
+const formatTimeRange = (start: string, end: string, format: string): string => {
+    if (format === '12') {
+        const formatTime12 = (time: string) => {
+            const [hour, minute] = time.split(':');
+            const h = parseInt(hour);
+            const period = h >= 12 ? 'PM' : 'AM';
+            const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+            return `${hour12}:${minute} ${period}`;
+        };
+        return `${formatTime12(start)} - ${formatTime12(end)}`;
+    }
+    return `${start} - ${end}`;
+};
+
 export default function EmployeeScheduleEdit() {
-    const { schedule, users, campaigns, sites } = usePage<PageProps>().props;
+    const { schedule, users, campaigns, sites, auth } = usePage<PageProps>().props;
+    const timeFormat = auth.user.time_format || '24';
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Edit Employee Schedule",
@@ -205,9 +226,18 @@ export default function EmployeeScheduleEdit() {
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value="night_shift">Night Shift</SelectItem>
-                                        <SelectItem value="morning_shift">Morning Shift</SelectItem>
-                                        <SelectItem value="afternoon_shift">Afternoon Shift</SelectItem>
+                                        <SelectItem value="graveyard_shift">
+                                            Graveyard Shift ({formatTimeRange('00:00', '09:00', timeFormat)})
+                                        </SelectItem>
+                                        <SelectItem value="morning_shift">
+                                            Morning Shift ({formatTimeRange('05:00', '14:00', timeFormat)})
+                                        </SelectItem>
+                                        <SelectItem value="afternoon_shift">
+                                            Afternoon Shift ({formatTimeRange('14:00', '23:00', timeFormat)})
+                                        </SelectItem>
+                                        <SelectItem value="night_shift">
+                                            Night Shift ({formatTimeRange('22:00', '07:00', timeFormat)})
+                                        </SelectItem>
                                         <SelectItem value="utility_24h">24H Utility</SelectItem>
                                     </SelectContent>
                                 </Select>

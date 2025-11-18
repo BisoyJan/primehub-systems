@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -75,6 +75,7 @@ interface AttendanceRecord {
     admin_verified: boolean;
     verification_notes?: string;
     notes?: string;
+    warnings?: string[];
 }
 
 interface Meta {
@@ -143,7 +144,9 @@ const getStatusBadge = (status: string) => {
         undertime: { label: "Undertime", className: "bg-orange-400" },
         failed_bio_in: { label: "Failed Bio In", className: "bg-purple-500" },
         failed_bio_out: { label: "Failed Bio Out", className: "bg-purple-500" },
+        needs_manual_review: { label: "Needs Review", className: "bg-amber-500" },
         present_no_bio: { label: "Present (No Bio)", className: "bg-gray-500" },
+        non_work_day: { label: "Non-Work Day", className: "bg-slate-500" },
     };
     const config = statusConfig[status] || { label: status, className: "bg-gray-500" };
     return <Badge className={config.className}>{config.label}</Badge>;
@@ -151,9 +154,19 @@ const getStatusBadge = (status: string) => {
 
 const getStatusBadges = (record: AttendanceRecord) => {
     return (
-        <div className="flex gap-1 flex-wrap">
+        <div className="flex gap-1 flex-wrap items-center">
             {getStatusBadge(record.status)}
             {record.secondary_status && getStatusBadge(record.secondary_status)}
+            {record.overtime_minutes && record.overtime_minutes > 0 && (
+                <Badge className={record.overtime_approved ? "bg-green-500" : "bg-blue-500"}>
+                    Overtime{record.overtime_approved && " ✓"}
+                </Badge>
+            )}
+            {record.warnings && record.warnings.length > 0 && (
+                <span title="Has warnings - see Issue column">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                </span>
+            )}
         </div>
     );
 };
@@ -181,6 +194,12 @@ export default function AttendanceReview() {
 
     const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [isBatchDialogOpen, setIsBatchDialogOpen] = useState(false);
+    const [selectedRecords, setSelectedRecords] = useState<Set<number>>(new Set());
+    const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
+    const [selectedSecondaryStatus, setSelectedSecondaryStatus] = useState<string | null | undefined>(null);
+    const [warningsDialogRecord, setWarningsDialogRecord] = useState<AttendanceRecord | null>(null);
+    const [isWarningsDialogOpen, setIsWarningsDialogOpen] = useState(false);
 
     // Search state
     const [searchQuery, setSearchQuery] = useState(filters?.search || "");
@@ -193,6 +212,13 @@ export default function AttendanceReview() {
         status: "",
         actual_time_in: "",
         actual_time_out: "",
+        verification_notes: "",
+        overtime_approved: false,
+    });
+
+    const { data: batchData, setData: setBatchData, post: postBatch, processing: batchProcessing, errors: batchErrors, reset: resetBatch } = useForm({
+        record_ids: [] as number[],
+        status: "",
         verification_notes: "",
         overtime_approved: false,
     });
@@ -223,17 +249,49 @@ export default function AttendanceReview() {
         router.get("/attendance/review", {}, { preserveState: true });
     };
 
+    // Helper to convert UTC datetime to local datetime string for input
+    const toLocalDateTimeString = (utcDateString: string | undefined) => {
+        if (!utcDateString) return "";
+        const date = new Date(utcDateString);
+        if (Number.isNaN(date.getTime())) return "";
+
+        // Get local year, month, day, hours, minutes
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+
     const openVerifyDialog = (record: AttendanceRecord) => {
         setSelectedRecord(record);
         setData({
             status: record.status,
-            actual_time_in: record.actual_time_in ? new Date(record.actual_time_in).toISOString().slice(0, 16) : "",
-            actual_time_out: record.actual_time_out ? new Date(record.actual_time_out).toISOString().slice(0, 16) : "",
+            actual_time_in: toLocalDateTimeString(record.actual_time_in),
+            actual_time_out: toLocalDateTimeString(record.actual_time_out),
             verification_notes: record.verification_notes || "",
             overtime_approved: record.overtime_approved || false,
         });
         setIsDialogOpen(true);
     };
+
+    // Auto-open dialog if verify parameter is present in URL
+    useEffect(() => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const verifyId = urlParams.get('verify');
+
+        if (verifyId) {
+            const recordToVerify = attendanceData.data.find(r => r.id === parseInt(verifyId));
+            if (recordToVerify) {
+                openVerifyDialog(recordToVerify);
+                // Remove the verify parameter from URL without page reload
+                window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [attendanceData.data]);
 
     const handleVerify = (e: React.FormEvent) => {
         e.preventDefault();
@@ -245,6 +303,94 @@ export default function AttendanceReview() {
                 setIsDialogOpen(false);
                 reset();
                 setSelectedRecord(null);
+            },
+        });
+    };
+
+    const openWarningsDialog = (record: AttendanceRecord) => {
+        setWarningsDialogRecord(record);
+        setIsWarningsDialogOpen(true);
+    };
+
+    const closeWarningsDialog = () => {
+        setIsWarningsDialogOpen(false);
+        setWarningsDialogRecord(null);
+    };
+
+    const hasOvertimeRecords = () => {
+        return attendanceData.data
+            .filter(r => selectedRecords.has(r.id))
+            .some(record => record.overtime_minutes && record.overtime_minutes > 0);
+    };
+
+    const handleSelectAll = () => {
+        if (selectedRecords.size === attendanceData.data.length) {
+            setSelectedRecords(new Set());
+            setSelectedStatus(null);
+            setSelectedSecondaryStatus(null);
+        } else {
+            // Select all records with the exact same primary AND secondary status as the first record
+            const firstRecord = attendanceData.data[0];
+            if (firstRecord) {
+                const recordsWithSameStatus = attendanceData.data.filter(r =>
+                    r.status === firstRecord.status &&
+                    r.secondary_status === firstRecord.secondary_status
+                );
+                setSelectedRecords(new Set(recordsWithSameStatus.map(r => r.id)));
+                setSelectedStatus(firstRecord.status);
+                setSelectedSecondaryStatus(firstRecord.secondary_status);
+            }
+        }
+    };
+
+    const handleSelectRecord = (id: number, status: string, secondaryStatus?: string) => {
+        const newSelected = new Set(selectedRecords);
+
+        if (newSelected.has(id)) {
+            // Deselecting a record
+            newSelected.delete(id);
+            // If no records are selected, reset the selected status
+            if (newSelected.size === 0) {
+                setSelectedStatus(null);
+                setSelectedSecondaryStatus(null);
+            }
+        } else {
+            // Selecting a record
+            if (selectedStatus === null) {
+                // First selection - set both primary and secondary status
+                newSelected.add(id);
+                setSelectedStatus(status);
+                setSelectedSecondaryStatus(secondaryStatus);
+            } else if (selectedStatus === status && selectedSecondaryStatus === secondaryStatus) {
+                // Only allow selection if BOTH primary AND secondary status match exactly
+                newSelected.add(id);
+            }
+            // If status combination doesn't match, do nothing (don't add the record)
+        }
+        setSelectedRecords(newSelected);
+    };
+
+    const openBatchVerifyDialog = () => {
+        setBatchData({
+            record_ids: Array.from(selectedRecords),
+            status: selectedStatus || "on_time", // Use selectedStatus if available, otherwise default to on_time
+            verification_notes: "",
+            overtime_approved: false,
+        });
+        setIsBatchDialogOpen(true);
+    };
+
+    const handleBatchVerify = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (selectedRecords.size === 0) return;
+
+        postBatch('/attendance/batch-verify', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsBatchDialogOpen(false);
+                resetBatch();
+                setSelectedRecords(new Set());
+                setSelectedStatus(null);
             },
         });
     };
@@ -353,10 +499,23 @@ export default function AttendanceReview() {
                     <div className="text-sm text-muted-foreground">
                         Showing {attendanceData.data.length} of {attendanceData.meta.total} record
                         {attendanceData.meta.total === 1 ? "" : "s"} needing verification
+                        {selectedRecords.size > 0 && (
+                            <span className="ml-2 font-semibold text-primary">
+                                ({selectedRecords.size} selected)
+                            </span>
+                        )}
                     </div>
-                    <Button variant="outline" onClick={() => router.get("/attendance")}>
-                        Back to Attendance
-                    </Button>
+                    <div className="flex gap-2">
+                        {selectedRecords.size > 0 && (
+                            <Button onClick={openBatchVerifyDialog}>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Verify {selectedRecords.size} Record{selectedRecords.size === 1 ? "" : "s"}
+                            </Button>
+                        )}
+                        <Button variant="outline" onClick={() => router.get("/attendance")}>
+                            Back to Attendance
+                        </Button>
+                    </div>
                 </div>
 
                 {attendanceData.data.length === 0 ? (
@@ -372,6 +531,14 @@ export default function AttendanceReview() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow>
+                                            <TableHead className="w-12">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={selectedRecords.size === attendanceData.data.length && attendanceData.data.length > 0}
+                                                    onChange={handleSelectAll}
+                                                    className="h-4 w-4 rounded border-gray-300"
+                                                />
+                                            </TableHead>
                                             <TableHead>Employee</TableHead>
                                             <TableHead>Shift Date</TableHead>
                                             <TableHead>Assigned Site</TableHead>
@@ -386,6 +553,15 @@ export default function AttendanceReview() {
                                     <TableBody>
                                         {attendanceData.data.map(record => (
                                             <TableRow key={record.id}>
+                                                <TableCell>
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedRecords.has(record.id)}
+                                                        onChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
+                                                        disabled={selectedStatus !== null && (record.status !== selectedStatus || record.secondary_status !== selectedSecondaryStatus)}
+                                                        className="h-4 w-4 rounded border-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
+                                                    />
+                                                </TableCell>
                                                 <TableCell className="font-medium">{record.user.name}</TableCell>
                                                 <TableCell>{formatDate(record.shift_date)}</TableCell>
                                                 <TableCell>
@@ -415,16 +591,24 @@ export default function AttendanceReview() {
                                                 <TableCell>{getStatusBadges(record)}</TableCell>
                                                 <TableCell className="text-sm">
                                                     <div className="space-y-1">
-                                                        {record.tardy_minutes ? (
-                                                            <div className="text-orange-600">+{record.tardy_minutes}m</div>
-                                                        ) : record.undertime_minutes ? (
-                                                            <div className="text-orange-600">-{record.undertime_minutes}m</div>
-                                                        ) : (
-                                                            <div>-</div>
+                                                        {record.tardy_minutes && record.tardy_minutes > 0 && (
+                                                            <div className="text-orange-600">
+                                                                +{record.tardy_minutes >= 60 ? `${Math.floor(record.tardy_minutes / 60)}h` : `${record.tardy_minutes}m`} T
+                                                            </div>
                                                         )}
+                                                        {record.undertime_minutes && record.undertime_minutes > 0 && (
+                                                            <div className="text-orange-600">
+                                                                {record.undertime_minutes >= 60 ? `${Math.floor(record.undertime_minutes / 60)}h` : `${record.undertime_minutes}m`} UT
+                                                            </div>
+                                                        )}
+                                                        {(!record.tardy_minutes || record.tardy_minutes === 0) &&
+                                                            (!record.undertime_minutes || record.undertime_minutes === 0) &&
+                                                            (!record.overtime_minutes || record.overtime_minutes === 0) && (
+                                                                <div>-</div>
+                                                            )}
                                                         {record.overtime_minutes && record.overtime_minutes > 0 && (
                                                             <div className={`text-xs ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                                +{record.overtime_minutes}m OT
+                                                                +{record.overtime_minutes >= 60 ? `${Math.floor(record.overtime_minutes / 60)}h` : `${record.overtime_minutes}m`} OT
                                                                 {record.overtime_approved && ' ✓'}
                                                             </div>
                                                         )}
@@ -450,6 +634,23 @@ export default function AttendanceReview() {
                                                         {(record.status === 'half_day_absence' || record.secondary_status === 'half_day_absence') && (
                                                             <span className="text-sm text-orange-600 block">Half Day</span>
                                                         )}
+                                                        {record.status === 'needs_manual_review' && (
+                                                            <span className="text-sm text-amber-600 font-medium block">
+                                                                <AlertCircle className="inline h-3 w-3 mr-1" />
+                                                                Suspicious Pattern
+                                                            </span>
+                                                        )}
+                                                        {record.warnings && record.warnings.length > 0 && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => openWarningsDialog(record)}
+                                                                className="mt-1 h-auto py-1 px-2 text-amber-700 hover:text-amber-900 hover:bg-amber-50"
+                                                            >
+                                                                <AlertCircle className="h-3 w-3 mr-1" />
+                                                                View {record.warnings.length} Warning{record.warnings.length > 1 ? 's' : ''}
+                                                            </Button>
+                                                        )}
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
@@ -474,7 +675,14 @@ export default function AttendanceReview() {
                             {attendanceData.data.map(record => (
                                 <div key={record.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
                                     <div className="flex justify-between items-start">
-                                        <div>
+                                        <input
+                                            type="checkbox"
+                                            checked={selectedRecords.has(record.id)}
+                                            onChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
+                                            disabled={selectedStatus !== null && (record.status !== selectedStatus || record.secondary_status !== selectedSecondaryStatus)}
+                                            className="h-5 w-5 rounded border-gray-300 mt-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                                        />
+                                        <div className="flex-1 mx-3">
                                             <div className="text-lg font-semibold">{record.user.name}</div>
                                             <div className="text-sm text-muted-foreground">
                                                 {formatDate(record.shift_date)}
@@ -530,19 +738,23 @@ export default function AttendanceReview() {
                                                 )}
                                             </div>
                                         </div>
-                                        {(record.tardy_minutes || record.undertime_minutes || (record.overtime_minutes && record.overtime_minutes > 0)) && (
+                                        {((record.tardy_minutes && record.tardy_minutes > 0) || (record.undertime_minutes && record.undertime_minutes > 0) || (record.overtime_minutes && record.overtime_minutes > 0)) && (
                                             <div>
                                                 <span className="font-medium">Time Adjustments:</span>
                                                 <div className="mt-1 space-y-1">
-                                                    {record.tardy_minutes && (
-                                                        <span className="text-orange-600 block">• Tardy: +{record.tardy_minutes} minutes</span>
+                                                    {record.tardy_minutes && record.tardy_minutes > 0 && (
+                                                        <span className="text-orange-600 block">
+                                                            • Tardy: +{record.tardy_minutes >= 60 ? `${Math.floor(record.tardy_minutes / 60)}h` : `${record.tardy_minutes}m`} T
+                                                        </span>
                                                     )}
-                                                    {record.undertime_minutes && (
-                                                        <span className="text-orange-600 block">• Undertime: -{record.undertime_minutes} minutes</span>
+                                                    {record.undertime_minutes && record.undertime_minutes > 0 && (
+                                                        <span className="text-orange-600 block">
+                                                            • Undertime: {record.undertime_minutes >= 60 ? `${Math.floor(record.undertime_minutes / 60)}h` : `${record.undertime_minutes}m`} UT
+                                                        </span>
                                                     )}
                                                     {record.overtime_minutes && record.overtime_minutes > 0 && (
                                                         <span className={`block ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                            • Overtime: +{record.overtime_minutes} minutes
+                                                            • Overtime: +{record.overtime_minutes >= 60 ? `${Math.floor(record.overtime_minutes / 60)}h` : `${record.overtime_minutes}m`} OT
                                                             {record.overtime_approved && ' (Approved)'}
                                                         </span>
                                                     )}
@@ -573,7 +785,161 @@ export default function AttendanceReview() {
                 )}
             </div>
 
-            {/* Verification Dialog */}
+            {/* Batch Verification Dialog */}
+            <Dialog open={isBatchDialogOpen} onOpenChange={setIsBatchDialogOpen}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Batch Verify Attendance Records</DialogTitle>
+                        <DialogDescription>
+                            Verify {selectedRecords.size} attendance record{selectedRecords.size === 1 ? "" : "s"} at once with common settings
+                            {selectedStatus && (
+                                <span className="block mt-1">
+                                    Current Status: <span className="font-semibold">{selectedStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</span>
+                                </span>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleBatchVerify} className="space-y-4">
+                        {/* Selected Records Summary */}
+                        <div className="bg-muted p-4 rounded-md">
+                            <h4 className="font-semibold text-sm mb-2">Selected Records ({selectedRecords.size})</h4>
+                            <div className="max-h-32 overflow-y-auto text-sm space-y-1">
+                                {attendanceData.data
+                                    .filter(r => selectedRecords.has(r.id))
+                                    .map(record => (
+                                        <div key={record.id} className="text-muted-foreground">
+                                            • {record.user.name} - {formatDate(record.shift_date)}
+                                        </div>
+                                    ))}
+                            </div>
+                        </div>
+
+                        {/* Common Status */}
+                        <div className="space-y-2">
+                            <Label htmlFor="batch-status">
+                                Status (Applied to All) <span className="text-red-500">*</span>
+                            </Label>
+                            <Select value={batchData.status} onValueChange={value => setBatchData("status", value)}>
+                                <SelectTrigger id="batch-status">
+                                    <SelectValue placeholder="Select status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="on_time">On Time</SelectItem>
+                                    <SelectItem value="tardy">Tardy</SelectItem>
+                                    <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
+                                    <SelectItem value="advised_absence">Advised Absence</SelectItem>
+                                    <SelectItem value="ncns">NCNS</SelectItem>
+                                    <SelectItem value="undertime">Undertime</SelectItem>
+                                    <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
+                                    <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
+                                    <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            {batchErrors.status && <p className="text-sm text-red-500">{batchErrors.status}</p>}
+                        </div>
+
+                        {/* Overtime Approval - Only show if selected records have overtime */}
+                        {hasOvertimeRecords() && (
+                            <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="checkbox"
+                                        id="batch_overtime_approved"
+                                        checked={batchData.overtime_approved}
+                                        onChange={e => setBatchData("overtime_approved", e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                    />
+                                    <Label htmlFor="batch_overtime_approved" className="text-sm font-medium cursor-pointer">
+                                        Approve Overtime for All Selected Records
+                                    </Label>
+                                </div>
+                                <p className="text-xs text-blue-700 dark:text-blue-400">
+                                    This will approve overtime for any records that have overtime hours
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Common Verification Notes */}
+                        <div className="space-y-2">
+                            <Label htmlFor="batch_verification_notes">
+                                Verification Notes (Applied to All) <span className="text-red-500">*</span>
+                            </Label>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setBatchData("verification_notes", "Verified attendance records as accurate")}
+                                    className="h-8 text-xs"
+                                >
+                                    Verified as accurate
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setBatchData("verification_notes", "Corrected time entries based on supervisor confirmation")}
+                                    className="h-8 text-xs"
+                                >
+                                    Supervisor confirmed
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setBatchData("verification_notes", "Adjusted status per attendance policy")}
+                                    className="h-8 text-xs"
+                                >
+                                    Policy adjustment
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setBatchData("verification_notes", "Manual verification due to system anomaly")}
+                                    className="h-8 text-xs"
+                                >
+                                    System anomaly
+                                </Button>
+                            </div>
+                            <Textarea
+                                id="batch_verification_notes"
+                                value={batchData.verification_notes}
+                                onChange={e => setBatchData("verification_notes", e.target.value)}
+                                placeholder="Explain why these records are being verified..."
+                                rows={4}
+                            />
+                            {batchErrors.verification_notes && (
+                                <p className="text-sm text-red-500">{batchErrors.verification_notes}</p>
+                            )}
+                        </div>
+
+                        <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-800 p-3 rounded-md">
+                            <p className="text-sm text-yellow-800 dark:text-yellow-400">
+                                <strong>Note:</strong> This will apply the same status and notes to all selected records.
+                                Time entries will remain as they are. Use individual verification for records needing time adjustments.
+                            </p>
+                        </div>
+
+                        <DialogFooter>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsBatchDialogOpen(false)}
+                                disabled={batchProcessing}
+                            >
+                                Cancel
+                            </Button>
+                            <Button type="submit" disabled={batchProcessing}>
+                                {batchProcessing ? "Verifying..." : `Verify ${selectedRecords.size} Record${selectedRecords.size === 1 ? "" : "s"}`}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Single Verification Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                 <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                     <DialogHeader>
@@ -931,6 +1297,35 @@ export default function AttendanceReview() {
                             <Label htmlFor="verification_notes">
                                 Verification Notes <span className="text-red-500">*</span>
                             </Label>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                {[
+                                    "Verified",
+                                    "Corrected",
+                                    "Manual entry",
+                                    "Bio scanner issue",
+                                    "Network delay",
+                                    "Shift adjustment",
+                                    "Approved by supervisor",
+                                    "System error",
+                                ].map((phrase) => (
+                                    <Button
+                                        key={phrase}
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="h-7 text-xs"
+                                        onClick={() => {
+                                            const currentNotes = data.verification_notes.trim();
+                                            const newNotes = currentNotes
+                                                ? `${currentNotes}${currentNotes.endsWith('.') ? '' : '.'} ${phrase}.`
+                                                : `${phrase}.`;
+                                            setData("verification_notes", newNotes);
+                                        }}
+                                    >
+                                        {phrase}
+                                    </Button>
+                                ))}
+                            </div>
                             <Textarea
                                 id="verification_notes"
                                 value={data.verification_notes}
@@ -957,6 +1352,96 @@ export default function AttendanceReview() {
                             </Button>
                         </DialogFooter>
                     </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Warnings Details Dialog */}
+            <Dialog open={isWarningsDialogOpen} onOpenChange={closeWarningsDialog}>
+                <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertCircle className="h-5 w-5 text-amber-600" />
+                            Suspicious Pattern Detected
+                        </DialogTitle>
+                        <DialogDescription>
+                            {warningsDialogRecord && (
+                                <span>
+                                    {warningsDialogRecord.user.name} - {formatDate(warningsDialogRecord.shift_date)}
+                                </span>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {warningsDialogRecord && (
+                        <div className="space-y-4">
+                            {/* Attendance Summary */}
+                            <div className="bg-muted p-4 rounded-md space-y-2">
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div>
+                                        <span className="font-medium">Scheduled Shift:</span>
+                                        <div className="text-muted-foreground">
+                                            {warningsDialogRecord.employee_schedule?.shift_type || 'Not Scheduled'}
+                                        </div>
+                                        {warningsDialogRecord.employee_schedule && (
+                                            <div className="text-muted-foreground text-xs">
+                                                {warningsDialogRecord.employee_schedule.scheduled_time_in} - {warningsDialogRecord.employee_schedule.scheduled_time_out}
+                                            </div>
+                                        )}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Recorded Times:</span>
+                                        <div className="text-muted-foreground">
+                                            In: {warningsDialogRecord.actual_time_in ? formatDateTime(warningsDialogRecord.actual_time_in) : 'N/A'}
+                                        </div>
+                                        <div className="text-muted-foreground">
+                                            Out: {warningsDialogRecord.actual_time_out ? formatDateTime(warningsDialogRecord.actual_time_out) : 'N/A'}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Warnings List */}
+                            <div className="space-y-2">
+                                <h4 className="font-semibold text-sm">Detected Issues:</h4>
+                                <div className="space-y-3">
+                                    {warningsDialogRecord.warnings?.map((warning, idx) => (
+                                        <div key={idx} className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                                            <div className="flex items-start gap-2">
+                                                <AlertCircle className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" />
+                                                <div className="text-sm text-amber-900">{warning}</div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Recommendation */}
+                            <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                                <div className="flex items-start gap-2">
+                                    <AlertCircle className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                                    <div className="text-sm text-blue-900">
+                                        <span className="font-medium block mb-1">Recommended Action:</span>
+                                        Review the biometric records and employee schedule. Verify with the employee or supervisor to determine the correct attendance status.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={closeWarningsDialog}>
+                            Close
+                        </Button>
+                        {warningsDialogRecord && (
+                            <Button onClick={() => {
+                                closeWarningsDialog();
+                                openVerifyDialog(warningsDialogRecord);
+                            }}>
+                                <Edit className="h-4 w-4 mr-2" />
+                                Verify Record
+                            </Button>
+                        )}
+                    </DialogFooter>
                 </DialogContent>
             </Dialog>
         </AppLayout>

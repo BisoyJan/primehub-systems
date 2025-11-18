@@ -95,7 +95,8 @@ export default function AttendanceImport() {
     const isPageLoading = usePageLoading();
 
     const [files, setFiles] = useState<FileUploadItem[]>([]);
-    const [shiftDate, setShiftDate] = useState(new Date().toISOString().split("T")[0]);
+    const [dateFrom, setDateFrom] = useState(new Date().toISOString().split("T")[0]);
+    const [dateTo, setDateTo] = useState(new Date().toISOString().split("T")[0]);
     const [notes, setNotes] = useState("");
     const [isUploading, setIsUploading] = useState(false);
 
@@ -137,7 +138,8 @@ export default function AttendanceImport() {
         for (const fileItem of files) {
             const formData = new FormData();
             formData.append('file', fileItem.file);
-            formData.append('shift_date', shiftDate);
+            formData.append('date_from', dateFrom);
+            formData.append('date_to', dateTo);
             formData.append('biometric_site_id', fileItem.biometric_site_id.toString());
             formData.append('notes', notes);
 
@@ -292,20 +294,40 @@ export default function AttendanceImport() {
                                     </div>
                                 )}
 
-                                {/* Shift Date */}
+                                {/* Date Range */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="shift_date">
-                                        Reference Date <span className="text-red-500">*</span>
+                                    <Label htmlFor="date_from">
+                                        Date Range <span className="text-red-500">*</span>
                                     </Label>
-                                    <Input
-                                        id="shift_date"
-                                        type="date"
-                                        value={shiftDate}
-                                        onChange={e => setShiftDate(e.target.value)}
-                                        max={new Date().toISOString().split("T")[0]}
-                                    />
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <Label htmlFor="date_from" className="text-xs text-muted-foreground">
+                                                From
+                                            </Label>
+                                            <Input
+                                                id="date_from"
+                                                type="date"
+                                                value={dateFrom}
+                                                onChange={e => setDateFrom(e.target.value)}
+                                                max={new Date().toISOString().split("T")[0]}
+                                            />
+                                        </div>
+                                        <div>
+                                            <Label htmlFor="date_to" className="text-xs text-muted-foreground">
+                                                To
+                                            </Label>
+                                            <Input
+                                                id="date_to"
+                                                type="date"
+                                                value={dateTo}
+                                                onChange={e => setDateTo(e.target.value)}
+                                                min={dateFrom}
+                                                max={new Date().toISOString().split("T")[0]}
+                                            />
+                                        </div>
+                                    </div>
                                     <p className="text-xs text-muted-foreground">
-                                        Select any date within the week. The system will automatically detect actual shift dates from the biometric records.
+                                        Select the date range covered by the biometric file(s). The system will process all records within this period.
                                     </p>
                                 </div>
 
@@ -375,22 +397,31 @@ export default function AttendanceImport() {
                                         Files can contain records from multiple days. The system automatically groups records by shift date based on shift type:
                                     </p>
                                     <p className="text-sm text-muted-foreground mt-2">
-                                        <strong>Examples:</strong>
+                                        <strong>Shift Detection Examples:</strong>
                                     </p>
                                     <ul className="text-sm text-muted-foreground mt-1 space-y-1 list-disc list-inside ml-4">
                                         <li>Morning shift (07:00-16:00): Jan 15 07:02 → Shift Date = Jan 15</li>
                                         <li>Afternoon shift (15:00-00:00): Jan 15 15:02 → Shift Date = Jan 15</li>
                                         <li>Night shift (22:00-07:00): Jan 15 22:00 → Shift Date = Jan 15</li>
+                                        <li>Graveyard shift (00:00-09:00): Jan 15 00:05 → Shift Date = Jan 15</li>
                                     </ul>
-                                    <ul className="text-sm text-muted-foreground mt-2 space-y-1 list-disc list-inside">
-                                        <li><strong>On Time:</strong> Arrived on time or slightly early</li>
-                                        <li><strong>Tardy:</strong> 1-15 minutes late</li>
-                                        <li><strong>Half-Day Absence:</strong> More than 15 minutes late</li>
+
+                                    <p className="text-sm text-muted-foreground mt-3">
+                                        <strong>Attendance Status Rules:</strong>
+                                    </p>
+                                    <ul className="text-sm text-muted-foreground mt-1 space-y-1 list-disc list-inside">
+                                        <li><strong>On Time:</strong> Arrived within 14 minutes of scheduled time</li>
+                                        <li><strong>Tardy:</strong> 15 minutes late (up to grace period limit)</li>
+                                        <li><strong>Half-Day Absence:</strong> More than grace period late (default 15+ minutes)</li>
                                         <li><strong>Undertime:</strong> Left more than 1 hour early</li>
                                         <li><strong>NCNS:</strong> No bio record found</li>
                                         <li><strong>Failed to Bio Out:</strong> No time out record found</li>
                                         <li><strong>Failed to Bio In:</strong> Has time out but no time in</li>
                                     </ul>
+
+                                    <p className="text-xs text-muted-foreground mt-2 italic">
+                                        Note: Grace period can be configured per employee schedule (default: 15 minutes)
+                                    </p>
                                 </div>
 
                                 <div className="bg-muted p-3 rounded-md">
@@ -398,8 +429,9 @@ export default function AttendanceImport() {
                                     <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
                                         <li>Upload one file for entire week - no need to split by shift date</li>
                                         <li>System automatically detects shift dates based on employee's schedule and time in records</li>
-                                        <li>Handles all shift types: morning (06:00-11:59), afternoon (12:00-17:59), evening/night (18:00-05:59)</li>
+                                        <li>Handles all shift types: morning (05:00-11:59), afternoon (12:00-17:59), evening (18:00-21:59), night (22:00-23:59), graveyard (00:00-04:59)</li>
                                         <li>Multiple files can be uploaded at once from different biometric sites</li>
+                                        <li>Automatic tardiness detection with 15-minute threshold before penalties apply</li>
                                     </ul>
                                 </div>
                             </div>

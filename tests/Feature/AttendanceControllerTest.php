@@ -12,10 +12,12 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 use Carbon\Carbon;
+use PHPUnit\Framework\Attributes\Test;
 
 class AttendanceControllerTest extends TestCase
 {
     use RefreshDatabase;
+
 
     protected User $admin;
 
@@ -25,7 +27,7 @@ class AttendanceControllerTest extends TestCase
         $this->admin = User::factory()->create(['role' => 'Admin']);
     }
 
-    /** @test */
+    #[Test]
     public function it_displays_attendance_index_page()
     {
         Attendance::factory()->count(3)->create();
@@ -40,7 +42,7 @@ class AttendanceControllerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_attendance_by_status()
     {
         Attendance::factory()->create(['status' => 'on_time']);
@@ -53,7 +55,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_attendance_by_date_range()
     {
         Attendance::factory()->create(['shift_date' => '2025-11-01']);
@@ -69,7 +71,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function it_searches_attendance_by_employee_name()
     {
         $user = User::factory()->create([
@@ -84,7 +86,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function it_displays_import_page()
     {
         AttendanceUpload::factory()->count(5)->create();
@@ -101,7 +103,7 @@ class AttendanceControllerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_file_upload_requirements()
     {
         $site = Site::factory()->create();
@@ -115,7 +117,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertSessionHasErrors(['file']);
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_shift_date_is_required()
     {
         Storage::fake('local');
@@ -128,10 +130,10 @@ class AttendanceControllerTest extends TestCase
                 'biometric_site_id' => $site->id,
             ]);
 
-        $response->assertSessionHasErrors(['shift_date']);
+        $response->assertSessionHasErrors(['date_from']);
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_biometric_site_id_exists()
     {
         Storage::fake('local');
@@ -140,14 +142,15 @@ class AttendanceControllerTest extends TestCase
         $response = $this->actingAs($this->admin)
             ->post(route('attendance.upload'), [
                 'file' => $file,
-                'shift_date' => '2025-11-05',
+                'date_from' => '2025-11-05',
+                'date_to' => '2025-11-05',
                 'biometric_site_id' => 9999, // Non-existent
             ]);
 
         $response->assertSessionHasErrors(['biometric_site_id']);
     }
 
-    /** @test */
+    #[Test]
     public function it_uploads_and_stores_attendance_file()
     {
         Storage::fake('local');
@@ -161,7 +164,8 @@ class AttendanceControllerTest extends TestCase
         $response = $this->actingAs($this->admin)
             ->post(route('attendance.upload'), [
                 'file' => $file,
-                'shift_date' => '2025-11-05',
+                'date_from' => '2025-11-05',
+                'date_to' => '2025-11-05',
                 'biometric_site_id' => $site->id,
                 'notes' => 'Test upload',
             ]);
@@ -169,7 +173,7 @@ class AttendanceControllerTest extends TestCase
         $this->assertDatabaseHas('attendance_uploads', [
             'uploaded_by' => $this->admin->id,
             'original_filename' => 'attendance.txt',
-            'shift_date' => '2025-11-05',
+            'date_from' => '2025-11-05',
             'biometric_site_id' => $site->id,
         ]);
 
@@ -177,7 +181,7 @@ class AttendanceControllerTest extends TestCase
         Storage::assertExists('attendance_uploads/' . $upload->stored_filename);
     }
 
-    /** @test */
+    #[Test]
     public function it_displays_review_page_with_records_needing_verification()
     {
         Attendance::factory()->create(['status' => 'failed_bio_in', 'admin_verified' => false]);
@@ -194,7 +198,7 @@ class AttendanceControllerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_verifies_and_updates_attendance_record()
     {
         $attendance = Attendance::factory()->create([
@@ -219,7 +223,7 @@ class AttendanceControllerTest extends TestCase
         $this->assertEquals('Manual verification', $attendance->verification_notes);
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_verification_data()
     {
         $attendance = Attendance::factory()->create();
@@ -233,7 +237,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertSessionHasErrors(['status', 'verification_notes']);
     }
 
-    /** @test */
+    #[Test]
     public function it_recalculates_tardy_minutes_on_verification()
     {
         $attendance = Attendance::factory()->create([
@@ -253,7 +257,7 @@ class AttendanceControllerTest extends TestCase
         $this->assertEquals(15, $attendance->tardy_minutes);
     }
 
-    /** @test */
+    #[Test]
     public function it_marks_attendance_as_advised_absence()
     {
         $attendance = Attendance::factory()->create([
@@ -276,7 +280,7 @@ class AttendanceControllerTest extends TestCase
         $this->assertEquals('Employee called in sick', $attendance->verification_notes);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_attendance_statistics()
     {
         $startDate = '2025-11-01';
@@ -301,7 +305,7 @@ class AttendanceControllerTest extends TestCase
         ]);
     }
 
-    /** @test */
+    #[Test]
     public function it_bulk_deletes_attendance_records()
     {
         $attendance1 = Attendance::factory()->create();
@@ -321,7 +325,7 @@ class AttendanceControllerTest extends TestCase
         $this->assertDatabaseHas('attendances', ['id' => $attendance3->id]);
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_bulk_delete_ids()
     {
         $response = $this->actingAs($this->admin)
@@ -332,7 +336,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertSessionHasErrors(['ids']);
     }
 
-    /** @test */
+    #[Test]
     public function it_requires_authentication_for_all_routes()
     {
         $attendance = Attendance::factory()->create();
@@ -350,7 +354,7 @@ class AttendanceControllerTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_records_needing_verification_in_review()
     {
         // Should appear in review
@@ -379,7 +383,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertStatus(200);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_file_processing_errors_gracefully()
     {
         Storage::fake('local');
@@ -400,7 +404,7 @@ class AttendanceControllerTest extends TestCase
         $response->assertStatus(302); // Redirect back
     }
 
-    /** @test */
+    #[Test]
     public function it_paginates_attendance_records()
     {
         Attendance::factory()->count(60)->create();
@@ -414,7 +418,7 @@ class AttendanceControllerTest extends TestCase
         );
     }
 
-    /** @test */
+    #[Test]
     public function it_filters_by_needs_verification_flag()
     {
         Attendance::factory()->create(['status' => 'failed_bio_in', 'admin_verified' => false]);

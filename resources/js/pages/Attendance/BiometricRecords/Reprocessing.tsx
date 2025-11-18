@@ -253,6 +253,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                     <AlertDescription>
                                         Reprocessing will recalculate attendance using the latest algorithm.
                                         Existing attendance records for the selected date range can be deleted and recreated.
+                                        <strong className="block mt-2">Note: Admin-verified/approved records will be preserved and not affected by reprocessing.</strong>
                                     </AlertDescription>
                                 </Alert>
 

@@ -12,10 +12,12 @@ use Tests\TestCase;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\Test;
 
 class AttendanceProcessorTest extends TestCase
 {
     use RefreshDatabase;
+
 
     protected AttendanceProcessor $processor;
     protected AttendanceFileParser $parser;
@@ -27,25 +29,50 @@ class AttendanceProcessorTest extends TestCase
         $this->processor = new AttendanceProcessor($this->parser);
     }
 
-    /** @test */
+    #[Test]
     public function it_determines_time_in_status_correctly()
     {
+        // Rule: Less than 15 mins = On Time, 15+ mins = Tardy (if within grace) or Half Day (if beyond grace)
+
+        // Test with default grace period of 15 minutes
         $testCases = [
-            [-10, 'on_time'],  // 10 minutes early
-            [0, 'on_time'],    // exactly on time
-            [1, 'tardy'],      // 1 minute late
-            [15, 'tardy'],     // 15 minutes late
-            [16, 'half_day_absence'], // more than 15 minutes
-            [120, 'half_day_absence'],
+            [-10, 15, 'on_time'],  // 10 minutes early
+            [0, 15, 'on_time'],    // exactly on time
+            [1, 15, 'on_time'],    // 1 minute late (below 15 min threshold)
+            [10, 15, 'on_time'],   // 10 minutes late (below 15 min threshold)
+            [14, 15, 'on_time'],   // 14 minutes late (below 15 min threshold)
+            [15, 15, 'tardy'],     // 15 minutes late (meets tardy threshold, within grace)
+            [16, 15, 'half_day_absence'], // beyond grace period
+            [120, 15, 'half_day_absence'], // way beyond grace period
+
+            // Test with grace period of 10 minutes (shorter than tardy threshold)
+            // If grace is 10 mins, anyone 15+ mins late exceeds grace AND meets tardy threshold
+            [5, 10, 'on_time'],    // 5 minutes late (below 15 min threshold)
+            [10, 10, 'on_time'],   // 10 minutes late (at grace limit, below 15 min threshold)
+            [15, 10, 'half_day_absence'], // 15 mins = tardy threshold BUT exceeds 10 min grace = half day
+            [20, 10, 'half_day_absence'], // beyond grace
+
+            // Test with grace period of 20 minutes (longer than tardy threshold)
+            [14, 20, 'on_time'],   // 14 minutes late (below 15 min threshold)
+            [15, 20, 'tardy'],     // 15 minutes late (meets tardy threshold, within 20 min grace)
+            [18, 20, 'tardy'],     // 18 minutes late (within 20 min grace)
+            [20, 20, 'tardy'],     // 20 minutes late (exactly at grace period)
+            [21, 20, 'half_day_absence'], // beyond grace period
+
+            // Test with grace period of 30 minutes
+            [15, 30, 'tardy'],     // 15 mins (tardy threshold, well within grace)
+            [25, 30, 'tardy'],     // 25 mins (within grace)
+            [30, 30, 'tardy'],     // 30 mins (exactly at grace)
+            [31, 30, 'half_day_absence'], // beyond grace
         ];
 
-        foreach ($testCases as [$tardyMinutes, $expectedStatus]) {
-            $status = $this->invokeMethod($this->processor, 'determineTimeInStatus', [$tardyMinutes]);
-            $this->assertEquals($expectedStatus, $status, "Tardy minutes {$tardyMinutes} should be {$expectedStatus}");
+        foreach ($testCases as [$tardyMinutes, $gracePeriod, $expectedStatus]) {
+            $status = $this->invokeMethod($this->processor, 'determineTimeInStatus', [$tardyMinutes, $gracePeriod]);
+            $this->assertEquals($expectedStatus, $status, "Tardy minutes {$tardyMinutes} with grace period {$gracePeriod} should be {$expectedStatus}");
         }
     }
 
-    /** @test */
+    #[Test]
     public function it_determines_shift_type_correctly()
     {
         $testCases = [
@@ -71,15 +98,17 @@ class AttendanceProcessorTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function it_detects_next_day_shift_correctly()
     {
         $testCases = [
             ['09:00:00', '18:00:00', false], // Same day: 9 AM - 6 PM
+            ['08:00:00', '17:00:00', false], // Same day: 8 AM - 5 PM (morning shift)
+            ['14:00:00', '23:00:00', false], // Same day: 2 PM - 11 PM (afternoon shift)
+            ['00:00:00', '09:00:00', false], // Same day: midnight - 9 AM (GRAVEYARD SHIFT - same calendar day)
+            ['01:00:00', '10:00:00', false], // Same day: 1 AM - 10 AM (GRAVEYARD SHIFT - same calendar day)
             ['15:00:00', '00:00:00', true],  // Next day: 3 PM - midnight
-            ['22:00:00', '07:00:00', true],  // Next day: 10 PM - 7 AM
-            ['00:00:00', '09:00:00', true],  // Graveyard: midnight - 9 AM
-            ['01:00:00', '10:00:00', true],  // Graveyard: 1 AM - 10 AM
+            ['22:00:00', '07:00:00', true],  // Next day: 10 PM - 7 AM (night shift spans calendar days)
         ];
 
         foreach ($testCases as [$timeIn, $timeOut, $expectedNextDay]) {
@@ -93,7 +122,7 @@ class AttendanceProcessorTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function it_finds_user_by_normalized_name()
     {
         $user = User::factory()->create([
@@ -115,7 +144,7 @@ class AttendanceProcessorTest extends TestCase
         }
     }
 
-    /** @test */
+    #[Test]
     public function it_distinguishes_users_with_same_last_name_using_initials()
     {
         $userA = User::factory()->create([
@@ -135,7 +164,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals($userB->id, $foundUserB->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_distinguishes_users_with_same_initial_using_two_letters()
     {
         $userJe = User::factory()->create([
@@ -155,7 +184,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals($userJo->id, $foundJo->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_uses_shift_timing_to_match_users_with_same_last_name()
     {
         // Create two users with same last name but different shifts
@@ -194,7 +223,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals($nightUser->id, $foundNight->id);
     }
 
-    /** @test */
+    #[Test]
     public function it_groups_records_by_shift_date_for_same_day_shift()
     {
         $user = User::factory()->create();
@@ -216,7 +245,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertCount(2, $grouped['2025-11-05']);
     }
 
-    /** @test */
+    #[Test]
     public function it_groups_records_by_shift_date_for_next_day_shift()
     {
         $user = User::factory()->create();
@@ -241,30 +270,33 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals('07:00:00', $grouped['2025-11-05']->last()['datetime']->format('H:i:s'));
     }
 
-    /** @test */
+    #[Test]
     public function it_groups_records_for_graveyard_shift()
     {
         $user = User::factory()->create();
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'scheduled_time_in' => '00:00:00',
-            'scheduled_time_out' => '09:00:00', // Graveyard shift
+            'scheduled_time_out' => '09:00:00', // Graveyard shift (SAME DAY: midnight to 9 AM)
             'is_active' => true,
         ]);
 
+        // Test case 1: Same day graveyard shift - both records on Nov 5
         $records = collect([
-            ['datetime' => Carbon::parse('2025-11-05 20:00:00')], // Late evening time in
-            ['datetime' => Carbon::parse('2025-11-06 08:00:00')], // Morning time out
+            ['datetime' => Carbon::parse('2025-11-05 00:02:00')], // Time in at 00:02 on Nov 5
+            ['datetime' => Carbon::parse('2025-11-05 09:03:00')], // Time out at 09:03 on Nov 5
         ]);
 
         $grouped = $this->invokeMethod($this->processor, 'groupRecordsByShiftDate', [$records, $user]);
 
-        // Both should be grouped to Nov 5 shift
+        // Both should be grouped to Nov 5 shift (graveyard is same-day shift)
         $this->assertArrayHasKey('2025-11-05', $grouped);
         $this->assertCount(2, $grouped['2025-11-05']);
+        $this->assertEquals('00:02:00', $grouped['2025-11-05']->first()['datetime']->format('H:i:s'));
+        $this->assertEquals('09:03:00', $grouped['2025-11-05']->last()['datetime']->format('H:i:s'));
     }
 
-    /** @test */
+    #[Test]
     public function it_validates_file_dates_match_expected_dates()
     {
         $shiftDate = Carbon::parse('2025-11-05');
@@ -282,7 +314,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals(['2025-11-05', '2025-11-06'], $validation['dates_found']);
     }
 
-    /** @test */
+    #[Test]
     public function it_generates_warning_for_unexpected_dates()
     {
         $shiftDate = Carbon::parse('2025-11-05');
@@ -298,7 +330,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertStringContainsString('unexpected dates', $validation['warnings'][0]);
     }
 
-    /** @test */
+    #[Test]
     public function it_processes_on_time_attendance()
     {
         $user = User::factory()->create();
@@ -335,7 +367,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertNull($attendance->tardy_minutes);
     }
 
-    /** @test */
+    #[Test]
     public function it_processes_tardy_attendance()
     {
         $user = User::factory()->create();
@@ -345,13 +377,15 @@ class AttendanceProcessorTest extends TestCase
             'site_id' => $site->id,
             'scheduled_time_in' => '09:00:00',
             'scheduled_time_out' => '18:00:00',
+            'grace_period_minutes' => 20,
             'work_days' => ['tuesday'],
             'is_active' => true,
         ]);
 
         $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
         $records = collect([
-            ['datetime' => Carbon::parse('2025-11-05 09:10:00')], // 10 min late
+            ['datetime' => Carbon::parse('2025-11-05 09:15:00')], // 15 min late (tardy threshold)
+            ['datetime' => Carbon::parse('2025-11-05 18:00:00')], // On time out
         ]);
 
         $this->invokeMethod($this->processor, 'processAttendance', [
@@ -367,10 +401,10 @@ class AttendanceProcessorTest extends TestCase
             ->first();
 
         $this->assertEquals('tardy', $attendance->status);
-        $this->assertEquals(10, $attendance->tardy_minutes);
+        $this->assertEquals(15, $attendance->tardy_minutes);
     }
 
-    /** @test */
+    #[Test]
     public function it_processes_half_day_absence()
     {
         $user = User::factory()->create();
@@ -405,7 +439,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals(20, $attendance->tardy_minutes);
     }
 
-    /** @test */
+    #[Test]
     public function it_detects_cross_site_bio()
     {
         $user = User::factory()->create();
@@ -441,7 +475,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertTrue($attendance->is_cross_site_bio);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_missing_time_out_record()
     {
         $user = User::factory()->create();
@@ -481,7 +515,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertNull($attendance->actual_time_out);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_missing_time_in_record()
     {
         $user = User::factory()->create();
@@ -521,7 +555,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals('18:07:00', $attendance->actual_time_out->format('H:i:s'));
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_no_biometric_records()
     {
         $user = User::factory()->create();
@@ -556,7 +590,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertNull($attendance->actual_time_out);
     }
 
-    /** @test */
+    #[Test]
     public function it_resets_old_values_when_reprocessing()
     {
         $user = User::factory()->create();
@@ -616,7 +650,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertEquals('failed_bio_out', $attendance->status);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_graveyard_shift_with_only_time_in()
     {
         $user = User::factory()->create();
@@ -654,7 +688,7 @@ class AttendanceProcessorTest extends TestCase
         $this->assertNull($attendance->actual_time_out);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_graveyard_shift_with_only_time_out()
     {
         $user = User::factory()->create();

@@ -9,12 +9,14 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use PHPUnit\Framework\Attributes\Test;
 
 class ProcessPointExpirationsCommandTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+
+    #[Test]
     public function it_processes_sro_expirations_for_standard_violations()
     {
         // Create points past their expiration date (6 months for standard violations)
@@ -69,7 +71,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertFalse($recentPoint->is_expired);
     }
 
-    /** @test */
+    #[Test]
     public function it_processes_sro_expirations_for_ncns_after_one_year()
     {
         $user = User::factory()->create();
@@ -91,7 +93,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertEquals('sro', $ncns->fresh()->expiration_type);
     }
 
-    /** @test */
+    #[Test]
     public function it_processes_gbro_for_users_with_60_days_clean_record()
     {
         $user = User::factory()->create();
@@ -130,7 +132,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertNotNull($newest->fresh()->gbro_applied_at);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_apply_gbro_if_less_than_60_days_clean()
     {
         $user = User::factory()->create();
@@ -157,7 +159,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertFalse($point2->fresh()->is_expired);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_apply_gbro_to_ncns_ftn_points()
     {
         $user = User::factory()->create();
@@ -190,7 +192,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertEquals('gbro', $tardy->fresh()->expiration_type);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_expire_already_expired_points()
     {
         $user = User::factory()->create();
@@ -213,7 +215,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertEquals($expiredAt->format('Y-m-d H:i:s'), $alreadyExpired->fresh()->expired_at->format('Y-m-d H:i:s'));
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_expire_excused_points()
     {
         $user = User::factory()->create();
@@ -234,7 +236,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertFalse($excused->fresh()->is_expired);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_dry_run_mode_without_making_changes()
     {
         $user = User::factory()->create();
@@ -256,7 +258,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertNull($point->fresh()->expired_at);
     }
 
-    /** @test */
+    #[Test]
     public function it_assigns_same_gbro_batch_id_to_points_expired_together()
     {
         $user = User::factory()->create();
@@ -282,7 +284,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertEquals($point1->fresh()->gbro_batch_id, $point2->fresh()->gbro_batch_id);
     }
 
-    /** @test */
+    #[Test]
     public function it_only_expires_last_2_eligible_points_via_gbro()
     {
         $user = User::factory()->create();
@@ -308,7 +310,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertEquals('gbro', $point5->fresh()->expiration_type);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_multiple_users_independently()
     {
         $user1 = User::factory()->create();
@@ -340,7 +342,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertFalse($user2Point->fresh()->is_expired);
     }
 
-    /** @test */
+    #[Test]
     public function it_returns_success_exit_code()
     {
         $exitCode = Artisan::call('points:process-expirations');
@@ -348,7 +350,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertEquals(0, $exitCode);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_users_with_no_points_gracefully()
     {
         // Create user with no points
@@ -359,7 +361,7 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertEquals(0, $exitCode);
     }
 
-    /** @test */
+    #[Test]
     public function it_skips_points_already_processed_by_gbro()
     {
         $user = User::factory()->create();

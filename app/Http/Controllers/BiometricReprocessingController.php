@@ -119,43 +119,37 @@ class BiometricReprocessingController extends Controller
                     ->get()
                     ->map(fn($r) => [
                         'datetime' => $r->datetime,
-                        'normalized_name' => $r->employee_name,
-                        'employee_name' => $r->employee_name,
+                        'name' => $user->last_name, // Use standardized name format
                     ]);
 
                 if ($records->isEmpty()) {
                     continue;
                 }
 
-                // Delete existing attendance if requested
+                // Delete existing attendance if requested, but preserve admin-verified records
                 if ($deleteExisting) {
-                    $deleted = Attendance::where('user_id', $user->id)
+                    Attendance::where('user_id', $user->id)
                         ->whereBetween('shift_date', [$startDate, $endDate])
+                        ->where('admin_verified', false) // Only delete unverified records
                         ->delete();
                 }
 
-                // Group and process records by shift date
-                $reflection = new \ReflectionClass($this->processor);
+                // Normalize the user's name for matching (same as upload process)
+                $normalizedName = strtolower(trim($user->last_name));
 
-                $groupMethod = $reflection->getMethod('groupRecordsByShiftDate');
-                $groupMethod->setAccessible(true);
-                $grouped = $groupMethod->invoke($this->processor, $records, $user);
-
-                $processMethod = $reflection->getMethod('processShift');
-                $processMethod->setAccessible(true);
-
-                $processedShifts = 0;
-                foreach ($grouped as $shiftDate => $shiftRecords) {
-                    $result = $processMethod->invoke($this->processor, $user, $shiftRecords, Carbon::parse($shiftDate));
-                    if ($result['processed']) {
-                        $processedShifts++;
-                    }
-                }
+                // Process ALL records at once (like upload does)
+                // This allows groupRecordsByShiftDate() to see all records and properly detect shift patterns
+                // Use the start date as reference date (like upload uses shift_date)
+                $result = $this->processor->reprocessEmployeeRecords(
+                    $normalizedName,
+                    $records,
+                    $startDate  // Use start date as reference
+                );
 
                 $results['processed']++;
                 $results['details'][] = [
                     'user' => $user->first_name . ' ' . $user->last_name,
-                    'shifts_processed' => $processedShifts,
+                    'shifts_processed' => $result['records_processed'],
                     'records_count' => $records->count(),
                 ];
 
@@ -165,12 +159,126 @@ class BiometricReprocessingController extends Controller
                     'user' => $user->first_name . ' ' . $user->last_name,
                     'error' => $e->getMessage(),
                 ];
+
+                \Log::error('Reprocessing failed for user', [
+                    'user_id' => $user->id,
+                    'error' => $e->getMessage(),
+                    'trace' => $e->getTraceAsString(),
+                ]);
             }
         }
 
         return back()->with([
             'success' => "Reprocessed {$results['processed']} employees successfully",
             'results' => $results,
+        ]);
+    }
+
+    /**
+     * Fix attendance statuses based on actual time in/out records
+     */
+    public function fixStatuses(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+        ]);
+
+        $startDate = Carbon::parse($request->start_date);
+        $endDate = Carbon::parse($request->end_date);
+
+        $results = [
+            'updated' => 0,
+            'total_checked' => 0,
+            'details' => [],
+        ];
+
+        // Get all attendance records in the date range with schedule
+        // Skip admin-verified records as they have been manually reviewed and approved
+        $attendances = Attendance::whereBetween('shift_date', [$startDate, $endDate])
+            ->where('admin_verified', false)
+            ->with('employeeSchedule', 'user')
+            ->get();
+
+        $results['total_checked'] = $attendances->count();
+
+        foreach ($attendances as $att) {
+            if (!$att->employeeSchedule) {
+                continue;
+            }
+
+            $oldStatus = $att->status;
+            $oldSecondaryStatus = $att->secondary_status;
+            $hasTimeIn = $att->actual_time_in !== null;
+            $hasTimeOut = $att->actual_time_out !== null;
+
+            // Recalculate status based on what we have
+            if (!$hasTimeIn && !$hasTimeOut) {
+                $att->status = 'ncns';
+                $att->secondary_status = null;
+            } elseif (!$hasTimeIn && $hasTimeOut) {
+                $att->status = 'failed_bio_in';
+                $att->secondary_status = null;
+            } elseif ($hasTimeIn && !$hasTimeOut) {
+                // Calculate tardiness
+                $shiftDate = is_string($att->shift_date) ? $att->shift_date : $att->shift_date->format('Y-m-d');
+                $scheduledIn = Carbon::parse($shiftDate . ' ' . $att->employeeSchedule->scheduled_time_in);
+                $actualIn = Carbon::parse($att->actual_time_in);
+                $tardyMins = (int) $scheduledIn->diffInMinutes($actualIn, false);
+
+                if ($tardyMins <= 0 || $actualIn->lessThanOrEqualTo($scheduledIn)) {
+                    $att->status = 'failed_bio_out'; // On time but missing out
+                    $att->secondary_status = null;
+                    $att->tardy_minutes = null;
+                } elseif ($tardyMins >= 1 && $tardyMins <= 15) {
+                    $att->status = 'tardy'; // Keep tardy as primary
+                    $att->secondary_status = 'failed_bio_out'; // Add missing out as secondary
+                    $att->tardy_minutes = $tardyMins;
+                } else {
+                    $att->status = 'half_day_absence'; // Keep half day as primary
+                    $att->secondary_status = 'failed_bio_out'; // Add missing out as secondary
+                    $att->tardy_minutes = $tardyMins;
+                }
+            } elseif ($hasTimeIn && $hasTimeOut) {
+                // Both exist, recalculate full status
+                $shiftDate = is_string($att->shift_date) ? $att->shift_date : Carbon::parse($att->shift_date)->format('Y-m-d');
+                $scheduledIn = Carbon::parse($shiftDate . ' ' . $att->employeeSchedule->scheduled_time_in);
+                $actualIn = Carbon::parse($att->actual_time_in);
+                $tardyMins = (int) $scheduledIn->diffInMinutes($actualIn, false);
+
+                if ($tardyMins <= 0 || $actualIn->lessThanOrEqualTo($scheduledIn)) {
+                    $att->status = 'on_time';
+                    $att->tardy_minutes = null;
+                } elseif ($tardyMins >= 1 && $tardyMins <= 15) {
+                    $att->status = 'tardy';
+                    $att->tardy_minutes = $tardyMins;
+                } else {
+                    $att->status = 'half_day_absence';
+                    $att->tardy_minutes = $tardyMins;
+                }
+
+                $att->secondary_status = null;
+            }
+
+            if ($oldStatus !== $att->status || $oldSecondaryStatus !== $att->secondary_status) {
+                $att->save();
+                $results['updated']++;
+
+                $oldStatusText = $oldStatus . ($oldSecondaryStatus ? " + {$oldSecondaryStatus}" : '');
+                $newStatusText = $att->status . ($att->secondary_status ? " + {$att->secondary_status}" : '');
+
+                $results['details'][] = [
+                    'user' => $att->user->first_name . ' ' . $att->user->last_name,
+                    'date' => $att->shift_date->format('M d, Y'),
+                    'old_status' => $oldStatusText,
+                    'new_status' => $att->status,
+                    'secondary_status' => $att->secondary_status,
+                ];
+            }
+        }
+
+        return back()->with([
+            'fixResults' => $results,
         ]);
     }
 }

@@ -30,16 +30,21 @@ export interface SharedData {
     [key: string]: unknown;
 }
 
+export type UserRole = 'Super Admin' | 'Admin' | 'Team Lead' | 'Agent' | 'HR' | 'IT' | 'Utility';
+
 export interface User {
     id: number;
     first_name: string;
     middle_name: string | null;
     last_name: string;
     email: string;
+    role: UserRole;
+    permissions?: string[];
     avatar?: string;
     email_verified_at: string | null;
     two_factor_enabled?: boolean;
     time_format?: '12' | '24';
+    hired_date?: string | null;
     created_at: string;
     updated_at: string;
     [key: string]: unknown; // This allows for additional properties...

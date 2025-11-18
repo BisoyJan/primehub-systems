@@ -13,6 +13,7 @@ use App\Services\AttendanceProcessor;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
+use PHPUnit\Framework\Attributes\Test;
 
 class AttendancePointGenerationTest extends TestCase
 {
@@ -27,7 +28,7 @@ class AttendancePointGenerationTest extends TestCase
         Storage::fake('local');
     }
 
-    /** @test */
+    #[Test]
     public function it_automatically_generates_points_for_ncns_violations()
     {
         $user = $this->createUserWithSchedule();
@@ -72,7 +73,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertEquals($expectedDate, $actualDate); // 1 year expiration
     }
 
-    /** @test */
+    #[Test]
     public function it_generates_points_for_half_day_absence()
     {
         $user = $this->createUserWithSchedule();
@@ -103,7 +104,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertEquals($shiftDate->copy()->addMonths(6)->toDateString(), ($point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at)); // 6 months expiration
     }
 
-    /** @test */
+    #[Test]
     public function it_generates_points_for_tardy()
     {
         $user = $this->createUserWithSchedule();
@@ -134,7 +135,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertTrue($point->eligible_for_gbro);
     }
 
-    /** @test */
+    #[Test]
     public function it_generates_points_for_undertime()
     {
         $user = $this->createUserWithSchedule();
@@ -165,7 +166,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertTrue($point->eligible_for_gbro);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_create_duplicate_points_for_same_violation()
     {
         $user = $this->createUserWithSchedule();
@@ -198,7 +199,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertEquals(1, $pointCount);
     }
 
-    /** @test */
+    #[Test]
     public function it_does_not_generate_points_for_on_time_attendance()
     {
         $user = $this->createUserWithSchedule();
@@ -224,7 +225,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertEquals(0, $pointCount);
     }
 
-    /** @test */
+    #[Test]
     public function it_generates_violation_details_text()
     {
         $user = $this->createUserWithSchedule();
@@ -253,7 +254,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertStringContainsString('12 minutes', $point->violation_details);
     }
 
-    /** @test */
+    #[Test]
     public function it_generates_points_for_multiple_users_on_same_date()
     {
         $user1 = $this->createUserWithSchedule();
@@ -288,7 +289,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertEquals('undertime', $point2->point_type);
     }
 
-    /** @test */
+    #[Test]
     public function it_sets_correct_expiration_type_for_ncns()
     {
         $user = $this->createUserWithSchedule();
@@ -312,7 +313,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertEquals($shiftDate->copy()->addYear()->toDateString(), ($point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at));
     }
 
-    /** @test */
+    #[Test]
     public function it_sets_correct_expiration_type_for_standard_violations()
     {
         $user = $this->createUserWithSchedule();
@@ -333,9 +334,10 @@ class AttendancePointGenerationTest extends TestCase
 
         $this->assertEquals('sro', $point->expiration_type); // Standard violations use SRO
         $this->assertEquals($shiftDate->copy()->addMonths(6)->toDateString(), ($point->expires_at instanceof \Carbon\Carbon ? $point->expires_at->toDateString() : $point->expires_at));
+
     }
 
-    /** @test */
+    #[Test]
     public function it_links_point_to_attendance_record()
     {
         $user = $this->createUserWithSchedule();
@@ -358,7 +360,7 @@ class AttendancePointGenerationTest extends TestCase
         $this->assertInstanceOf(Attendance::class, $point->attendance);
     }
 
-    /** @test */
+    #[Test]
     public function it_handles_advised_absence_correctly()
     {
         $user = $this->createUserWithSchedule();

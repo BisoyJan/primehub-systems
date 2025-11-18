@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\User;
 use Illuminate\Http\Request;
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
@@ -60,7 +61,7 @@ class AccountController extends Controller
     public function create()
     {
         return Inertia::render('Account/Create', [
-            'roles' => ['Super Admin', 'Admin', 'Agent', 'HR'],
+            'roles' => ['Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility'],
         ]);
     }
 
@@ -75,7 +76,8 @@ class AccountController extends Controller
             'last_name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users',
             'password' => ['required', 'confirmed', Password::defaults()],
-            'role' => 'required|in:Super Admin,Admin,Agent,HR',
+            'role' => 'required|in:Super Admin,Admin,Team Lead,Agent,HR,IT,Utility',
+            'hired_date' => 'required|date',
         ]);
 
         $validated['password'] = Hash::make($validated['password']);
@@ -95,8 +97,16 @@ class AccountController extends Controller
     public function edit(User $account)
     {
         return Inertia::render('Account/Edit', [
-            'user' => $account,
-            'roles' => ['Super Admin', 'Admin', 'Agent', 'HR'],
+            'user' => [
+                'id' => $account->id,
+                'first_name' => $account->first_name,
+                'middle_name' => $account->middle_name,
+                'last_name' => $account->last_name,
+                'email' => $account->email,
+                'role' => $account->role,
+                'hired_date' => $account->hired_date ? Carbon::parse($account->hired_date)->format('Y-m-d') : '',
+            ],
+            'roles' => ['Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility'],
         ]);
     }
 
@@ -111,7 +121,8 @@ class AccountController extends Controller
             'last_name' => 'required|string|max:255',
             'email' => 'required|string|email|max:255|unique:users,email,' . $account->id,
             'password' => ['nullable', 'confirmed', Password::defaults()],
-            'role' => 'required|in:Super Admin,Admin,Agent,HR',
+            'role' => 'required|in:Super Admin,Admin,Team Lead,Agent,HR,IT,Utility',
+            'hired_date' => 'required|date',
         ]);
 
         if (!empty($validated['password'])) {
