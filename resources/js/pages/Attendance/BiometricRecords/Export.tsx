@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Can } from '@/components/authorization';
 
 interface User {
     id: number;
@@ -225,23 +226,25 @@ export default function Export({ users, sites }: { users: User[]; sites: Site[] 
                                 )}
                             </div>
 
-                            <Button
-                                onClick={handleExport}
-                                disabled={isExporting || !startDate || !endDate}
-                                className="w-full"
-                            >
-                                {isExporting ? (
-                                    <>
-                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                        Exporting...
-                                    </>
-                                ) : (
-                                    <>
-                                        <Download className="mr-2 h-4 w-4" />
-                                        Export {exportFormat === 'xlsx' ? 'Excel' : 'CSV'}
-                                    </>
-                                )}
-                            </Button>
+                            <Can permission="biometric.export">
+                                <Button
+                                    onClick={handleExport}
+                                    disabled={isExporting || !startDate || !endDate}
+                                    className="w-full"
+                                >
+                                    {isExporting ? (
+                                        <>
+                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                            Exporting...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Download className="mr-2 h-4 w-4" />
+                                            Export {exportFormat === 'xlsx' ? 'Excel' : 'CSV'}
+                                        </>
+                                    )}
+                                </Button>
+                            </Can>
                         </CardContent>
                     </Card>
                 </div>

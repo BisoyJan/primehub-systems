@@ -16,7 +16,7 @@ class AttendanceUploadController extends Controller
     {
         $uploads = AttendanceUpload::with(['uploader:id,first_name,middle_name,last_name', 'biometricSite:id,name'])
             ->orderBy('created_at', 'desc')
-            ->paginate(20);
+            ->paginate(25);
 
         return Inertia::render('Attendance/Uploads/Index', [
             'uploads' => $uploads,

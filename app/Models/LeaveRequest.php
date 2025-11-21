@@ -17,7 +17,6 @@ class LeaveRequest extends Model
         'end_date',
         'days_requested',
         'reason',
-        'team_lead_email',
         'campaign_department',
         'medical_cert_submitted',
         'status',
@@ -70,6 +69,14 @@ class LeaveRequest extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /**
+     * Get the attendance records associated with this leave request.
+     */
+    public function attendances()
+    {
+        return $this->hasMany(Attendance::class);
     }
 
     /**

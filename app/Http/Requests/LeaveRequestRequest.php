@@ -22,15 +22,22 @@ class LeaveRequestRequest extends FormRequest
      */
     public function rules(): array
     {
-        return [
+        $rules = [
             'leave_type' => ['required', Rule::in(['VL', 'SL', 'BL', 'SPL', 'LOA', 'LDV', 'UPTO'])],
             'start_date' => ['required', 'date', 'after_or_equal:today'],
             'end_date' => ['required', 'date', 'after_or_equal:start_date'],
             'reason' => ['required', 'string', 'min:10', 'max:1000'],
-            'team_lead_email' => ['required', 'email'],
             'campaign_department' => ['required', 'string', 'max:255'],
             'medical_cert_submitted' => ['sometimes', 'boolean'],
         ];
+
+        // Allow employee_id for admins
+        $user = $this->user();
+        if ($user && in_array($user->role, ['Super Admin', 'Admin'])) {
+            $rules['employee_id'] = ['sometimes', 'nullable', 'exists:users,id'];
+        }
+
+        return $rules;
     }
 
     /**
@@ -48,8 +55,6 @@ class LeaveRequestRequest extends FormRequest
             'reason.required' => 'Please provide a reason for your leave request.',
             'reason.min' => 'Reason must be at least 10 characters.',
             'reason.max' => 'Reason cannot exceed 1000 characters.',
-            'team_lead_email.required' => 'Team lead email is required.',
-            'team_lead_email.email' => 'Please provide a valid team lead email address.',
             'campaign_department.required' => 'Campaign/Department is required.',
         ];
     }

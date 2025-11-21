@@ -34,7 +34,7 @@ class AccountController extends Controller
         }
 
         $users = $query->orderBy('created_at', 'desc')
-            ->paginate(10)
+            ->paginate(25)
             ->withQueryString();
 
         return Inertia::render('Account/Index', [

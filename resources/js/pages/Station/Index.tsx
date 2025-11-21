@@ -27,6 +27,7 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { Can } from "@/components/authorization";
 
 interface Station {
     id: number;
@@ -553,15 +554,21 @@ export default function StationIndex() {
 
                         {/* Regular Action Buttons */}
                         <div className="flex flex-col sm:flex-row gap-3 sm:ml-auto">
-                            <Button onClick={() => router.get('/stations/create')} className="w-full sm:w-auto">
-                                Add Station
-                            </Button>
-                            <Button onClick={() => router.get('/sites')} className="w-full sm:w-auto">
-                                Site Management
-                            </Button>
-                            <Button onClick={() => router.get('/campaigns')} className="w-full sm:w-auto">
-                                Campaign Management
-                            </Button>
+                            <Can permission="stations.create">
+                                <Button onClick={() => router.get('/stations/create')} className="w-full sm:w-auto">
+                                    Add Station
+                                </Button>
+                            </Can>
+                            <Can permission="sites.view">
+                                <Button onClick={() => router.get('/sites')} className="w-full sm:w-auto">
+                                    Site Management
+                                </Button>
+                            </Can>
+                            <Can permission="campaigns.view">
+                                <Button onClick={() => router.get('/campaigns')} className="w-full sm:w-auto">
+                                    Campaign Management
+                                </Button>
+                            </Can>
                         </div>
                     </div>
                 </div>
@@ -775,17 +782,21 @@ export default function StationIndex() {
                                             </TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
-                                                    <Button variant="outline" size="sm" onClick={() => router.get(`/stations/${station.id}/edit`)} disabled={loading}>
-                                                        Edit
-                                                    </Button>
+                                                    <Can permission="stations.edit">
+                                                        <Button variant="outline" size="sm" onClick={() => router.get(`/stations/${station.id}/edit`)} disabled={loading}>
+                                                            Edit
+                                                        </Button>
+                                                    </Can>
 
                                                     {/* Reusable delete confirmation dialog */}
-                                                    <DeleteConfirmDialog
-                                                        onConfirm={() => handleDelete(station.id)}
-                                                        title="Delete Station"
-                                                        description={`Are you sure you want to delete station "${station.station_number}"?`}
-                                                        disabled={loading}
-                                                    />
+                                                    <Can permission="stations.delete">
+                                                        <DeleteConfirmDialog
+                                                            onConfirm={() => handleDelete(station.id)}
+                                                            title="Delete Station"
+                                                            description={`Are you sure you want to delete station "${station.station_number}"?`}
+                                                            disabled={loading}
+                                                        />
+                                                    </Can>
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -972,25 +983,29 @@ export default function StationIndex() {
 
                                 {/* Action Buttons */}
                                 <div className="flex gap-2 pt-2 border-t">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => router.get(`/stations/${station.id}/edit`)}
-                                        disabled={loading}
-                                        className="flex-1"
-                                    >
-                                        Edit
-                                    </Button>
+                                    <Can permission="stations.edit">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => router.get(`/stations/${station.id}/edit`)}
+                                            disabled={loading}
+                                            className="flex-1"
+                                        >
+                                            Edit
+                                        </Button>
+                                    </Can>
 
                                     {/* Reusable delete confirmation dialog */}
-                                    <div className="flex-1">
-                                        <DeleteConfirmDialog
-                                            onConfirm={() => handleDelete(station.id)}
-                                            title="Delete Station"
-                                            description={`Are you sure you want to delete station "${station.station_number}"?`}
-                                            disabled={loading}
-                                        />
-                                    </div>
+                                    <Can permission="stations.delete">
+                                        <div className="flex-1">
+                                            <DeleteConfirmDialog
+                                                onConfirm={() => handleDelete(station.id)}
+                                                title="Delete Station"
+                                                description={`Are you sure you want to delete station "${station.station_number}"?`}
+                                                disabled={loading}
+                                            />
+                                        </div>
+                                    </Can>
                                 </div>
                             </div>
                         );

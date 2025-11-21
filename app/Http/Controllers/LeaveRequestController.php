@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LeaveRequestRequest;
 use App\Models\LeaveRequest;
+use App\Models\User;
 use App\Services\LeaveCreditService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -55,63 +56,117 @@ class LeaveRequestController extends Controller
         }
 
         $leaveRequests = $query->orderBy('created_at', 'desc')
-            ->paginate(15)
+            ->paginate(25)
             ->withQueryString();
+
+        // Check if current user has pending leave requests
+        $hasPendingRequests = LeaveRequest::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->exists();
 
         return Inertia::render('Leave/Index', [
             'leaveRequests' => $leaveRequests,
             'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id']),
             'isAdmin' => $isAdmin,
+            'hasPendingRequests' => $hasPendingRequests,
         ]);
     }
 
     /**
      * Show the form for creating a new leave request.
      */
-    public function create()
+    public function create(Request $request)
     {
         $user = auth()->user();
         $leaveCreditService = $this->leaveCreditService;
+        $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+
+        // For admins creating leave for employees, check if employee_id is provided
+        $targetUser = $user;
+        if ($isAdmin && $request->filled('employee_id')) {
+            $targetUser = \App\Models\User::findOrFail($request->employee_id);
+        }
+
+        // Check if user has pending leave requests
+        $hasPendingRequests = LeaveRequest::where('user_id', $targetUser->id)
+            ->where('status', 'pending')
+            ->exists();
 
         // Auto-backfill missing credits if any
-        $leaveCreditService->backfillCredits($user);
+        $leaveCreditService->backfillCredits($targetUser);
 
         // Get leave credits summary
-        $creditsSummary = $leaveCreditService->getSummary($user);
+        $creditsSummary = $leaveCreditService->getSummary($targetUser);
 
-        // Get attendance points
-        $attendancePoints = $leaveCreditService->getAttendancePoints($user);
+        // Get attendance points total
+        $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
+
+        // Get detailed attendance violations
+        $attendanceViolations = \App\Models\AttendancePoint::where('user_id', $targetUser->id)
+            ->where('is_expired', false)
+            ->where('is_excused', false)
+            ->orderBy('shift_date', 'desc')
+            ->get()
+            ->map(function ($point) {
+                return [
+                    'id' => $point->id,
+                    'shift_date' => $point->shift_date,
+                    'point_type' => $point->point_type,
+                    'points' => $point->points,
+                    'violation_details' => $point->violation_details,
+                    'expires_at' => $point->expires_at,
+                ];
+            });
 
         // Check if user has recent absence
-        $hasRecentAbsence = $leaveCreditService->hasRecentAbsence($user);
+        $hasRecentAbsence = $leaveCreditService->hasRecentAbsence($targetUser);
         $nextEligibleLeaveDate = $hasRecentAbsence
-            ? $leaveCreditService->getNextEligibleLeaveDate($user)
+            ? $leaveCreditService->getNextEligibleLeaveDate($targetUser)
             : null;
-
-        // Team Lead email options
-        $teamLeadEmails = [
-            'TeamLead1@primedigital.ph',
-            'TeamLead2@primedigital.ph',
-            'TeamLead3@primedigital.ph',
-            'TeamLead4@primedigital.ph',
-            'TeamLead5@primedigital.ph',
-            'TeamLead6@primedigital.ph',
-            'TeamLead7@primedigital.ph',
-            'TeamLead8@primedigital.ph',
-        ];
 
         // Campaign/Department options - fetch from database + add Management
         $campaignsFromDb = \App\Models\Campaign::orderBy('name')->pluck('name')->toArray();
         $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
 
+        // Get employee's campaign from active schedule
+        $selectedCampaign = null;
+        $activeSchedule = $targetUser->activeSchedule;
+        if ($activeSchedule && $activeSchedule->campaign) {
+            $selectedCampaign = $activeSchedule->campaign->name;
+        }
+
+        // Get all employees for admin selection
+        $employees = [];
+        if ($isAdmin) {
+            $employees = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get()
+                ->map(function ($emp) {
+                    return [
+                        'id' => $emp->id,
+                        'name' => $emp->name,
+                        'email' => $emp->email,
+                    ];
+                });
+        }
+
+        // Calculate two weeks from now for 2-week notice validation
+        $twoWeeksFromNow = now()->addWeeks(2)->format('Y-m-d');
+
         return Inertia::render('Leave/Create', [
             'creditsSummary' => $creditsSummary,
             'attendancePoints' => $attendancePoints,
+            'attendanceViolations' => $attendanceViolations,
             'hasRecentAbsence' => $hasRecentAbsence,
-            'nextEligibleLeaveDate' => $nextEligibleLeaveDate?->format('Y-m-d'),
-            'teamLeadEmails' => $teamLeadEmails,
+            'hasPendingRequests' => $hasPendingRequests,
+            'nextEligibleLeaveDate' => $nextEligibleLeaveDate,
             'campaigns' => $campaigns,
-            'twoWeeksFromNow' => now()->addWeeks(2)->format('Y-m-d'),
+            'selectedCampaign' => $selectedCampaign,
+            'twoWeeksFromNow' => $twoWeeksFromNow,
+            'isAdmin' => $isAdmin,
+            'employees' => $employees,
+            'selectedEmployeeId' => $targetUser->id,
         ]);
     }
 
@@ -123,13 +178,28 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $leaveCreditService = $this->leaveCreditService;
 
+        // For admins, allow creating leave for other employees
+        $targetUser = $user;
+        if (in_array($user->role, ['Super Admin', 'Admin']) && $request->filled('employee_id')) {
+            $targetUser = User::findOrFail($request->employee_id);
+        }
+
+        // Check if user has pending leave requests
+        $hasPendingRequests = LeaveRequest::where('user_id', $targetUser->id)
+            ->where('status', 'pending')
+            ->exists();
+
+        if ($hasPendingRequests) {
+            return back()->withErrors(['error' => 'You cannot create a new leave request while you have pending requests. Please wait for approval or cancel your existing pending request.'])->withInput();
+        }
+
         // Calculate days
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
         $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate);
 
         // Get current attendance points
-        $attendancePoints = $leaveCreditService->getAttendancePoints($user);
+        $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
 
         // Prepare data for validation
         $validationData = array_merge($request->validated(), [
@@ -138,7 +208,7 @@ class LeaveRequestController extends Controller
         ]);
 
         // Validate business rules
-        $validation = $leaveCreditService->validateLeaveRequest($user, $validationData);
+        $validation = $leaveCreditService->validateLeaveRequest($targetUser, $validationData);
 
         if (!$validation['valid']) {
             return back()->withErrors(['validation' => $validation['errors']])->withInput();
@@ -148,13 +218,12 @@ class LeaveRequestController extends Controller
         try {
             // Create leave request
             $leaveRequest = LeaveRequest::create([
-                'user_id' => $user->id,
+                'user_id' => $targetUser->id,
                 'leave_type' => $request->leave_type,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
                 'days_requested' => $daysRequested,
                 'reason' => $request->reason,
-                'team_lead_email' => $request->team_lead_email,
                 'campaign_department' => $request->campaign_department,
                 'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
                 'status' => 'pending',
@@ -167,6 +236,16 @@ class LeaveRequestController extends Controller
                 ->with('success', 'Leave request submitted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
+            // Log the actual error for debugging
+            \Log::error('Leave request submission failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'user_id' => $user->id,
+                'target_user_id' => $targetUser->id,
+                'request_data' => $request->all(),
+            ]);
+
             return back()->withErrors(['error' => 'Failed to submit leave request. Please try again.'])->withInput();
         }
     }

@@ -108,103 +108,130 @@ Route::middleware(['auth', 'verified'])->group(function () {
         ->middleware('permission:accounts.view,accounts.create,accounts.edit,accounts.delete');
 
     // PC Transfer
-    Route::prefix('pc-transfers')->name('pc-transfers.')->group(function () {
-        Route::get('/', [PcTransferController::class, 'index'])->name('index');
-        Route::get('transfer/{station?}', [PcTransferController::class, 'transferPage'])->name('transferPage');
-        Route::post('/', [PcTransferController::class, 'transfer'])->name('transfer');
-        Route::post('bulk', [PcTransferController::class, 'bulkTransfer'])->name('bulk');
-        Route::delete('remove', [PcTransferController::class, 'remove'])->name('remove');
-        Route::get('history', [PcTransferController::class, 'history'])->name('history');
-    });
+    Route::prefix('pc-transfers')->name('pc-transfers.')
+        ->middleware('permission:pc_transfers.view,pc_transfers.create,pc_transfers.remove')
+        ->group(function () {
+            Route::get('/', [PcTransferController::class, 'index'])->name('index');
+            Route::get('transfer/{station?}', [PcTransferController::class, 'transferPage'])->name('transferPage');
+            Route::post('/', [PcTransferController::class, 'transfer'])->name('transfer');
+            Route::post('bulk', [PcTransferController::class, 'bulkTransfer'])->name('bulk');
+            Route::delete('remove', [PcTransferController::class, 'remove'])->name('remove');
+            Route::get('history', [PcTransferController::class, 'history'])->name('history');
+        });
 
     // PC Maintenance
-    Route::resource('pc-maintenance', PcMaintenanceController::class);
+    Route::resource('pc-maintenance', PcMaintenanceController::class)
+        ->middleware('permission:pc_maintenance.view,pc_maintenance.create,pc_maintenance.edit,pc_maintenance.delete');
 
     // Attendance Management
-    Route::prefix('attendance')->name('attendance.')->group(function () {
-        Route::get('/', [AttendanceController::class, 'index'])->name('index');
-        Route::post('/', [AttendanceController::class, 'store'])->name('store');
-        Route::get('dashboard', [AttendanceController::class, 'dashboard'])->name('dashboard');
-        Route::get('import', [AttendanceController::class, 'import'])->name('import');
-        Route::post('upload', [AttendanceController::class, 'upload'])->name('upload');
-        Route::get('review', [AttendanceController::class, 'review'])->name('review');
-        Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify');
-        Route::post('batch-verify', [AttendanceController::class, 'batchVerify'])->name('batchVerify');
-        Route::post('{attendance}/mark-advised', [AttendanceController::class, 'markAdvised'])->name('markAdvised');
-        Route::post('{attendance}/quick-approve', [AttendanceController::class, 'quickApprove'])->name('quickApprove');
-        Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove');
-        Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics');
-        Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete');
-    });
+    Route::prefix('attendance')->name('attendance.')
+        ->middleware('permission:attendance.view,attendance.create,attendance.import,attendance.review,attendance.verify,attendance.approve,attendance.statistics,attendance.delete')
+        ->group(function () {
+            Route::get('/', [AttendanceController::class, 'index'])->name('index');
+            Route::get('/calendar/{user?}', [AttendanceController::class, 'calendar'])->name('calendar');
+            Route::get('/create', [AttendanceController::class, 'create'])->name('create');
+            Route::post('/', [AttendanceController::class, 'store'])->name('store');
+            Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore');
+            Route::get('dashboard', [AttendanceController::class, 'dashboard'])->name('dashboard');
+            Route::get('import', [AttendanceController::class, 'import'])->name('import');
+            Route::post('upload', [AttendanceController::class, 'upload'])->name('upload');
+            Route::get('review', [AttendanceController::class, 'review'])->name('review');
+            Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify');
+            Route::post('batch-verify', [AttendanceController::class, 'batchVerify'])->name('batchVerify');
+            Route::post('{attendance}/mark-advised', [AttendanceController::class, 'markAdvised'])->name('markAdvised');
+            Route::post('{attendance}/quick-approve', [AttendanceController::class, 'quickApprove'])->name('quickApprove');
+            Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove');
+            Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics');
+            Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete');
+        });
 
     // Employee Schedules
-    Route::resource('employee-schedules', EmployeeScheduleController::class);
+    Route::resource('employee-schedules', EmployeeScheduleController::class)
+        ->middleware('permission:schedules.view,schedules.create,schedules.edit,schedules.delete');
     Route::post('employee-schedules/{employeeSchedule}/toggle-active', [EmployeeScheduleController::class, 'toggleActive'])
+        ->middleware('permission:schedules.toggle')
         ->name('employee-schedules.toggleActive');
     Route::get('employee-schedules/get-schedule', [EmployeeScheduleController::class, 'getSchedule'])
+        ->middleware('permission:schedules.view')
         ->name('employee-schedules.getSchedule');
 
     // Biometric Records
-    Route::prefix('biometric-records')->name('biometric-records.')->group(function () {
-        Route::get('/', [BiometricRecordController::class, 'index'])->name('index');
-        Route::get('/{user}/{date}', [BiometricRecordController::class, 'show'])->name('show');
-    });
+    Route::prefix('biometric-records')->name('biometric-records.')
+        ->middleware('permission:biometric.view')
+        ->group(function () {
+            Route::get('/', [BiometricRecordController::class, 'index'])->name('index');
+            Route::get('/{user}/{date}', [BiometricRecordController::class, 'show'])->name('show');
+        });
 
     // Biometric Reprocessing
-    Route::prefix('biometric-reprocessing')->name('biometric-reprocessing.')->group(function () {
-        Route::get('/', [BiometricReprocessingController::class, 'index'])->name('index');
-        Route::post('preview', [BiometricReprocessingController::class, 'preview'])->name('preview');
-        Route::post('reprocess', [BiometricReprocessingController::class, 'reprocess'])->name('reprocess');
-        Route::post('fix-statuses', [BiometricReprocessingController::class, 'fixStatuses'])->name('fix-statuses');
-    });
+    Route::prefix('biometric-reprocessing')->name('biometric-reprocessing.')
+        ->middleware('permission:biometric.reprocess')
+        ->group(function () {
+            Route::get('/', [BiometricReprocessingController::class, 'index'])->name('index');
+            Route::post('preview', [BiometricReprocessingController::class, 'preview'])->name('preview');
+            Route::post('reprocess', [BiometricReprocessingController::class, 'reprocess'])->name('reprocess');
+            Route::post('fix-statuses', [BiometricReprocessingController::class, 'fixStatuses'])->name('fix-statuses');
+        });
 
     // Biometric Anomalies
-    Route::prefix('biometric-anomalies')->name('biometric-anomalies.')->group(function () {
-        Route::get('/', [BiometricAnomalyController::class, 'index'])->name('index');
-        Route::post('detect', [BiometricAnomalyController::class, 'detect'])->name('detect');
-    });
+    Route::prefix('biometric-anomalies')->name('biometric-anomalies.')
+        ->middleware('permission:biometric.anomalies')
+        ->group(function () {
+            Route::get('/', [BiometricAnomalyController::class, 'index'])->name('index');
+            Route::post('detect', [BiometricAnomalyController::class, 'detect'])->name('detect');
+        });
 
     // Biometric Export
-    Route::prefix('biometric-export')->name('biometric-export.')->group(function () {
-        Route::get('/', [BiometricExportController::class, 'index'])->name('index');
-        Route::get('export', [BiometricExportController::class, 'export'])->name('export');
-    });
+    Route::prefix('biometric-export')->name('biometric-export.')
+        ->middleware('permission:biometric.export')
+        ->group(function () {
+            Route::get('/', [BiometricExportController::class, 'index'])->name('index');
+            Route::get('export', [BiometricExportController::class, 'export'])->name('export');
+        });
 
     // Attendance Uploads
-    Route::prefix('attendance-uploads')->name('attendance-uploads.')->group(function () {
-        Route::get('/', [AttendanceUploadController::class, 'index'])->name('index');
-        Route::get('/{upload}', [AttendanceUploadController::class, 'show'])->name('show');
-    });
+    Route::prefix('attendance-uploads')->name('attendance-uploads.')
+        ->middleware('permission:attendance.view')
+        ->group(function () {
+            Route::get('/', [AttendanceUploadController::class, 'index'])->name('index');
+            Route::get('/{upload}', [AttendanceUploadController::class, 'show'])->name('show');
+        });
 
     // Attendance Points
-    Route::prefix('attendance-points')->name('attendance-points.')->group(function () {
-        Route::get('/', [AttendancePointController::class, 'index'])->name('index');
-        Route::post('/rescan', [AttendancePointController::class, 'rescan'])->name('rescan');
-        Route::get('/export-all', [AttendancePointController::class, 'exportAll'])->name('export-all');
-        Route::get('/export-all-excel', [AttendancePointController::class, 'exportAllExcel'])->name('export-all-excel');
-        Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
-        Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])->name('statistics');
-        Route::get('/{user}/export', [AttendancePointController::class, 'export'])->name('export');
-        Route::get('/{user}/export-excel', [AttendancePointController::class, 'exportExcel'])->name('export-excel');
-        Route::post('/{point}/excuse', [AttendancePointController::class, 'excuse'])->name('excuse');
-        Route::delete('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])->name('unexcuse');
-    });
+    Route::prefix('attendance-points')->name('attendance-points.')
+        ->middleware('permission:attendance_points.view,attendance_points.excuse,attendance_points.export,attendance_points.rescan')
+        ->group(function () {
+            Route::get('/', [AttendancePointController::class, 'index'])->name('index');
+            Route::post('/rescan', [AttendancePointController::class, 'rescan'])->name('rescan');
+            Route::get('/export-all', [AttendancePointController::class, 'exportAll'])->name('export-all');
+            Route::get('/export-all-excel', [AttendancePointController::class, 'exportAllExcel'])->name('export-all-excel');
+            Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
+            Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])->name('statistics');
+            Route::get('/{user}/export', [AttendancePointController::class, 'export'])->name('export');
+            Route::get('/{user}/export-excel', [AttendancePointController::class, 'exportExcel'])->name('export-excel');
+            Route::post('/{point}/excuse', [AttendancePointController::class, 'excuse'])->name('excuse');
+            Route::post('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])->name('unexcuse');
+        });
 
     // Biometric Retention Policies
-    Route::prefix('biometric-retention-policies')->name('biometric-retention-policies.')->group(function () {
-        Route::get('/', [BiometricRetentionPolicyController::class, 'index'])->name('index');
-        Route::post('/', [BiometricRetentionPolicyController::class, 'store'])->name('store');
-        Route::put('/{policy}', [BiometricRetentionPolicyController::class, 'update'])->name('update');
-        Route::delete('/{policy}', [BiometricRetentionPolicyController::class, 'destroy'])->name('destroy');
-        Route::post('/{policy}/toggle', [BiometricRetentionPolicyController::class, 'toggle'])->name('toggle');
-    });
+    Route::prefix('biometric-retention-policies')->name('biometric-retention-policies.')
+        ->middleware('permission:biometric.retention')
+        ->group(function () {
+            Route::get('/', [BiometricRetentionPolicyController::class, 'index'])->name('index');
+            Route::post('/', [BiometricRetentionPolicyController::class, 'store'])->name('store');
+            Route::put('/{policy}', [BiometricRetentionPolicyController::class, 'update'])->name('update');
+            Route::delete('/{policy}', [BiometricRetentionPolicyController::class, 'destroy'])->name('destroy');
+            Route::post('/{policy}/toggle', [BiometricRetentionPolicyController::class, 'toggle'])->name('toggle');
+        });
 
     // Leave Requests
-    Route::prefix('leave-requests')->name('leave-requests.')->group(function () {
-        Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
-        Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
-        Route::post('/', [LeaveRequestController::class, 'store'])->name('store');
-        Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->name('show');
+    Route::prefix('leave-requests')->name('leave-requests.')
+        ->middleware('permission:leave.view,leave.create,leave.approve,leave.deny,leave.cancel')
+        ->group(function () {
+            Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
+            Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
+            Route::post('/', [LeaveRequestController::class, 'store'])->name('store');
+            Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->name('show');
         Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
         Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
         Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');

@@ -5,6 +5,8 @@ import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { Can } from "@/components/authorization";
+import { usePermission } from "@/hooks/useAuthorization";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -143,6 +145,7 @@ export default function EmployeeSchedulesIndex() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { can } = usePermission(); // Check permissions
 
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(appliedFilters.search || "");
@@ -311,10 +314,12 @@ export default function EmployeeSchedulesIndex() {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-3">
-                        <Button onClick={() => router.get("/employee-schedules/create")}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Employee Schedule
-                        </Button>
+                        <Can permission="schedules.create">
+                            <Button onClick={() => router.get("/employee-schedules/create")}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Employee Schedule
+                            </Button>
+                        </Can>
                     </div>
                 </div>
 
@@ -370,31 +375,37 @@ export default function EmployeeSchedulesIndex() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex gap-2">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => router.get(`/employee-schedules/${schedule.id}/edit`)}
-                                                >
-                                                    <Edit className="h-4 w-4" />
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleToggleActive(schedule.id)}
-                                                >
-                                                    {schedule.is_active ? (
-                                                        <XCircle className="h-4 w-4 text-orange-500" />
-                                                    ) : (
-                                                        <CheckCircle className="h-4 w-4 text-green-500" />
-                                                    )}
-                                                </Button>
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => handleDelete(schedule.id)}
-                                                >
-                                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                                </Button>
+                                                <Can permission="schedules.edit">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => router.get(`/employee-schedules/${schedule.id}/edit`)}
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                </Can>
+                                                <Can permission="schedules.toggle_active">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleToggleActive(schedule.id)}
+                                                    >
+                                                        {schedule.is_active ? (
+                                                            <XCircle className="h-4 w-4 text-orange-500" />
+                                                        ) : (
+                                                            <CheckCircle className="h-4 w-4 text-green-500" />
+                                                        )}
+                                                    </Button>
+                                                </Can>
+                                                <Can permission="schedules.delete">
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleDelete(schedule.id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                                    </Button>
+                                                </Can>
                                             </div>
                                         </TableCell>
                                     </TableRow>

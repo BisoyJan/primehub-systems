@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
@@ -16,8 +16,10 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Database, Calendar, Filter, Clock, Trash2, Eye } from "lucide-react";
+import { Database, Calendar, Filter, Clock, Trash2, Eye, Check, ChevronsUpDown } from "lucide-react";
 import type { BreadcrumbItem } from "@/types";
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -83,14 +85,9 @@ interface Filters {
 }
 
 interface PageProps extends SharedData {
-    records: RecordPayload;
+    records: BiometricRecordPayload;
     stats: Stats;
-    filters?: {
-        search?: string;
-        user_id?: string;
-        site_id?: string;
-        date?: string;
-    };
+    filters: Filters;
     [key: string]: unknown;
 }
 
@@ -128,6 +125,24 @@ export default function BiometricRecordsIndex() {
     const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
+    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
+
+    // Filter employees based on search query
+    const filteredEmployees = useMemo(() => {
+        if (!filters?.users) return [];
+        if (!employeeSearchQuery) return filters.users;
+        return filters.users.filter(user =>
+            user.name.toLowerCase().includes(employeeSearchQuery.toLowerCase())
+        );
+    }, [filters?.users, employeeSearchQuery]);
+
+    // Get the selected employee's name
+    const selectedEmployeeName = useMemo(() => {
+        if (!selectedUserId || !filters?.users) return "";
+        const employee = filters.users.find(user => String(user.id) === selectedUserId);
+        return employee?.name || "";
+    }, [selectedUserId, filters?.users]);
 
     const recordsData = {
         data: records?.data || [],
@@ -249,18 +264,70 @@ export default function BiometricRecordsIndex() {
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                        <Select value={selectedUserId || undefined} onValueChange={(value) => setSelectedUserId(value || "")}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="All Employees" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {filters?.users.map((user) => (
-                                    <SelectItem key={user.id} value={String(user.id)}>
-                                        {user.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                        <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={isEmployeePopoverOpen}
+                                    className="w-full justify-between font-normal"
+                                >
+                                    <span className="truncate">
+                                        {selectedUserId ? selectedEmployeeName : "All Employees"}
+                                    </span>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start">
+                                <Command shouldFilter={false}>
+                                    <CommandInput
+                                        placeholder="Search employee..."
+                                        value={employeeSearchQuery}
+                                        onValueChange={setEmployeeSearchQuery}
+                                    />
+                                    <CommandList>
+                                        <CommandEmpty>No employee found.</CommandEmpty>
+                                        <CommandGroup>
+                                            <CommandItem
+                                                value="all"
+                                                onSelect={() => {
+                                                    setSelectedUserId("");
+                                                    setIsEmployeePopoverOpen(false);
+                                                    setEmployeeSearchQuery("");
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                <Check
+                                                    className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"
+                                                        }`}
+                                                />
+                                                All Employees
+                                            </CommandItem>
+                                            {filteredEmployees.map((user) => (
+                                                <CommandItem
+                                                    key={user.id}
+                                                    value={user.name}
+                                                    onSelect={() => {
+                                                        setSelectedUserId(String(user.id));
+                                                        setIsEmployeePopoverOpen(false);
+                                                        setEmployeeSearchQuery("");
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${selectedUserId === String(user.id)
+                                                                ? "opacity-100"
+                                                                : "opacity-0"
+                                                            }`}
+                                                    />
+                                                    {user.name}
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
 
                         <Select value={selectedSiteId || undefined} onValueChange={(value) => setSelectedSiteId(value || "")}>
                             <SelectTrigger className="w-full">

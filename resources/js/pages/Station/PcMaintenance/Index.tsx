@@ -29,6 +29,8 @@ import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { SearchBar } from '@/components/SearchBar';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import { Can } from '@/components/authorization';
+import { usePermission } from '@/hooks/useAuthorization';
 
 interface PcSpec {
     id: number;
@@ -112,6 +114,7 @@ export default function Index() {
     });
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { can } = usePermission(); // Check permissions
 
     const hasData = maintenances && maintenances.data && maintenances.data.length > 0;
 
@@ -219,7 +222,7 @@ export default function Index() {
                 <PageHeader
                     title="PC Maintenance"
                     description="Track PC maintenance schedules and history"
-                    createLink="/pc-maintenance/create"
+                    createLink={can("pc_maintenance.create") ? "/pc-maintenance/create" : undefined}
                     createLabel="Add Maintenance Record"
                 >
                     {/* Filters */}
@@ -329,19 +332,23 @@ export default function Index() {
                                         <TableCell>{getStatusBadge(maintenance)}</TableCell>
                                         <TableCell className="text-right">
                                             <div className="flex justify-end gap-2">
-                                                <Link href={`/pc-maintenance/${maintenance.id}/edit`}>
-                                                    <Button variant="ghost" size="sm" disabled={loading}>
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                </Link>
-                                                <DeleteConfirmDialog
-                                                    onConfirm={() => handleDelete(maintenance.id)}
-                                                    title="Delete Maintenance Record"
-                                                    description={`Are you sure you want to delete this maintenance record for PC ${maintenance.station.pc_spec?.pc_number || maintenance.station.station_number}? This action cannot be undone.`}
-                                                    disabled={loading}
-                                                    triggerClassName="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/90"
-                                                    triggerLabel=""
-                                                />
+                                                <Can permission="pc_maintenance.edit">
+                                                    <Link href={`/pc-maintenance/${maintenance.id}/edit`}>
+                                                        <Button variant="ghost" size="sm" disabled={loading}>
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    </Link>
+                                                </Can>
+                                                <Can permission="pc_maintenance.delete">
+                                                    <DeleteConfirmDialog
+                                                        onConfirm={() => handleDelete(maintenance.id)}
+                                                        title="Delete Maintenance Record"
+                                                        description={`Are you sure you want to delete this maintenance record for PC ${maintenance.station.pc_spec?.pc_number || maintenance.station.station_number}? This action cannot be undone.`}
+                                                        disabled={loading}
+                                                        triggerClassName="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/90"
+                                                        triggerLabel=""
+                                                    />
+                                                </Can>
                                             </div>
                                         </TableCell>
                                     </TableRow>

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Can } from '@/components/authorization';
 import {
     Dialog,
     DialogContent,
@@ -33,7 +34,6 @@ interface LeaveRequest {
     end_date: string;
     days_requested: number;
     reason: string;
-    team_lead_email: string;
     campaign_department: string;
     medical_cert_submitted: boolean;
     status: string;
@@ -119,21 +119,27 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                     <div className="flex gap-2">
                         {isAdmin && leaveRequest.status === 'pending' && (
                             <>
-                                <Button variant="default" onClick={() => setShowApproveDialog(true)}>
-                                    <Check className="mr-2 h-4 w-4" />
-                                    Approve
-                                </Button>
-                                <Button variant="destructive" onClick={() => setShowDenyDialog(true)}>
-                                    <X className="mr-2 h-4 w-4" />
-                                    Deny
-                                </Button>
+                                <Can permission="leave.approve">
+                                    <Button variant="default" onClick={() => setShowApproveDialog(true)}>
+                                        <Check className="mr-2 h-4 w-4" />
+                                        Approve
+                                    </Button>
+                                </Can>
+                                <Can permission="leave.approve">
+                                    <Button variant="destructive" onClick={() => setShowDenyDialog(true)}>
+                                        <X className="mr-2 h-4 w-4" />
+                                        Deny
+                                    </Button>
+                                </Can>
                             </>
                         )}
-                        {canCancel && (
-                            <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
-                                <Ban className="mr-2 h-4 w-4" />
-                                Cancel Request
-                            </Button>
+                        {canCancel && leaveRequest.status === 'pending' && (
+                            <Can permission="leave.cancel">
+                                <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
+                                    <Ban className="mr-2 h-4 w-4" />
+                                    Cancel Request
+                                </Button>
+                            </Can>
                         )}
                     </div>
                 </div>
@@ -193,15 +199,9 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                         </div>
 
                         {/* Work Info */}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Team Lead</p>
-                                <p className="text-base">{leaveRequest.team_lead_email}</p>
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Campaign/Department</p>
-                                <p className="text-base">{leaveRequest.campaign_department}</p>
-                            </div>
+                        <div>
+                            <p className="text-sm font-medium text-muted-foreground">Campaign/Department</p>
+                            <p className="text-base">{leaveRequest.campaign_department}</p>
                         </div>
 
                         {/* Medical Cert (if SL) */}
@@ -229,7 +229,11 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                             <p className="text-sm font-medium text-muted-foreground">
                                 Attendance Points at Request
                             </p>
-                            <p className="text-base">{leaveRequest.attendance_points_at_request}</p>
+                            <p className="text-base">
+                                {leaveRequest.attendance_points_at_request
+                                    ? Number(leaveRequest.attendance_points_at_request).toFixed(1)
+                                    : '0'}
+                            </p>
                         </div>
 
                         {/* Reason */}

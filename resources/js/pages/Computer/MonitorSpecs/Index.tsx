@@ -20,6 +20,8 @@ import {
     DialogClose,
     DialogHeader,
 } from '@/components/ui/dialog';
+import { Can } from '@/components/authorization';
+import { usePermission } from '@/hooks/useAuthorization';
 import {
     AlertDialog,
     AlertDialogTrigger,
@@ -86,6 +88,7 @@ export default function Index() {
 
     useFlashMessage();
     const isLoading = usePageLoading();
+    const { can } = usePermission(); // Check permissions
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -111,7 +114,7 @@ export default function Index() {
                 <PageHeader
                     title="Monitor Specs Management"
                     description="Manage monitor specifications for PC configurations"
-                    createLink={monitorSpecCreate.url()}
+                    createLink={can("hardware.create") ? monitorSpecCreate.url() : undefined}
                     createLabel="Add Monitor Spec"
                 >
                     <SearchBar
@@ -158,15 +161,17 @@ export default function Index() {
                                         </TableCell>
                                         <TableCell className="flex justify-center gap-2">
                                             {/* Edit */}
-                                            <Link href={monitorSpecEdit.url(monitor.id)}>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                                >
-                                                    Edit
-                                                </Button>
-                                            </Link>
+                                            <Can permission="hardware.edit">
+                                                <Link href={monitorSpecEdit.url(monitor.id)}>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                    >
+                                                        Edit
+                                                    </Button>
+                                                </Link>
+                                            </Can>
 
                                             {/* Details Dialog */}
                                             <Dialog>
@@ -233,34 +238,36 @@ export default function Index() {
                                             </Dialog>
 
                                             {/* Delete */}
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
-                                                    <Button
-                                                        variant="destructive"
-                                                        size="sm"
-                                                        className="bg-red-600 hover:bg-red-700 text-white"
-                                                    >
-                                                        Delete
-                                                    </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent>
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
-                                                        <AlertDialogDescription>
-                                                            Are you sure you want to delete {monitor.brand} {monitor.model}? This action cannot be undone.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
-                                                    <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                                        <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction
-                                                            className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                            onClick={() => handleDelete(monitor.id)}
+                                            <Can permission="hardware.delete">
+                                                <AlertDialog>
+                                                    <AlertDialogTrigger asChild>
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="bg-red-600 hover:bg-red-700 text-white"
                                                         >
-                                                            Yes, Delete
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+                                                            Delete
+                                                        </Button>
+                                                    </AlertDialogTrigger>
+                                                    <AlertDialogContent>
+                                                        <AlertDialogHeader>
+                                                            <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                                                            <AlertDialogDescription>
+                                                                Are you sure you want to delete {monitor.brand} {monitor.model}? This action cannot be undone.
+                                                            </AlertDialogDescription>
+                                                        </AlertDialogHeader>
+                                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                                            <AlertDialogAction
+                                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                                                onClick={() => handleDelete(monitor.id)}
+                                                            >
+                                                                Yes, Delete
+                                                            </AlertDialogAction>
+                                                        </AlertDialogFooter>
+                                                    </AlertDialogContent>
+                                                </AlertDialog>
+                                            </Can>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -319,15 +326,17 @@ export default function Index() {
 
                             <div className="flex flex-col gap-2 pt-2 border-t">
                                 <div className="flex gap-2">
-                                    <Link href={monitorSpecEdit.url(monitor.id)} className="flex-1">
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="bg-green-600 hover:bg-green-700 text-white w-full"
-                                        >
-                                            Edit
-                                        </Button>
-                                    </Link>
+                                    <Can permission="hardware.edit">
+                                        <Link href={monitorSpecEdit.url(monitor.id)} className="flex-1">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="bg-green-600 hover:bg-green-700 text-white w-full"
+                                            >
+                                                Edit
+                                            </Button>
+                                        </Link>
+                                    </Can>
                                     <Dialog>
                                         <DialogTrigger asChild>
                                             <Button
@@ -384,34 +393,36 @@ export default function Index() {
                                         </DialogContent>
                                     </Dialog>
                                 </div>
-                                <AlertDialog>
-                                    <AlertDialogTrigger asChild>
-                                        <Button
-                                            variant="destructive"
-                                            size="sm"
-                                            className="bg-red-600 hover:bg-red-700 text-white w-full"
-                                        >
-                                            Delete
-                                        </Button>
-                                    </AlertDialogTrigger>
-                                    <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
-                                        <AlertDialogHeader>
-                                            <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
-                                            <AlertDialogDescription>
-                                                Are you sure you want to delete {monitor.brand} {monitor.model}?
-                                            </AlertDialogDescription>
-                                        </AlertDialogHeader>
-                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                            <AlertDialogAction
-                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                onClick={() => handleDelete(monitor.id)}
+                                <Can permission="hardware.delete">
+                                    <AlertDialog>
+                                        <AlertDialogTrigger asChild>
+                                            <Button
+                                                variant="destructive"
+                                                size="sm"
+                                                className="bg-red-600 hover:bg-red-700 text-white w-full"
                                             >
-                                                Yes, Delete
-                                            </AlertDialogAction>
-                                        </AlertDialogFooter>
-                                    </AlertDialogContent>
-                                </AlertDialog>
+                                                Delete
+                                            </Button>
+                                        </AlertDialogTrigger>
+                                        <AlertDialogContent className="max-w-[90vw] sm:max-w-lg">
+                                            <AlertDialogHeader>
+                                                <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                                                <AlertDialogDescription>
+                                                    Are you sure you want to delete {monitor.brand} {monitor.model}?
+                                                </AlertDialogDescription>
+                                            </AlertDialogHeader>
+                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                                <AlertDialogAction
+                                                    className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                                    onClick={() => handleDelete(monitor.id)}
+                                                >
+                                                    Yes, Delete
+                                                </AlertDialogAction>
+                                            </AlertDialogFooter>
+                                        </AlertDialogContent>
+                                    </AlertDialog>
+                                </Can>
                             </div>
                         </div>
                     ))}

@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('employee_schedule_id')->nullable()->constrained()->onDelete('set null');
+            $table->foreignId('leave_request_id')->nullable()->constrained()->onDelete('set null');
             $table->date('shift_date'); // The date of the shift (e.g., Monday for Mon night shift)
             $table->time('scheduled_time_in')->nullable();
             $table->time('scheduled_time_out')->nullable();
@@ -33,7 +34,8 @@ return new class extends Migration
                 'failed_bio_out',
                 'present_no_bio',
                 'needs_manual_review',
-                'non_work_day'
+                'non_work_day',
+                'on_leave'
             ])->default('on_time');
             $table->string('secondary_status')->nullable();
             $table->integer('tardy_minutes')->nullable();
@@ -55,6 +57,7 @@ return new class extends Migration
             // Indexes for performance
             $table->index(['user_id', 'shift_date']);
             $table->index('employee_schedule_id');
+            $table->index('leave_request_id');
             $table->index('bio_in_site_id');
             $table->index('bio_out_site_id');
             $table->index('status');

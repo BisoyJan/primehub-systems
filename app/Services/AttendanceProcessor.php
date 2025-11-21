@@ -8,6 +8,7 @@ use App\Models\EmployeeSchedule;
 use App\Models\AttendanceUpload;
 use App\Models\BiometricRecord;
 use App\Models\AttendancePoint;
+use App\Models\LeaveRequest;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -258,6 +259,22 @@ class AttendanceProcessor
             'dates_found' => $datesFound,
             'expected_dates' => $expectedDates,
         ];
+    }
+
+    /**
+     * Check if user has an approved leave request for the given date.
+     *
+     * @param User $user
+     * @param Carbon $date
+     * @return LeaveRequest|null
+     */
+    protected function checkApprovedLeave(User $user, Carbon $date): ?LeaveRequest
+    {
+        return LeaveRequest::where('user_id', $user->id)
+            ->where('status', 'approved')
+            ->where('start_date', '<=', $date)
+            ->where('end_date', '>=', $date)
+            ->first();
     }
 
     /**
@@ -535,6 +552,19 @@ class AttendanceProcessor
             ];
         }
 
+        // Check if user has an approved leave request for this date
+        $approvedLeave = $this->checkApprovedLeave($user, $detectedShiftDate);
+        if ($approvedLeave) {
+            // Create attendance record with on_leave status
+            $this->createLeaveAttendance($user, $schedule, $detectedShiftDate, $approvedLeave);
+
+            return [
+                'processed' => true,
+                'on_leave' => true,
+                'error' => null,
+            ];
+        }
+
         // Process attendance for this shift
         $result = $this->processAttendance($user, $schedule, $records, $detectedShiftDate, $biometricSiteId);
 
@@ -542,6 +572,63 @@ class AttendanceProcessor
             'processed' => $result['matched'] ?? false,
             'error' => !empty($result['errors']) ? implode(', ', $result['errors']) : null,
         ];
+    }
+
+    /**
+     * Create attendance record for employee on approved leave.
+     *
+     * @param User $user
+     * @param EmployeeSchedule $schedule
+     * @param Carbon $shiftDate
+     * @param LeaveRequest $leaveRequest
+     * @return void
+     */
+    protected function createLeaveAttendance(
+        User $user,
+        EmployeeSchedule $schedule,
+        Carbon $shiftDate,
+        LeaveRequest $leaveRequest
+    ): void {
+        // Check if attendance record already exists
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $shiftDate)
+            ->first();
+
+        if ($attendance) {
+            // If record exists and is already verified, don't modify
+            if ($attendance->admin_verified) {
+                return;
+            }
+
+            // Update existing record to on_leave status
+            $attendance->update([
+                'status' => 'on_leave',
+                'leave_request_id' => $leaveRequest->id,
+                'admin_verified' => true, // Auto-verify leave records
+                'notes' => "Employee on approved {$leaveRequest->leave_type} leave. Leave request #{$leaveRequest->id}.",
+            ]);
+        } else {
+            // Create new attendance record with on_leave status
+            Attendance::create([
+                'user_id' => $user->id,
+                'employee_schedule_id' => $schedule->id,
+                'leave_request_id' => $leaveRequest->id,
+                'shift_date' => $shiftDate,
+                'scheduled_time_in' => $schedule->scheduled_time_in,
+                'scheduled_time_out' => $schedule->scheduled_time_out,
+                'status' => 'on_leave',
+                'admin_verified' => true, // Auto-verify leave records
+                'notes' => "Employee on approved {$leaveRequest->leave_type} leave. Leave request #{$leaveRequest->id}.",
+            ]);
+        }
+
+        \Log::info('Created on_leave attendance record', [
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'shift_date' => $shiftDate->format('Y-m-d'),
+            'leave_request_id' => $leaveRequest->id,
+            'leave_type' => $leaveRequest->leave_type,
+        ]);
     }
 
     /**
@@ -1535,6 +1622,14 @@ class AttendanceProcessor
 
                 // Check if employee works on this day
                 if (!$schedule->worksOnDay($dayName)) {
+                    continue;
+                }
+
+                // Check if employee has approved leave for this date
+                $approvedLeave = $this->checkApprovedLeave($employee, $date);
+                if ($approvedLeave) {
+                    // Create on_leave attendance record instead of NCNS
+                    $this->createLeaveAttendance($employee, $schedule, $date, $approvedLeave);
                     continue;
                 }
 

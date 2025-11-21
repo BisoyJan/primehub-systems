@@ -5,6 +5,7 @@ import { useFlashMessage } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
+import { usePermission } from "@/hooks/useAuthorization";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -153,6 +154,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     useFlashMessage();
     const { auth } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format || '24';
+    const { can } = usePermission();
 
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
     const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(null);
@@ -494,7 +496,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                             <TableHead>Status</TableHead>
                                             <TableHead>Violation Details</TableHead>
                                             <TableHead>Expires</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
+                                            {can('attendance_points.excuse') && <TableHead className="text-right">Actions</TableHead>}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -575,33 +577,31 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                             <span className="text-muted-foreground text-sm">-</span>
                                                         )}
                                                     </TableCell>
-                                                    <TableCell className="text-right">
-                                                        <DropdownMenu>
-                                                            <DropdownMenuTrigger asChild>
-                                                                <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                                    <MoreVertical className="h-4 w-4" />
-                                                                </Button>
-                                                            </DropdownMenuTrigger>
-                                                            <DropdownMenuContent align="end">
-                                                                {!point.is_expired && !point.is_excused && (
-                                                                    <DropdownMenuItem onClick={() => openExcuseDialog(point)}>
-                                                                        <CheckCircle className="mr-2 h-4 w-4" />
-                                                                        Excuse Point
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                {point.is_excused && (
-                                                                    <DropdownMenuItem onClick={() => handleUnexcuse(point.id)}>
-                                                                        <XCircle className="mr-2 h-4 w-4" />
-                                                                        Remove Excuse
-                                                                    </DropdownMenuItem>
-                                                                )}
-                                                                <DropdownMenuItem onClick={() => openExcuseDialog(point)}>
-                                                                    <FileText className="mr-2 h-4 w-4" />
-                                                                    View Details
-                                                                </DropdownMenuItem>
-                                                            </DropdownMenuContent>
-                                                        </DropdownMenu>
-                                                    </TableCell>
+                                                    {can('attendance_points.excuse') && (
+                                                        <TableCell className="text-right">
+                                                            <DropdownMenu>
+                                                                <DropdownMenuTrigger asChild>
+                                                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                                                                        <MoreVertical className="h-4 w-4" />
+                                                                    </Button>
+                                                                </DropdownMenuTrigger>
+                                                                <DropdownMenuContent align="end">
+                                                                    {!point.is_expired && !point.is_excused && (
+                                                                        <DropdownMenuItem onClick={() => openExcuseDialog(point)}>
+                                                                            <CheckCircle className="mr-2 h-4 w-4" />
+                                                                            Excuse Point
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                    {point.is_excused && (
+                                                                        <DropdownMenuItem onClick={() => handleUnexcuse(point.id)}>
+                                                                            <XCircle className="mr-2 h-4 w-4" />
+                                                                            Remove Excuse
+                                                                        </DropdownMenuItem>
+                                                                    )}
+                                                                </DropdownMenuContent>
+                                                            </DropdownMenu>
+                                                        </TableCell>
+                                                    )}
                                                 </TableRow>
                                             );
                                         })}

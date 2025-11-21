@@ -19,6 +19,8 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
+import { Can } from "@/components/authorization";
+import { usePermission } from "@/hooks/useAuthorization";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 
 import { create, edit, destroy, index } from "@/routes/ramspecs";
@@ -57,6 +59,7 @@ export default function RamSpecsIndexRefactored() {
 
     useFlashMessage(); // Automatically handles flash messages
     const isLoading = usePageLoading(); // Track page loading state
+    const { can } = usePermission(); // Check permissions
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -84,7 +87,7 @@ export default function RamSpecsIndexRefactored() {
                 <PageHeader
                     title="RAM Specs Management"
                     description="Manage RAM component specifications and inventory"
-                    createLink={create.url()}
+                    createLink={can("hardware.create") ? create.url() : undefined}
                     createLabel="Add RAM Spec"
                 >
                     {/* Reusable search bar */}
@@ -132,16 +135,20 @@ export default function RamSpecsIndexRefactored() {
                                         </TableCell>
                                         <TableCell>
                                             <div className="flex items-center justify-center gap-2">
-                                                <Link href={edit({ ramspec: ram.id }).url}>
-                                                    <Button variant="outline" size="sm">Edit</Button>
-                                                </Link>
+                                                <Can permission="hardware.edit">
+                                                    <Link href={edit({ ramspec: ram.id }).url}>
+                                                        <Button variant="outline" size="sm">Edit</Button>
+                                                    </Link>
+                                                </Can>
 
                                                 {/* Reusable delete confirmation dialog */}
-                                                <DeleteConfirmDialog
-                                                    onConfirm={() => handleDelete(ram.id)}
-                                                    title="Delete RAM Specification"
-                                                    description={`Are you sure you want to delete ${ram.manufacturer} ${ram.model}?`}
-                                                />
+                                                <Can permission="hardware.delete">
+                                                    <DeleteConfirmDialog
+                                                        onConfirm={() => handleDelete(ram.id)}
+                                                        title="Delete RAM Specification"
+                                                        description={`Are you sure you want to delete ${ram.manufacturer} ${ram.model}?`}
+                                                    />
+                                                </Can>
                                             </div>
                                         </TableCell>
                                     </TableRow>

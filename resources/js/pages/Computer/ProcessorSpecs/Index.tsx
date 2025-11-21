@@ -20,6 +20,8 @@ import { PageHeader } from "@/components/PageHeader";
 import { SearchBar } from "@/components/SearchBar";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { Can } from "@/components/authorization";
+import { usePermission } from "@/hooks/useAuthorization";
 
 import { create, edit, destroy, index } from "@/routes/processorspecs";
 
@@ -64,6 +66,7 @@ export default function Index() {
 
     useFlashMessage(); // Automatically handles flash messages
     const isLoading = usePageLoading(); // Track page loading state
+    const { can } = usePermission(); // Check permissions
 
     const handleSearch = (e: React.FormEvent) => {
         e.preventDefault();
@@ -91,7 +94,7 @@ export default function Index() {
                 <PageHeader
                     title="Processor Specs Management"
                     description="Manage CPU/processor component specifications and inventory"
-                    createLink={create.url()}
+                    createLink={can("hardware.create") ? create.url() : undefined}
                     createLabel="Add Processor"
                 >
                     {/* Reusable search bar */}
@@ -154,22 +157,26 @@ export default function Index() {
                                             )}
                                         </TableCell>
                                         <TableCell className="flex justify-center gap-2">
-                                            <Link href={edit.url(cpu.id)}>
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="bg-green-600 hover:bg-green-700 text-white"
-                                                >
-                                                    Edit
-                                                </Button>
-                                            </Link>
+                                            <Can permission="hardware.edit">
+                                                <Link href={edit.url(cpu.id)}>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="bg-green-600 hover:bg-green-700 text-white"
+                                                    >
+                                                        Edit
+                                                    </Button>
+                                                </Link>
+                                            </Can>
 
                                             {/* Reusable delete confirmation dialog */}
-                                            <DeleteConfirmDialog
-                                                onConfirm={() => handleDelete(cpu.id)}
-                                                title="Delete Processor Specification"
-                                                description={`Are you sure you want to delete ${cpu.manufacturer} ${cpu.model}?`}
-                                            />
+                                            <Can permission="hardware.delete">
+                                                <DeleteConfirmDialog
+                                                    onConfirm={() => handleDelete(cpu.id)}
+                                                    title="Delete Processor Specification"
+                                                    description={`Are you sure you want to delete ${cpu.manufacturer} ${cpu.model}?`}
+                                                />
+                                            </Can>
                                         </TableCell>
                                     </TableRow>
                                 ))}
@@ -235,25 +242,29 @@ export default function Index() {
                             </div>
 
                             {/* Actions */}
-                            <div className="flex gap-2 pt-2 border-t">
-                                <Link href={edit.url(cpu.id)} className="flex-1">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="bg-green-600 hover:bg-green-700 text-white w-full"
-                                    >
-                                        Edit
-                                    </Button>
-                                </Link>
+                            <div className="flex gap-2">
+                                <Can permission="hardware.edit">
+                                    <Link href={edit.url(cpu.id)} className="flex-1">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="bg-green-600 hover:bg-green-700 text-white w-full"
+                                        >
+                                            Edit
+                                        </Button>
+                                    </Link>
+                                </Can>
 
                                 {/* Reusable delete confirmation dialog */}
-                                <div className="flex-1">
-                                    <DeleteConfirmDialog
-                                        onConfirm={() => handleDelete(cpu.id)}
-                                        title="Delete Processor Specification"
-                                        description={`Are you sure you want to delete ${cpu.manufacturer} ${cpu.model}?`}
-                                    />
-                                </div>
+                                <Can permission="hardware.delete">
+                                    <div className="flex-1">
+                                        <DeleteConfirmDialog
+                                            onConfirm={() => handleDelete(cpu.id)}
+                                            title="Delete Processor Specification"
+                                            description={`Are you sure you want to delete ${cpu.manufacturer} ${cpu.model}?`}
+                                        />
+                                    </div>
+                                </Can>
                             </div>
                         </div>
                     ))}

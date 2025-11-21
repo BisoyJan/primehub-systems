@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
     AlertDialog,
@@ -24,6 +24,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Can } from '@/components/authorization';
 
 interface Stats {
     total_records: number;
@@ -306,56 +307,62 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                 </div>
 
                                 <div className="flex gap-3">
-                                    <Button
-                                        onClick={handlePreview}
-                                        disabled={isLoading || !startDate || !endDate}
-                                        variant="outline"
-                                    >
-                                        {isLoading ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Loading...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Calendar className="mr-2 h-4 w-4" />
-                                                Preview
-                                            </>
-                                        )}
-                                    </Button>
-                                    <Button
-                                        onClick={handleReprocess}
-                                        disabled={isLoading || !startDate || !endDate}
-                                    >
-                                        {isLoading ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Processing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <RefreshCw className="mr-2 h-4 w-4" />
-                                                Reprocess
-                                            </>
-                                        )}
-                                    </Button>
-                                    <Button
-                                        onClick={handleFixStatuses}
-                                        disabled={isLoading || !startDate || !endDate}
-                                        variant="secondary"
-                                    >
-                                        {isLoading ? (
-                                            <>
-                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                Fixing...
-                                            </>
-                                        ) : (
-                                            <>
-                                                <CheckCircle className="mr-2 h-4 w-4" />
-                                                Fix Statuses
-                                            </>
-                                        )}
-                                    </Button>
+                                    <Can permission="biometric.preview">
+                                        <Button
+                                            onClick={handlePreview}
+                                            disabled={isLoading || !startDate || !endDate}
+                                            variant="outline"
+                                        >
+                                            {isLoading ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Loading...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Calendar className="mr-2 h-4 w-4" />
+                                                    Preview
+                                                </>
+                                            )}
+                                        </Button>
+                                    </Can>
+                                    <Can permission="biometric.reprocess">
+                                        <Button
+                                            onClick={handleReprocess}
+                                            disabled={isLoading || !startDate || !endDate}
+                                        >
+                                            {isLoading ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Processing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <RefreshCw className="mr-2 h-4 w-4" />
+                                                    Reprocess
+                                                </>
+                                            )}
+                                        </Button>
+                                    </Can>
+                                    <Can permission="biometric.fix_statuses">
+                                        <Button
+                                            onClick={handleFixStatuses}
+                                            disabled={isLoading || !startDate || !endDate}
+                                            variant="secondary"
+                                        >
+                                            {isLoading ? (
+                                                <>
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                    Fixing...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle className="mr-2 h-4 w-4" />
+                                                    Fix Statuses
+                                                </>
+                                            )}
+                                        </Button>
+                                    </Can>
                                 </div>
                             </CardContent>
                         </Card>

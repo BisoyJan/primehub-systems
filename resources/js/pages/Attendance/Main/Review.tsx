@@ -140,6 +140,7 @@ const getStatusBadge = (status: string) => {
         tardy: { label: "Tardy", className: "bg-yellow-500" },
         half_day_absence: { label: "Half Day", className: "bg-orange-500" },
         advised_absence: { label: "Advised Absence", className: "bg-blue-500" },
+        on_leave: { label: "On Leave", className: "bg-blue-600" },
         ncns: { label: "NCNS", className: "bg-red-500" },
         undertime: { label: "Undertime", className: "bg-orange-400" },
         failed_bio_in: { label: "Failed Bio In", className: "bg-purple-500" },
@@ -200,6 +201,8 @@ export default function AttendanceReview() {
     const [selectedSecondaryStatus, setSelectedSecondaryStatus] = useState<string | null | undefined>(null);
     const [warningsDialogRecord, setWarningsDialogRecord] = useState<AttendanceRecord | null>(null);
     const [isWarningsDialogOpen, setIsWarningsDialogOpen] = useState(false);
+    const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(null);
+    const highlightedRowRef = React.useRef<HTMLTableRowElement | HTMLDivElement>(null);
 
     // Search state
     const [searchQuery, setSearchQuery] = useState(filters?.search || "");
@@ -277,21 +280,55 @@ export default function AttendanceReview() {
         setIsDialogOpen(true);
     };
 
+    // Clear highlight when dialog closes
+    useEffect(() => {
+        if (!isDialogOpen && highlightedRecordId) {
+            setHighlightedRecordId(null);
+        }
+    }, [isDialogOpen, highlightedRecordId]);
+
     // Auto-open dialog if verify parameter is present in URL
     useEffect(() => {
         const urlParams = new URLSearchParams(window.location.search);
         const verifyId = urlParams.get('verify');
 
         if (verifyId) {
-            const recordToVerify = attendanceData.data.find(r => r.id === parseInt(verifyId));
+            const recordId = parseInt(verifyId);
+            const recordToVerify = attendanceData.data.find(r => r.id === recordId);
+
+            // Set highlighted record (will remain until dialog is closed)
+            setHighlightedRecordId(recordId);
+
             if (recordToVerify) {
-                openVerifyDialog(recordToVerify);
+                // Wait for loading to complete, then scroll and open dialog
+                const checkLoading = setInterval(() => {
+                    if (!isPageLoading) {
+                        clearInterval(checkLoading);
+
+                        // Scroll to highlighted row
+                        setTimeout(() => {
+                            highlightedRowRef.current?.scrollIntoView({
+                                behavior: 'smooth',
+                                block: 'center'
+                            });
+
+                            // Open dialog after scroll
+                            setTimeout(() => {
+                                openVerifyDialog(recordToVerify);
+                            }, 600);
+                        }, 300);
+                    }
+                }, 100);
+
                 // Remove the verify parameter from URL without page reload
                 window.history.replaceState({}, '', window.location.pathname + window.location.hash);
+
+                // Cleanup
+                return () => clearInterval(checkLoading);
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [attendanceData.data]);
+    }, [attendanceData.data, isPageLoading]);
 
     const handleVerify = (e: React.FormEvent) => {
         e.preventDefault();
@@ -552,7 +589,14 @@ export default function AttendanceReview() {
                                     </TableHeader>
                                     <TableBody>
                                         {attendanceData.data.map(record => (
-                                            <TableRow key={record.id}>
+                                            <TableRow
+                                                key={record.id}
+                                                ref={highlightedRecordId === record.id ? highlightedRowRef as React.RefObject<HTMLTableRowElement> : null}
+                                                className={`transition-colors duration-300 ${highlightedRecordId === record.id
+                                                        ? 'bg-blue-100 dark:bg-blue-900/30'
+                                                        : ''
+                                                    }`}
+                                            >
                                                 <TableCell>
                                                     <input
                                                         type="checkbox"
@@ -673,7 +717,14 @@ export default function AttendanceReview() {
                         {/* Mobile View */}
                         <div className="md:hidden space-y-4">
                             {attendanceData.data.map(record => (
-                                <div key={record.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                                <div
+                                    key={record.id}
+                                    ref={highlightedRecordId === record.id ? highlightedRowRef as React.RefObject<HTMLDivElement> : null}
+                                    className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 transition-colors duration-300 ${highlightedRecordId === record.id
+                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                                            : ''
+                                        }`}
+                                >
                                     <div className="flex justify-between items-start">
                                         <input
                                             type="checkbox"
@@ -829,11 +880,13 @@ export default function AttendanceReview() {
                                     <SelectItem value="tardy">Tardy</SelectItem>
                                     <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
                                     <SelectItem value="advised_absence">Advised Absence</SelectItem>
+                                    <SelectItem value="on_leave">On Leave</SelectItem>
                                     <SelectItem value="ncns">NCNS</SelectItem>
                                     <SelectItem value="undertime">Undertime</SelectItem>
                                     <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                     <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
                                     <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>
+                                    <SelectItem value="non_work_day">Non-Work Day</SelectItem>
                                 </SelectContent>
                             </Select>
                             {batchErrors.status && <p className="text-sm text-red-500">{batchErrors.status}</p>}
@@ -1006,11 +1059,13 @@ export default function AttendanceReview() {
                                     <SelectItem value="tardy">Tardy</SelectItem>
                                     <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
                                     <SelectItem value="advised_absence">Advised Absence</SelectItem>
+                                    <SelectItem value="on_leave">On Leave</SelectItem>
                                     <SelectItem value="ncns">NCNS</SelectItem>
                                     <SelectItem value="undertime">Undertime</SelectItem>
                                     <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                     <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
                                     <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>
+                                    <SelectItem value="non_work_day">Non-Work Day</SelectItem>
                                 </SelectContent>
                             </Select>
                             {errors.status && <p className="text-sm text-red-500">{errors.status}</p>}

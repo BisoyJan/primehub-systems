@@ -4,7 +4,9 @@ import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
-import { type SharedData } from "@/types";
+import { type SharedData, type UserRole } from "@/types";
+import { Can } from "@/components/authorization";
+import { usePermission } from "@/hooks/useAuthorization";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,6 +20,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { CheckCircle, AlertCircle, Trash2, Check } from "lucide-react";
+import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
     AlertDialog,
@@ -179,6 +182,7 @@ const getStatusBadge = (status: string) => {
         tardy: { label: "Tardy", className: "bg-yellow-500" },
         half_day_absence: { label: "Half Day", className: "bg-orange-500" },
         advised_absence: { label: "Advised Absence", className: "bg-blue-500" },
+        on_leave: { label: "On Leave", className: "bg-blue-600" },
         ncns: { label: "NCNS", className: "bg-red-500" },
         undertime: { label: "Undertime", className: "bg-orange-400" },
         failed_bio_in: { label: "No Bio In", className: "bg-purple-500" },
@@ -243,6 +247,7 @@ export default function AttendanceIndex() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { can } = usePermission();
 
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(appliedFilters.search || "");
@@ -271,6 +276,11 @@ export default function AttendanceIndex() {
     }, [search]);
 
     const isInitialMount = React.useRef(true);
+    const userId = auth.user?.id;
+    const userRole = auth.user?.role;
+    // Roles that should only see their own attendance records
+    const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
+    const isRestrictedUser = userRole && restrictedRoles.includes(userRole);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -279,7 +289,15 @@ export default function AttendanceIndex() {
         }
 
         const params: Record<string, string> = {};
-        if (debouncedSearch) params.search = debouncedSearch;
+
+        // For Agent, IT, and Utility roles, automatically filter to their own records
+        if (isRestrictedUser && userId) {
+            params.user_id = userId.toString();
+        } else if (debouncedSearch) {
+            // Only allow search for users with higher permissions
+            params.search = debouncedSearch;
+        }
+
         if (statusFilter !== "all") params.status = statusFilter;
         if (startDate) params.start_date = startDate;
         if (endDate) params.end_date = endDate;
@@ -292,7 +310,7 @@ export default function AttendanceIndex() {
             replace: true,
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, statusFilter, startDate, endDate, needsVerification]);
+    }, [debouncedSearch, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
 
     const showClearFilters =
         statusFilter !== "all" ||
@@ -421,15 +439,17 @@ export default function AttendanceIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="w-full">
-                        <Input
-                            type="search"
-                            placeholder="Search employee name..."
-                            value={search}
-                            onChange={event => setSearch(event.target.value)}
-                            className="w-full"
-                        />
-                    </div>
+                    {!isRestrictedUser && (
+                        <div className="w-full">
+                            <Input
+                                type="search"
+                                placeholder="Search employee name..."
+                                value={search}
+                                onChange={event => setSearch(event.target.value)}
+                                className="w-full"
+                            />
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
@@ -488,40 +508,65 @@ export default function AttendanceIndex() {
 
                     <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:justify-between min-w-0">
                         <div className="flex flex-col sm:flex-row gap-3">
-                            {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
-                                <Button
-                                    onClick={handleBulkQuickApprove}
-                                    variant="outline"
-                                    className="w-full sm:w-auto"
-                                >
-                                    <Check className="mr-2 h-4 w-4" />
-                                    Quick Approve ({getEligibleQuickApproveCount()})
-                                </Button>
-                            )}
-                            {selectedRecords.length > 0 && (
-                                <Button
-                                    onClick={handleBulkDelete}
-                                    variant="destructive"
-                                    className="w-full sm:w-auto"
-                                >
-                                    <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete Selected ({selectedRecords.length})
-                                </Button>
-                            )}
                             <Button
-                                onClick={() => router.get("/attendance/import")}
-                                className="w-full sm:w-auto"
-                            >
-                                Import Biometric File (.txt)
-                            </Button>
-                            <Button
-                                onClick={() => router.get("/attendance/review")}
+                                onClick={() => router.get("/attendance/calendar")}
                                 className="w-full sm:w-auto"
                                 variant="outline"
                             >
-                                <AlertCircle className="mr-2 h-4 w-4" />
-                                Review Flagged Records
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                Calendar View
                             </Button>
+                            <Can permission="attendance.create">
+                                <Button
+                                    onClick={() => router.get("/attendance/create")}
+                                    className="w-full sm:w-auto"
+                                    variant="default"
+                                >
+                                    Add Manual Attendance
+                                </Button>
+                            </Can>
+                            {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
+                                <Can permission="attendance.approve">
+                                    <Button
+                                        onClick={handleBulkQuickApprove}
+                                        variant="outline"
+                                        className="w-full sm:w-auto"
+                                    >
+                                        <Check className="mr-2 h-4 w-4" />
+                                        Quick Approve ({getEligibleQuickApproveCount()})
+                                    </Button>
+                                </Can>
+                            )}
+                            {selectedRecords.length > 0 && (
+                                <Can permission="attendance.delete">
+                                    <Button
+                                        onClick={handleBulkDelete}
+                                        variant="destructive"
+                                        className="w-full sm:w-auto"
+                                    >
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete Selected ({selectedRecords.length})
+                                    </Button>
+                                </Can>
+                            )}
+                            <Can permission="attendance.import">
+                                <Button
+                                    onClick={() => router.get("/attendance/import")}
+                                    className="w-full sm:w-auto"
+                                >
+                                    Import Biometric File (.txt)
+                                </Button>
+                            </Can>
+                            <Can permission="attendance.review">
+                                <Button
+                                    onClick={() => router.get("/attendance/review")}
+                                    className="w-full sm:w-auto"
+                                    variant="outline"
+                                >
+                                    <AlertCircle className="mr-2 h-4 w-4" />
+                                    Review Flagged Records
+                                </Button>
+                            </Can>
                         </div>
                     </div>
                 </div>
@@ -564,7 +609,7 @@ export default function AttendanceIndex() {
                                     <TableHead>Status</TableHead>
                                     <TableHead>Tardy/UT/OT</TableHead>
                                     <TableHead>Verified</TableHead>
-                                    <TableHead>Actions</TableHead>
+                                    {can('attendance.approve') && <TableHead>Actions</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -650,29 +695,33 @@ export default function AttendanceIndex() {
                                                 <span className="text-muted-foreground text-xs">Pending</span>
                                             )}
                                         </TableCell>
-                                        <TableCell>
-                                            {canQuickApprove(record) ? (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleQuickApprove(record.id)}
-                                                    className="h-8"
-                                                >
-                                                    <Check className="h-3 w-3 mr-1" />
-                                                    Approve
-                                                </Button>
-                                            ) : needsReview(record) ? (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => router.get(`/attendance/review?verify=${record.id}`)}
-                                                    className="h-8 text-amber-600 border-amber-600"
-                                                >
-                                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                                    Review
-                                                </Button>
-                                            ) : null}
-                                        </TableCell>
+                                        {can('attendance.approve') && (
+                                            <TableCell>
+                                                <Can permission="attendance.approve">
+                                                    {canQuickApprove(record) ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => handleQuickApprove(record.id)}
+                                                            className="h-8"
+                                                        >
+                                                            <Check className="h-3 w-3 mr-1" />
+                                                            Approve
+                                                        </Button>
+                                                    ) : needsReview(record) ? (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => window.open(`/attendance/review?verify=${record.id}`, '_blank')}
+                                                            className="h-8 text-amber-600 border-amber-600"
+                                                        >
+                                                            <AlertCircle className="h-3 w-3 mr-1" />
+                                                            Review
+                                                        </Button>
+                                                    ) : null}
+                                                </Can>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 ))}
                                 {attendanceData.data.length === 0 && !loading && (
@@ -776,31 +825,33 @@ export default function AttendanceIndex() {
                                         </div>
                                     </div>
 
-                                    {(canQuickApprove(record) || needsReview(record)) && (
-                                        <div className="mt-3 pt-3 border-t">
-                                            {canQuickApprove(record) ? (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => handleQuickApprove(record.id)}
-                                                    className="w-full"
-                                                >
-                                                    <Check className="h-3 w-3 mr-1" />
-                                                    Quick Approve
-                                                </Button>
-                                            ) : (
-                                                <Button
-                                                    size="sm"
-                                                    variant="outline"
-                                                    onClick={() => router.get(`/attendance/review?verify=${record.id}`)}
-                                                    className="w-full text-amber-600 border-amber-600"
-                                                >
-                                                    <AlertCircle className="h-3 w-3 mr-1" />
-                                                    Needs Review
-                                                </Button>
-                                            )}
-                                        </div>
-                                    )}
+                                    <Can permission="attendance.approve">
+                                        {(canQuickApprove(record) || needsReview(record)) && (
+                                            <div className="mt-3 pt-3 border-t">
+                                                {canQuickApprove(record) ? (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => handleQuickApprove(record.id)}
+                                                        className="w-full"
+                                                    >
+                                                        <Check className="h-3 w-3 mr-1" />
+                                                        Quick Approve
+                                                    </Button>
+                                                ) : (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => window.open(`/attendance/review?verify=${record.id}`, '_blank')}
+                                                        className="w-full text-amber-600 border-amber-600"
+                                                    >
+                                                        <AlertCircle className="h-3 w-3 mr-1" />
+                                                        Needs Review
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        )}
+                                    </Can>
                                 </div>
                             </div>
                         </div>

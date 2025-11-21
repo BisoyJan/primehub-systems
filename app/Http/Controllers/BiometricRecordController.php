@@ -53,7 +53,7 @@ class BiometricRecordController extends Controller
         // Order by datetime descending (most recent first)
         $query->orderBy('datetime', 'desc');
 
-        $records = $query->paginate(50)->withQueryString();
+        $records = $query->paginate(25)->withQueryString();
 
         // Get statistics
         $stats = $this->getStatistics();

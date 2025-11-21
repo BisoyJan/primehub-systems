@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import type { BreadcrumbItem } from "@/types";
 import { index as campaignsIndex } from "@/routes/campaigns";
+import { Can } from "@/components/authorization";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Campaigns', href: campaignsIndex().url }
@@ -175,9 +176,11 @@ export default function CampaignManagement() {
                 <div className="flex flex-col gap-3 mb-4">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold">Campaign Management</h2>
-                        <Button onClick={handleAdd} disabled={loading}>
-                            {loading ? 'Loading...' : 'Add Campaign'}
-                        </Button>
+                        <Can permission="campaigns.create">
+                            <Button onClick={handleAdd} disabled={loading}>
+                                {loading ? 'Loading...' : 'Add Campaign'}
+                            </Button>
+                        </Can>
                     </div>
 
                     {/* Search Input */}
@@ -218,12 +221,16 @@ export default function CampaignManagement() {
                                         <TableCell>{campaign.name}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => handleEdit(campaign)} disabled={loading}>
-                                                    Edit
-                                                </Button>
-                                                <Button variant="destructive" size="sm" onClick={() => handleDelete(campaign)} className="ml-2" disabled={loading}>
-                                                    Delete
-                                                </Button>
+                                                <Can permission="campaigns.edit">
+                                                    <Button variant="outline" size="sm" onClick={() => handleEdit(campaign)} disabled={loading}>
+                                                        Edit
+                                                    </Button>
+                                                </Can>
+                                                <Can permission="campaigns.delete">
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete(campaign)} className="ml-2" disabled={loading}>
+                                                        Delete
+                                                    </Button>
+                                                </Can>
                                             </div>
                                         </TableCell>
                                     </TableRow>

@@ -45,7 +45,7 @@ class EmployeeScheduleController extends Controller
         }
 
         $schedules = $query->orderBy('effective_date', 'desc')
-            ->paginate(50)
+            ->paginate(25)
             ->withQueryString();
 
         $users = User::orderBy('first_name')->get();

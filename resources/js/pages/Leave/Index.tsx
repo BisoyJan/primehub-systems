@@ -4,6 +4,7 @@ import { format, parseISO } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Can } from '@/components/authorization';
 import {
     Table,
     TableBody,
@@ -19,8 +20,19 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Filter, Eye } from 'lucide-react';
+import { Plus, Filter, Eye, Ban } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface User {
     id: number;
@@ -64,11 +76,20 @@ interface Props {
         end_date?: string;
     };
     isAdmin: boolean;
+    hasPendingRequests: boolean;
+    auth: {
+        user: {
+            id: number;
+            name: string;
+        };
+    };
 }
 
-export default function Index({ leaveRequests, filters, isAdmin }: Props) {
+export default function Index({ leaveRequests, filters, isAdmin, hasPendingRequests, auth }: Props) {
     const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
     const [filterType, setFilterType] = useState(filters.type || 'all');
+    const [showCancelDialog, setShowCancelDialog] = useState(false);
+    const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
 
     const handleFilter = () => {
         router.get(
@@ -78,6 +99,30 @@ export default function Index({ leaveRequests, filters, isAdmin }: Props) {
                 type: filterType === 'all' ? '' : filterType
             },
             { preserveState: true }
+        );
+    };
+
+    const handleCancelRequest = (id: number) => {
+        setSelectedLeaveId(id);
+        setShowCancelDialog(true);
+    };
+
+    const confirmCancel = () => {
+        if (!selectedLeaveId) return;
+
+        router.post(
+            `/leave-requests/${selectedLeaveId}/cancel`,
+            {},
+            {
+                onSuccess: () => {
+                    toast.success('Leave request cancelled successfully');
+                    setShowCancelDialog(false);
+                    setSelectedLeaveId(null);
+                },
+                onError: () => {
+                    toast.error('Failed to cancel leave request');
+                }
+            }
         );
     };
 
@@ -99,6 +144,16 @@ export default function Index({ leaveRequests, filters, isAdmin }: Props) {
         return <Badge variant="secondary">{type}</Badge>;
     };
 
+    const handleRequestLeaveClick = (e: React.MouseEvent) => {
+        if (hasPendingRequests) {
+            e.preventDefault();
+            toast.warning('Cannot create new leave request', {
+                description: 'You have a pending leave request. Please wait for approval or cancel your existing pending request before creating a new one.',
+                duration: 6000,
+            });
+        }
+    };
+
     return (
         <AppLayout>
             <Head title="Leave Requests" />
@@ -111,12 +166,14 @@ export default function Index({ leaveRequests, filters, isAdmin }: Props) {
                             {isAdmin ? 'Manage all leave requests' : 'View your leave requests'}
                         </p>
                     </div>
-                    <Link href="/leave-requests/create">
-                        <Button>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Request Leave
-                        </Button>
-                    </Link>
+                    <Can permission="leave.create">
+                        <Link href="/leave-requests/create" onClick={handleRequestLeaveClick}>
+                            <Button disabled={hasPendingRequests}>
+                                <Plus className="mr-2 h-4 w-4" />
+                                Request Leave
+                            </Button>
+                        </Link>
+                    </Can>
                 </div>
 
                 {/* Filters */}
@@ -215,11 +272,22 @@ export default function Index({ leaveRequests, filters, isAdmin }: Props) {
                                                     {format(parseISO(request.created_at), 'MMM d, yyyy')}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    <Link href={`/leave-requests/${request.id}`}>
-                                                        <Button size="sm" variant="ghost">
-                                                            <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                    </Link>
+                                                    <div className="flex justify-end gap-2">
+                                                        <Link href={`/leave-requests/${request.id}`}>
+                                                            <Button size="sm" variant="ghost">
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
+                                                        </Link>
+                                                        {request.status === 'pending' && auth.user.id === request.user.id && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                onClick={() => handleCancelRequest(request.id)}
+                                                            >
+                                                                <Ban className="h-4 w-4 text-red-500" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))
@@ -246,6 +314,24 @@ export default function Index({ leaveRequests, filters, isAdmin }: Props) {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Cancel Confirmation Dialog */}
+            <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Cancel Leave Request</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to cancel this leave request? This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setSelectedLeaveId(null)}>No, Keep It</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmCancel} className="bg-red-600 hover:bg-red-700">
+                            Yes, Cancel Request
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

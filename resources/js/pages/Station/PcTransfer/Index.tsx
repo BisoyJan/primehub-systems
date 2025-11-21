@@ -31,6 +31,8 @@ import { index as pcTransfersIndex, transferPage } from '@/routes/pc-transfers';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { Can } from '@/components/authorization';
+import { usePermission } from '@/hooks/useAuthorization';
 
 type PcSpecDetails = {
     manufacturer: string;
@@ -108,6 +110,7 @@ export default function Index() {
 
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading(); // Track page loading state
+    const { can } = usePermission(); // Check permissions
 
     const [stations, setStations] = useState<Station[]>(props.stations.data);
     const [links, setLinks] = useState<PaginationLink[]>(props.stations.links);
@@ -420,22 +423,26 @@ export default function Index() {
                                             <TableCell className="text-right">
                                                 {!bulkMode && (
                                                     <div className="flex justify-end gap-2">
-                                                        <Link href={transferPage(station.id).url}>
-                                                            <Button
-                                                                size="sm"
-                                                            >
-                                                                <ArrowRight size={14} className="mr-1" />
-                                                                {station.pc_spec_id ? 'Transfer PC' : 'Assign PC'}
-                                                            </Button>
-                                                        </Link>
+                                                        <Can permission="pc_transfers.create">
+                                                            <Link href={transferPage(station.id).url}>
+                                                                <Button
+                                                                    size="sm"
+                                                                >
+                                                                    <ArrowRight size={14} className="mr-1" />
+                                                                    {station.pc_spec_id ? 'Transfer PC' : 'Assign PC'}
+                                                                </Button>
+                                                            </Link>
+                                                        </Can>
                                                         {station.pc_spec_id && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="destructive"
-                                                                onClick={() => handleRemovePC(station)}
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </Button>
+                                                            <Can permission="pc_transfers.remove">
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="destructive"
+                                                                    onClick={() => handleRemovePC(station)}
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </Button>
+                                                            </Can>
                                                         )}
                                                     </div>
                                                 )}

@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Can } from '@/components/authorization';
 
 interface Site {
     id: number;
@@ -173,12 +174,14 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                         </CardDescription>
                                     </div>
                                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                                        <DialogTrigger asChild>
-                                            <Button onClick={openCreateDialog}>
-                                                <Plus className="mr-2 h-4 w-4" />
-                                                Add Policy
-                                            </Button>
-                                        </DialogTrigger>
+                                        <Can permission="biometric.retention">
+                                            <DialogTrigger asChild>
+                                                <Button onClick={openCreateDialog}>
+                                                    <Plus className="mr-2 h-4 w-4" />
+                                                    Add Policy
+                                                </Button>
+                                            </DialogTrigger>
+                                        </Can>
                                         <DialogContent className="max-w-2xl">
                                             <DialogHeader>
                                                 <DialogTitle>
@@ -378,20 +381,24 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => openEditDialog(policy)}
-                                                            >
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => handleDelete(policy.id)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-red-600" />
-                                                            </Button>
+                                                            <Can permission="biometric.retention">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => openEditDialog(policy)}
+                                                                >
+                                                                    <Pencil className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                            <Can permission="biometric.retention">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleDelete(policy.id)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                                                </Button>
+                                                            </Can>
                                                         </div>
                                                     </TableCell>
                                                 </TableRow>

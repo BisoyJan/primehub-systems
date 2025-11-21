@@ -4,8 +4,9 @@ import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import type { BreadcrumbItem, SharedData } from "@/types";
+import type { BreadcrumbItem, SharedData, UserRole } from "@/types";
 import { toast } from "sonner";
+import { Can } from '@/components/authorization';
 import {
     Select,
     SelectContent,
@@ -41,7 +42,6 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MoreVertical } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -172,6 +172,10 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
     useFlashMessage();
     const { auth } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format as '12' | '24';
+
+    // Roles that should only see their own attendance points
+    const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
+    const isRestrictedUser = auth.user.role && restrictedRoles.includes(auth.user.role);
 
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
     const [employeeSearch, setEmployeeSearch] = useState("");
@@ -432,51 +436,59 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                 <div className="flex flex-col gap-3">
                     <div className="flex items-center justify-between">
                         <h3 className="text-lg font-medium">Filters</h3>
-                        <div className="flex items-center gap-2">
-                            <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                    <Button variant="outline" size="sm">
-                                        <Download className="h-4 w-4 mr-2" />
-                                        Export
+                        {!isRestrictedUser && (
+                            <div className="flex items-center gap-2">
+                                <Can permission="attendance_points.export">
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" size="sm">
+                                                <Download className="h-4 w-4 mr-2" />
+                                                Export
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={handleExportAllCSV}>
+                                                <FileText className="mr-2 h-4 w-4" />
+                                                Export as CSV
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={handleExportAllExcel}>
+                                                <FileText className="mr-2 h-4 w-4" />
+                                                Export as Excel
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </Can>
+                                <Can permission="attendance_points.rescan">
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setIsRescanOpen(true)}
+                                        className="gap-2"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                        Rescan Points
                                     </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                    <DropdownMenuItem onClick={handleExportAllCSV}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        Export as CSV
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem onClick={handleExportAllExcel}>
-                                        <FileText className="mr-2 h-4 w-4" />
-                                        Export as Excel
-                                    </DropdownMenuItem>
-                                </DropdownMenuContent>
-                            </DropdownMenu>
-                            <Button
-                                variant="outline"
-                                onClick={() => setIsRescanOpen(true)}
-                                className="gap-2"
-                            >
-                                <RefreshCw className="h-4 w-4" />
-                                Rescan Points
-                            </Button>
-                        </div>
+                                </Can>
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-                        <Input
-                            type="text"
-                            placeholder="Search employee name..."
-                            value={employeeSearch}
-                            onChange={(e) => {
-                                setEmployeeSearch(e.target.value);
-                                // Find matching user and set ID
-                                const matchedUser = users?.find(u =>
-                                    u.name.toLowerCase().includes(e.target.value.toLowerCase())
-                                );
-                                setSelectedUserId(matchedUser?.id.toString() || "");
-                            }}
-                            className="w-full"
-                        />
+                        {!isRestrictedUser && (
+                            <Input
+                                type="text"
+                                placeholder="Search employee name..."
+                                value={employeeSearch}
+                                onChange={(e) => {
+                                    setEmployeeSearch(e.target.value);
+                                    // Find matching user and set ID
+                                    const matchedUser = users?.find(u =>
+                                        u.name.toLowerCase().includes(e.target.value.toLowerCase())
+                                    );
+                                    setSelectedUserId(matchedUser?.id.toString() || "");
+                                }}
+                                className="w-full"
+                            />
+                        )}
 
                         <Select value={selectedPointType || undefined} onValueChange={(value) => setSelectedPointType(value || "")}>
                             <SelectTrigger className="w-full">
@@ -670,30 +682,30 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                                                         <Eye className="h-4 w-4" />
                                                         View
                                                     </button>
-                                                    <DropdownMenu>
-                                                        <DropdownMenuTrigger asChild>
-                                                            <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                                <MoreVertical className="h-4 w-4" />
+                                                    {!point.is_expired && !point.is_excused && (
+                                                        <Can permission="attendance_points.excuse">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => openExcuseDialog(point)}
+                                                            >
+                                                                <CheckCircle className="h-4 w-4 mr-1" />
+                                                                Excuse
                                                             </Button>
-                                                        </DropdownMenuTrigger>
-                                                        <DropdownMenuContent align="end">
-                                                            {!point.is_excused && !point.is_expired ? (
-                                                                <DropdownMenuItem onClick={() => openExcuseDialog(point)}>
-                                                                    <CheckCircle className="mr-2 h-4 w-4" />
-                                                                    Excuse Point
-                                                                </DropdownMenuItem>
-                                                            ) : point.is_excused ? (
-                                                                <DropdownMenuItem onClick={() => handleUnexcuse(point.id)}>
-                                                                    <XCircle className="mr-2 h-4 w-4" />
-                                                                    Remove Excuse
-                                                                </DropdownMenuItem>
-                                                            ) : null}
-                                                            <DropdownMenuItem onClick={() => openExcuseDialog(point)}>
-                                                                <FileText className="mr-2 h-4 w-4" />
-                                                                View Details
-                                                            </DropdownMenuItem>
-                                                        </DropdownMenuContent>
-                                                    </DropdownMenu>
+                                                        </Can>
+                                                    )}
+                                                    {!point.is_expired && point.is_excused && (
+                                                        <Can permission="attendance_points.unexcuse">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleUnexcuse(point.id)}
+                                                            >
+                                                                <XCircle className="h-4 w-4 mr-1" />
+                                                                Unexcuse
+                                                            </Button>
+                                                        </Can>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -806,32 +818,36 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                                         View
                                     </Button>
                                     {!point.is_expired && !point.is_excused && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                openExcuseDialog(point);
-                                            }}
-                                        >
-                                            <CheckCircle className="h-4 w-4 mr-1" />
-                                            Excuse
-                                        </Button>
+                                        <Can permission="attendance_points.excuse">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex-1"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    openExcuseDialog(point);
+                                                }}
+                                            >
+                                                <CheckCircle className="h-4 w-4 mr-1" />
+                                                Excuse
+                                            </Button>
+                                        </Can>
                                     )}
                                     {!point.is_expired && point.is_excused && (
-                                        <Button
-                                            variant="outline"
-                                            size="sm"
-                                            className="flex-1"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                handleUnexcuse(point.id);
-                                            }}
-                                        >
-                                            <XCircle className="h-4 w-4 mr-1" />
-                                            Remove
-                                        </Button>
+                                        <Can permission="attendance_points.unexcuse">
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="flex-1"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    handleUnexcuse(point.id);
+                                                }}
+                                            >
+                                                <XCircle className="h-4 w-4 mr-1" />
+                                                Remove
+                                            </Button>
+                                        </Can>
                                     )}
                                 </div>
                             </div>

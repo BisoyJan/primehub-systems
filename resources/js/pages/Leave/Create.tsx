@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
-import { format, differenceInDays, parseISO } from 'date-fns';
+import { format, parseISO } from 'date-fns';
+import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +17,11 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { AlertCircle, Calendar, CreditCard } from 'lucide-react';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 
 interface CreditsSummary {
     year: number;
@@ -28,46 +33,131 @@ interface CreditsSummary {
     balance: number;
 }
 
+interface AttendanceViolation {
+    id: number;
+    shift_date: string;
+    point_type: string;
+    points: number;
+    violation_details: string;
+    expires_at: string;
+}
+
+interface Employee {
+    id: number;
+    name: string;
+    email: string;
+}
+
 interface Props {
     creditsSummary: CreditsSummary;
     attendancePoints: number;
+    attendanceViolations: AttendanceViolation[];
     hasRecentAbsence: boolean;
+    hasPendingRequests: boolean;
     nextEligibleLeaveDate: string | null;
-    teamLeadEmails: string[];
     campaigns: string[];
+    selectedCampaign: string | null;
     twoWeeksFromNow: string;
+    isAdmin: boolean;
+    employees: Employee[];
+    selectedEmployeeId: number;
 }
 
 export default function Create({
     creditsSummary,
     attendancePoints,
+    attendanceViolations,
     hasRecentAbsence,
+    hasPendingRequests,
     nextEligibleLeaveDate,
-    teamLeadEmails,
     campaigns,
+    selectedCampaign,
     twoWeeksFromNow,
+    isAdmin,
+    employees,
+    selectedEmployeeId,
 }: Props) {
     const { data, setData, post, processing, errors } = useForm({
+        employee_id: selectedEmployeeId,
         leave_type: '',
         start_date: '',
         end_date: '',
         reason: '',
-        team_lead_email: '',
-        campaign_department: '',
+        campaign_department: selectedCampaign || '',
         medical_cert_submitted: false,
     });
+
+    const [selectedEmployee, setSelectedEmployee] = useState<number>(selectedEmployeeId);
+    const [searchQuery, setSearchQuery] = useState<string>('');
+    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
 
     const [calculatedDays, setCalculatedDays] = useState<number>(0);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
 
-    // Calculate days when dates change
+    // Show warning if user has pending requests
+    useEffect(() => {
+        if (hasPendingRequests) {
+            toast.warning('Cannot create new leave request', {
+                description: 'You have a pending leave request. Please wait for approval or cancel your existing pending request before creating a new one.',
+                duration: 6000,
+            });
+        }
+    }, [hasPendingRequests]);
+
+    // Update campaign_department when selectedCampaign changes
+    useEffect(() => {
+        if (selectedCampaign && !data.campaign_department) {
+            setData('campaign_department', selectedCampaign);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedCampaign]);
+
+    // Filter employees based on search query
+    const filteredEmployees = employees.filter((employee) => {
+        const query = searchQuery.toLowerCase();
+        return (
+            employee.name.toLowerCase().includes(query) ||
+            employee.email.toLowerCase().includes(query)
+        );
+    });
+
+    // Get selected employee details
+    const selectedEmployeeDetails = employees.find(emp => emp.id === selectedEmployee);
+
+    // Handle employee selection change for admins
+    const handleEmployeeChange = (employeeId: number) => {
+        setSelectedEmployee(employeeId);
+        setIsEmployeePopoverOpen(false);
+        setSearchQuery('');
+        // Refresh the page with new employee data
+        router.get(`/leave-requests/create?employee_id=${employeeId}`, {}, {
+            preserveState: false,
+            preserveScroll: true,
+        });
+    };
+
+    // Calculate working days when dates change (excluding weekends)
     useEffect(() => {
         if (data.start_date && data.end_date) {
             try {
                 const start = parseISO(data.start_date);
                 const end = parseISO(data.end_date);
-                const days = differenceInDays(end, start) + 1;
-                setCalculatedDays(days > 0 ? days : 0);
+
+                // Count only weekdays (Monday-Friday)
+                let workingDays = 0;
+                const currentDate = new Date(start);
+
+                while (currentDate <= end) {
+                    const dayOfWeek = currentDate.getDay();
+                    // 0 = Sunday, 6 = Saturday, exclude these
+                    // 1-5 = Monday-Friday, count these
+                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                        workingDays++;
+                    }
+                    currentDate.setDate(currentDate.getDate() + 1);
+                }
+
+                setCalculatedDays(workingDays);
             } catch {
                 setCalculatedDays(0);
             }
@@ -82,16 +172,21 @@ export default function Create({
 
         // Check eligibility
         if (!creditsSummary.is_eligible && ['VL', 'SL', 'BL'].includes(data.leave_type)) {
+            const eligibilityDateStr = creditsSummary.eligibility_date
+                ? format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')
+                : 'N/A';
             warnings.push(
-                `You are not eligible to use leave credits yet. Eligible on ${format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}.`
+                `You are not eligible to use leave credits yet. Eligible on ${eligibilityDateStr}.`
             );
         }
 
         // Check 2-week notice (only for VL and BL, not SL as it's unpredictable)
         if (data.start_date && ['VL', 'BL'].includes(data.leave_type)) {
-            const start = parseISO(data.start_date);
-            const twoWeeks = parseISO(twoWeeksFromNow);
-            if (start < twoWeeks) {
+            const start = new Date(data.start_date);
+            start.setHours(0, 0, 0, 0);
+            const twoWeeks = new Date(twoWeeksFromNow);
+            twoWeeks.setHours(0, 0, 0, 0);
+            if (start.getTime() < twoWeeks.getTime()) {
                 warnings.push(
                     `Leave must be requested at least 2 weeks in advance. Earliest date: ${format(twoWeeks, 'MMMM d, yyyy')}`
                 );
@@ -106,9 +201,9 @@ export default function Create({
         }
 
         // Check recent absence for VL/BL
-        if (['VL', 'BL'].includes(data.leave_type) && hasRecentAbsence) {
+        if (['VL', 'BL'].includes(data.leave_type) && hasRecentAbsence && nextEligibleLeaveDate) {
             warnings.push(
-                `You had an absence in the last 30 days. Next eligible date: ${format(parseISO(nextEligibleLeaveDate!), 'MMMM d, yyyy')}`
+                `You had an absence in the last 30 days. Next eligible date: ${format(parseISO(nextEligibleLeaveDate), 'MMMM d, yyyy')}`
             );
         }
 
@@ -135,7 +230,29 @@ export default function Create({
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/leave-requests');
+
+        post('/leave-requests', {
+            onSuccess: () => {
+                toast.success('Leave request submitted successfully!', {
+                    description: 'Your request has been sent for approval.',
+                });
+            },
+            onError: (errors) => {
+                if (errors.error) {
+                    toast.error('Failed to submit leave request', {
+                        description: errors.error as string,
+                    });
+                } else if (errors.validation) {
+                    toast.error('Validation failed', {
+                        description: 'Please check the form for errors.',
+                    });
+                } else {
+                    toast.error('Failed to submit leave request', {
+                        description: 'Please try again.',
+                    });
+                }
+            },
+        });
     };
 
     const requiresCredits = ['VL', 'SL', 'BL'].includes(data.leave_type);
@@ -194,16 +311,111 @@ export default function Create({
                     </Card>
                 )}
 
-                {!creditsSummary.is_eligible && creditsSummary.eligibility_date && (
+                {!creditsSummary.is_eligible && (
                     <Alert className="mb-6">
                         <AlertCircle className="h-4 w-4" />
                         <AlertTitle>Not Eligible Yet</AlertTitle>
                         <AlertDescription>
-                            You will be eligible to use leave credits on{' '}
-                            <strong>
-                                {format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')}
-                            </strong>
-                            . You can still apply for non-credited leave types (SPL, LOA, LDV).
+                            {creditsSummary.eligibility_date ? (
+                                <>
+                                    You will be eligible to use leave credits on{' '}
+                                    <strong className="text-orange-600 dark:text-orange-400">
+                                        {format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')}
+                                    </strong>
+                                    You can still apply for non-credited leave types (SPL, LOA, LDV).
+                                </>
+                            ) : (
+                                <>
+                                    Eligibility date not set. Please contact HR to update your hire date. You can still
+                                    apply for non-credited leave types (SPL, LOA, LDV).
+                                </>
+                            )}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Attendance Violations Display */}
+                {attendanceViolations.length > 0 && (
+                    <Card className="mb-6 border-orange-200 dark:border-orange-800">
+                        <CardHeader className="pb-3">
+                            <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
+                                <AlertTriangle className="h-5 w-5" />
+                                <CardTitle>Active Attendance Violations ({attendancePoints.toFixed(2)} points)</CardTitle>
+                            </div>
+                            <CardDescription>
+                                {attendancePoints > 6
+                                    ? 'You have more than 6 attendance points. Vacation/Bereavement leave requests may be denied.'
+                                    : 'Current attendance violations that may affect leave approval'}
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <Accordion type="single" collapsible className="w-full">
+                                <AccordionItem value="violations" className="border-0">
+                                    <AccordionTrigger className="py-2 hover:no-underline">
+                                        <span className="text-sm font-medium">
+                                            View {attendanceViolations.length} violation{attendanceViolations.length !== 1 ? 's' : ''}
+                                        </span>
+                                    </AccordionTrigger>
+                                    <AccordionContent className="pt-2">
+                                        <div className="space-y-3">
+                                            {attendanceViolations.map((violation) => {
+                                                const getPointTypeBadge = (type: string) => {
+                                                    const variants: Record<string, { className: string; label: string }> = {
+                                                        whole_day_absence: { className: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-100', label: 'Whole Day' },
+                                                        half_day_absence: { className: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-100', label: 'Half Day' },
+                                                        undertime: { className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100', label: 'Undertime' },
+                                                        tardy: { className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-100', label: 'Tardy' },
+                                                    };
+                                                    const variant = variants[type] || { className: 'bg-gray-100 text-gray-800', label: type };
+                                                    return <Badge className={variant.className}>{variant.label}</Badge>;
+                                                };
+
+                                                return (
+                                                    <div key={violation.id} className="p-3 border rounded-lg bg-muted/50">
+                                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                                            <div className="flex items-center gap-2">
+                                                                {getPointTypeBadge(violation.point_type)}
+                                                                <span className="text-sm font-medium">
+                                                                    {format(parseISO(violation.shift_date), 'MMM d, yyyy')}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-sm font-bold text-red-600 dark:text-red-400">
+                                                                {Number(violation.points).toFixed(2)} pts
+                                                            </span>
+                                                        </div>
+                                                        <p className="text-xs text-muted-foreground">
+                                                            {violation.violation_details}
+                                                        </p>
+                                                        <p className="text-xs text-muted-foreground mt-1">
+                                                            Expires: {format(parseISO(violation.expires_at), 'MMM d, yyyy')}
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                        {attendancePoints > 6 && (
+                                            <Alert variant="destructive" className="mt-4">
+                                                <AlertCircle className="h-4 w-4" />
+                                                <AlertTitle>High Attendance Points</AlertTitle>
+                                                <AlertDescription>
+                                                    Your attendance points exceed 6.0. This may result in automatic denial of Vacation Leave (VL) and Bereavement Leave (BL) requests. Please work on improving attendance or wait for points to expire.
+                                                </AlertDescription>
+                                            </Alert>
+                                        )}
+                                    </AccordionContent>
+                                </AccordionItem>
+                            </Accordion>
+                        </CardContent>
+                    </Card>
+                )}
+
+                {/* Pending Request Warning */}
+                {hasPendingRequests && (
+                    <Alert variant="destructive" className="mb-6">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle>Cannot Create New Request</AlertTitle>
+                        <AlertDescription>
+                            You have a pending leave request. Please wait for approval or cancel your existing pending request before creating a new one.
                         </AlertDescription>
                     </Alert>
                 )}
@@ -231,6 +443,73 @@ export default function Create({
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-6">
+                            {/* Employee Selection (Admin Only) */}
+                            {isAdmin && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="employee_id">
+                                        Employee <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={isEmployeePopoverOpen}
+                                                className="w-full justify-between font-normal"
+                                            >
+                                                {selectedEmployeeDetails ? (
+                                                    <span className="truncate">
+                                                        {selectedEmployeeDetails.name} ({selectedEmployeeDetails.email})
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground">Search employee...</span>
+                                                )}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-full p-0" align="start">
+                                            <Command shouldFilter={false}>
+                                                <CommandInput
+                                                    placeholder="Search by name or email..."
+                                                    value={searchQuery}
+                                                    onValueChange={setSearchQuery}
+                                                />
+                                                <CommandList>
+                                                    <CommandEmpty>No employee found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        {filteredEmployees.map((employee) => (
+                                                            <CommandItem
+                                                                key={employee.id}
+                                                                value={`${employee.name} ${employee.email}`}
+                                                                onSelect={() => handleEmployeeChange(employee.id)}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={`mr-2 h-4 w-4 ${selectedEmployee === employee.id
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0'
+                                                                        }`}
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-medium">{employee.name}</span>
+                                                                    <span className="text-xs text-muted-foreground">{employee.email}</span>
+                                                                </div>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                    {errors.employee_id && (
+                                        <p className="text-sm text-red-500">{errors.employee_id}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                        Search and select the employee for whom you are creating this leave request
+                                    </p>
+                                </div>
+                            )}
+
                             {/* Leave Type */}
                             <div className="space-y-2">
                                 <Label htmlFor="leave_type">
@@ -316,31 +595,6 @@ export default function Create({
                                 </Alert>
                             )}
 
-                            {/* Team Lead Email */}
-                            <div className="space-y-2">
-                                <Label htmlFor="team_lead_email">
-                                    Team Lead Email <span className="text-red-500">*</span>
-                                </Label>
-                                <Select
-                                    value={data.team_lead_email}
-                                    onValueChange={(value) => setData('team_lead_email', value)}
-                                >
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="Select team lead" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {teamLeadEmails.map((email) => (
-                                            <SelectItem key={email} value={email}>
-                                                {email}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.team_lead_email && (
-                                    <p className="text-sm text-red-500">{errors.team_lead_email}</p>
-                                )}
-                            </div>
-
                             {/* Campaign/Department */}
                             <div className="space-y-2">
                                 <Label htmlFor="campaign_department">
@@ -349,6 +603,7 @@ export default function Create({
                                 <Select
                                     value={data.campaign_department}
                                     onValueChange={(value) => setData('campaign_department', value)}
+                                    disabled={!!selectedCampaign && !!data.campaign_department}
                                 >
                                     <SelectTrigger>
                                         <SelectValue placeholder="Select campaign/department" />
@@ -363,6 +618,16 @@ export default function Create({
                                 </Select>
                                 {errors.campaign_department && (
                                     <p className="text-sm text-red-500">{errors.campaign_department}</p>
+                                )}
+                                {selectedCampaign && data.campaign_department && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Auto-selected from employee schedule
+                                    </p>
+                                )}
+                                {!selectedCampaign && (
+                                    <p className="text-xs text-muted-foreground">
+                                        Employee has no active schedule - please select manually
+                                    </p>
                                 )}
                             </div>
 
@@ -422,7 +687,7 @@ export default function Create({
 
                             {/* Submit Button */}
                             <div className="flex gap-4">
-                                <Button type="submit" disabled={processing || validationWarnings.length > 0}>
+                                <Button type="submit" disabled={processing || validationWarnings.length > 0 || hasPendingRequests}>
                                     {processing ? 'Submitting...' : 'Submit Leave Request'}
                                 </Button>
                                 <Button

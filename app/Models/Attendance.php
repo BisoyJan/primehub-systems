@@ -12,6 +12,7 @@ class Attendance extends Model
     protected $fillable = [
         'user_id',
         'employee_schedule_id',
+        'leave_request_id',
         'shift_date',
         'scheduled_time_in',
         'scheduled_time_out',
@@ -64,6 +65,14 @@ class Attendance extends Model
     public function employeeSchedule(): BelongsTo
     {
         return $this->belongsTo(EmployeeSchedule::class);
+    }
+
+    /**
+     * Get the leave request associated with this attendance.
+     */
+    public function leaveRequest(): BelongsTo
+    {
+        return $this->belongsTo(LeaveRequest::class);
     }
 
     /**
@@ -170,6 +179,7 @@ class Attendance extends Model
             'tardy' => 'yellow',
             'half_day_absence' => 'orange',
             'advised_absence' => 'blue',
+            'on_leave' => 'blue',
             'ncns' => 'red',
             'undertime' => 'orange',
             'failed_bio_in', 'failed_bio_out' => 'purple',

@@ -316,13 +316,25 @@ class LeaveCreditService
     }
 
     /**
-     * Calculate number of days between two dates (excluding weekends if needed).
+     * Calculate number of working days between two dates (excluding weekends).
+     * Leave credits are only deducted for working days (Monday-Friday).
      */
     public function calculateDays(Carbon $startDate, Carbon $endDate): float
     {
-        // For now, simple day count including weekends
-        // You can enhance this to exclude weekends/holidays if needed
-        return $startDate->diffInDays($endDate) + 1;
+        $workingDays = 0;
+        $currentDate = $startDate->copy();
+
+        // Loop through each day in the range
+        while ($currentDate->lte($endDate)) {
+            // Count only weekdays (Monday = 1 to Friday = 5)
+            // Saturday = 6, Sunday = 7 are excluded
+            if ($currentDate->dayOfWeek >= Carbon::MONDAY && $currentDate->dayOfWeek <= Carbon::FRIDAY) {
+                $workingDays++;
+            }
+            $currentDate->addDay();
+        }
+
+        return $workingDays;
     }
 
     /**
@@ -346,8 +358,8 @@ class LeaveCreditService
 
         // Check 2-week advance notice for VL and BL only (SL is unpredictable)
         if (in_array($leaveType, ['VL', 'BL'])) {
-            $twoWeeksFromNow = now()->addWeeks(2);
-            if ($startDate->lt($twoWeeksFromNow)) {
+            $twoWeeksFromNow = now()->addWeeks(2)->startOfDay();
+            if ($startDate->startOfDay()->lt($twoWeeksFromNow)) {
                 $errors[] = "Leave requests must be submitted at least 2 weeks in advance. Earliest date you can apply for is {$twoWeeksFromNow->format('F j, Y')}.";
             }
         }

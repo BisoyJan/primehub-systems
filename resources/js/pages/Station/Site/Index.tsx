@@ -14,6 +14,8 @@ import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import type { BreadcrumbItem } from "@/types";
+import { Can } from "@/components/authorization";
+import { usePermission } from "@/hooks/useAuthorization";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Sites', href: sitesIndex().url }
@@ -47,6 +49,7 @@ interface Filters {
 export default function SiteManagement() {
     // Fix: Use correct prop name for paginated data
     const { sites, flash, filters = {} } = usePage<{ sites: PaginatedSites, flash?: Flash, filters?: Filters }>().props;
+    const { can } = usePermission(); // Check permissions
     const [open, setOpen] = useState(false);
     const [editSite, setEditSite] = useState<Site | null>(null);
     const [name, setName] = useState("");
@@ -180,9 +183,11 @@ export default function SiteManagement() {
                 <div className="flex flex-col gap-3 mb-4">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-semibold">Site Management</h2>
-                        <Button onClick={handleAdd} disabled={loading}>
-                            {loading ? 'Loading...' : 'Add Site'}
-                        </Button>
+                        <Can permission="sites.create">
+                            <Button onClick={handleAdd} disabled={loading}>
+                                {loading ? 'Loading...' : 'Add Site'}
+                            </Button>
+                        </Can>
                     </div>
 
                     {/* Search Input */}
@@ -223,12 +228,16 @@ export default function SiteManagement() {
                                         <TableCell>{site.name}</TableCell>
                                         <TableCell>
                                             <div className="flex items-center gap-2">
-                                                <Button variant="outline" size="sm" onClick={() => handleEdit(site)} disabled={loading}>
-                                                    Edit
-                                                </Button>
-                                                <Button variant="destructive" size="sm" onClick={() => handleDelete(site)} className="ml-2" disabled={loading}>
-                                                    Delete
-                                                </Button>
+                                                <Can permission="sites.edit">
+                                                    <Button variant="outline" size="sm" onClick={() => handleEdit(site)} disabled={loading}>
+                                                        Edit
+                                                    </Button>
+                                                </Can>
+                                                <Can permission="sites.delete">
+                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete(site)} className="ml-2" disabled={loading}>
+                                                        Delete
+                                                    </Button>
+                                                </Can>
                                             </div>
                                         </TableCell>
                                     </TableRow>

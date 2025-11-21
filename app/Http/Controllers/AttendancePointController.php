@@ -17,11 +17,21 @@ class AttendancePointController extends Controller
 {
     public function index(Request $request)
     {
+        // Redirect restricted roles to their own show page
+        $restrictedRoles = ['Agent', 'IT', 'Utility'];
+        if (in_array(auth()->user()->role, $restrictedRoles)) {
+            return redirect()->route('attendance-points.show', ['user' => auth()->id()]);
+        }
+
         $query = AttendancePoint::with(['user', 'attendance', 'excusedBy'])
             ->orderBy('shift_date', 'desc');
 
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+        if (true) {
+            // Only allow user_id filter for non-restricted roles
+            // Only allow user_id filter for non-restricted roles
+            if ($request->filled('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
         }
 
         if ($request->filled('point_type')) {
@@ -56,11 +66,13 @@ class AttendancePointController extends Controller
                   ->where('is_expired', false);
         }
 
-        $points = $query->paginate(50);
+        $points = $query->paginate(25);
 
         $users = User::orderBy('first_name')->get();
 
-        $stats = $this->calculateStats($request);
+        // Pass user_id for stats calculation when restricted
+        $statsUserId = in_array(auth()->user()->role, $restrictedRoles) ? auth()->id() : null;
+        $stats = $this->calculateStats($request, $statsUserId);
 
         return Inertia::render('Attendance/Points/Index', [
             'points' => $points,
@@ -330,11 +342,14 @@ class AttendancePointController extends Controller
         };
     }
 
-    private function calculateStats(Request $request)
+    private function calculateStats(Request $request, $userId = null)
     {
         $query = AttendancePoint::query();
 
-        if ($request->filled('user_id')) {
+        // If userId is provided (for restricted users), filter by that user
+        if ($userId) {
+            $query->where('user_id', $userId);
+        } elseif ($request->filled('user_id')) {
             $query->where('user_id', $request->user_id);
         }
 

@@ -19,142 +19,184 @@ import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane, LucideIcon } from 'lucide-react';
 import AppLogo from './app-logo';
+import { usePermission } from '@/hooks/useAuthorization';
+import type { NavItem } from '@/types';
+import { usePage } from '@inertiajs/react';
+import type { SharedData } from '@/types';
 
-// Navigation configuration
-const navigationConfig = {
-    main: {
-        label: 'Platform',
-        items: [
-            {
-                title: 'Dashboard',
-                href: dashboard(),
-                icon: LayoutGrid,
-            },
-        ],
-    },
-    computer: {
-        label: 'Computer Specs',
-        items: [
-            {
-                title: 'Ram Specs',
-                href: ramIndex.url(),
-                icon: MemoryStick
-            },
-            {
-                title: 'Disk Specs',
-                href: diskIndex.url(),
-                icon: HardDrive
-            },
-            {
-                title: 'Processor Specs',
-                href: processorIndex.url(),
-                icon: CpuIcon
-            },
-            {
-                title: 'Monitor Specs',
-                href: monitorIndex.url(),
-                icon: Monitor
-            },
-            {
-                title: 'PC Specs',
-                href: pcIndex.url(),
-                icon: Microchip
-            },
-            {
-                title: 'Stocks',
-                href: stocksIndex.url(),
-                icon: Folder
-            }
-        ],
-    },
-    station: {
-        label: 'Station Details',
-        items: [
-            {
-                title: 'Stations',
-                href: stationIndex.url(),
-                icon: Computer,
-            },
-            {
-                title: 'PC Transfer',
-                href: '/pc-transfers',
-                icon: ArrowUpDown,
-            },
-            {
-                title: 'PC Maintenance',
-                href: '/pc-maintenance',
-                icon: Wrench,
-            },
-        ],
-    },
-    attendance: {
-        label: 'Attendance',
-        items: [
-            {
-                title: 'Attendance',
-                href: '/attendance',
-                icon: CalendarCheck,
-            },
-            {
-                title: 'Employee Schedules',
-                href: '/employee-schedules',
-                icon: Clock,
-            },
-            {
-                title: 'Biometric Records',
-                href: '/biometric-records',
-                icon: Database,
-            },
-            {
-                title: 'Recent Uploads',
-                href: '/attendance-uploads',
-                icon: FileText,
-            },
-            {
-                title: 'Attendance Points',
-                href: '/attendance-points',
-                icon: Award,
-            },
-            {
-                title: 'Reprocess Attendance',
-                href: '/biometric-reprocessing',
-                icon: RefreshCw,
-            },
-            {
-                title: 'Anomaly Detection',
-                href: '/biometric-anomalies',
-                icon: AlertTriangle,
-            },
-            {
-                title: 'Export Records',
-                href: '/biometric-export',
-                icon: Download,
-            },
-            {
-                title: 'Retention Policies',
-                href: '/biometric-retention-policies',
-                icon: Shield,
-            },
-            {
-                title: 'Leave Requests',
-                href: '/leave-requests',
-                icon: Plane,
-            },
-        ],
-    },
-    account: {
-        label: 'Account Management',
-        items: [
-            {
-                title: 'Accounts',
-                href: '/accounts',
-                icon: User,
-            },
-        ],
-    },
-} as const;
+// Internal navigation item type with permission
+interface NavItemConfig {
+    title: string;
+    href: string | { url: string } | (() => string);
+    icon: LucideIcon;
+    permission?: string;
+}
+
+// Navigation configuration function that takes auth user
+const getNavigationConfig = (userId: number, userRole: string) => {
+    // Restricted roles should go to their own show page
+    const restrictedRoles = ['Agent', 'IT', 'Utility'];
+    const isRestrictedUser = restrictedRoles.includes(userRole);
+    const attendancePointsHref = isRestrictedUser
+        ? `/attendance-points/${userId}`
+        : '/attendance-points';
+
+    return {
+        main: {
+            label: 'Platform',
+            items: [
+                {
+                    title: 'Dashboard',
+                    href: dashboard(),
+                    icon: LayoutGrid,
+                    permission: undefined, // Dashboard is always visible
+                },
+            ],
+        },
+        computer: {
+            label: 'Computer Specs',
+            items: [
+                {
+                    title: 'Ram Specs',
+                    href: ramIndex.url(),
+                    icon: MemoryStick,
+                    permission: 'hardware.view',
+                },
+                {
+                    title: 'Disk Specs',
+                    href: diskIndex.url(),
+                    icon: HardDrive,
+                    permission: 'hardware.view',
+                },
+                {
+                    title: 'Processor Specs',
+                    href: processorIndex.url(),
+                    icon: CpuIcon,
+                    permission: 'hardware.view',
+                },
+                {
+                    title: 'Monitor Specs',
+                    href: monitorIndex.url(),
+                    icon: Monitor,
+                    permission: 'hardware.view',
+                },
+                {
+                    title: 'PC Specs',
+                    href: pcIndex.url(),
+                    icon: Microchip,
+                    permission: 'hardware.view',
+                },
+                {
+                    title: 'Stocks',
+                    href: stocksIndex.url(),
+                    icon: Folder,
+                    permission: 'stock.view',
+                }
+            ],
+        },
+        station: {
+            label: 'Station Details',
+            items: [
+                {
+                    title: 'Stations',
+                    href: stationIndex.url(),
+                    icon: Computer,
+                    permission: 'stations.view',
+                },
+                {
+                    title: 'PC Transfer',
+                    href: '/pc-transfers',
+                    icon: ArrowUpDown,
+                    permission: 'pc_transfers.view',
+                },
+                {
+                    title: 'PC Maintenance',
+                    href: '/pc-maintenance',
+                    icon: Wrench,
+                    permission: 'pc_maintenance.view',
+                },
+            ],
+        },
+        attendance: {
+            label: 'Attendance',
+            items: [
+                {
+                    title: 'Attendance',
+                    href: '/attendance',
+                    icon: CalendarCheck,
+                    permission: 'attendance.view',
+                },
+                {
+                    title: 'Employee Schedules',
+                    href: '/employee-schedules',
+                    icon: Clock,
+                    permission: 'schedules.view',
+                },
+                {
+                    title: 'Biometric Records',
+                    href: '/biometric-records',
+                    icon: Database,
+                    permission: 'biometric.view',
+                },
+                {
+                    title: 'Recent Uploads',
+                    href: '/attendance-uploads',
+                    icon: FileText,
+                    permission: 'biometric.view',
+                },
+                {
+                    title: 'Attendance Points',
+                    href: attendancePointsHref,
+                    icon: Award,
+                    permission: 'attendance.view',
+                },
+                {
+                    title: 'Reprocess Attendance',
+                    href: '/biometric-reprocessing',
+                    icon: RefreshCw,
+                    permission: 'biometric.reprocess',
+                },
+                {
+                    title: 'Anomaly Detection',
+                    href: '/biometric-anomalies',
+                    icon: AlertTriangle,
+                    permission: 'biometric.anomalies',
+                },
+                {
+                    title: 'Export Records',
+                    href: '/biometric-export',
+                    icon: Download,
+                    permission: 'biometric.export',
+                },
+                {
+                    title: 'Retention Policies',
+                    href: '/biometric-retention-policies',
+                    icon: Shield,
+                    permission: 'biometric.retention',
+                },
+                {
+                    title: 'Leave Requests',
+                    href: '/leave-requests',
+                    icon: Plane,
+                    permission: 'leave.view',
+                },
+            ],
+        },
+        account: {
+            label: 'Account Management',
+            items: [
+                {
+                    title: 'Accounts',
+                    href: '/accounts',
+                    icon: User,
+                    permission: 'accounts.view',
+                },
+            ],
+        },
+    } as const;
+};
 
 // const footerNavItems: NavItem[] = [
 //     {
@@ -170,6 +212,59 @@ const navigationConfig = {
 // ];
 
 export function AppSidebar() {
+    const { can } = usePermission();
+    const { auth } = usePage<SharedData>().props;
+
+    // Get navigation config based on current user
+    const navigationConfig = getNavigationConfig(auth.user.id, auth.user.role);
+
+    // Filter navigation items based on permissions
+    const filterItemsByPermission = (items: readonly NavItemConfig[]): NavItem[] => {
+        return items
+            .filter(item => {
+                // If no permission specified, show the item (e.g., Dashboard)
+                if (!item.permission) return true;
+                // Check if user has the required permission
+                return can(item.permission);
+            })
+            .map(item => {
+                const href = typeof item.href === 'string'
+                    ? item.href
+                    : typeof item.href === 'function'
+                        ? item.href()
+                        : item.href.url;
+
+                return {
+                    title: item.title,
+                    href,
+                    icon: item.icon,
+                };
+            });
+    };
+
+    const filteredNavigation = {
+        main: {
+            label: navigationConfig.main.label,
+            items: filterItemsByPermission(navigationConfig.main.items),
+        },
+        computer: {
+            label: navigationConfig.computer.label,
+            items: filterItemsByPermission(navigationConfig.computer.items),
+        },
+        station: {
+            label: navigationConfig.station.label,
+            items: filterItemsByPermission(navigationConfig.station.items),
+        },
+        attendance: {
+            label: navigationConfig.attendance.label,
+            items: filterItemsByPermission(navigationConfig.attendance.items),
+        },
+        account: {
+            label: navigationConfig.account.label,
+            items: filterItemsByPermission(navigationConfig.account.items),
+        },
+    };
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
@@ -185,11 +280,11 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavGroup label={navigationConfig.main.label} items={navigationConfig.main.items} />
-                <NavGroup label={navigationConfig.computer.label} items={navigationConfig.computer.items} />
-                <NavGroup label={navigationConfig.station.label} items={navigationConfig.station.items} />
-                <NavGroup label={navigationConfig.attendance.label} items={navigationConfig.attendance.items} />
-                <NavGroup label={navigationConfig.account.label} items={navigationConfig.account.items} />
+                <NavGroup label={filteredNavigation.main.label} items={filteredNavigation.main.items} />
+                <NavGroup label={filteredNavigation.computer.label} items={filteredNavigation.computer.items} />
+                <NavGroup label={filteredNavigation.station.label} items={filteredNavigation.station.items} />
+                <NavGroup label={filteredNavigation.attendance.label} items={filteredNavigation.attendance.items} />
+                <NavGroup label={filteredNavigation.account.label} items={filteredNavigation.account.items} />
             </SidebarContent>
 
             <SidebarFooter>

@@ -25,8 +25,7 @@ return new class extends Migration
             $table->decimal('days_requested', 5, 2); // Calculated days
             $table->text('reason');
 
-            // Team Lead and Campaign info
-            $table->string('team_lead_email');
+            // Campaign info
             $table->string('campaign_department');
 
             // Medical certificate (for SL)
