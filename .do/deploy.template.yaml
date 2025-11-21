@@ -1,0 +1,7 @@
+spec:
+  name: primehub-systems
+  services:
+  - name: web
+    git:
+      repo_clone_url: https://github.com/BisoyJan/primehub-systems.git
+      branch: main

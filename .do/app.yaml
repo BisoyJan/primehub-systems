@@ -1,0 +1,96 @@
+name: primehub-systems
+region: sgp1
+
+services:
+- name: web
+  github:
+    repo: BisoyJan/primehub-systems
+    branch: main
+    deploy_on_push: true
+  
+  build_command: |
+    composer install --optimize-autoloader --no-dev
+    php artisan wayfinder:generate --with-form
+    npm ci
+    npm run build
+  
+  run_command: |
+    php artisan config:cache
+    php artisan route:cache
+    php artisan view:cache
+    heroku-php-apache2 public/
+  
+  environment_slug: php
+  http_port: 8080
+  instance_count: 1
+  instance_size_slug: basic-xs
+  
+  envs:
+  - key: APP_NAME
+    value: "PrimeHub Systems"
+  - key: APP_ENV
+    value: production
+  - key: APP_DEBUG
+    value: "false"
+  - key: APP_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: LOG_CHANNEL
+    value: errorlog
+  - key: SESSION_DRIVER
+    value: database
+  - key: CACHE_STORE
+    value: database
+  - key: QUEUE_CONNECTION
+    value: database
+  - key: DB_CONNECTION
+    value: mysql
+  - key: DB_HOST
+    value: ${db.HOSTNAME}
+  - key: DB_PORT
+    value: ${db.PORT}
+  - key: DB_DATABASE
+    value: ${db.DATABASE}
+  - key: DB_USERNAME
+    value: ${db.USERNAME}
+  - key: DB_PASSWORD
+    value: ${db.PASSWORD}
+
+- name: worker
+  github:
+    repo: BisoyJan/primehub-systems
+    branch: main
+  
+  build_command: |
+    composer install --optimize-autoloader --no-dev
+  
+  run_command: php artisan queue:work --sleep=3 --tries=3 --max-time=3600
+  
+  environment_slug: php
+  instance_count: 1
+  instance_size_slug: basic-xxs
+  
+  envs:
+  - key: APP_KEY
+    scope: RUN_AND_BUILD_TIME
+    type: SECRET
+  - key: DB_CONNECTION
+    value: mysql
+  - key: DB_HOST
+    value: ${db.HOSTNAME}
+  - key: DB_PORT
+    value: ${db.PORT}
+  - key: DB_DATABASE
+    value: ${db.DATABASE}
+  - key: DB_USERNAME
+    value: ${db.USERNAME}
+  - key: DB_PASSWORD
+    value: ${db.PASSWORD}
+  - key: QUEUE_CONNECTION
+    value: database
+
+databases:
+- name: db
+  engine: MYSQL
+  version: "8"
+  production: true
