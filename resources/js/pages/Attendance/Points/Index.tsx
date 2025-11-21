@@ -14,6 +14,8 @@ import {
     SelectTrigger,
     SelectValue
 } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Dialog,
     DialogContent,
@@ -46,7 +48,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, Filter, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download } from "lucide-react";
+import { AlertCircle, Filter, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown } from "lucide-react";
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Attendance Points', href: '/attendance-points' }
@@ -178,7 +180,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
     const isRestrictedUser = auth.user.role && restrictedRoles.includes(auth.user.role);
 
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
-    const [employeeSearch, setEmployeeSearch] = useState("");
+    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState("");
     const [selectedPointType, setSelectedPointType] = useState(filters?.point_type || "");
     const [selectedStatus, setSelectedStatus] = useState(filters?.status || "");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
@@ -230,7 +233,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
 
     const handleReset = () => {
         setSelectedUserId("");
-        setEmployeeSearch("");
+        setUserSearchQuery("");
         setSelectedPointType("");
         setSelectedStatus("");
         setDateFrom("");
@@ -364,7 +367,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
         );
     };
 
-    const showClearFilters = selectedUserId || selectedPointType || selectedStatus || dateFrom || dateTo || employeeSearch || filterExpiringSoon || filterGbroEligible;
+    const showClearFilters = selectedUserId || selectedPointType || selectedStatus || dateFrom || dateTo || userSearchQuery || filterExpiringSoon || filterGbroEligible;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -472,23 +475,87 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-                        {!isRestrictedUser && (
-                            <Input
-                                type="text"
-                                placeholder="Search employee name..."
-                                value={employeeSearch}
-                                onChange={(e) => {
-                                    setEmployeeSearch(e.target.value);
-                                    // Find matching user and set ID
-                                    const matchedUser = users?.find(u =>
-                                        u.name.toLowerCase().includes(e.target.value.toLowerCase())
-                                    );
-                                    setSelectedUserId(matchedUser?.id.toString() || "");
-                                }}
-                                className="w-full"
-                            />
-                        )}
+                    {!isRestrictedUser && (
+                        <div className="w-full">
+                            <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={isUserPopoverOpen}
+                                                className="w-full justify-between font-normal"
+                                            >
+                                                <span className="truncate">
+                                                    {selectedUserId
+                                                        ? users?.find(u => String(u.id) === selectedUserId)?.name || "Select employee..."
+                                                        : "All Employees"}
+                                                </span>
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-full p-0" align="start">
+                                            <Command shouldFilter={false}>
+                                                <CommandInput
+                                                    placeholder="Search employee..."
+                                                    value={userSearchQuery}
+                                                    onValueChange={setUserSearchQuery}
+                                                />
+                                                <CommandList>
+                                                    <CommandEmpty>No employee found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        <CommandItem
+                                                            value="all"
+                                                            onSelect={() => {
+                                                                setSelectedUserId("");
+                                                                setIsUserPopoverOpen(false);
+                                                                setUserSearchQuery("");
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${
+                                                                    !selectedUserId
+                                                                        ? "opacity-100"
+                                                                        : "opacity-0"
+                                                                }`}
+                                                            />
+                                                            All Employees
+                                                        </CommandItem>
+                                                        {users
+                                                            ?.filter(user =>
+                                                                !userSearchQuery ||
+                                                                user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
+                                                            )
+                                                            .map((user) => (
+                                                                <CommandItem
+                                                                    key={user.id}
+                                                                    value={user.name}
+                                                                    onSelect={() => {
+                                                                        setSelectedUserId(String(user.id));
+                                                                        setIsUserPopoverOpen(false);
+                                                                        setUserSearchQuery("");
+                                                                    }}
+                                                                    className="cursor-pointer"
+                                                                >
+                                                                    <Check
+                                                                        className={`mr-2 h-4 w-4 ${
+                                                                            selectedUserId === String(user.id)
+                                                                                ? "opacity-100"
+                                                                                : "opacity-0"
+                                                                        }`}
+                                                                    />
+                                                                    {user.name}
+                                                                </CommandItem>
+                                                            ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                        </div>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
 
                         <Select value={selectedPointType || undefined} onValueChange={(value) => setSelectedPointType(value || "")}>
                             <SelectTrigger className="w-full">

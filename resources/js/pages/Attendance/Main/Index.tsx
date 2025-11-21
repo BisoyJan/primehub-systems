@@ -8,7 +8,8 @@ import { type SharedData, type UserRole } from "@/types";
 import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Select,
     SelectContent,
@@ -19,7 +20,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { CheckCircle, AlertCircle, Trash2, Check } from "lucide-react";
+import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown } from "lucide-react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -91,6 +92,7 @@ interface AttendancePayload {
 
 interface PageProps extends SharedData {
     attendances?: AttendancePayload;
+    users?: User[];
     filters?: {
         search?: string;
         status?: string;
@@ -229,7 +231,7 @@ const getShiftTypeBadge = (shiftType: string) => {
 };
 
 export default function AttendanceIndex() {
-    const { attendances, filters, auth } = usePage<PageProps>().props;
+    const { attendances, users = [], filters, auth } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format || '24';
 
     // Ensure we have proper data structure
@@ -250,8 +252,9 @@ export default function AttendanceIndex() {
     const { can } = usePermission();
 
     const [loading, setLoading] = useState(false);
-    const [search, setSearch] = useState(appliedFilters.search || "");
-    const [debouncedSearch, setDebouncedSearch] = useState(appliedFilters.search || "");
+    const [selectedUserId, setSelectedUserId] = useState(appliedFilters.user_id || "");
+    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState("");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
     const [startDate, setStartDate] = useState(appliedFilters.start_date || "");
     const [endDate, setEndDate] = useState(appliedFilters.end_date || "");
@@ -261,19 +264,13 @@ export default function AttendanceIndex() {
 
     // Update local state when filters prop changes (e.g., when navigating back or pagination)
     useEffect(() => {
-        setSearch(appliedFilters.search || "");
-        setDebouncedSearch(appliedFilters.search || "");
+        setSelectedUserId(appliedFilters.user_id || "");
         setStatusFilter(appliedFilters.status || "all");
         setStartDate(appliedFilters.start_date || "");
         setEndDate(appliedFilters.end_date || "");
         setNeedsVerification(appliedFilters.needs_verification || false);
         // Don't clear selections when filters change
-    }, [appliedFilters.search, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
-
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 500);
-        return () => clearTimeout(timer);
-    }, [search]);
+    }, [appliedFilters.user_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
 
     const isInitialMount = React.useRef(true);
     const userId = auth.user?.id;
@@ -281,6 +278,14 @@ export default function AttendanceIndex() {
     // Roles that should only see their own attendance records
     const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
     const isRestrictedUser = userRole && restrictedRoles.includes(userRole);
+
+    // Filter users based on search query
+    const filteredUsers = React.useMemo(() => {
+        if (!userSearchQuery) return users;
+        return users.filter(user =>
+            user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
+        );
+    }, [users, userSearchQuery]);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -293,9 +298,9 @@ export default function AttendanceIndex() {
         // For Agent, IT, and Utility roles, automatically filter to their own records
         if (isRestrictedUser && userId) {
             params.user_id = userId.toString();
-        } else if (debouncedSearch) {
-            // Only allow search for users with higher permissions
-            params.search = debouncedSearch;
+        } else if (selectedUserId) {
+            // Only allow user filter for users with higher permissions
+            params.user_id = selectedUserId;
         }
 
         if (statusFilter !== "all") params.status = statusFilter;
@@ -310,17 +315,18 @@ export default function AttendanceIndex() {
             replace: true,
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
+    }, [selectedUserId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
 
     const showClearFilters =
         statusFilter !== "all" ||
         Boolean(startDate) ||
         Boolean(endDate) ||
         needsVerification ||
-        Boolean(search);
+        Boolean(selectedUserId);
 
     const clearFilters = () => {
-        setSearch("");
+        setSelectedUserId("");
+        setUserSearchQuery("");
         setStatusFilter("all");
         setStartDate("");
         setEndDate("");
@@ -441,13 +447,72 @@ export default function AttendanceIndex() {
                 <div className="flex flex-col gap-3">
                     {!isRestrictedUser && (
                         <div className="w-full">
-                            <Input
-                                type="search"
-                                placeholder="Search employee name..."
-                                value={search}
-                                onChange={event => setSearch(event.target.value)}
-                                className="w-full"
-                            />
+                            <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isUserPopoverOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedUserId
+                                                ? users.find(u => u.id.toString() === selectedUserId)?.name || "Select employee..."
+                                                : "All Employees"}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search employee..."
+                                            value={userSearchQuery}
+                                            onValueChange={setUserSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No employee found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="all"
+                                                    onSelect={() => {
+                                                        setSelectedUserId("");
+                                                        setIsUserPopoverOpen(false);
+                                                        setUserSearchQuery("");
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    All Employees
+                                                </CommandItem>
+                                                {filteredUsers.map((user) => (
+                                                    <CommandItem
+                                                        key={user.id}
+                                                        value={user.name}
+                                                        onSelect={() => {
+                                                            setSelectedUserId(user.id.toString());
+                                                            setIsUserPopoverOpen(false);
+                                                            setUserSearchQuery("");
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${
+                                                                selectedUserId === user.id.toString()
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                            }`}
+                                                        />
+                                                        {user.name}
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
                         </div>
                     )}
 

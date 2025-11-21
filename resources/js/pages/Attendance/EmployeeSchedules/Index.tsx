@@ -6,9 +6,8 @@ import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Can } from "@/components/authorization";
-import { usePermission } from "@/hooks/useAuthorization";
+
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import {
     Select,
     SelectContent,
@@ -16,6 +15,9 @@ import {
     SelectTrigger,
     SelectValue
 } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
@@ -124,7 +126,7 @@ const getShiftTypeBadge = (shiftType: string) => {
 };
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns = [], sites = [], filters, auth } = usePage<PageProps>().props;
+    const { schedules, users, campaigns = [], filters, auth } = usePage<PageProps>().props;
     const timeFormat = (auth.user as { time_format?: '12' | '24' })?.time_format || '24';
     const scheduleData = {
         data: schedules?.data ?? [],
@@ -145,12 +147,13 @@ export default function EmployeeSchedulesIndex() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
-    const { can } = usePermission(); // Check permissions
 
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(appliedFilters.search || "");
     const [debouncedSearch, setDebouncedSearch] = useState(appliedFilters.search || "");
     const [userFilter, setUserFilter] = useState(appliedFilters.user_id || "all");
+    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState("");
     const [campaignFilter, setCampaignFilter] = useState(appliedFilters.campaign_id || "all");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
     const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
@@ -248,29 +251,82 @@ export default function EmployeeSchedulesIndex() {
 
                 <div className="flex flex-col gap-3">
                     <div className="w-full">
-                        <Input
-                            type="search"
-                            placeholder="Search employee name..."
-                            value={search}
-                            onChange={event => setSearch(event.target.value)}
-                            className="w-full"
-                        />
+                        <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={isUserPopoverOpen}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            <span className="truncate">
+                                                {userFilter !== "all"
+                                                    ? users.find(u => String(u.id) === userFilter)?.name || "Select employee..."
+                                                    : "All Employees"}
+                                            </span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-full p-0" align="start">
+                                        <Command shouldFilter={false}>
+                                            <CommandInput
+                                                placeholder="Search employee..."
+                                                value={userSearchQuery}
+                                                onValueChange={setUserSearchQuery}
+                                            />
+                                            <CommandList>
+                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="all"
+                                                        onSelect={() => {
+                                                            setUserFilter("all");
+                                                            setIsUserPopoverOpen(false);
+                                                            setUserSearchQuery("");
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${userFilter === "all"
+                                                                ? "opacity-100"
+                                                                : "opacity-0"
+                                                                }`}
+                                                        />
+                                                        All Employees
+                                                    </CommandItem>
+                                                    {users
+                                                        .filter(user =>
+                                                            !userSearchQuery ||
+                                                            user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
+                                                        )
+                                                        .map((user) => (
+                                                            <CommandItem
+                                                                key={user.id}
+                                                                value={user.name}
+                                                                onSelect={() => {
+                                                                    setUserFilter(String(user.id));
+                                                                    setIsUserPopoverOpen(false);
+                                                                    setUserSearchQuery("");
+                                                                }}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={`mr-2 h-4 w-4 ${userFilter === String(user.id)
+                                                                        ? "opacity-100"
+                                                                        : "opacity-0"
+                                                                        }`}
+                                                                />
+                                                                {user.name}
+                                                            </CommandItem>
+                                                        ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                        <Select value={userFilter} onValueChange={setUserFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Employee" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Employees</SelectItem>
-                                {users.map(user => (
-                                    <SelectItem key={user.id} value={String(user.id)}>
-                                        {user.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 
                         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
                             <SelectTrigger className="w-full">
