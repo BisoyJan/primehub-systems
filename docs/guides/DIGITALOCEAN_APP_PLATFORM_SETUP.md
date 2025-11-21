@@ -33,7 +33,7 @@ The required files are already created:
 ```bash
 git add .do/
 git commit -m "Add DigitalOcean App Platform configuration"
-git push origin main
+git push origin deploy
 ```
 
 ---
@@ -58,7 +58,7 @@ git push origin main
 ### 2.3 Configure Repository
 
 1. **Repository**: Select `BisoyJan/primehub-systems`
-2. **Branch**: Choose `main`
+2. **Branch**: Choose `deploy`
 3. **Source Directory**: Leave as `/` (root)
 4. Check **Autodeploy**: Yes (deploys automatically on git push)
 5. Click **Next**
@@ -264,7 +264,7 @@ DigitalOcean will show you DNS records to add:
 
 Already configured! ✅
 
-Every time you push to `main` branch:
+Every time you push to `deploy` branch:
 1. DigitalOcean detects the push
 2. Automatically builds new version
 3. Deploys with zero downtime
@@ -277,7 +277,7 @@ Every time you push to `main` branch:
 echo "# Updated $(date)" >> README.md
 git add README.md
 git commit -m "Test auto-deploy"
-git push origin main
+git push origin deploy
 ```
 
 Watch the deployment in App Platform dashboard!

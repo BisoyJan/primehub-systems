@@ -5,7 +5,7 @@ services:
 - name: web
   github:
     repo: BisoyJan/primehub-systems
-    branch: main
+    branch: deploy
     deploy_on_push: true
   
   build_command: |
@@ -59,7 +59,7 @@ services:
 - name: worker
   github:
     repo: BisoyJan/primehub-systems
-    branch: main
+    branch: deploy
   
   build_command: |
     composer install --optimize-autoloader --no-dev
