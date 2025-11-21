@@ -252,78 +252,78 @@ export default function EmployeeSchedulesIndex() {
                 <div className="flex flex-col gap-3">
                     <div className="w-full">
                         <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={isUserPopoverOpen}
-                                            className="w-full justify-between font-normal"
-                                        >
-                                            <span className="truncate">
-                                                {userFilter !== "all"
-                                                    ? users.find(u => String(u.id) === userFilter)?.name || "Select employee..."
-                                                    : "All Employees"}
-                                            </span>
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-full p-0" align="start">
-                                        <Command shouldFilter={false}>
-                                            <CommandInput
-                                                placeholder="Search employee..."
-                                                value={userSearchQuery}
-                                                onValueChange={setUserSearchQuery}
-                                            />
-                                            <CommandList>
-                                                <CommandEmpty>No employee found.</CommandEmpty>
-                                                <CommandGroup>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={isUserPopoverOpen}
+                                    className="w-full justify-between font-normal"
+                                >
+                                    <span className="truncate">
+                                        {userFilter !== "all"
+                                            ? users.find(u => String(u.id) === userFilter)?.name || "Select employee..."
+                                            : "All Employees"}
+                                    </span>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start">
+                                <Command shouldFilter={false}>
+                                    <CommandInput
+                                        placeholder="Search employee..."
+                                        value={userSearchQuery}
+                                        onValueChange={setUserSearchQuery}
+                                    />
+                                    <CommandList>
+                                        <CommandEmpty>No employee found.</CommandEmpty>
+                                        <CommandGroup>
+                                            <CommandItem
+                                                value="all"
+                                                onSelect={() => {
+                                                    setUserFilter("all");
+                                                    setIsUserPopoverOpen(false);
+                                                    setUserSearchQuery("");
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                <Check
+                                                    className={`mr-2 h-4 w-4 ${userFilter === "all"
+                                                        ? "opacity-100"
+                                                        : "opacity-0"
+                                                        }`}
+                                                />
+                                                All Employees
+                                            </CommandItem>
+                                            {users
+                                                .filter(user =>
+                                                    !userSearchQuery ||
+                                                    user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
+                                                )
+                                                .map((user) => (
                                                     <CommandItem
-                                                        value="all"
+                                                        key={user.id}
+                                                        value={user.name}
                                                         onSelect={() => {
-                                                            setUserFilter("all");
+                                                            setUserFilter(String(user.id));
                                                             setIsUserPopoverOpen(false);
                                                             setUserSearchQuery("");
                                                         }}
                                                         className="cursor-pointer"
                                                     >
                                                         <Check
-                                                            className={`mr-2 h-4 w-4 ${userFilter === "all"
+                                                            className={`mr-2 h-4 w-4 ${userFilter === String(user.id)
                                                                 ? "opacity-100"
                                                                 : "opacity-0"
                                                                 }`}
                                                         />
-                                                        All Employees
+                                                        {user.name}
                                                     </CommandItem>
-                                                    {users
-                                                        .filter(user =>
-                                                            !userSearchQuery ||
-                                                            user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
-                                                        )
-                                                        .map((user) => (
-                                                            <CommandItem
-                                                                key={user.id}
-                                                                value={user.name}
-                                                                onSelect={() => {
-                                                                    setUserFilter(String(user.id));
-                                                                    setIsUserPopoverOpen(false);
-                                                                    setUserSearchQuery("");
-                                                                }}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={`mr-2 h-4 w-4 ${userFilter === String(user.id)
-                                                                        ? "opacity-100"
-                                                                        : "opacity-0"
-                                                                        }`}
-                                                                />
-                                                                {user.name}
-                                                            </CommandItem>
-                                                        ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
+                                                ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

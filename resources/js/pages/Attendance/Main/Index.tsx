@@ -499,11 +499,10 @@ export default function AttendanceIndex() {
                                                         className="cursor-pointer"
                                                     >
                                                         <Check
-                                                            className={`mr-2 h-4 w-4 ${
-                                                                selectedUserId === user.id.toString()
+                                                            className={`mr-2 h-4 w-4 ${selectedUserId === user.id.toString()
                                                                     ? "opacity-100"
                                                                     : "opacity-0"
-                                                            }`}
+                                                                }`}
                                                         />
                                                         {user.name}
                                                     </CommandItem>
