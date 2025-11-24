@@ -22,7 +22,10 @@ use App\Http\Controllers\BiometricExportController;
 use App\Http\Controllers\AttendanceUploadController;
 use App\Http\Controllers\AttendancePointController;
 use App\Http\Controllers\BiometricRetentionPolicyController;
+use App\Http\Controllers\FormRequestRetentionPolicyController;
 use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\ItConcernController;
+use App\Http\Controllers\MedicationRequestController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -32,6 +35,17 @@ Route::get('/', function () {
 
 
 Route::middleware(['auth', 'verified'])->group(function () {
+    // Pending approval page - accessible to authenticated but unapproved users
+    Route::get('/pending-approval', function () {
+        // If user is already approved, redirect to dashboard
+        if (auth()->user()->is_approved) {
+            return redirect()->route('dashboard');
+        }
+        return Inertia::render('auth/pending-approval');
+    })->name('pending-approval');
+});
+
+Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     // Dashboard
     Route::get('/dashboard', [DashboardController::class, 'index'])
         ->middleware('permission:dashboard.view')
@@ -106,6 +120,12 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::resource('accounts', AccountController::class)
         ->except(['show'])
         ->middleware('permission:accounts.view,accounts.create,accounts.edit,accounts.delete');
+    Route::post('accounts/{account}/approve', [AccountController::class, 'approve'])
+        ->middleware('permission:accounts.edit')
+        ->name('accounts.approve');
+    Route::post('accounts/{account}/unapprove', [AccountController::class, 'unapprove'])
+        ->middleware('permission:accounts.edit')
+        ->name('accounts.unapprove');
 
     // PC Transfer
     Route::prefix('pc-transfers')->name('pc-transfers.')
@@ -132,7 +152,6 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::get('/create', [AttendanceController::class, 'create'])->name('create');
             Route::post('/', [AttendanceController::class, 'store'])->name('store');
             Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore');
-            Route::get('dashboard', [AttendanceController::class, 'dashboard'])->name('dashboard');
             Route::get('import', [AttendanceController::class, 'import'])->name('import');
             Route::post('upload', [AttendanceController::class, 'upload'])->name('upload');
             Route::get('review', [AttendanceController::class, 'review'])->name('review');
@@ -224,8 +243,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
             Route::post('/{policy}/toggle', [BiometricRetentionPolicyController::class, 'toggle'])->name('toggle');
         });
 
-    // Leave Requests
-    Route::prefix('leave-requests')->name('leave-requests.')
+    // Form Requests - Leave Requests
+    Route::prefix('form-requests/leave-requests')->name('leave-requests.')
         ->middleware('permission:leave.view,leave.create,leave.approve,leave.deny,leave.cancel')
         ->group(function () {
             Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
@@ -238,6 +257,47 @@ Route::middleware(['auth', 'verified'])->group(function () {
         Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
         Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
     });
+
+    // Form Requests - IT Concerns
+    Route::prefix('form-requests/it-concerns')->name('it-concerns.')
+        ->middleware('permission:it_concerns.view,it_concerns.create,it_concerns.edit,it_concerns.delete,it_concerns.assign,it_concerns.resolve')
+        ->group(function () {
+            Route::get('/', [ItConcernController::class, 'index'])->name('index');
+            Route::get('/create', [ItConcernController::class, 'create'])->name('create');
+            Route::post('/', [ItConcernController::class, 'store'])->name('store');
+            Route::get('/{itConcern}', [ItConcernController::class, 'show'])->name('show');
+            Route::get('/{itConcern}/edit', [ItConcernController::class, 'edit'])->name('edit');
+            Route::put('/{itConcern}', [ItConcernController::class, 'update'])->name('update');
+            Route::delete('/{itConcern}', [ItConcernController::class, 'destroy'])->name('destroy');
+            Route::post('/{itConcern}/status', [ItConcernController::class, 'updateStatus'])->name('updateStatus');
+            Route::post('/{itConcern}/assign', [ItConcernController::class, 'assign'])->name('assign');
+            Route::post('/{itConcern}/resolve', [ItConcernController::class, 'resolve'])->name('resolve');
+        });
+
+    // Form Requests - Medication Requests
+    Route::prefix('form-requests/medication-requests')->name('medication-requests.')
+        ->middleware('permission:medication_requests.view,medication_requests.create,medication_requests.update,medication_requests.delete')
+        ->group(function () {
+            Route::get('/', [MedicationRequestController::class, 'index'])->name('index');
+            Route::get('/create', [MedicationRequestController::class, 'create'])->name('create');
+            Route::get('/check-pending/{userId}', [MedicationRequestController::class, 'checkPendingRequest'])->name('check-pending');
+            Route::post('/', [MedicationRequestController::class, 'store'])->name('store');
+            Route::get('/{medicationRequest}', [MedicationRequestController::class, 'show'])->name('show');
+            Route::post('/{medicationRequest}/status', [MedicationRequestController::class, 'updateStatus'])->name('updateStatus');
+            Route::delete('/{medicationRequest}/cancel', [MedicationRequestController::class, 'cancel'])->name('cancel');
+            Route::delete('/{medicationRequest}', [MedicationRequestController::class, 'destroy'])->name('destroy');
+        });
+
+    // Form Requests - Retention Policies
+    Route::prefix('form-requests/retention-policies')->name('form-requests.retention-policies.')
+        ->middleware('permission:form_requests.retention')
+        ->group(function () {
+            Route::get('/', [FormRequestRetentionPolicyController::class, 'index'])->name('index');
+            Route::post('/', [FormRequestRetentionPolicyController::class, 'store'])->name('store');
+            Route::put('/{policy}', [FormRequestRetentionPolicyController::class, 'update'])->name('update');
+            Route::delete('/{policy}', [FormRequestRetentionPolicyController::class, 'destroy'])->name('destroy');
+            Route::post('/{policy}/toggle', [FormRequestRetentionPolicyController::class, 'toggle'])->name('toggle');
+        });
 });
 
 require __DIR__ . '/settings.php';

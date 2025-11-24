@@ -116,10 +116,12 @@ biometric_records
 ```
 
 ### Retention Policy
-- **Retention Period:** 3 months (90 days)
+- **Default Retention:** 3 months (90 days) - configurable via policies
+- **Policy Management:** Site-specific or global retention periods
 - **Cleanup Schedule:** Daily at 2:00 AM
-- **Manual Cleanup:** `php artisan biometric:clean-old-records`
-- **Custom Retention:** `--months` flag (e.g., `--months=6`)
+- **Manual Cleanup:** `php artisan biometric:clean-old-records --force`
+- **Custom Retention:** `--months` flag for manual override (e.g., `--months=6`)
+- **Priority System:** Site-specific policies override global policies
 
 ### Storage Metrics
 | Employees | Records/Day | 3-Month Storage |
@@ -144,7 +146,7 @@ biometric_records
 1. **Reprocessing UI** - Recalculate attendance with updated algorithm
 2. **Anomaly Detection** - Find unusual scan patterns
 3. **CSV Export** - Download records for external analysis
-4. **Retention Policies** - Customizable retention per site
+4. **Retention Policies** - Customizable retention per site with priority system
 
 See **[../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)** for details.
 
@@ -197,11 +199,14 @@ See **[../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../../BIOMETRIC_ENHANCEME
 
 ### Cleaning Old Records
 ```bash
-# Manual cleanup (3 months)
+# Automatic cleanup (uses retention policies from database)
+php artisan biometric:clean-old-records --force
+
+# Interactive cleanup (asks for confirmation per site)
 php artisan biometric:clean-old-records
 
-# Custom retention
-php artisan biometric:clean-old-records --months=6
+# Manual override (bypass policies, use specific months for all sites)
+php artisan biometric:clean-old-records --months=6 --force
 
 # Check scheduled task
 php artisan schedule:list
@@ -225,6 +230,19 @@ See **[../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../../BIOMETRIC_ENHANCEME
 1. Navigate to `/biometric-export`
 2. Select filters (dates, employees, sites)
 3. Download CSV file
+
+### Managing Retention Policies
+1. Navigate to `/biometric-retention-policies`
+2. Create new policy (global or site-specific)
+3. Set retention period in months
+4. Configure priority (higher number = higher priority)
+5. Activate/deactivate policies as needed
+
+**How Policies Work:**
+- Site-specific policies override global policies
+- Higher priority wins when multiple policies apply
+- Cleanup command applies policies automatically
+- Each site can have different retention periods
 
 ---
 
@@ -310,10 +328,12 @@ php artisan test tests/Unit/AttendanceProcessorTest.php
 - Audit trail preserved
 
 ### Retention Compliance
-- Configurable retention periods
-- Site-specific or global policies
-- Priority system for flexibility
-- Manual override capability
+- Configurable retention periods per site or globally
+- Site-specific policies override global policies
+- Priority system for policy resolution
+- Manual override capability for special cases
+- Automatic enforcement via scheduled cleanup
+- Detailed logging for audit purposes
 
 ---
 
@@ -325,4 +345,4 @@ php artisan test tests/Unit/AttendanceProcessorTest.php
 
 ---
 
-*Last updated: November 10, 2025*
+*Last updated: November 22, 2025*

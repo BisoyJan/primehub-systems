@@ -16,6 +16,8 @@ class AccountController extends Controller
      */
     public function index(Request $request)
     {
+        $this->authorize('viewAny', User::class);
+
         $query = User::query();
 
         // Search by name or email
@@ -81,6 +83,9 @@ class AccountController extends Controller
         ]);
 
         $validated['password'] = Hash::make($validated['password']);
+        // Accounts created by admins are automatically approved
+        $validated['is_approved'] = true;
+        $validated['approved_at'] = now();
 
         User::create($validated);
 
@@ -157,6 +162,64 @@ class AccountController extends Controller
 
         return back()->with('flash', [
             'message' => 'User account deleted successfully',
+            'type' => 'success'
+        ]);
+    }
+
+    /**
+     * Approve a user account.
+     */
+    public function approve(User $account)
+    {
+        $this->authorize('update', $account);
+
+        if ($account->is_approved) {
+            return back()->with('flash', [
+                'message' => 'User account is already approved',
+                'type' => 'info'
+            ]);
+        }
+
+        $account->update([
+            'is_approved' => true,
+            'approved_at' => now(),
+        ]);
+
+        return back()->with('flash', [
+            'message' => 'User account approved successfully',
+            'type' => 'success'
+        ]);
+    }
+
+    /**
+     * Unapprove a user account.
+     */
+    public function unapprove(User $account)
+    {
+        $this->authorize('update', $account);
+
+        // Prevent unapproving own account
+        if ($account->id === auth()->id()) {
+            return back()->with('flash', [
+                'message' => 'You cannot unapprove your own account',
+                'type' => 'error'
+            ]);
+        }
+
+        if (!$account->is_approved) {
+            return back()->with('flash', [
+                'message' => 'User account is already unapproved',
+                'type' => 'info'
+            ]);
+        }
+
+        $account->update([
+            'is_approved' => false,
+            'approved_at' => null,
+        ]);
+
+        return back()->with('flash', [
+            'message' => 'User account approval revoked successfully',
             'type' => 'success'
         ]);
     }

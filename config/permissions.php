@@ -128,6 +128,20 @@ return [
         'leave.cancel' => 'Cancel Leave Requests',
         'leave.view_all' => 'View All Leave Requests',
 
+        // IT Concerns
+        'it_concerns.view' => 'View IT Concerns',
+        'it_concerns.create' => 'Create IT Concerns',
+        'it_concerns.edit' => 'Edit IT Concerns',
+        'it_concerns.delete' => 'Delete IT Concerns',
+        'it_concerns.assign' => 'Assign IT Concerns',
+        'it_concerns.resolve' => 'Resolve IT Concerns',
+
+        // Medication Requests
+        'medication_requests.view' => 'View Medication Requests',
+        'medication_requests.create' => 'Create Medication Requests',
+        'medication_requests.update' => 'Update Medication Requests Status',
+        'medication_requests.delete' => 'Delete Medication Requests',
+
         // Settings
         'settings.view' => 'Access Settings',
         'settings.account' => 'Manage Account Settings',
@@ -156,7 +170,9 @@ return [
             'schedules.view', 'schedules.create', 'schedules.edit', 'schedules.delete', 'schedules.toggle',
             'biometric.view', 'biometric.reprocess', 'biometric.anomalies', 'biometric.export', 'biometric.retention',
             'attendance_points.view', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan',
-            'leave.view', 'leave.create', 'leave.approve', 'leave.deny', 'leave.view_all',
+            'leave.view', 'leave.create', 'leave.approve', 'leave.deny', 'leave.cancel', 'leave.view_all',
+            'it_concerns.view', 'it_concerns.create', 'it_concerns.assign',
+            'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
             'settings.view', 'settings.account', 'settings.password',
         ],
 
@@ -167,6 +183,8 @@ return [
             'biometric.view',
             'attendance_points.view', 'attendance_points.export',
             'leave.view', 'leave.create',
+            'it_concerns.view', 'it_concerns.create',
+            'medication_requests.view', 'medication_requests.create', 'medication_requests.update',
             'settings.account', 'settings.password',
         ],
 
@@ -174,7 +192,9 @@ return [
             'dashboard.view',
             'attendance.view',
             'attendance_points.view',
-            'leave.view', 'leave.create',
+            'leave.view', 'leave.create', 'leave.cancel',
+            'it_concerns.view', 'it_concerns.create',
+            'medication_requests.view', 'medication_requests.create',
             'settings.account',
         ],
 
@@ -186,6 +206,7 @@ return [
             'biometric.view', 'biometric.reprocess', 'biometric.anomalies', 'biometric.export', 'biometric.retention',
             'attendance_points.view', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan',
             'leave.view', 'leave.create', 'leave.approve', 'leave.deny', 'leave.view_all',
+            'it_concerns.view', 'it_concerns.create',
             'settings.account', 'settings.password',
         ],
 
@@ -203,6 +224,8 @@ return [
             'attendance.view',
             'attendance_points.view',
             'leave.view', 'leave.create',
+            'it_concerns.view', 'it_concerns.create', 'it_concerns.edit', 'it_concerns.delete', 'it_concerns.assign', 'it_concerns.resolve',
+            'medication_requests.view', 'medication_requests.create',
             'settings.account', 'settings.password',
         ],
 

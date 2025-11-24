@@ -7,6 +7,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -74,6 +75,7 @@ interface PageProps extends SharedData {
     selectedUser?: User | null;
     month: number;
     year: number;
+    verificationFilter: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -131,7 +133,7 @@ const formatTime = (time: string | undefined, timeFormat: '12' | '24' = '24') =>
 };
 
 export default function AttendanceCalendar() {
-    const { attendances, users, selectedUser, month, year, auth } = usePage<PageProps>().props;
+    const { attendances, users, selectedUser, month, year, verificationFilter: initialVerificationFilter, auth } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format || '24';
 
     useFlashMessage();
@@ -140,6 +142,7 @@ export default function AttendanceCalendar() {
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
+    const [verificationFilter, setVerificationFilter] = useState(initialVerificationFilter || 'all');
 
     // Filter users based on search query
     const filteredUsers = useMemo(() => {
@@ -188,6 +191,9 @@ export default function AttendanceCalendar() {
         if (selectedUser) {
             params.user_id = selectedUser.id;
         }
+        if (verificationFilter !== 'all') {
+            params.verification_filter = verificationFilter;
+        }
         router.get('/attendance/calendar', params, { preserveState: true });
     };
 
@@ -196,9 +202,24 @@ export default function AttendanceCalendar() {
         if (userId) {
             params.user_id = userId;
         }
+        if (verificationFilter !== 'all') {
+            params.verification_filter = verificationFilter;
+        }
         router.get('/attendance/calendar', params);
         setIsUserPopoverOpen(false);
         setUserSearchQuery("");
+    };
+
+    const handleVerificationFilterChange = (value: string) => {
+        setVerificationFilter(value);
+        const params: Record<string, string | number> = { month, year };
+        if (selectedUser) {
+            params.user_id = selectedUser.id;
+        }
+        if (value !== 'all') {
+            params.verification_filter = value;
+        }
+        router.get('/attendance/calendar', params, { preserveState: true });
     };
 
     const handleDayClick = (day: number) => {
@@ -246,55 +267,71 @@ export default function AttendanceCalendar() {
 
                 {/* User Selection and Month Navigation */}
                 <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
-                    {users.length > 0 && (
-                        <div className="w-full sm:w-80">
-                            <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={isUserPopoverOpen}
-                                        className="w-full justify-between font-normal"
-                                    >
-                                        <span className="truncate">
-                                            {selectedUser ? selectedUser.name : "Select employee..."}
-                                        </span>
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
-                                    <Command shouldFilter={false}>
-                                        <CommandInput
-                                            placeholder="Search employee..."
-                                            value={userSearchQuery}
-                                            onValueChange={setUserSearchQuery}
-                                        />
-                                        <CommandList>
-                                            <CommandEmpty>No employee found.</CommandEmpty>
-                                            <CommandGroup>
-                                                {filteredUsers.map((user) => (
-                                                    <CommandItem
-                                                        key={user.id}
-                                                        value={user.name}
-                                                        onSelect={() => handleUserSelect(user.id)}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedUser?.id === user.id
-                                                                ? "opacity-100"
-                                                                : "opacity-0"
-                                                                }`}
-                                                        />
-                                                        {user.name}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
-                        </div>
-                    )}
+                    <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                        {users.length > 0 && (
+                            <div className="w-full sm:w-80">
+                                <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={isUserPopoverOpen}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            <span className="truncate">
+                                                {selectedUser ? selectedUser.name : "Select employee..."}
+                                            </span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-full p-0" align="start">
+                                        <Command shouldFilter={false}>
+                                            <CommandInput
+                                                placeholder="Search employee..."
+                                                value={userSearchQuery}
+                                                onValueChange={setUserSearchQuery}
+                                            />
+                                            <CommandList>
+                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    {filteredUsers.map((user) => (
+                                                        <CommandItem
+                                                            key={user.id}
+                                                            value={user.name}
+                                                            onSelect={() => handleUserSelect(user.id)}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${selectedUser?.id === user.id
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                                    }`}
+                                                            />
+                                                            {user.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            </div>
+                        )}
+                        {selectedUser && (
+                            <div className="w-full sm:w-60">
+                                <Select value={verificationFilter} onValueChange={handleVerificationFilterChange}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="Filter by status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Records</SelectItem>
+                                        <SelectItem value="verified">Verified Only</SelectItem>
+                                        <SelectItem value="non_verified">Non-Verified Only</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
+                    </div>
 
                     <div className="flex items-center gap-3">
                         <Button

@@ -17,6 +17,8 @@ class AttendancePointController extends Controller
 {
     public function index(Request $request)
     {
+        $this->authorize('viewAny', AttendancePoint::class);
+
         // Redirect restricted roles to their own show page
         $restrictedRoles = ['Agent', 'IT', 'Utility'];
         if (in_array(auth()->user()->role, $restrictedRoles)) {

@@ -12,8 +12,8 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Clean biometric records older than 3 months - runs daily at 2:00 AM
-        $schedule->command('biometric:clean-old-records')
+        // Clean biometric records based on retention policies - runs daily at 2:00 AM
+        $schedule->command('biometric:clean-old-records --force')
             ->dailyAt('02:00')
             ->withoutOverlapping()
             ->onOneServer();

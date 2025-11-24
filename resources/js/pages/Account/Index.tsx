@@ -28,6 +28,8 @@ interface User {
     role: string;
     hired_date: string | null;
     created_at: string;
+    is_approved: boolean;
+    approved_at: string | null;
 }
 
 interface Meta {
@@ -104,6 +106,26 @@ export default function AccountIndex() {
             onFinish: () => setLoading(false),
             onSuccess: () => toast.success("User account deleted successfully"),
             onError: () => toast.error("Failed to delete user account"),
+        });
+    };
+
+    const handleApprove = (userId: number) => {
+        setLoading(true);
+        router.post(`/accounts/${userId}/approve`, {}, {
+            preserveScroll: true,
+            onFinish: () => setLoading(false),
+            onSuccess: () => toast.success("User account approved successfully"),
+            onError: () => toast.error("Failed to approve user account"),
+        });
+    };
+
+    const handleUnapprove = (userId: number) => {
+        setLoading(true);
+        router.post(`/accounts/${userId}/unapprove`, {}, {
+            preserveScroll: true,
+            onFinish: () => setLoading(false),
+            onSuccess: () => toast.success("User account approval revoked successfully"),
+            onError: () => toast.error("Failed to revoke user approval"),
         });
     };
 
@@ -199,6 +221,7 @@ export default function AccountIndex() {
                                     <TableHead>Last Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
+                                    <TableHead>Status</TableHead>
                                     <TableHead>Hired Date</TableHead>
                                     <TableHead>Created At</TableHead>
                                     <TableHead>Actions</TableHead>
@@ -218,6 +241,14 @@ export default function AccountIndex() {
                                             </span>
                                         </TableCell>
                                         <TableCell>
+                                            <span className={`px-3 py-1 rounded-full text-xs font-medium border ${user.is_approved
+                                                    ? 'bg-green-100 text-green-800 border-green-200'
+                                                    : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                                }`}>
+                                                {user.is_approved ? 'Approved' : 'Pending'}
+                                            </span>
+                                        </TableCell>
+                                        <TableCell>
                                             {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : '-'}
                                         </TableCell>
                                         <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
@@ -229,6 +260,30 @@ export default function AccountIndex() {
                                                             Edit
                                                         </Button>
                                                     </Link>
+                                                </Can>
+
+                                                <Can permission="accounts.edit">
+                                                    {user.is_approved ? (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleUnapprove(user.id)}
+                                                            disabled={loading || user.id === currentUserId}
+                                                            className="text-yellow-600 hover:text-yellow-700 border-yellow-300"
+                                                        >
+                                                            Revoke
+                                                        </Button>
+                                                    ) : (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleApprove(user.id)}
+                                                            disabled={loading}
+                                                            className="text-green-600 hover:text-green-700 border-green-300"
+                                                        >
+                                                            Approve
+                                                        </Button>
+                                                    )}
                                                 </Can>
 
                                                 <Can permission="accounts.delete">
@@ -245,7 +300,7 @@ export default function AccountIndex() {
                                 ))}
                                 {users.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={10} className="py-8 text-center text-gray-500">
                                             No user accounts found
                                         </TableCell>
                                     </TableRow>
@@ -266,9 +321,17 @@ export default function AccountIndex() {
                                     </h3>
                                     <p className="text-sm text-gray-600">{user.email}</p>
                                 </div>
-                                <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
-                                    {user.role}
-                                </span>
+                                <div className="flex flex-col gap-2 items-end">
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
+                                        {user.role}
+                                    </span>
+                                    <span className={`px-2 py-1 rounded-full text-xs font-medium border ${user.is_approved
+                                            ? 'bg-green-100 text-green-800 border-green-200'
+                                            : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                        }`}>
+                                        {user.is_approved ? 'Approved' : 'Pending'}
+                                    </span>
+                                </div>
                             </div>
                             <div className="text-xs text-gray-500">
                                 Hired: {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : 'Not set'}
@@ -276,25 +339,50 @@ export default function AccountIndex() {
                             <div className="text-xs text-gray-500">
                                 Created: {new Date(user.created_at).toLocaleDateString()}
                             </div>
-                            <div className="flex gap-2 pt-2">
-                                <Can permission="accounts.edit">
-                                    <Link href={`/accounts/${user.id}/edit`} className="flex-1">
-                                        <Button variant="outline" size="sm" className="w-full" disabled={loading}>
-                                            Edit
-                                        </Button>
-                                    </Link>
-                                </Can>
+                            <div className="flex flex-col gap-2 pt-2">
+                                <div className="flex gap-2">
+                                    <Can permission="accounts.edit">
+                                        <Link href={`/accounts/${user.id}/edit`} className="flex-1">
+                                            <Button variant="outline" size="sm" className="w-full" disabled={loading}>
+                                                Edit
+                                            </Button>
+                                        </Link>
+                                    </Can>
 
-                                <Can permission="accounts.delete">
-                                    <div className="flex-1">
-                                        <DeleteConfirmDialog
-                                            onConfirm={() => handleDelete(user.id)}
-                                            title="Delete User Account"
-                                            description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
+                                    <Can permission="accounts.delete">
+                                        <div className="flex-1">
+                                            <DeleteConfirmDialog
+                                                onConfirm={() => handleDelete(user.id)}
+                                                title="Delete User Account"
+                                                description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
+                                                disabled={loading || user.id === currentUserId}
+                                                buttonProps={{ size: "sm", className: "w-full" }}
+                                            />
+                                        </div>
+                                    </Can>
+                                </div>
+                                <Can permission="accounts.edit">
+                                    {user.is_approved ? (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleUnapprove(user.id)}
                                             disabled={loading || user.id === currentUserId}
-                                            buttonProps={{ size: "sm", className: "w-full" }}
-                                        />
-                                    </div>
+                                            className="w-full text-yellow-600 hover:text-yellow-700 border-yellow-300"
+                                        >
+                                            Revoke Approval
+                                        </Button>
+                                    ) : (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleApprove(user.id)}
+                                            disabled={loading}
+                                            className="w-full text-green-600 hover:text-green-700 border-green-300"
+                                        >
+                                            Approve Account
+                                        </Button>
+                                    )}
                                 </Can>
                             </div>
                         </div>

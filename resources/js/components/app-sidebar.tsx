@@ -18,8 +18,9 @@ import { index as pcIndex } from '@/routes/pcspecs'
 import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
+import { index as medicationRequestsIndex } from '@/routes/medication-requests'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane, LucideIcon } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane, LucideIcon, AlertCircle, Pill } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -176,11 +177,34 @@ const getNavigationConfig = (userId: number, userRole: string) => {
                     icon: Shield,
                     permission: 'biometric.retention',
                 },
+            ],
+        },
+        requests: {
+            label: 'Request Forms',
+            items: [
+                {
+                    title: 'IT Concerns',
+                    href: '/form-requests/it-concerns',
+                    icon: AlertCircle,
+                    permission: 'it_concerns.view',
+                },
                 {
                     title: 'Leave Requests',
-                    href: '/leave-requests',
+                    href: '/form-requests/leave-requests',
                     icon: Plane,
                     permission: 'leave.view',
+                },
+                {
+                    title: 'Medication Requests',
+                    href: medicationRequestsIndex.url(),
+                    icon: Pill,
+                    permission: 'medication_requests.view',
+                },
+                {
+                    title: 'Retention Policies',
+                    href: '/form-requests/retention-policies',
+                    icon: Shield,
+                    permission: 'form_requests.retention',
                 },
             ],
         },
@@ -259,6 +283,10 @@ export function AppSidebar() {
             label: navigationConfig.attendance.label,
             items: filterItemsByPermission(navigationConfig.attendance.items),
         },
+        requests: {
+            label: navigationConfig.requests.label,
+            items: filterItemsByPermission(navigationConfig.requests.items),
+        },
         account: {
             label: navigationConfig.account.label,
             items: filterItemsByPermission(navigationConfig.account.items),
@@ -284,6 +312,7 @@ export function AppSidebar() {
                 <NavGroup label={filteredNavigation.computer.label} items={filteredNavigation.computer.items} />
                 <NavGroup label={filteredNavigation.station.label} items={filteredNavigation.station.items} />
                 <NavGroup label={filteredNavigation.attendance.label} items={filteredNavigation.attendance.items} />
+                <NavGroup label={filteredNavigation.requests.label} items={filteredNavigation.requests.items} />
                 <NavGroup label={filteredNavigation.account.label} items={filteredNavigation.account.items} />
             </SidebarContent>
 

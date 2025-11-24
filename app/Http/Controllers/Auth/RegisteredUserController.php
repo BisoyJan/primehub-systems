@@ -44,14 +44,17 @@ class RegisteredUserController extends Controller
             'last_name' => $request->last_name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'is_approved' => false, // New users need approval
         ]);
 
         event(new Registered($user));
 
+        // Log the user in so they can access the pending approval page
         Auth::login($user);
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route('dashboard', absolute: false));
+        // Redirect to pending approval page instead of dashboard
+        return redirect()->route('pending-approval');
     }
 }

@@ -1,7 +1,7 @@
 # Biometric Records Storage & Management
 
 ## Overview
-The system now stores **all raw biometric records** permanently in the `biometric_records` table for audit trail, debugging, and reprocessing capabilities. Records are automatically deleted after **3 months** to manage database size.
+The system now stores **all raw biometric records** permanently in the `biometric_records` table for audit trail, debugging, and reprocessing capabilities. Records are automatically deleted based on **configurable retention policies** (default: 3 months) to manage database size while maintaining compliance flexibility.
 
 ## Features
 
@@ -28,6 +28,12 @@ The system now stores **all raw biometric records** permanently in the `biometri
 - Fix past attendance issues by reprocessing stored records
 - Run reports on historical biometric data
 
+### ✅ Configurable Retention Policies
+- Site-specific or global retention periods
+- Priority-based policy resolution
+- Flexible compliance with different regulatory requirements
+- Automatic enforcement via scheduled cleanup
+
 ## Database Schema
 
 ```sql
@@ -46,6 +52,21 @@ Indexes:
 - (user_id, record_date, record_time) -- Fast time in/out searches
 - (user_id, datetime) -- Historical queries
 - record_date -- Cleanup operations
+
+biometric_retention_policies
+├── id (primary key)
+├── name (string) -- Policy name
+├── description (text, nullable) -- Policy description
+├── retention_months (integer) -- Months to retain data
+├── applies_to_type (string) -- 'global' or 'site'
+├── applies_to_id (foreign key, nullable) -- site_id if site-specific
+├── priority (integer) -- Higher number = higher priority
+├── is_active (boolean) -- Whether policy is active
+└── timestamps (created_at, updated_at)
+
+Indexes:
+- (applies_to_type, applies_to_id) -- Fast policy lookups
+- is_active -- Active policy queries
 ```
 
 ## Data Lifecycle
@@ -62,32 +83,57 @@ Process Attendance (existing logic)
 ```
 
 ### 2. Retention Period
-**Records are kept for 3 months**, then automatically deleted.
+**Records are kept based on configured retention policies:**
 
-**Why 3 months?**
+**Default Policy:**
+- 3 months for all sites (if no custom policies exist)
 - Sufficient for payroll processing and corrections
 - Covers typical attendance dispute resolution timeframes
 - Balances audit needs with database performance
-- Complies with most data retention policies
+
+**Custom Policies:**
+- Create site-specific retention periods
+- Override global settings with higher priority
+- Support different regulatory requirements per location
+- Flexible compliance management
+
+**Policy Resolution:**
+1. Check for active site-specific policy
+2. Fall back to global policy if no site policy exists
+3. Use default 3 months if no policies configured
+4. Higher priority wins if multiple policies apply
 
 ### 3. Automatic Cleanup
 **Scheduled Task:** Daily at 2:00 AM
-- Deletes records older than 3 months
-- Logs deletion count for audit
+- Applies retention policies per site automatically
+- Deletes records older than configured retention period
+- Logs deletion count per site for audit
 - Runs on single server (prevents duplicates)
 - Prevents overlap with concurrent runs
 
 **Manual Cleanup:**
 ```bash
-# Delete records older than 3 months (default)
+# Automatic cleanup using retention policies (default)
+php artisan biometric:clean-old-records --force
+
+# Interactive cleanup (asks for confirmation per site)
 php artisan biometric:clean-old-records
 
-# Custom retention period (e.g., 6 months)
-php artisan biometric:clean-old-records --months=6
-
-# Check what would be deleted without confirmation
-php artisan biometric:clean-old-records --dry-run
+# Manual override - bypass policies and use specific months for all sites
+php artisan biometric:clean-old-records --months=6 --force
 ```
+
+**How Cleanup Works:**
+1. **Query Policies:** Get retention period for each site
+2. **Calculate Cutoff:** Subtract retention months from current date
+3. **Delete Records:** Remove records older than cutoff date
+4. **Log Results:** Record deletion count per site
+5. **Repeat:** Process all sites separately
+
+Example:
+- Site A has 12-month policy → keeps records from Nov 2024 onwards
+- Site B has 6-month policy → keeps records from May 2025 onwards
+- No policy for Site C → uses default 3 months (Aug 2025 onwards)
 
 ## How It Works
 
@@ -289,9 +335,11 @@ done &
 ## Security & Privacy
 
 ### Data Retention Compliance
-- 3-month retention aligns with typical employment law requirements
+- Configurable retention aligns with varying regulatory requirements
+- Site-specific policies support different jurisdictions
 - Old records automatically purged (GDPR "right to erasure")
-- Audit trail maintained for active period
+- Audit trail maintained for configured period
+- Priority system allows flexible compliance management
 
 ### Access Control
 Use Laravel policies to restrict access:
@@ -303,6 +351,89 @@ public function view(User $user, BiometricRecord $record)
     // Only admins or the employee themselves
     return $user->is_admin || $user->id === $record->user_id;
 }
+```
+
+## Retention Policy Management
+
+### Creating Policies
+
+**Via UI:**
+1. Navigate to `/biometric-retention-policies`
+2. Click "Add Policy"
+3. Configure:
+   - Name and description
+   - Retention period (months)
+   - Applies to: Global or specific site
+   - Priority (higher wins)
+   - Active status
+
+**Example Policies:**
+```
+Policy 1: "EU Sites Compliance"
+- Retention: 6 months
+- Applies to: Site "London Office"
+- Priority: 100
+- Status: Active
+
+Policy 2: "Default Retention"
+- Retention: 3 months
+- Applies to: Global
+- Priority: 50
+- Status: Active
+
+Result: London Office keeps 6 months, all others keep 3 months
+```
+
+### Policy Resolution Logic
+
+```php
+// Get retention for a site
+$retentionMonths = BiometricRetentionPolicy::getRetentionMonths($siteId);
+
+// Resolution order:
+// 1. Active site-specific policy (highest priority)
+// 2. Active global policy (highest priority)
+// 3. Default: 3 months
+```
+
+### Policy Priority Examples
+
+**Scenario 1: Simple Override**
+- Global policy: 3 months (priority 50)
+- Site A policy: 12 months (priority 100)
+- Result: Site A uses 12 months, others use 3 months
+
+**Scenario 2: Multiple Site Policies**
+- Global policy: 3 months (priority 50)
+- Site A policy: 12 months (priority 100)
+- Site A policy 2: 6 months (priority 80)
+- Result: Site A uses 12 months (higher priority wins)
+
+**Scenario 3: Deactivated Policy**
+- Global policy: 3 months (priority 50, active)
+- Site A policy: 12 months (priority 100, inactive)
+- Result: Site A falls back to global 3 months
+
+### Testing Policies
+
+**Check what will be deleted:**
+```bash
+# Dry-run mode (shows what would be deleted without actually deleting)
+php artisan biometric:clean-old-records
+
+# View calculated retention for each site
+SELECT s.name, 
+       BiometricRetentionPolicy::getRetentionMonths(s.id) as retention_months
+FROM sites s;
+```
+
+**Manual test cleanup:**
+```bash
+# Run cleanup with confirmation prompts
+php artisan biometric:clean-old-records
+
+# Force cleanup without prompts
+php artisan biometric:clean-old-records --force
 ```
 
 ## Troubleshooting
@@ -320,19 +451,37 @@ public function view(User $user, BiometricRecord $record)
 2. Cron/Task Scheduler configured correctly
 3. Server timezone matches application timezone
 4. Logs: `tail storage/logs/laravel.log | grep biometric`
+5. Retention policies configured: Check `/biometric-retention-policies`
+
+### Policies Not Being Applied
+**Check:**
+1. Policy is active: Check `is_active` column
+2. Policy priority: Higher priority wins
+3. Site association: Ensure `applies_to_id` matches site
+4. Manual override: Check if `--months` flag is being used
+5. Logs: Review cleanup logs for applied retention periods
 
 ### Query Performance Slow
 **Solutions:**
 1. Ensure indexes exist: `SHOW INDEX FROM biometric_records;`
-2. Run cleanup if records > 3 months old: `php artisan biometric:clean-old-records`
+2. Run cleanup if records accumulate: `php artisan biometric:clean-old-records --force`
 3. Add site_id index if filtering by site frequently
 4. Consider partitioning table by month for very large datasets
+5. Review retention policies to avoid keeping too much data
 
 ## Future Enhancements
 
+Completed:
+- ✅ **Reprocessing UI:** Admin interface to reprocess specific date ranges
+- ✅ **Retention Policies:** Configurable per-site retention with priority system
+- ✅ **Anomaly Detection:** Flag unusual patterns (e.g., bio at 2 sites simultaneously)
+- ✅ **Export Feature:** Download raw biometric data for external analysis
+
 Potential additions:
-- **Reprocessing UI:** Admin interface to reprocess specific date ranges
-- **Anomaly Detection:** Flag unusual patterns (e.g., bio at 2 sites simultaneously)
-- **Export Feature:** Download raw biometric data for external analysis
-- **Retention Policies:** Different retention periods per site/department
 - **Archive Table:** Move old records to archive instead of deleting
+- **Retention Reports:** Dashboard showing retention compliance per site
+- **Policy Simulation:** Preview impact of policy changes before applying
+
+---
+
+*Last updated: November 22, 2025*

@@ -25,6 +25,8 @@ class LeaveRequestController extends Controller
      */
     public function index(Request $request)
     {
+        $this->authorize('viewAny', LeaveRequest::class);
+
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
 
@@ -64,7 +66,7 @@ class LeaveRequestController extends Controller
             ->where('status', 'pending')
             ->exists();
 
-        return Inertia::render('Leave/Index', [
+        return Inertia::render('FormRequest/Leave/Index', [
             'leaveRequests' => $leaveRequests,
             'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id']),
             'isAdmin' => $isAdmin,
@@ -77,6 +79,8 @@ class LeaveRequestController extends Controller
      */
     public function create(Request $request)
     {
+        $this->authorize('create', LeaveRequest::class);
+
         $user = auth()->user();
         $leaveCreditService = $this->leaveCreditService;
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
@@ -154,7 +158,7 @@ class LeaveRequestController extends Controller
         // Calculate two weeks from now for 2-week notice validation
         $twoWeeksFromNow = now()->addWeeks(2)->format('Y-m-d');
 
-        return Inertia::render('Leave/Create', [
+        return Inertia::render('FormRequest/Leave/Create', [
             'creditsSummary' => $creditsSummary,
             'attendancePoints' => $attendancePoints,
             'attendanceViolations' => $attendanceViolations,
@@ -255,17 +259,14 @@ class LeaveRequestController extends Controller
      */
     public function show(LeaveRequest $leaveRequest)
     {
+        $this->authorize('view', $leaveRequest);
+
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
 
-        // Check authorization
-        if (!$isAdmin && $leaveRequest->user_id !== $user->id) {
-            abort(403, 'Unauthorized access to leave request.');
-        }
-
         $leaveRequest->load(['user', 'reviewer']);
 
-        return Inertia::render('Leave/Show', [
+        return Inertia::render('FormRequest/Leave/Show', [
             'leaveRequest' => $leaveRequest,
             'isAdmin' => $isAdmin,
             'canCancel' => $leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id,
@@ -277,12 +278,9 @@ class LeaveRequestController extends Controller
      */
     public function approve(Request $request, LeaveRequest $leaveRequest)
     {
-        $user = auth()->user();
+        $this->authorize('approve', $leaveRequest);
 
-        // Check authorization
-        if (!in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
-            abort(403, 'Unauthorized to approve leave requests.');
-        }
+        $user = auth()->user();
 
         if ($leaveRequest->status !== 'pending') {
             return back()->withErrors(['error' => 'Only pending requests can be approved.']);
@@ -324,12 +322,9 @@ class LeaveRequestController extends Controller
      */
     public function deny(Request $request, LeaveRequest $leaveRequest)
     {
-        $user = auth()->user();
+        $this->authorize('deny', $leaveRequest);
 
-        // Check authorization
-        if (!in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
-            abort(403, 'Unauthorized to deny leave requests.');
-        }
+        $user = auth()->user();
 
         if ($leaveRequest->status !== 'pending') {
             return back()->withErrors(['error' => 'Only pending requests can be denied.']);
@@ -363,12 +358,9 @@ class LeaveRequestController extends Controller
      */
     public function cancel(Request $request, LeaveRequest $leaveRequest)
     {
-        $user = auth()->user();
+        $this->authorize('cancel', $leaveRequest);
 
-        // Check authorization
-        if ($leaveRequest->user_id !== $user->id) {
-            abort(403, 'Unauthorized to cancel this leave request.');
-        }
+        $user = auth()->user();
 
         if (!$leaveRequest->canBeCancelled()) {
             return back()->withErrors(['error' => 'This leave request cannot be cancelled.']);

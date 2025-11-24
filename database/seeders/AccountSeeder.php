@@ -23,6 +23,8 @@ class AccountSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => 'Super Admin',
                 'email_verified_at' => now(),
+                'is_approved' => true,
+                'approved_at' => now(),
             ],
             [
                 'first_name' => 'Admin',
@@ -32,6 +34,8 @@ class AccountSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => 'Admin',
                 'email_verified_at' => now(),
+                'is_approved' => true,
+                'approved_at' => now(),
             ],
             [
                 'first_name' => 'Agent',
@@ -41,6 +45,30 @@ class AccountSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => 'Agent',
                 'email_verified_at' => now(),
+                'is_approved' => true,
+                'approved_at' => now(),
+            ],
+            [
+                'first_name' => 'IT',
+                'middle_name' => 'U',
+                'last_name' => 'User',
+                'email' => 'it@example.com',
+                'password' => Hash::make('password'),
+                'role' => 'IT',
+                'email_verified_at' => now(),
+                'is_approved' => true,
+                'approved_at' => now(),
+            ],
+            [
+                'first_name' => 'Utility',
+                'middle_name' => 'U',
+                'last_name' => 'User',
+                'email' => 'utility@example.com',
+                'password' => Hash::make('password'),
+                'role' => 'Utility',
+                'email_verified_at' => now(),
+                'is_approved' => true,
+                'approved_at' => now(),
             ],
             [
                 'first_name' => 'HR',
@@ -50,6 +78,8 @@ class AccountSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => 'HR',
                 'email_verified_at' => now(),
+                'is_approved' => true,
+                'approved_at' => now(),
             ],
             [
                 'first_name' => 'Test',
@@ -59,6 +89,8 @@ class AccountSeeder extends Seeder
                 'password' => Hash::make('password'),
                 'role' => 'Super Admin',
                 'email_verified_at' => now(),
+                'is_approved' => true,
+                'approved_at' => now(),
             ],
         ];
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BiometricRecord;
+use App\Models\BiometricRetentionPolicy;
 use App\Models\User;
 use App\Models\Site;
 use Illuminate\Http\Request;
@@ -99,8 +100,8 @@ class BiometricRecordController extends Controller
             ->whereMonth('record_date', Carbon::now()->month)
             ->count();
 
-        // Records older than 3 months (eligible for deletion)
-        $oldRecords = BiometricRecord::olderThan(3)->count();
+        // Calculate records eligible for deletion based on retention policies
+        $oldRecords = $this->countRecordsEligibleForCleanup();
 
         // Oldest record date
         $oldestRecord = BiometricRecord::orderBy('record_date')->first();
@@ -123,6 +124,34 @@ class BiometricRecordController extends Controller
             'newest_date' => $newestDate,
             'next_cleanup' => $nextCleanup,
         ];
+    }
+
+    /**
+     * Count records eligible for cleanup based on retention policies.
+     */
+    protected function countRecordsEligibleForCleanup(): int
+    {
+        $count = 0;
+        $sites = Site::all();
+
+        foreach ($sites as $site) {
+            $retentionMonths = BiometricRetentionPolicy::getRetentionMonths($site->id);
+            $cutoffDate = Carbon::now()->subMonths($retentionMonths);
+
+            $count += BiometricRecord::where('site_id', $site->id)
+                ->where('record_date', '<', $cutoffDate)
+                ->count();
+        }
+
+        // Also count records without a site (using global policy)
+        $globalRetentionMonths = BiometricRetentionPolicy::getRetentionMonths();
+        $globalCutoffDate = Carbon::now()->subMonths($globalRetentionMonths);
+
+        $count += BiometricRecord::whereNull('site_id')
+            ->where('record_date', '<', $globalCutoffDate)
+            ->count();
+
+        return $count;
     }
 
     /**

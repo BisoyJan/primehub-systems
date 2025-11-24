@@ -27,6 +27,8 @@ class User extends Authenticatable
         'role',
         'time_format',
         'hired_date',
+        'is_approved',
+        'approved_at',
     ];
 
     /**
@@ -57,6 +59,8 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'hired_date' => 'date',
+            'is_approved' => 'boolean',
+            'approved_at' => 'datetime',
         ];
     }
 

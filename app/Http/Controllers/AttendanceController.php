@@ -25,6 +25,8 @@ class AttendanceController extends Controller
      */
     public function index(Request $request)
     {
+        $this->authorize('viewAny', Attendance::class);
+
         $query = Attendance::with([
             'user',
             'employeeSchedule.site',
@@ -98,6 +100,7 @@ class AttendanceController extends Controller
         // Get month and year from request or use current
         $month = $request->input('month', now()->month);
         $year = $request->input('year', now()->year);
+        $verificationFilter = $request->input('verification_filter', 'all'); // all, verified, non_verified
 
         // Restrict certain roles to only view their own attendance records
         $restrictedRoles = ['Agent', 'IT', 'Utility'];
@@ -141,16 +144,24 @@ class AttendanceController extends Controller
         // Get attendance records for the month
         $attendances = [];
         if ($userId) {
-            $records = Attendance::with([
+            $query = Attendance::with([
                 'user',
                 'employeeSchedule.site',
                 'bioInSite',
                 'bioOutSite'
             ])
             ->where('user_id', $userId)
-            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->orderBy('shift_date', 'asc')
-            ->get();
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+            // Apply verification filter
+            if ($verificationFilter === 'verified') {
+                $query->where('admin_verified', 1);
+            } elseif ($verificationFilter === 'non_verified') {
+                $query->where('admin_verified', 0);
+            }
+            // 'all' means no filter
+
+            $records = $query->orderBy('shift_date', 'asc')->get();
 
             // Convert to associative array keyed by date (Y-m-d format only)
             foreach ($records as $record) {
@@ -165,6 +176,7 @@ class AttendanceController extends Controller
             'selectedUser' => $selectedUser,
             'month' => (int) $month,
             'year' => (int) $year,
+            'verificationFilter' => $verificationFilter,
         ]);
     }
 
@@ -1054,31 +1066,6 @@ class AttendanceController extends Controller
         ];
 
         return response()->json($stats);
-    }
-
-    /**
-     * Display the attendance dashboard with statistics.
-     */
-    public function dashboard(Request $request)
-    {
-        $startDate = $request->input('start_date', now()->startOfMonth()->format('Y-m-d'));
-        $endDate = $request->input('end_date', now()->endOfMonth()->format('Y-m-d'));
-
-        $stats = [
-            'total' => Attendance::dateRange($startDate, $endDate)->count(),
-            'on_time' => Attendance::dateRange($startDate, $endDate)->byStatus('on_time')->count(),
-            'tardy' => Attendance::dateRange($startDate, $endDate)->byStatus('tardy')->count(),
-            'half_day' => Attendance::dateRange($startDate, $endDate)->byStatus('half_day_absence')->count(),
-            'ncns' => Attendance::dateRange($startDate, $endDate)->byStatus('ncns')->count(),
-            'advised' => Attendance::dateRange($startDate, $endDate)->byStatus('advised_absence')->count(),
-            'needs_verification' => Attendance::dateRange($startDate, $endDate)->needsVerification()->count(),
-        ];
-
-        return Inertia::render('Attendance/Dashboard', [
-            'statistics' => $stats,
-            'startDate' => $startDate,
-            'endDate' => $endDate,
-        ]);
     }
 
     /**

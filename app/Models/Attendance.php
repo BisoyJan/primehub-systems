@@ -116,6 +116,14 @@ class Attendance extends Model
     }
 
     /**
+     * Scope to filter records with overtime.
+     */
+    public function scopeHasOvertime($query)
+    {
+        return $query->where('overtime_minutes', '>', 0);
+    }
+
+    /**
      * Scope to get records needing verification.
      */
     public function scopeNeedsVerification($query)

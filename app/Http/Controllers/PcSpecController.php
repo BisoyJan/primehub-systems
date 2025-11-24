@@ -31,6 +31,8 @@ class PcSpecController extends Controller
      */
     public function index(Request $request)
     {
+        $this->authorize('viewAny', PcSpec::class);
+
         $search = trim((string) $request->input('search', ''));
 
         $query = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
