@@ -1,18 +1,20 @@
-import React from "react";
+import React, { useState } from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
-import { useFlashMessage } from "@/hooks";
+import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { FileText, AlertTriangle, CheckCircle, Clock, XCircle, Eye } from "lucide-react";
-import type { BreadcrumbItem } from "@/types";
+import { FileText, AlertTriangle, CheckCircle, Clock, XCircle, Eye, RefreshCw, Search, Filter } from "lucide-react";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { index as attendanceUploadsIndex, show as attendanceUploadsShow } from "@/routes/attendance-uploads";
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Recent Uploads', href: '/attendance-uploads' }
-];
+const defaultTitle = "Recent Uploads";
 
 interface User {
     id: number;
@@ -51,6 +53,12 @@ interface UploadPayload {
 
 interface PageProps extends SharedData {
     uploads?: UploadPayload;
+    filters?: {
+        search?: string;
+        status?: string;
+        date_from?: string;
+        date_to?: string;
+    };
     [key: string]: unknown;
 }
 
@@ -73,9 +81,51 @@ const formatDateTime = (datetime: string, timeFormat: '12' | '24' = '24') => {
     });
 };
 
-export default function UploadsIndex({ uploads, auth }: PageProps) {
+export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
     useFlashMessage();
     const timeFormat = auth.user.time_format || '24';
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: defaultTitle,
+        breadcrumbs: [{ title: defaultTitle, href: attendanceUploadsIndex().url }],
+    });
+
+    const isPageLoading = usePageLoading();
+
+    const [searchQuery, setSearchQuery] = useState(filters?.search || "");
+    const [selectedStatus, setSelectedStatus] = useState(filters?.status || "");
+    const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
+    const [dateTo, setDateTo] = useState(filters?.date_to || "");
+    const [lastRefresh, setLastRefresh] = useState(new Date());
+
+    const handleManualRefresh = () => {
+        setLastRefresh(new Date());
+        router.reload({ only: ['uploads'] });
+    };
+
+    const handleFilter = () => {
+        router.get(
+            attendanceUploadsIndex().url,
+            {
+                search: searchQuery,
+                status: selectedStatus,
+                date_from: dateFrom,
+                date_to: dateTo,
+            },
+            {
+                preserveState: true,
+                preserveScroll: true,
+            }
+        );
+    };
+
+    const handleReset = () => {
+        setSearchQuery("");
+        setSelectedStatus("");
+        setDateFrom("");
+        setDateTo("");
+        router.get(attendanceUploadsIndex().url);
+    };
 
     const uploadsData = {
         data: uploads?.data || [],
@@ -110,22 +160,87 @@ export default function UploadsIndex({ uploads, auth }: PageProps) {
     };
 
     const viewUploadDetails = (uploadId: number) => {
-        router.get(`/attendance-uploads/${uploadId}`);
+        router.get(attendanceUploadsShow({ upload: uploadId }).url);
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Recent Uploads" />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+            <Head title={title} />
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+                <LoadingOverlay isLoading={isPageLoading} />
                 <PageHeader
-                    title="Recent Uploads"
+                    title={title}
                     description="View and manage attendance file uploads"
                 />
 
-                <div className="flex justify-between items-center text-sm">
-                    <div className="text-muted-foreground">
-                        Showing {uploadsData.meta.from} to {uploadsData.meta.to} of {uploadsData.meta.total} upload
-                        {uploadsData.meta.total === 1 ? "" : "s"}
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search filename..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
+
+                            <Select value={selectedStatus || undefined} onValueChange={(value) => setSelectedStatus(value || "")}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="processing">Processing</SelectItem>
+                                    <SelectItem value="completed">Completed</SelectItem>
+                                    <SelectItem value="failed">Failed</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                                <span className="text-muted-foreground text-xs">From:</span>
+                                <Input
+                                    type="date"
+                                    value={dateFrom}
+                                    onChange={(e) => setDateFrom(e.target.value)}
+                                    className="w-full bg-transparent outline-none text-sm h-auto p-0 border-0 focus-visible:ring-0"
+                                />
+                            </div>
+
+                            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                                <span className="text-muted-foreground text-xs">To:</span>
+                                <Input
+                                    type="date"
+                                    value={dateTo}
+                                    onChange={(e) => setDateTo(e.target.value)}
+                                    className="w-full bg-transparent outline-none text-sm h-auto p-0 border-0 focus-visible:ring-0"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button onClick={handleFilter} className="flex-1 sm:flex-none">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
+                            </Button>
+                            <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
+                                Reset
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            Showing {uploadsData.meta.from} to {uploadsData.meta.to} of {uploadsData.meta.total} upload
+                            {uploadsData.meta.total === 1 ? "" : "s"}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
+                        </div>
                     </div>
                 </div>
 

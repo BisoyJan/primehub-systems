@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Station;
 use App\Models\PcSpec;
 use App\Models\PcMaintenance;
+use App\Models\ItConcern;
+use App\Models\Site;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -176,6 +178,59 @@ class DashboardService
             'dualMonitor' => $this->getDualMonitorStations(),
             'maintenanceDue' => $this->getMaintenanceDue(),
             'unassignedPcSpecs' => $this->getUnassignedPcSpecs(),
+            'itConcernStats' => $this->getItConcernStats(),
+            'itConcernTrends' => $this->getItConcernTrends(),
+        ];
+    }
+
+    /**
+     * Get IT concern counts by status for quick dashboard view
+     */
+    public function getItConcernStats(): array
+    {
+        $statuses = ['pending', 'in_progress', 'resolved'];
+
+        $counts = ItConcern::select('status', DB::raw('COUNT(*) as total'))
+            ->whereIn('status', $statuses)
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $siteAggregates = ItConcern::select('site_id', 'status', DB::raw('COUNT(*) as total'))
+            ->whereIn('status', $statuses)
+            ->groupBy('site_id', 'status')
+            ->get()
+            ->groupBy('site_id');
+
+        $sites = Site::select('id', 'name')->orderBy('name')->get();
+
+        $bySite = $sites->map(function ($site) use ($siteAggregates, $statuses) {
+            $statusCounts = array_fill_keys($statuses, 0);
+
+            if ($siteAggregates->has($site->id)) {
+                foreach ($siteAggregates[$site->id] as $aggregate) {
+                    $statusCounts[$aggregate->status] = (int) $aggregate->total;
+                }
+            }
+
+            $total = array_sum($statusCounts);
+
+            return [
+                'site' => $site->name,
+                'pending' => $statusCounts['pending'],
+                'in_progress' => $statusCounts['in_progress'],
+                'resolved' => $statusCounts['resolved'],
+                'total' => $total,
+            ];
+        })
+        ->filter(fn ($row) => $row['total'] > 0)
+        ->values()
+        ->toArray();
+
+        return [
+            'pending' => (int) ($counts['pending'] ?? 0),
+            'in_progress' => (int) ($counts['in_progress'] ?? 0),
+            'resolved' => (int) ($counts['resolved'] ?? 0),
+            'bySite' => $bySite,
         ];
     }
 
@@ -239,5 +294,37 @@ class DashboardService
     private function formatDaysOverdue(int $days): string
     {
         return $days === 1 ? '1 day overdue' : "$days days overdue";
+    }
+
+    /**
+     * Get monthly IT concern trend data for charts.
+     */
+    public function getItConcernTrends(): array
+    {
+        $startDate = now()->subMonths(11)->startOfMonth();
+
+        return ItConcern::selectRaw('
+                DATE_FORMAT(created_at, "%Y-%m") as month_key,
+                DATE_FORMAT(created_at, "%b %Y") as label,
+                COUNT(*) as total,
+                SUM(CASE WHEN status = "pending" THEN 1 ELSE 0 END) as pending,
+                SUM(CASE WHEN status = "in_progress" THEN 1 ELSE 0 END) as in_progress,
+                SUM(CASE WHEN status = "resolved" THEN 1 ELSE 0 END) as resolved
+            ')
+            ->where('created_at', '>=', $startDate)
+            ->groupBy('month_key', 'label')
+            ->orderBy('month_key')
+            ->get()
+            ->map(function ($row) {
+                return [
+                    'month' => $row->month_key,
+                    'label' => $row->label,
+                    'total' => (int) $row->total,
+                    'pending' => (int) $row->pending,
+                    'in_progress' => (int) $row->in_progress,
+                    'resolved' => (int) $row->resolved,
+                ];
+            })
+            ->toArray();
     }
 }

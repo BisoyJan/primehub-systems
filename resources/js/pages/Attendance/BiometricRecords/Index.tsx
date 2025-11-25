@@ -2,8 +2,9 @@ import React, { useState, useMemo } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
-import { useFlashMessage } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -19,12 +20,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Database, Calendar, Filter, Clock, Trash2, Eye, Check, ChevronsUpDown } from "lucide-react";
-import type { BreadcrumbItem } from "@/types";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Biometric Records', href: '/biometric-records' }
-];
+import { Database, Calendar, Filter, Clock, Trash2, Eye, Check, ChevronsUpDown, RefreshCw, Search } from "lucide-react";
+import { index as biometricRecordsIndex, show as biometricRecordsShow } from "@/routes/biometric-records";
 
 interface User {
     id: number;
@@ -118,7 +115,13 @@ export default function BiometricRecordsIndex() {
     const { records, stats, filters, auth } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format || '24';
 
+    const { title, breadcrumbs } = usePageMeta({
+        title: "Biometric Records",
+        breadcrumbs: [{ title: "Biometric Records", href: biometricRecordsIndex().url }],
+    });
+
     useFlashMessage();
+    const isPageLoading = usePageLoading();
 
     const [searchTerm, setSearchTerm] = useState(filters?.search || "");
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
@@ -127,6 +130,7 @@ export default function BiometricRecordsIndex() {
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
     // Filter employees based on search query
     const filteredEmployees = useMemo(() => {
@@ -159,7 +163,7 @@ export default function BiometricRecordsIndex() {
 
     const handleFilter = () => {
         router.get(
-            "/biometric-records",
+            biometricRecordsIndex().url,
             {
                 search: searchTerm,
                 user_id: selectedUserId,
@@ -167,8 +171,15 @@ export default function BiometricRecordsIndex() {
                 date_from: dateFrom,
                 date_to: dateTo
             },
-            { preserveState: true }
+            {
+                preserveState: true,
+                onSuccess: () => setLastRefresh(new Date())
+            }
         );
+    };
+
+    const handleManualRefresh = () => {
+        handleFilter();
     };
 
     const handleReset = () => {
@@ -177,18 +188,19 @@ export default function BiometricRecordsIndex() {
         setSelectedSiteId("");
         setDateFrom("");
         setDateTo("");
-        router.get("/biometric-records");
+        router.get(biometricRecordsIndex().url);
     };
 
     const viewUserRecords = (userId: number, date: string) => {
-        router.get(`/biometric-records/${userId}/${date}`);
+        router.get(biometricRecordsShow({ user: userId, date }).url);
     };
 
     const showClearFilters = searchTerm || selectedUserId || selectedSiteId || dateFrom || dateTo;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Biometric Records" />
+            <Head title={title} />
+            <LoadingOverlay isLoading={isPageLoading} />
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <PageHeader
                     title="Biometric Records"
@@ -263,7 +275,7 @@ export default function BiometricRecordsIndex() {
                         />
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                         <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
                             <PopoverTrigger asChild>
                                 <Button
@@ -316,8 +328,8 @@ export default function BiometricRecordsIndex() {
                                                 >
                                                     <Check
                                                         className={`mr-2 h-4 w-4 ${selectedUserId === String(user.id)
-                                                                ? "opacity-100"
-                                                                : "opacity-0"
+                                                            ? "opacity-100"
+                                                            : "opacity-0"
                                                             }`}
                                                     />
                                                     {user.name}
@@ -344,7 +356,7 @@ export default function BiometricRecordsIndex() {
 
                         <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
-                            <input
+                            <Input
                                 type="date"
                                 value={dateFrom}
                                 onChange={(e) => setDateFrom(e.target.value)}
@@ -354,32 +366,42 @@ export default function BiometricRecordsIndex() {
 
                         <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                             <span className="text-muted-foreground text-xs">To:</span>
-                            <input
+                            <Input
                                 type="date"
                                 value={dateTo}
                                 onChange={(e) => setDateTo(e.target.value)}
                                 className="w-full bg-transparent outline-none text-sm"
                             />
                         </div>
-
-                        <Button onClick={handleFilter} className="w-full">
-                            <Filter className="h-4 w-4 mr-2" />
-                            Apply Filters
-                        </Button>
                     </div>
 
-                    {showClearFilters && (
-                        <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
-                            Reset Filters
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                        <Button variant="default" onClick={handleFilter} className="w-full sm:w-auto">
+                            <Search className="mr-2 h-4 w-4" />
+                            Apply Filters
                         </Button>
-                    )}
+
+                        {showClearFilters && (
+                            <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
+                                Clear Filters
+                            </Button>
+                        )}
+
+                        <Button variant="ghost" onClick={handleManualRefresh} className="w-full sm:w-auto">
+                            <RefreshCw className="mr-2 h-4 w-4" />
+                            Refresh
+                        </Button>
+                    </div>
                 </div>
 
-                <div className="flex justify-between items-center text-sm">
-                    <div className="text-muted-foreground">
+                <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <div>
                         Showing {recordsData.meta.from} to {recordsData.meta.to} of {recordsData.meta.total} record
                         {recordsData.meta.total === 1 ? "" : "s"}
                         {showClearFilters ? " (filtered)" : ""}
+                    </div>
+                    <div className="text-xs">
+                        Last updated: {lastRefresh.toLocaleTimeString()}
                     </div>
                 </div>
 

@@ -23,9 +23,14 @@ import {
     CommandItem,
 } from '@/components/ui/command'
 
+import { PageHeader } from '@/components/PageHeader'
+import { LoadingOverlay } from '@/components/LoadingOverlay'
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks'
+
 import {
     index as pcSpecIndex,
     store as pcSpecStore,
+    create as pcSpecCreate,
 } from '@/routes/pcspecs'
 
 interface Option {
@@ -49,7 +54,6 @@ type PageProps = {
     ramOptions: RamOption[]
     diskOptions: Option[]
     processorOptions: ProcessorOption[]
-    flash?: { message?: string; type?: string }
 }
 
 const memoryTypes = ['DDR3', 'DDR4', 'DDR5']
@@ -61,7 +65,19 @@ const formFactorOptions = ['ATX', 'Micro-ATX', 'Mini-ITX']
 //const ethernetSpeedOptions = ['1GbE', '2.5GbE', '5GbE', '10GbE']
 
 export default function Create() {
-    const { ramOptions, diskOptions, processorOptions, flash } = usePage<PageProps>().props
+    useFlashMessage()
+
+    const { ramOptions, diskOptions, processorOptions } = usePage<PageProps>().props
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Create PC Specification',
+        breadcrumbs: [
+            { title: 'PC Specifications', href: pcSpecIndex().url },
+            { title: 'Create', href: pcSpecCreate().url },
+        ],
+    })
+
+    const isPageLoading = usePageLoading()
 
     const form = useForm({
         pc_number: '',
@@ -112,13 +128,6 @@ export default function Create() {
             form.setData('ram_specs', next)
         }
     }, [form.data.memory_type, ramOptions, form])
-
-    // flash messages
-    useEffect(() => {
-        if (!flash?.message) return
-        if (flash.type === 'error') toast.error(flash.message)
-        else toast.success(flash.message)
-    }, [flash?.message, flash?.type])
 
     function handleSubmit(e: React.FormEvent) {
         e.preventDefault()
@@ -171,7 +180,7 @@ export default function Create() {
             }
         }
 
-        form.post(pcSpecStore.url())
+        form.post(pcSpecStore().url)
     }
 
     useEffect(() => {
@@ -314,14 +323,27 @@ export default function Create() {
     }, [form.data.quantity, form.data.ram_specs, form.data.disk_specs, form.data.processor_spec_id, ramOptions, diskOptions, processorOptions]);
 
     return (
-        <AppLayout>
-            <Head title="Create PC Spec" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={pcSpecIndex.url()}>
-                        <Button><ArrowLeft /> Return</Button>
-                    </Link>
-                </div>
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
+
+            <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || form.processing}
+                    message={form.processing ? 'Creating PC specification...' : undefined}
+                />
+
+                <PageHeader
+                    title="Create PC Specification"
+                    description="Bundle motherboard capabilities with RAM, storage, and CPU selections."
+                    actions={(
+                        <Link href={pcSpecIndex().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
 
                 <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Core Info */}
@@ -428,11 +450,11 @@ export default function Create() {
                         {/* same vs different toggle */}
                         <div className="mt-4 flex items-center gap-6">
                             <div className="flex items-center gap-2">
-                                <input id="ram_mode_same" name="ram_mode" type="radio" className="cursor-pointer" checked={form.data.ram_mode === 'same'} onChange={() => form.setData('ram_mode', 'same')} />
+                                <Input id="ram_mode_same" name="ram_mode" type="radio" className="cursor-pointer" checked={form.data.ram_mode === 'same'} onChange={() => form.setData('ram_mode', 'same')} />
                                 <Label htmlFor="ram_mode_same">Use same module for all slots</Label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input id="ram_mode_diff" name="ram_mode" type="radio" className="cursor-pointer" checked={form.data.ram_mode === 'different'} onChange={() => form.setData('ram_mode', 'different')} />
+                                <Input id="ram_mode_diff" name="ram_mode" type="radio" className="cursor-pointer" checked={form.data.ram_mode === 'different'} onChange={() => form.setData('ram_mode', 'different')} />
                                 <Label htmlFor="ram_mode_diff">Use different modules</Label>
                             </div>
                             <div className="ml-auto text-sm text-gray-600">
@@ -557,11 +579,11 @@ export default function Create() {
                         {/* disk same/different toggle */}
                         <div className="mt-4 flex items-center gap-6">
                             <div className="flex items-center gap-2">
-                                <input id="disk_mode_same" name="disk_mode" type="radio" checked={form.data.disk_mode === 'same'} onChange={() => form.setData('disk_mode', 'same')} />
+                                <Input id="disk_mode_same" name="disk_mode" type="radio" checked={form.data.disk_mode === 'same'} onChange={() => form.setData('disk_mode', 'same')} />
                                 <Label htmlFor="disk_mode_same">Use same drive for all slots</Label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input id="disk_mode_diff" name="disk_mode" type="radio" checked={form.data.disk_mode === 'different'} onChange={() => form.setData('disk_mode', 'different')} />
+                                <Input id="disk_mode_diff" name="disk_mode" type="radio" checked={form.data.disk_mode === 'different'} onChange={() => form.setData('disk_mode', 'different')} />
                                 <Label htmlFor="disk_mode_diff">Use different drives</Label>
                             </div>
                         </div>

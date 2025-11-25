@@ -7,13 +7,10 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import type { BreadcrumbItem } from "@/types";
-import { index as accountsIndex } from "@/routes/accounts";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: "Accounts", href: accountsIndex().url },
-    { title: "Edit", href: "#" }
-];
+import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { index as accountsIndex, edit as accountsEdit, update as accountsUpdate } from "@/routes/accounts";
 
 interface User {
     id: number;
@@ -28,6 +25,19 @@ interface User {
 export default function AccountEdit() {
     const { user, roles } = usePage<{ user: User; roles: string[] }>().props;
 
+    const fullName = `${user.first_name} ${user.last_name}`;
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: `Edit ${fullName}`,
+        breadcrumbs: [
+            { title: "Accounts", href: accountsIndex().url },
+            { title: `Edit ${fullName}`, href: accountsEdit(user.id).url },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+
     const { data, setData, patch, processing, errors } = useForm({
         first_name: user.first_name,
         middle_name: user.middle_name || "",
@@ -41,10 +51,10 @@ export default function AccountEdit() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        patch(`/accounts/${user.id}`, {
+        patch(accountsUpdate(user.id).url, {
             onSuccess: () => {
                 toast.success("User account updated successfully");
-                router.get("/accounts");
+                router.get(accountsIndex().url);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
@@ -55,8 +65,10 @@ export default function AccountEdit() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit User Account" />
-            <div className="max-w-4xl mx-auto p-6">
+            <Head title={title} />
+            <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? "Updating account..." : undefined} />
+            <div className="max-w-4xl mx-auto p-6 space-y-6">
+                <PageHeader title="Edit User Account" description={`Update information for ${fullName}`} />
                 <Card>
                     <CardHeader>
                         <CardTitle>Edit User Account</CardTitle>
@@ -197,7 +209,7 @@ export default function AccountEdit() {
                                 <Button
                                     variant="outline"
                                     type="button"
-                                    onClick={() => router.get("/accounts")}
+                                    onClick={() => router.get(accountsIndex().url)}
                                 >
                                     Cancel
                                 </Button>

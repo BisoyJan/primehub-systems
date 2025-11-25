@@ -16,7 +16,9 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft, Plus, X } from 'lucide-react';
 
-import { useFlashMessage } from '@/hooks';
+import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { store, update, create, edit, index } from '@/routes/monitorspecs';
 
 interface MonitorSpec {
@@ -39,8 +41,26 @@ export default function Form() {
 
     const { monitorspec } = usePage<Props>().props;
     const isEditing = !!monitorspec;
+    const monitorLabel = monitorspec
+        ? `${monitorspec.brand ?? ''} ${monitorspec.model ?? ''}`.trim() || `Monitor Spec #${monitorspec.id}`
+        : 'New Monitor Specification';
 
-    const { data, setData, post, put, errors } = useForm({
+    const { title, breadcrumbs } = usePageMeta({
+        title: isEditing ? `Edit ${monitorLabel}` : 'Create Monitor Specification',
+        breadcrumbs: [
+            { title: 'Monitor Specifications', href: index().url },
+            {
+                title: isEditing ? monitorLabel : 'Create',
+                href: isEditing
+                    ? edit({ monitorspec: monitorspec!.id }).url
+                    : create().url,
+            },
+        ],
+    });
+
+    const isPageLoading = usePageLoading();
+
+    const { data, setData, post, put, errors, processing } = useForm({
         brand: monitorspec?.brand || '',
         model: monitorspec?.model || '',
         screen_size: monitorspec?.screen_size || ('' as number | ''),
@@ -55,9 +75,9 @@ export default function Form() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (isEditing && monitorspec) {
-            put(update.url(monitorspec.id));
+            put(update({ monitorspec: monitorspec.id }).url);
         } else {
-            post(store.url());
+            post(store().url);
         }
     };
 
@@ -73,22 +93,29 @@ export default function Form() {
     };
 
     return (
-        <AppLayout breadcrumbs={[
-            { title: 'Monitor Specifications', href: index().url },
-            { title: isEditing ? 'Edit' : 'Create', href: isEditing ? edit.url(monitorspec!.id) : create().url }
-        ]}>
-            <Head title={isEditing ? 'Edit Monitor Specification' : 'Create Monitor Specification'} />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={index.url()}>
-                        <Button>
-                            <ArrowLeft /> Return
-                        </Button>
-                    </Link>
-                </div>
+            <div className="relative mx-auto flex h-full w-full max-w-4xl flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? (isEditing ? 'Updating monitor spec...' : 'Creating monitor spec...') : undefined}
+                />
 
-                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <PageHeader
+                    title={title}
+                    description="Capture monitor display details and available ports for deployment."
+                    actions={(
+                        <Link href={index().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
+
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {/* Brand */}
                     <div>
                         <Label htmlFor="brand">Brand *</Label>
@@ -207,13 +234,13 @@ export default function Form() {
                                 {data.ports.map((port, idx) => (
                                     <div key={idx} className="flex items-center gap-1 bg-secondary text-secondary-foreground px-3 py-1 rounded-md text-sm">
                                         {port}
-                                        <button
+                                        <Button
                                             type="button"
                                             onClick={() => removePort(port)}
                                             className="ml-1 hover:text-destructive"
                                         >
                                             <X className="h-3 w-3" />
-                                        </button>
+                                        </Button>
                                     </div>
                                 ))}
                             </div>
@@ -236,7 +263,7 @@ export default function Form() {
 
                     {/* Submit Button */}
                     <div className="md:col-span-2 flex justify-end gap-2">
-                        <Link href={index.url()}>
+                        <Link href={index().url}>
                             <Button type="button" variant="outline">
                                 Cancel
                             </Button>

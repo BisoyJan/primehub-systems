@@ -11,7 +11,7 @@ import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Label, RadialBar, RadialBarChart, PolarGrid, Area, AreaChart, Legend, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
 
-import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList } from 'lucide-react';
 
 //
 import { dashboard } from '@/routes';
@@ -67,6 +67,26 @@ interface DashboardProps {
         processor: string;
         cpu_count: number;
         issue: string | null;
+    }>;
+    itConcernStats?: {
+        pending: number;
+        in_progress: number;
+        resolved: number;
+        bySite?: Array<{
+            site: string;
+            pending: number;
+            in_progress: number;
+            resolved: number;
+            total: number;
+        }>;
+    };
+    itConcernTrends?: Array<{
+        month: string;
+        label: string;
+        total: number;
+        pending: number;
+        in_progress: number;
+        resolved: number;
     }>;
     attendanceStatistics: {
         total: number;
@@ -202,6 +222,8 @@ export default function Dashboard({
     dualMonitor,
     maintenanceDue,
     unassignedPcSpecs,
+    itConcernStats,
+    itConcernTrends,
     attendanceStatistics,
     monthlyAttendanceData,
     dailyAttendanceData,
@@ -222,6 +244,16 @@ export default function Dashboard({
     const [radialChartIndex, setRadialChartIndex] = useState(0);
     const [areaChartFilter, setAreaChartFilter] = useState<string>("all");
     const [selectedMonth, setSelectedMonth] = useState<string>("all");
+    const concernStatusConfig = [
+        { key: 'pending', label: 'Pending' },
+        { key: 'in_progress', label: 'In Progress' },
+        { key: 'resolved', label: 'Resolved' },
+    ];
+    const itTrendSlides = [
+        { key: 'pending', label: 'Pending Trend', description: 'Monitors new issues awaiting action', color: 'hsl(45, 93%, 47%)' },
+        { key: 'in_progress', label: 'In-Progress Trend', description: 'Tracks workload currently being handled', color: 'hsl(221, 83%, 53%)' },
+        { key: 'resolved', label: 'Resolved Trend', description: 'Measures closure rate per month', color: 'hsl(142, 71%, 45%)' },
+    ];
 
     // Generate month options from date range
     const monthOptions = (() => {
@@ -349,6 +381,20 @@ export default function Dashboard({
         setRadialChartIndex((prev) => (prev === radialChartData.length - 1 ? 0 : prev + 1));
     };
 
+    const goToItConcerns = (status?: 'pending' | 'in_progress' | 'resolved') => {
+        const params = status ? { status } : {};
+        router.get('/form-requests/it-concerns', params);
+    };
+
+    const concernStats = itConcernStats ?? { pending: 0, in_progress: 0, resolved: 0 };
+    const concernBreakdown = itConcernStats?.bySite ?? [];
+    const totalConcerns = concernStats.pending + concernStats.in_progress + concernStats.resolved;
+    const itTrends = itConcernTrends ?? [];
+    const [itTrendSlideIndex, setItTrendSlideIndex] = useState(0);
+    const activeItTrendSlide = itTrendSlides[itTrendSlideIndex];
+    const latestItTrend = itTrends.length > 0 ? itTrends[itTrends.length - 1] : null;
+    const activeTrendGradientId = `it-trend-${activeItTrendSlide.key}`;
+
     const handleDateRangeChange = () => {
         router.reload({
             data: {
@@ -368,6 +414,14 @@ export default function Dashboard({
         setActiveDialog(null);
         setSelectedVacantSite(null);
         setSelectedNoPcSite(null);
+    };
+
+    const handleTrendPrev = () => {
+        setItTrendSlideIndex((prev) => (prev === 0 ? itTrendSlides.length - 1 : prev - 1));
+    };
+
+    const handleTrendNext = () => {
+        setItTrendSlideIndex((prev) => (prev === itTrendSlides.length - 1 ? 0 : prev + 1));
     };
 
     // calendar and holidays handled inside CalendarWithHolidays component
@@ -580,6 +634,43 @@ export default function Dashboard({
                             delay={0.6}
                         />
 
+                        {/* IT Concerns */}
+                        <StatCard
+                            title="IT Concerns (All)"
+                            value={totalConcerns}
+                            icon={ClipboardList}
+                            description="Click for per-site breakdown"
+                            onClick={() => setActiveDialog('itConcernsBySite')}
+                            variant={totalConcerns > 0 ? 'success' : 'default'}
+                            delay={0.63}
+                        />
+                        <StatCard
+                            title="IT Concerns (Pending)"
+                            value={concernStats.pending}
+                            icon={Clock}
+                            description="Awaiting acknowledgement"
+                            onClick={() => goToItConcerns('pending')}
+                            variant={concernStats.pending > 0 ? 'warning' : 'default'}
+                            delay={0.68}
+                        />
+                        <StatCard
+                            title="IT Concerns (In Progress)"
+                            value={concernStats.in_progress}
+                            icon={Loader2}
+                            description="Currently being handled"
+                            onClick={() => goToItConcerns('in_progress')}
+                            delay={0.73}
+                        />
+                        <StatCard
+                            title="IT Concerns (Resolved)"
+                            value={concernStats.resolved}
+                            icon={CheckCircle2}
+                            description="Closed this period"
+                            onClick={() => goToItConcerns('resolved')}
+                            variant="success"
+                            delay={0.78}
+                        />
+
                         {/* Cards removed as requested */}
                     </motion.div>
                 )}
@@ -637,6 +728,8 @@ export default function Dashboard({
                                 value={dateRange.start}
                                 onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
                                 className="px-3 py-2 border rounded-md text-sm"
+                                placeholder="Start date"
+                                title="Start date"
                             />
                             <span className="text-muted-foreground">to</span>
                             <input
@@ -644,6 +737,8 @@ export default function Dashboard({
                                 value={dateRange.end}
                                 onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
                                 className="px-3 py-2 border rounded-md text-sm"
+                                placeholder="End date"
+                                title="End date"
                             />
                             <button
                                 onClick={handleDateRangeChange}
@@ -1062,6 +1157,118 @@ export default function Dashboard({
 
                     </motion.div>
 
+                    {/* IT Concern Trends Carousel */}
+                    <motion.div
+                        className="mt-6"
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.5, delay: 2.0 }}
+                    >
+                        <Card>
+                            <CardHeader className="pb-0">
+                                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                    <div>
+                                        <CardTitle className="text-base">IT Concern Trends</CardTitle>
+                                        <CardDescription className="text-xs">
+                                            Slide through statuses to review monthly performance
+                                        </CardDescription>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <div className="text-sm font-medium">
+                                            {activeItTrendSlide.label}
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={handleTrendPrev}
+                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                aria-label="Previous trend"
+                                            >
+                                                <ChevronLeft className="h-4 w-4" />
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleTrendNext}
+                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                aria-label="Next trend"
+                                            >
+                                                <ChevronRight className="h-4 w-4" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-2">
+                                    {activeItTrendSlide.description}
+                                </p>
+                            </CardHeader>
+                            <CardContent className="pt-4">
+                                {itTrends.length === 0 ? (
+                                    <div className="py-10 text-center text-muted-foreground">
+                                        No IT concern activity recorded for the selected window.
+                                    </div>
+                                ) : (
+                                    <>
+                                        <ChartContainer
+                                            config={{
+                                                [activeItTrendSlide.key]: {
+                                                    label: activeItTrendSlide.label,
+                                                    color: activeItTrendSlide.color,
+                                                }
+                                            }}
+                                            className="h-[320px] w-full"
+                                        >
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>
+                                                    <defs>
+                                                        <linearGradient id={activeTrendGradientId} x1="0" y1="0" x2="0" y2="1">
+                                                            <stop offset="5%" stopColor={activeItTrendSlide.color} stopOpacity={0.8} />
+                                                            <stop offset="95%" stopColor={activeItTrendSlide.color} stopOpacity={0.05} />
+                                                        </linearGradient>
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" />
+                                                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval="preserveStartEnd" />
+                                                    <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
+                                                    <ChartTooltip
+                                                        cursor={false}
+                                                        content={<ChartTooltipContent />}
+                                                    />
+                                                    <Area
+                                                        type="monotone"
+                                                        dataKey={activeItTrendSlide.key as 'pending' | 'in_progress' | 'resolved'}
+                                                        stroke={activeItTrendSlide.color}
+                                                        fill={`url(#${activeTrendGradientId})`}
+                                                        strokeWidth={2}
+                                                        activeDot={{ r: 5 }}
+                                                    />
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </ChartContainer>
+                                        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
+                                            <div>
+                                                <p className="text-muted-foreground text-xs uppercase">Latest Month</p>
+                                                <p className="font-semibold">{latestItTrend?.label ?? 'N/A'}</p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-4">
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs uppercase">Pending</p>
+                                                    <p className="font-semibold">{latestItTrend?.pending ?? 0}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs uppercase">In Progress</p>
+                                                    <p className="font-semibold">{latestItTrend?.in_progress ?? 0}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs uppercase">Resolved</p>
+                                                    <p className="font-semibold">{latestItTrend?.resolved ?? 0}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+
                     {/* Area Chart - Monthly Statistics */}
                     <motion.div
                         className="mt-6"
@@ -1298,6 +1505,79 @@ export default function Dashboard({
                         </Card>
                     </motion.div>
                 </motion.div>
+
+                <DetailDialog
+                    open={activeDialog === 'itConcernsBySite'}
+                    onClose={closeDialog}
+                    title="IT Concerns by Site"
+                    description="Pending, in-progress, and resolved concerns grouped per site"
+                >
+                    {concernBreakdown.length === 0 ? (
+                        <div className="py-6 text-center text-muted-foreground">
+                            No IT concerns recorded yet.
+                        </div>
+                    ) : (
+                        <div className="space-y-4">
+                            <div className="flex flex-wrap items-center justify-between gap-3">
+                                <p className="text-sm text-muted-foreground">
+                                    Totals reflect all concern statuses with site-specific counts.
+                                </p>
+                                <button
+                                    className="text-sm font-medium text-primary underline"
+                                    onClick={() => goToItConcerns()}
+                                >
+                                    View IT Concerns List
+                                </button>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="min-w-full border text-sm">
+                                    <thead>
+                                        <tr className="bg-muted">
+                                            <th className="px-3 py-2 text-left font-semibold">IT Concerns</th>
+                                            {concernBreakdown.map((site) => (
+                                                <th key={site.site} className="px-3 py-2 text-left font-semibold whitespace-nowrap">
+                                                    {site.site}
+                                                </th>
+                                            ))}
+                                            <th className="px-3 py-2 text-left font-semibold">Total</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {concernStatusConfig.map((status) => (
+                                            <tr key={status.key} className="border-t">
+                                                <td className="px-3 py-2 font-medium">{status.label}</td>
+                                                {concernBreakdown.map((site) => (
+                                                    <td
+                                                        key={`${site.site}-${status.key}`}
+                                                        className="px-3 py-2"
+                                                    >
+                                                        {site[status.key as 'pending' | 'in_progress' | 'resolved']}
+                                                    </td>
+                                                ))}
+                                                <td className="px-3 py-2 font-semibold">
+                                                    {status.key === 'pending'
+                                                        ? concernStats.pending
+                                                        : status.key === 'in_progress'
+                                                            ? concernStats.in_progress
+                                                            : concernStats.resolved}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        <tr className="border-t bg-muted/50">
+                                            <td className="px-3 py-2 font-semibold">Total</td>
+                                            {concernBreakdown.map((site) => (
+                                                <td key={`${site.site}-total`} className="px-3 py-2 font-semibold">
+                                                    {site.total}
+                                                </td>
+                                            ))}
+                                            <td className="px-3 py-2 font-bold">{totalConcerns}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    )}
+                </DetailDialog>
 
                 <DetailDialog
                     open={activeDialog === 'dateTime'}

@@ -1,7 +1,7 @@
 import React, { useState } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage } from "@/hooks";
+import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
@@ -36,7 +36,17 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, MoreVertical, CheckCircle, XCircle, FileText, Download, BarChart3 } from "lucide-react";
-import type { BreadcrumbItem, SharedData } from "@/types";
+import type { SharedData } from "@/types";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import {
+    index as attendancePointsIndex,
+    show as attendancePointsShow,
+    statistics as attendancePointsStatistics,
+    exportMethod as attendancePointsExport,
+    exportExcel as attendancePointsExportExcel,
+    excuse as attendancePointsExcuse,
+    unexcuse as attendancePointsUnexcuse,
+} from "@/routes/attendance-points";
 
 interface User {
     id: number;
@@ -150,11 +160,19 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats }) => {
+const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats, auth }) => {
     useFlashMessage();
-    const { auth } = usePage<PageProps>().props;
-    const timeFormat = auth.user.time_format || '24';
+    const timeFormat = (auth.user.time_format as '12' | '24') ?? '24';
     const { can } = usePermission();
+    const pageTitle = `${user.name}'s Attendance Points`;
+    const { title, breadcrumbs } = usePageMeta({
+        title: pageTitle,
+        breadcrumbs: [
+            { title: 'Attendance Points', href: attendancePointsIndex().url },
+            { title: user.name, href: attendancePointsShow({ user: user.id }).url },
+        ],
+    });
+    const isPageLoading = usePageLoading();
 
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
     const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(null);
@@ -180,21 +198,16 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     } | null>(null);
     const [isLoadingStats, setIsLoadingStats] = useState(false);
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Attendance Points', href: '/attendance-points' },
-        { title: `${user.name}'s Points`, href: '' }
-    ];
-
     const goBack = () => {
-        router.get("/attendance-points");
+        router.get(attendancePointsIndex().url);
     };
 
     const handleExportCSV = () => {
-        window.location.href = `/attendance-points/${user.id}/export`;
+        window.location.href = attendancePointsExport({ user: user.id }).url;
     };
 
     const handleExportExcel = () => {
-        window.location.href = `/attendance-points/${user.id}/export-excel`;
+        window.location.href = attendancePointsExportExcel({ user: user.id }).url;
     };
 
     const handleViewStatistics = async () => {
@@ -202,7 +215,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         setIsStatisticsDialogOpen(true);
 
         try {
-            const response = await fetch(`/attendance-points/${user.id}/statistics`);
+            const response = await fetch(attendancePointsStatistics({ user: user.id }).url);
             const data = await response.json();
             setStatistics(data);
         } catch {
@@ -228,7 +241,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
         setIsSubmitting(true);
         router.post(
-            `/attendance-points/${selectedPoint.id}/excuse`,
+            attendancePointsExcuse({ point: selectedPoint.id }).url,
             {
                 excuse_reason: excuseReason,
                 notes: notes,
@@ -260,7 +273,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         if (!pointToUnexcuse) return;
 
         router.post(
-            `/attendance-points/${pointToUnexcuse}/unexcuse`,
+            attendancePointsUnexcuse({ point: pointToUnexcuse }).url,
             {},
             {
                 onSuccess: () => {
@@ -294,9 +307,10 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Attendance Points - ${user.name}`} />
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+                <LoadingOverlay isLoading={isPageLoading} />
                 <div className="flex items-center justify-between gap-4">
                     <Button variant="ghost" size="sm" onClick={goBack}>
                         <ArrowLeft className="h-4 w-4 mr-2" />
@@ -329,10 +343,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                     </div>
                 </div>
 
-                <PageHeader
-                    title={`${user.name}'s Attendance Points`}
-                    description={formattedDateRange}
-                />
+                <PageHeader title={title} description={formattedDateRange} />
 
                 {/* Summary Cards */}
                 <div className="grid gap-4 md:grid-cols-4">

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowLeft, CircleAlert } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -13,12 +14,16 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ArrowLeft, CircleAlert } from 'lucide-react';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import {
+    index as ramSpecsIndexRoute,
+    edit as ramSpecsEditRoute,
+    update as ramSpecsUpdateRoute,
+} from '@/routes/ramspecs';
 
-import { useFlashMessage } from '@/hooks';
-import { update, index } from '@/routes/ramspecs';
-
-interface ramSpec {
+interface RamSpec {
     id: number;
     manufacturer: string;
     model: string;
@@ -30,13 +35,21 @@ interface ramSpec {
 }
 
 interface Props {
-    ramspec: ramSpec
+    ramspec: RamSpec;
 }
 
 export default function Edit({ ramspec }: Props) {
-    useFlashMessage(); // Automatically handles flash messages
+    useFlashMessage();
 
-    const { data, setData, put, errors } = useForm({
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Edit RAM Specification',
+        breadcrumbs: [
+            { title: 'RAM Specifications', href: ramSpecsIndexRoute().url },
+            { title: 'Edit', href: ramSpecsEditRoute({ ramspec: ramspec.id }).url },
+        ],
+    });
+
+    const { data, setData, put, errors, processing } = useForm({
         manufacturer: ramspec.manufacturer,
         model: ramspec.model,
         capacity_gb: ramspec.capacity_gb,
@@ -46,38 +59,48 @@ export default function Edit({ ramspec }: Props) {
         voltage: ramspec.voltage,
     });
 
-    const handleUpdate = (e: React.FormEvent) => {
-        e.preventDefault();
-        put(update.url(ramspec.id));
+    const isPageLoading = usePageLoading();
+
+    const handleUpdate = (event: React.FormEvent) => {
+        event.preventDefault();
+        put(ramSpecsUpdateRoute({ ramspec: ramspec.id }).url);
     };
 
+    const hasErrors = Object.keys(errors).length > 0;
+
     return (
-        <AppLayout breadcrumbs={[
-            { title: 'RAM Specifications', href: index().url },
-            { title: 'Edit', href: '#' }
-        ]}>
-            <Head title="Edit RAM Specification" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={index.url()}>
-                        <Button>
-                            <ArrowLeft /> Return
-                        </Button>
-                    </Link>
-                </div>
+            <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Updating RAM spec...' : undefined}
+                />
 
-                <form onSubmit={handleUpdate} className="grid grid-cols-2 gap-4">
-                    {/* 1. Error Alert spans both columns */}
-                    {Object.keys(errors).length > 0 && (
-                        <div className="col-span-2">
+                <PageHeader
+                    title="Edit RAM Specification"
+                    description={`${ramspec.manufacturer} ${ramspec.model}`}
+                    actions={(
+                        <Link href={ramSpecsIndexRoute().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
+
+                <form onSubmit={handleUpdate} className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {hasErrors && (
+                        <div className="md:col-span-2">
                             <Alert>
                                 <CircleAlert className="h-4 w-4" />
-                                <AlertTitle>Error!</AlertTitle>
+                                <AlertTitle>Error</AlertTitle>
                                 <AlertDescription>
-                                    <ul>
-                                        {Object.entries(errors).map(([key, message]) => (
-                                            <li key={key}>{message as string}</li>
+                                    <ul className="list-disc pl-5 text-sm">
+                                        {Object.entries(errors).map(([field, message]) => (
+                                            <li key={field}>{message as string}</li>
                                         ))}
                                     </ul>
                                 </AlertDescription>
@@ -85,7 +108,6 @@ export default function Edit({ ramspec }: Props) {
                         </div>
                     )}
 
-                    {/* Row 1 */}
                     <div>
                         <Label htmlFor="manufacturer">Manufacturer</Label>
                         <Input
@@ -95,7 +117,11 @@ export default function Edit({ ramspec }: Props) {
                             value={data.manufacturer}
                             onChange={(e) => setData('manufacturer', e.target.value)}
                         />
+                        {errors.manufacturer && (
+                            <p className="mt-1 text-sm text-red-600">{errors.manufacturer}</p>
+                        )}
                     </div>
+
                     <div>
                         <Label htmlFor="model">Model</Label>
                         <Input
@@ -105,14 +131,14 @@ export default function Edit({ ramspec }: Props) {
                             value={data.model}
                             onChange={(e) => setData('model', e.target.value)}
                         />
+                        {errors.model && <p className="mt-1 text-sm text-red-600">{errors.model}</p>}
                     </div>
 
-                    {/* Row 2 */}
                     <div>
                         <Label htmlFor="capacity_gb">Capacity (GB)</Label>
                         <Select
                             value={data.capacity_gb ? String(data.capacity_gb) : ''}
-                            onValueChange={(val) => setData('capacity_gb', Number(val))}
+                            onValueChange={(value) => setData('capacity_gb', Number(value))}
                         >
                             <SelectTrigger id="capacity_gb" name="capacity_gb">
                                 <SelectValue placeholder="Select capacity" />
@@ -125,27 +151,31 @@ export default function Edit({ ramspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.capacity_gb && (
+                            <p className="mt-1 text-sm text-red-600">{errors.capacity_gb}</p>
+                        )}
                     </div>
+
                     <div>
                         <Label htmlFor="type">Type</Label>
                         <Select
                             value={data.type}
-                            onValueChange={(val) => setData('type', val)}
+                            onValueChange={(value) => setData('type', value)}
                         >
                             <SelectTrigger id="type" name="type">
                                 <SelectValue placeholder="e.g. DDR4" />
                             </SelectTrigger>
                             <SelectContent>
-                                {['DDR3', 'DDR4', 'DDR5'].map((t) => (
-                                    <SelectItem key={t} value={t}>
-                                        {t}
+                                {['DDR3', 'DDR4', 'DDR5'].map((option) => (
+                                    <SelectItem key={option} value={option}>
+                                        {option}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.type && <p className="mt-1 text-sm text-red-600">{errors.type}</p>}
                     </div>
 
-                    {/* Row 3 */}
                     <div>
                         <Label htmlFor="speed">Speed (MHz)</Label>
                         <Input
@@ -157,27 +187,31 @@ export default function Edit({ ramspec }: Props) {
                             value={data.speed}
                             onChange={(e) => setData('speed', Number(e.target.value))}
                         />
+                        {errors.speed && <p className="mt-1 text-sm text-red-600">{errors.speed}</p>}
                     </div>
+
                     <div>
                         <Label htmlFor="form_factor">Form Factor</Label>
                         <Select
                             value={data.form_factor}
-                            onValueChange={(val) => setData('form_factor', val)}
+                            onValueChange={(value) => setData('form_factor', value)}
                         >
                             <SelectTrigger id="form_factor" name="form_factor">
                                 <SelectValue placeholder="e.g. SO-DIMM" />
                             </SelectTrigger>
                             <SelectContent>
-                                {['SO-DIMM', 'DIMM'].map((t) => (
-                                    <SelectItem key={t} value={t}>
-                                        {t}
+                                {['SO-DIMM', 'DIMM'].map((formFactor) => (
+                                    <SelectItem key={formFactor} value={formFactor}>
+                                        {formFactor}
                                     </SelectItem>
                                 ))}
                             </SelectContent>
                         </Select>
+                        {errors.form_factor && (
+                            <p className="mt-1 text-sm text-red-600">{errors.form_factor}</p>
+                        )}
                     </div>
 
-                    {/* Row 4 */}
                     <div>
                         <Label htmlFor="voltage">Voltage (V)</Label>
                         <Input
@@ -190,9 +224,13 @@ export default function Edit({ ramspec }: Props) {
                             value={data.voltage}
                             onChange={(e) => setData('voltage', Number(e.target.value))}
                         />
+                        {errors.voltage && <p className="mt-1 text-sm text-red-600">{errors.voltage}</p>}
                     </div>
-                    <div className="flex items-end justify-end">
-                        <Button type="submit">Edit RAM Spec</Button>
+
+                    <div className="md:col-span-2 flex justify-end">
+                        <Button type="submit" disabled={processing}>
+                            {processing ? 'Saving...' : 'Update RAM Spec'}
+                        </Button>
                     </div>
                 </form>
             </div>

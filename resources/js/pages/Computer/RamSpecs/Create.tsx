@@ -1,5 +1,6 @@
 import React from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowLeft } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -12,15 +13,27 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft } from 'lucide-react';
-
-import { useFlashMessage } from '@/hooks';
-import { store, create, index } from '@/routes/ramspecs';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
+import {
+    store as ramSpecsStoreRoute,
+    create as ramSpecsCreateRoute,
+    index as ramSpecsIndexRoute,
+} from '@/routes/ramspecs';
 
 export default function Create() {
     useFlashMessage(); // Automatically handles flash messages
 
-    const { data, setData, post, errors } = useForm({
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Create RAM Specification',
+        breadcrumbs: [
+            { title: 'RAM Specifications', href: ramSpecsIndexRoute().url },
+            { title: 'Create', href: ramSpecsCreateRoute().url },
+        ],
+    });
+
+    const { data, setData, post, errors, processing } = useForm({
         manufacturer: '',
         model: '',
         capacity_gb: '' as number | '',
@@ -31,29 +44,37 @@ export default function Create() {
         stock_quantity: 0,
     });
 
+    const isPageLoading = usePageLoading();
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(store.url());
+        post(ramSpecsStoreRoute().url);
     };
 
     return (
-        <AppLayout breadcrumbs={[
-            { title: 'RAM Specifications', href: index().url },
-            { title: 'Create', href: create().url }
-        ]}>
-            <Head title="Create RAM Specification" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={index.url()}>
-                        <Button>
-                            <ArrowLeft /> Return
-                        </Button>
-                    </Link>
-                </div>
+            <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Saving RAM spec...' : undefined}
+                />
 
-                <form onSubmit={handleSubmit} className="grid grid-cols-2 gap-4">
-                    {/* Row 1 */}
+                <PageHeader
+                    title="Create RAM Specification"
+                    description="Add RAM specs with key details and initial stock quantity"
+                    actions={(
+                        <Link href={ramSpecsIndexRoute().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
+
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <div>
                         <Label htmlFor="manufacturer">Manufacturer</Label>
                         <Input
@@ -63,7 +84,7 @@ export default function Create() {
                             value={data.manufacturer}
                             onChange={(e) => setData('manufacturer', e.target.value)}
                         />
-                        {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
+                        {errors.manufacturer && <p className="text-red-600 text-sm mt-1">{errors.manufacturer}</p>}
                     </div>
                     <div>
                         <Label htmlFor="model">Model</Label>
@@ -74,10 +95,9 @@ export default function Create() {
                             value={data.model}
                             onChange={(e) => setData('model', e.target.value)}
                         />
-                        {errors.model && <p className="text-red-600">{errors.model}</p>}
+                        {errors.model && <p className="text-red-600 text-sm mt-1">{errors.model}</p>}
                     </div>
 
-                    {/* Row 2 */}
                     <div>
                         <Label htmlFor="capacity_gb">Capacity (GB)</Label>
                         <Select
@@ -95,7 +115,7 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.capacity_gb && <p className="text-red-600">{errors.capacity_gb}</p>}
+                        {errors.capacity_gb && <p className="text-red-600 text-sm mt-1">{errors.capacity_gb}</p>}
                     </div>
                     <div>
                         <Label htmlFor="type">Type</Label>
@@ -114,10 +134,9 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.type && <p className="text-red-600">{errors.type}</p>}
+                        {errors.type && <p className="text-red-600 text-sm mt-1">{errors.type}</p>}
                     </div>
 
-                    {/* Row 3 */}
                     <div>
                         <Label htmlFor="speed">Speed (MHz)</Label>
                         <Input
@@ -129,7 +148,7 @@ export default function Create() {
                             value={data.speed}
                             onChange={(e) => setData('speed', e.target.value)}
                         />
-                        {errors.speed && <p className="text-red-600">{errors.speed}</p>}
+                        {errors.speed && <p className="text-red-600 text-sm mt-1">{errors.speed}</p>}
                     </div>
                     <div>
                         <Label htmlFor="form_factor">Form Factor</Label>
@@ -148,10 +167,9 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.form_factor && <p className="text-red-600">{errors.form_factor}</p>}
+                        {errors.form_factor && <p className="text-red-600 text-sm mt-1">{errors.form_factor}</p>}
                     </div>
 
-                    {/* Row 4 */}
                     <div>
                         <Label htmlFor="voltage">Voltage (V)</Label>
                         <Input
@@ -164,32 +182,28 @@ export default function Create() {
                             value={data.voltage}
                             onChange={(e) => setData('voltage', e.target.value)}
                         />
-                        {errors.voltage && <p className="text-red-600">{errors.voltage}</p>}
-                    </div>
-                    <div className="flex items-end justify-end">
-                        <Button type="submit">Add RAM Spec</Button>
+                        {errors.voltage && <p className="text-red-600 text-sm mt-1">{errors.voltage}</p>}
                     </div>
 
-                    {/* Add this input field for stock quantity */}
-                    <div className="mb-4">
-                        <Label htmlFor="stock_quantity">
-                            Initial Stock Quantity
-                        </Label>
+                    <div>
+                        <Label htmlFor="stock_quantity">Initial Stock Quantity</Label>
                         <Input
                             type="number"
                             id="stock_quantity"
                             name="stock_quantity"
                             value={data.stock_quantity || 0}
+                            min={0}
                             onChange={(e) => setData('stock_quantity', Number(e.target.value))}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                            min="0"
-                            required
                         />
                         {errors.stock_quantity && (
-                            <div className="text-red-500 text-sm mt-1">
-                                {errors.stock_quantity}
-                            </div>
+                            <p className="text-red-600 text-sm mt-1">{errors.stock_quantity}</p>
                         )}
+                    </div>
+
+                    <div className="md:col-span-2 flex justify-end">
+                        <Button type="submit" disabled={processing}>
+                            {processing ? 'Saving...' : 'Add RAM Spec'}
+                        </Button>
                     </div>
                 </form>
             </div>

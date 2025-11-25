@@ -206,15 +206,34 @@ class ItConcernController extends Controller
     {
         $request->validate([
             'resolution_notes' => 'required|string|max:1000',
+            'status' => 'nullable|in:pending,in_progress,resolved,cancelled',
+            'priority' => 'nullable|in:low,medium,high,urgent',
         ]);
 
-        $itConcern->update([
+        $data = [
             'resolution_notes' => $request->resolution_notes,
-            'status' => 'resolved',
-            'resolved_at' => now(),
-        ]);
+        ];
+
+        // Update status if provided, default to 'resolved'
+        $data['status'] = $request->input('status', 'resolved');
+
+        // Update priority if provided
+        if ($request->has('priority')) {
+            $data['priority'] = $request->priority;
+        }
+
+        // Set resolved_at timestamp if status is resolved
+        if ($data['status'] === 'resolved' && $itConcern->status !== 'resolved') {
+            $data['resolved_at'] = now();
+            // Auto-fill resolved_by if user is IT role and not already set
+            if ((auth()->user()->role === 'IT' || auth()->user()->role === 'Super Admin') && !$itConcern->resolved_by) {
+                $data['resolved_by'] = auth()->id();
+            }
+        }
+
+        $itConcern->update($data);
 
         return redirect()->back()
-            ->with('flash', ['message' => 'IT concern resolved successfully', 'type' => 'success']);
+            ->with('flash', ['message' => 'IT concern updated successfully', 'type' => 'success']);
     }
 }

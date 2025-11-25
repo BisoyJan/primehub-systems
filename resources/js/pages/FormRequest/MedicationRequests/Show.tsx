@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, CheckCircle, XCircle, Package } from 'lucide-react';
 import { Can } from '@/components/authorization';
+import { index as medicationIndexRoute, updateStatus as medicationUpdateStatusRoute } from '@/routes/medication-requests';
 
 interface MedicationRequest {
     id: number;
@@ -58,7 +59,7 @@ export default function Show({ medicationRequest }: Props) {
 
     const handleStatusUpdate = () => {
         setData('status', actionType);
-        post(`/form-requests/medication-requests/${medicationRequest.id}/status`, {
+        post(medicationUpdateStatusRoute(medicationRequest.id).url, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsDialogOpen(false);
@@ -89,7 +90,7 @@ export default function Show({ medicationRequest }: Props) {
             <div className="container mx-auto px-4 py-8">
                 <div className="flex items-center justify-between mb-6">
                     <div className="flex items-center gap-4">
-                        <Link href="/form-requests/medication-requests">
+                        <Link href={medicationIndexRoute().url}>
                             <Button variant="ghost" size="sm">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back

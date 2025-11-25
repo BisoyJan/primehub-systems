@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { ArrowLeft, Check, X, Ban, Info } from 'lucide-react';
 import { toast } from 'sonner';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -59,7 +60,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
     const denyForm = useForm({ review_notes: '' });
 
     const handleApprove = () => {
-        approveForm.post(`/leave-requests/${leaveRequest.id}/approve`, {
+        approveForm.post(leaveApproveRoute(leaveRequest.id).url, {
             onSuccess: () => {
                 setShowApproveDialog(false);
                 toast.success('Leave request approved successfully');
@@ -68,7 +69,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
     };
 
     const handleDeny = () => {
-        denyForm.post(`/leave-requests/${leaveRequest.id}/deny`, {
+        denyForm.post(leaveDenyRoute(leaveRequest.id).url, {
             onSuccess: () => {
                 setShowDenyDialog(false);
                 toast.success('Leave request denied');
@@ -78,7 +79,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
 
     const handleCancel = () => {
         router.post(
-            `/leave-requests/${leaveRequest.id}/cancel`,
+            leaveCancelRoute(leaveRequest.id).url,
             {},
             {
                 onSuccess: () => {
@@ -109,7 +110,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
 
             <div className="container mx-auto px-4 py-8 max-w-4xl">
                 <div className="mb-6 flex justify-between items-center">
-                    <Link href="/leave-requests">
+                    <Link href={leaveIndexRoute().url}>
                         <Button variant="ghost">
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             Back to List

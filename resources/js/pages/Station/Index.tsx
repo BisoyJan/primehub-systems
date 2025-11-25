@@ -18,9 +18,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
-import { Eye, AlertTriangle, Plus, CheckSquare } from "lucide-react";
+import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Search } from "lucide-react";
 import { transferPage } from '@/routes/pc-transfers';
-import { index as stationsIndex } from "@/routes/stations";
+import {
+    index as stationsIndexRoute,
+    create as stationsCreateRoute,
+    edit as stationsEditRoute,
+    destroy as stationsDestroyRoute,
+} from "@/routes/stations";
+import { index as sitesIndexRoute } from "@/routes/sites";
+import { index as campaignsIndexRoute } from "@/routes/campaigns";
 
 // New reusable components and hooks
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -115,6 +122,8 @@ export default function StationIndex() {
     const [selectedZipProgress, setSelectedZipProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
     const bulkIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const selectedZipIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+    const bulkProgressRef = React.useRef<HTMLDivElement>(null);
+    const selectedZipProgressRef = React.useRef<HTMLDivElement>(null);
 
     // Selection logic
     // Save selectedStationIds to localStorage on change
@@ -298,7 +307,7 @@ export default function StationIndex() {
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
         title: "Stations",
-        breadcrumbs: [{ title: "Stations", href: stationsIndex().url }]
+        breadcrumbs: [{ title: "Stations", href: stationsIndexRoute().url }]
     });
 
     useFlashMessage(); // Automatically handles flash messages
@@ -319,6 +328,16 @@ export default function StationIndex() {
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [issueText, setIssueText] = useState("");
     const [selectedEmptyStations, setSelectedEmptyStations] = useState<number[]>([]);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+    const handleManualRefresh = () => {
+        setLoading(true);
+        router.reload({
+            only: ['stations'],
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
+    };
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -343,17 +362,18 @@ export default function StationIndex() {
 
         // When filters change, reset to page 1 (don't preserve page from URL)
         setLoading(true);
-        router.get("/stations", params, {
+        router.get(stationsIndexRoute().url, params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
         });
     }, [debouncedSearch, siteFilter, campaignFilter, statusFilter]);
 
     const handleDelete = (stationId: number) => {
         setLoading(true);
-        router.delete(`/stations/${stationId}`, {
+        router.delete(stationsDestroyRoute(stationId).url, {
             preserveScroll: true,
             onFinish: () => setLoading(false),
             onSuccess: () => toast.success("Station deleted successfully"),
@@ -403,7 +423,7 @@ export default function StationIndex() {
 
         // Navigate to transfer page with multiple stations
         const stationIds = selectedEmptyStations.join(',');
-        router.visit(`/pc-transfers/transfer?stations=${stationIds}`);
+        router.visit(transferPage(undefined, { query: { stations: stationIds } }).url);
     };
 
     const clearSelection = () => {
@@ -426,151 +446,161 @@ export default function StationIndex() {
                 />
 
                 {/* Filters */}
-                <div className="flex flex-col gap-3">
-                    {/* Search Input - full width on mobile */}
-                    <div className="w-full">
-                        <Input
-                            type="search"
-                            placeholder="Search site, station #, campaign..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            className="w-full"
-                        />
-                    </div>
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search site, station #, campaign..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
 
-                    {/* Select Filters - stacked on mobile, row on desktop */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <Select value={siteFilter} onValueChange={setSiteFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Site" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Sites</SelectItem>
-                                {filters.sites.map((site) => (
-                                    <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            <Select value={siteFilter} onValueChange={setSiteFilter}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Site" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Sites</SelectItem>
+                                    {filters.sites.map((site) => (
+                                        <SelectItem key={site.id} value={String(site.id)}>{site.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
 
-                        <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Campaign" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
-                                {filters.campaigns.map((campaign) => (
-                                    <SelectItem key={campaign.id} value={String(campaign.id)}>{campaign.name}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {filters.campaigns.map((campaign) => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>{campaign.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
 
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                {filters.statuses.map((status) => (
-                                    <SelectItem key={status} value={status}>{status}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="Filter by Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    {filters.statuses.map((status) => (
+                                        <SelectItem key={status} value={status}>{status}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                        {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && (
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    setSearch("");
-                                    setSiteFilter("all");
-                                    setCampaignFilter("all");
-                                    setStatusFilter("all");
-                                }}
-                                className="w-full sm:w-auto"
-                            >
-                                Clear Filters
+                        <div className="flex gap-2 w-full sm:w-auto flex-wrap justify-end">
+                            {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && (
+                                <Button
+                                    variant="outline"
+                                    onClick={() => {
+                                        setSearch("");
+                                        setSiteFilter("all");
+                                        setCampaignFilter("all");
+                                        setStatusFilter("all");
+                                    }}
+                                    className="flex-1 sm:flex-none"
+                                >
+                                    Reset
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Refresh
                             </Button>
-                        )}
-                    </div>
 
-                    {/* Action Buttons - stacked on mobile, row on desktop */}
-                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:justify-between min-w-0">
-                        {/* Bulk Selection Controls */}
-                        {selectedEmptyStations.length > 0 && (
-                            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 min-w-0">
-                                <span className="text-sm font-medium">
-                                    {selectedEmptyStations.length} empty station{selectedEmptyStations.length > 1 ? 's' : ''} selected
-                                </span>
-                                <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto min-w-0">
-                                    <Button
-                                        onClick={handleBulkAssign}
-                                        className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0"
-                                        size="sm"
-                                    >
-                                        <CheckSquare className="h-4 w-4" />
-                                        Assign PCs to Selected
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        onClick={clearSelection}
-                                        size="sm"
-                                        className="flex-1 sm:flex-initial min-w-0"
-                                    >
-                                        Clear
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* QR Code ZIP Actions */}
-                        {selectedStationIds.length > 0 && (
-                            <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between min-w-0">
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center min-w-0">
-                                    <span className="font-medium text-blue-900 dark:text-blue-100">
-                                        {selectedStationIds.length} Station{selectedStationIds.length !== 1 ? 's' : ''} selected
-                                    </span>
-                                    <Button variant="outline" size="sm" onClick={() => setSelectedStationIds([])} className="w-full sm:w-auto min-w-0">
-                                        Clear Selection
-                                    </Button>
-                                </div>
-                                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-2 min-w-0">
-                                    <Button
-                                        onClick={handleDownloadSelectedQRCodes}
-                                        variant="outline"
-                                        className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white dark:hover:text-white w-full sm:w-auto min-w-0"
-                                        disabled={selectedZipProgress.running}
-                                    >
-                                        Download Selected QR Codes as ZIP
-                                    </Button>
-                                    <Button
-                                        onClick={handleBulkDownloadAllQRCodes}
-                                        className="bg-blue-700 hover:bg-blue-800 text-white w-full sm:w-auto min-w-0"
-                                        disabled={bulkProgress.running}
-                                    >
-                                        Download All QR Codes as ZIP
-                                    </Button>
-                                </div>
-                            </div>
-                        )}
-
-                        {/* Regular Action Buttons */}
-                        <div className="flex flex-col sm:flex-row gap-3 sm:ml-auto">
                             <Can permission="stations.create">
-                                <Button onClick={() => router.get('/stations/create')} className="w-full sm:w-auto">
+                                <Button onClick={() => router.get(stationsCreateRoute().url)} className="flex-1 sm:flex-none">
+                                    <Plus className="mr-2 h-4 w-4" />
                                     Add Station
                                 </Button>
                             </Can>
+
                             <Can permission="sites.view">
-                                <Button onClick={() => router.get('/sites')} className="w-full sm:w-auto">
-                                    Site Management
+                                <Button variant="outline" onClick={() => router.get(sitesIndexRoute().url)} className="flex-1 sm:flex-none">
+                                    Sites
                                 </Button>
                             </Can>
                             <Can permission="campaigns.view">
-                                <Button onClick={() => router.get('/campaigns')} className="w-full sm:w-auto">
-                                    Campaign Management
+                                <Button variant="outline" onClick={() => router.get(campaignsIndexRoute().url)} className="flex-1 sm:flex-none">
+                                    Campaigns
                                 </Button>
                             </Can>
                         </div>
                     </div>
+
+                    {/* Bulk Actions Section */}
+                    {(selectedEmptyStations.length > 0 || selectedStationIds.length > 0) && (
+                        <div className="flex flex-col sm:flex-row gap-4 p-4 bg-muted/50 rounded-lg border">
+                            {/* Bulk Selection Controls */}
+                            {selectedEmptyStations.length > 0 && (
+                                <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 min-w-0 flex-1">
+                                    <span className="text-sm font-medium">
+                                        {selectedEmptyStations.length} empty station{selectedEmptyStations.length > 1 ? 's' : ''} selected
+                                    </span>
+                                    <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto min-w-0">
+                                        <Button
+                                            onClick={handleBulkAssign}
+                                            className="flex items-center gap-2 flex-1 sm:flex-initial min-w-0"
+                                            size="sm"
+                                        >
+                                            <CheckSquare className="h-4 w-4" />
+                                            Assign PCs
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            onClick={clearSelection}
+                                            size="sm"
+                                            className="flex-1 sm:flex-initial min-w-0"
+                                        >
+                                            Clear
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* QR Code ZIP Actions */}
+                            {selectedStationIds.length > 0 && (
+                                <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between min-w-0 flex-1">
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center min-w-0">
+                                        <span className="font-medium text-blue-900 dark:text-blue-100">
+                                            {selectedStationIds.length} Station{selectedStationIds.length !== 1 ? 's' : ''} selected
+                                        </span>
+                                        <Button variant="outline" size="sm" onClick={() => setSelectedStationIds([])} className="w-full sm:w-auto min-w-0">
+                                            Clear
+                                        </Button>
+                                    </div>
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-2 min-w-0">
+                                        <Button
+                                            onClick={handleDownloadSelectedQRCodes}
+                                            variant="outline"
+                                            className="border-green-600 text-green-600 hover:bg-green-600 hover:text-white dark:hover:text-white w-full sm:w-auto min-w-0"
+                                            disabled={selectedZipProgress.running}
+                                            size="sm"
+                                        >
+                                            Download QR ZIP
+                                        </Button>
+                                        <Button
+                                            onClick={handleBulkDownloadAllQRCodes}
+                                            className="bg-blue-700 hover:bg-blue-800 text-white w-full sm:w-auto min-w-0"
+                                            disabled={bulkProgress.running}
+                                            size="sm"
+                                        >
+                                            Download All QR ZIP
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
                 </div>
 
                 {/* Results Count with Empty Stations Info */}
@@ -579,11 +609,14 @@ export default function StationIndex() {
                         Showing {stations.data.length} of {stations.meta.total} station{stations.meta.total !== 1 ? 's' : ''}
                         {(siteFilter !== "all" || campaignFilter !== "all" || statusFilter !== "all" || search) && ' (filtered)'}
                     </div>
-                    {emptyStationsCount > 0 && (
-                        <div className="text-orange-600 font-medium">
-                            {emptyStationsCount} station{emptyStationsCount > 1 ? 's' : ''} without PC
-                        </div>
-                    )}
+                    <div className="flex items-center gap-4">
+                        {emptyStationsCount > 0 && (
+                            <div className="text-orange-600 font-medium">
+                                {emptyStationsCount} station{emptyStationsCount > 1 ? 's' : ''} without PC
+                            </div>
+                        )}
+                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                    </div>
                 </div>
 
                 {/* Desktop Table View - hidden on mobile */}
@@ -593,7 +626,7 @@ export default function StationIndex() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-12">
-                                        <input
+                                        <Input
                                             type="checkbox"
                                             checked={selectedStationIds.length === stations.data.length && stations.data.length > 0}
                                             onChange={e => handleSelectAllStations(e.target.checked)}
@@ -622,40 +655,14 @@ export default function StationIndex() {
                                             className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
                                         >
                                             <TableCell>
-                                                <input
+                                                <Input
                                                     type="checkbox"
                                                     checked={selectedStationIds.includes(station.id)}
                                                     onChange={e => handleSelectStation(station.id, e.target.checked)}
                                                     className="cursor-pointer"
                                                 />
                                             </TableCell>
-                                            {/* Floating progress indicators for QR ZIP */}
-                                            {bulkProgress.running && (
-                                                <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-900 border border-blue-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
-                                                    <div className="font-semibold text-blue-700 dark:text-blue-200">
-                                                        Bulk QR Code ZIP Progress
-                                                    </div>
-                                                    <div className="w-full bg-gray-200 rounded h-3 mb-2">
-                                                        <div className="bg-blue-600 h-3 rounded" style={{ width: `${bulkProgress.percent}%` }} />
-                                                    </div>
-                                                    <div className="text-xs text-gray-700 dark:text-gray-300">
-                                                        {bulkProgress.status} ({bulkProgress.percent}%)
-                                                    </div>
-                                                </div>
-                                            )}
-                                            {selectedZipProgress.running && (
-                                                <div className="fixed bottom-24 right-6 z-50 bg-white dark:bg-gray-900 border border-green-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
-                                                    <div className="font-semibold text-green-700 dark:text-green-200">
-                                                        Selected QR Code ZIP Progress
-                                                    </div>
-                                                    <div className="w-full bg-gray-200 rounded h-3 mb-2">
-                                                        <div className="bg-green-600 h-3 rounded" style={{ width: `${selectedZipProgress.percent}%` }} />
-                                                    </div>
-                                                    <div className="text-xs text-gray-700 dark:text-gray-300">
-                                                        {selectedZipProgress.status} ({selectedZipProgress.percent}%)
-                                                    </div>
-                                                </div>
-                                            )}
+
                                             <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
                                             <TableCell>{station.site}</TableCell>
                                             <TableCell>{station.station_number}</TableCell>
@@ -783,7 +790,7 @@ export default function StationIndex() {
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <Can permission="stations.edit">
-                                                        <Button variant="outline" size="sm" onClick={() => router.get(`/stations/${station.id}/edit`)} disabled={loading}>
+                                                        <Button variant="outline" size="sm" onClick={() => router.get(stationsEditRoute(station.id).url)} disabled={loading}>
                                                             Edit
                                                         </Button>
                                                     </Can>
@@ -987,7 +994,7 @@ export default function StationIndex() {
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => router.get(`/stations/${station.id}/edit`)}
+                                            onClick={() => router.get(stationsEditRoute(station.id).url)}
                                             disabled={loading}
                                             className="flex-1"
                                         >
@@ -1163,6 +1170,34 @@ export default function StationIndex() {
                         </div>
                     </DialogContent>
                 </Dialog>
+
+                {/* Floating progress indicators for QR ZIP */}
+                {bulkProgress.running && (
+                    <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-900 border border-blue-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                        <div className="font-semibold text-blue-700 dark:text-blue-200">
+                            Bulk QR Code ZIP Progress
+                        </div>
+                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
+                            <div ref={bulkProgressRef} className="bg-blue-600 h-3 rounded" />
+                        </div>
+                        <div className="text-xs text-gray-700 dark:text-gray-300">
+                            {bulkProgress.status} ({bulkProgress.percent}%)
+                        </div>
+                    </div>
+                )}
+                {selectedZipProgress.running && (
+                    <div className="fixed bottom-24 right-6 z-50 bg-white dark:bg-gray-900 border border-green-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
+                        <div className="font-semibold text-green-700 dark:text-green-200">
+                            Selected QR Code ZIP Progress
+                        </div>
+                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
+                            <div ref={selectedZipProgressRef} className="bg-green-600 h-3 rounded" />
+                        </div>
+                        <div className="text-xs text-gray-700 dark:text-gray-300">
+                            {selectedZipProgress.status} ({selectedZipProgress.percent}%)
+                        </div>
+                    </div>
+                )}
             </div>
         </AppLayout>
     );

@@ -22,6 +22,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
 
 interface CreditsSummary {
     year: number;
@@ -130,7 +131,7 @@ export default function Create({
         setIsEmployeePopoverOpen(false);
         setSearchQuery('');
         // Refresh the page with new employee data
-        router.get(`/leave-requests/create?employee_id=${employeeId}`, {}, {
+        router.get(leaveCreateRoute().url, { employee_id: employeeId }, {
             preserveState: false,
             preserveScroll: true,
         });
@@ -231,7 +232,7 @@ export default function Create({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        post('/leave-requests', {
+        post(leaveStoreRoute().url, {
             onSuccess: () => {
                 toast.success('Leave request submitted successfully!', {
                     description: 'Your request has been sent for approval.',
@@ -693,7 +694,7 @@ export default function Create({
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => router.visit('/leave-requests')}
+                                    onClick={() => router.visit(leaveIndexRoute().url)}
                                 >
                                     Cancel
                                 </Button>

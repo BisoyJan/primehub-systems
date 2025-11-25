@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { ArrowLeft, Search, ArrowRight, Check, AlertCircle, X, MousePointer, CheckSquare, ListChecks } from 'lucide-react';
@@ -23,11 +23,17 @@ import {
     DialogDescription,
 } from '@/components/ui/dialog';
 
-import { index as pcTransferIndex, bulk as bulkTransferRoute } from '@/routes/pc-transfers';
+import {
+    index as pcTransfersIndexRoute,
+    bulk as pcTransfersBulkRoute,
+    transferPage as pcTransfersTransferPageRoute,
+} from '@/routes/pc-transfers';
 
 // New reusable components and hooks
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { PageHeader } from '@/components/PageHeader';
+import { index as stationsIndexRoute } from '@/routes/stations';
 
 interface PcSpec {
     id: number;
@@ -112,6 +118,23 @@ function generateDarkColor(baseColor: string): string {
     return baseColor;
 }
 
+// Helper component to apply dynamic styles without triggering lint warnings
+interface ColorizedProps extends React.HTMLAttributes<HTMLElement> {
+    as?: React.ElementType;
+    children?: React.ReactNode;
+}
+
+const Colorized = ({ children, style, className, as: Component = 'div', ...props }: ColorizedProps) => {
+    const ref = useRef<HTMLElement>(null);
+    useEffect(() => {
+        if (ref.current && style) {
+            Object.assign(ref.current.style, style);
+        }
+    }, [style]);
+
+    return <Component ref={ref} className={className} {...props}>{children}</Component>;
+};
+
 interface Transfer {
     pcId: number;
     stationId: number;
@@ -119,8 +142,7 @@ interface Transfer {
     replacedPcId?: number; // ID of PC being replaced/made floating
 }
 
-export default function Transfer(props: Props) {
-    const { stations, pcSpecs, preselectedStationId } = props;
+export default function Transfer({ stations, pcSpecs, filters, preselectedStationId }: Props) {
 
     // Read 'pc' query param from URL
     const [autoSelectedPcId, setAutoSelectedPcId] = useState<number | null>(null);
@@ -139,8 +161,9 @@ export default function Transfer(props: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Bulk PC Transfer',
         breadcrumbs: [
-            { title: 'PC Transfer', href: pcTransferIndex().url },
-            { title: 'Transfer', href: '#' }
+            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'PC Transfer', href: pcTransfersIndexRoute().url },
+            { title: 'Transfer', href: pcTransfersTransferPageRoute().url },
         ]
     });
 
@@ -149,10 +172,10 @@ export default function Transfer(props: Props) {
 
     // Ensure unique sites and campaigns (in case backend sends duplicates)
     const uniqueSites = Array.from(
-        new Map(props.filters.sites.map(site => [site.id, site])).values()
+        new Map(filters.sites.map(site => [site.id, site])).values()
     );
     const uniqueCampaigns = Array.from(
-        new Map(props.filters.campaigns.map(campaign => [campaign.id, campaign])).values()
+        new Map(filters.campaigns.map(campaign => [campaign.id, campaign])).values()
     );
 
     const [pcSearch, setPcSearch] = useState('');
@@ -167,6 +190,9 @@ export default function Transfer(props: Props) {
     const [notes, setNotes] = useState('');
     const [highlightedStationId, setHighlightedStationId] = useState<number | null>(null);
     const [helpDialogOpen, setHelpDialogOpen] = useState(false);
+    const readyTransfers = transfers.filter(t => t.stationId !== 0).length;
+    const transferActionDisabled = processing || transfers.some(t => t.stationId === 0);
+    const overlayMessage = processing ? 'Processing transfers...' : undefined;
 
     // Auto-select PC from preselected station OR highlight empty station
     useEffect(() => {
@@ -452,7 +478,7 @@ export default function Transfer(props: Props) {
             notes: notes.trim() || undefined, // Include notes if provided
         };
 
-        router.post(bulkTransferRoute().url, payload, {
+        router.post(pcTransfersBulkRoute().url, payload, {
             preserveScroll: true,
             onSuccess: () => {
                 const transferCount = transfers.length;
@@ -476,7 +502,7 @@ export default function Transfer(props: Props) {
                             clearInterval(countdownInterval);
                             toast.dismiss(countdownToast);
                             setProcessing(false);
-                            router.visit(pcTransferIndex().url);
+                            router.visit(pcTransfersIndexRoute().url);
                         }
                     }, 1000);
                 }, 1500);
@@ -490,51 +516,54 @@ export default function Transfer(props: Props) {
         });
     }
 
+
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 space-y-6 relative">
-                {/* Loading overlay for page transitions */}
-                <LoadingOverlay isLoading={isPageLoading} />
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+                <LoadingOverlay isLoading={isPageLoading || processing} message={overlayMessage} />
 
-                {/* Header with Back Button and Transfer Action */}
-                <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Link href={pcTransferIndex().url}>
-                            <Button variant="outline">
-                                <ArrowLeft className="mr-2 h-4 w-4" />
-                                Back to Transfers
+                <PageHeader
+                    title="Bulk PC Transfer"
+                    description="Queue assignments, swaps, or removals across stations"
+                >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex items-center gap-2">
+                            <Link href={pcTransfersIndexRoute().url}>
+                                <Button variant="outline">
+                                    <ArrowLeft className="mr-2 h-4 w-4" />
+                                    Back to Transfers
+                                </Button>
+                            </Link>
+                            <Button
+                                variant="outline"
+                                size="icon"
+                                onClick={() => setHelpDialogOpen(true)}
+                                title="How to use PC Transfer"
+                            >
+                                <UseAnimations animation={help} size={25} strokeColor="currentColor" />
                             </Button>
-                        </Link>
-                        <Button
-                            variant="outline"
-                            size="icon"
-                            onClick={() => setHelpDialogOpen(true)}
-                            title="How to use PC Transfer"
-                        >
-                            <UseAnimations animation={help} size={25} strokeColor="currentColor" />
-                        </Button>
-                    </div>
+                        </div>
 
-                    {transfers.length > 0 && (
-                        <div className="flex flex-col sm:flex-row items-center justify-end gap-2 sm:gap-4">
-                            <span className="text-sm text-muted-foreground">
-                                {transfers.filter(t => t.stationId !== 0).length} of {transfers.length} transfers ready
-                            </span>
-                            <div>
+                        {transfers.length > 0 && (
+                            <div className="flex flex-col sm:flex-row items-center justify-end gap-2 sm:gap-4">
+                                <span className="text-sm text-muted-foreground">
+                                    {readyTransfers} of {transfers.length} transfers ready
+                                </span>
                                 <Button
                                     onClick={handleSubmit}
-                                    disabled={processing || transfers.some(t => t.stationId === 0)}
+                                    disabled={transferActionDisabled}
                                     className="w-full sm:w-auto flex items-center justify-center gap-2"
                                 >
                                     <Check className="h-4 w-4" />
                                     Transfer {transfers.length} PC{transfers.length > 1 ? 's' : ''}
                                 </Button>
                             </div>
-                        </div>
-                    )}
-                </div>
+                        )}
+                    </div>
+                </PageHeader>
 
                 {/* Validation Errors */}
                 {errors.length > 0 && (
@@ -570,7 +599,7 @@ export default function Transfer(props: Props) {
 
                                     return (
                                         <div key={transfer.pcId} data-transfer-id={transfer.pcId}>
-                                            <div
+                                            <Colorized
                                                 className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-2 rounded border-2 space-y-2 sm:space-y-0"
                                                 style={{
                                                     backgroundColor: transfer.color,
@@ -578,13 +607,15 @@ export default function Transfer(props: Props) {
                                                 }}
                                             >
                                                 <div className="flex items-center gap-2">
-                                                    <div className="text-sm font-semibold" style={{ color: darkColor }}>
+                                                    <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
                                                         {pc?.pc_number || pc?.label}
-                                                    </div>
-                                                    <ArrowRight className="h-3 w-3" style={{ color: darkColor }} />
-                                                    <div className="text-sm font-semibold" style={{ color: darkColor }}>
+                                                    </Colorized>
+                                                    <Colorized as="span" style={{ color: darkColor }} className="flex items-center">
+                                                        <ArrowRight className="h-3 w-3" />
+                                                    </Colorized>
+                                                    <Colorized className="text-sm font-semibold" style={{ color: darkColor }}>
                                                         {station ? station.station_number : 'No station selected'}
-                                                    </div>
+                                                    </Colorized>
                                                 </div>
                                                 <div className="w-full sm:w-auto flex justify-end">
                                                     <Button
@@ -596,7 +627,7 @@ export default function Transfer(props: Props) {
                                                         <X className="h-3 w-3" />
                                                     </Button>
                                                 </div>
-                                            </div>
+                                            </Colorized>
 
                                             {replacedPc && (
                                                 <div className="mt-1 p-2 bg-orange-50 border-l-2 border-orange-400 rounded text-xs">
@@ -754,18 +785,19 @@ export default function Transfer(props: Props) {
                                                         } : {}}
                                                     >
                                                         <TableCell>
-                                                            <span
+                                                            <Colorized
+                                                                as="span"
                                                                 className="font-medium"
                                                                 style={{ color: darkColor || (willBeFloating ? '#ea580c' : '#2563eb') }}
                                                             >
                                                                 {pc.pc_number || '-'}
-                                                            </span>
+                                                            </Colorized>
                                                         </TableCell>
                                                         <TableCell className="hidden md:table-cell">
-                                                            <div style={{ color: darkColor || undefined }}>
+                                                            <Colorized style={{ color: darkColor || undefined }}>
                                                                 <div className="font-medium text-sm">{pc.details.model || '-'}</div>
                                                                 <div className="text-xs text-muted-foreground">{pc.details.processor || '-'}</div>
-                                                            </div>
+                                                            </Colorized>
                                                         </TableCell>
                                                         <TableCell>
                                                             {willBeFloating ? (
@@ -932,12 +964,13 @@ export default function Transfer(props: Props) {
                                                         } : {}}
                                                     >
                                                         <TableCell>
-                                                            <span
+                                                            <Colorized
+                                                                as="span"
                                                                 className="font-medium"
                                                                 style={{ color: darkColor || undefined }}
                                                             >
                                                                 {station.station_number}
-                                                            </span>
+                                                            </Colorized>
                                                         </TableCell>
                                                         <TableCell className="hidden md:table-cell" style={{ color: darkColor || undefined }}>
                                                             <div className="text-sm">{station.site}</div>

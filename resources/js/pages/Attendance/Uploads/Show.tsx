@@ -2,14 +2,15 @@ import React from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import { format } from 'date-fns';
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage } from "@/hooks";
+import { useFlashMessage, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { ArrowLeft, FileText, AlertTriangle, Calendar, Users, CheckCircle, XCircle, Clock, MapPin } from "lucide-react";
-import type { BreadcrumbItem, SharedData } from "@/types";
+import type { SharedData } from "@/types";
+import { index as attendanceUploadsIndex, show as attendanceUploadsShow } from "@/routes/attendance-uploads";
 
 interface Upload {
     id: number;
@@ -46,13 +47,16 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
     const { auth } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format || '24';
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Recent Uploads', href: '/attendance-uploads' },
-        { title: upload.original_filename, href: '' }
-    ];
+    const { title, breadcrumbs } = usePageMeta({
+        title: `Upload Details - ${upload.original_filename}`,
+        breadcrumbs: [
+            { title: 'Recent Uploads', href: attendanceUploadsIndex().url },
+            { title: upload.original_filename, href: attendanceUploadsShow({ upload: upload.id }).url },
+        ],
+    });
 
     const goBack = () => {
-        router.get("/attendance-uploads");
+        router.get(attendanceUploadsIndex().url);
     };
 
     const getStatusBadge = (status: Upload['status']) => {
@@ -80,7 +84,7 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Upload Details - ${upload.original_filename}`} />
+            <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <div className="flex items-center gap-4">

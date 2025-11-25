@@ -1,10 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
+import type { ChangeEvent } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import { toast } from 'sonner';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
     Table,
     TableBody,
@@ -37,11 +40,11 @@ import {
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { RefreshCw, Search, Filter, Plus } from 'lucide-react';
 
 // New reusable components and hooks
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
-import { SearchBar } from "@/components/SearchBar";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 
 import {
@@ -50,6 +53,7 @@ import {
     edit as pcSpecEdit,
     destroy as pcSpecDestroy,
 } from '@/routes/pcspecs';
+
 
 interface RamSpec {
     id: number;
@@ -113,10 +117,34 @@ interface Props extends InertiaPageProps {
 
 export default function Index() {
     const { pcspecs, search: initialSearch } = usePage<Props>().props;
-    const form = useForm({ search: initialSearch || '' });
+    const form = useForm({}); // Keep useForm for delete but empty for search
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
     const [issueText, setIssueText] = useState('');
+
+    const [searchQuery, setSearchQuery] = useState(initialSearch || "");
+    const [lastRefresh, setLastRefresh] = useState(new Date());
+
+    const handleManualRefresh = () => {
+        setLastRefresh(new Date());
+        router.reload({ only: ['pcspecs'] });
+    };
+
+    const handleFilter = () => {
+        router.get(
+            pcSpecIndex().url,
+            { search: searchQuery },
+            {
+                preserveState: true,
+                preserveScroll: true,
+            }
+        );
+    };
+
+    const handleReset = () => {
+        setSearchQuery("");
+        router.get(pcSpecIndex().url);
+    };
 
     const [selectedZipProgress, setSelectedZipProgress] = useState<{
         running: boolean;
@@ -135,6 +163,20 @@ export default function Index() {
     }>({ running: false, percent: 0, status: '' });
 
     const progressIntervalRef = useRef<NodeJS.Timeout | null>(null);
+    const bulkProgressRef = useRef<HTMLDivElement>(null);
+    const selectedProgressRef = useRef<HTMLDivElement>(null);
+
+    useEffect(() => {
+        if (bulkProgressRef.current) {
+            bulkProgressRef.current.style.width = `${bulkProgress.percent}%`;
+        }
+    }, [bulkProgress.percent]);
+
+    useEffect(() => {
+        if (selectedProgressRef.current) {
+            selectedProgressRef.current.style.width = `${selectedZipProgress.percent}%`;
+        }
+    }, [selectedZipProgress.percent]);
 
     // QR Code functionality - persist selection in localStorage
     const LOCAL_STORAGE_KEY = 'pcspec_selected_ids';
@@ -201,14 +243,6 @@ export default function Index() {
     useFlashMessage(); // Automatically handles flash messages
     const isLoading = usePageLoading(); // Track page loading state
 
-    const handleSearch = (e: React.FormEvent) => {
-        e.preventDefault();
-        form.get(pcSpecIndex.url(), {
-            preserveState: true,
-            preserveScroll: true,
-        });
-    };
-
     const handleDelete = (id: number) => {
         form.delete(pcSpecDestroy({ pcspec: id }).url, {
             preserveScroll: true,
@@ -252,6 +286,14 @@ export default function Index() {
         } else {
             setSelectedPcIds(prev => prev.filter(pcId => pcId !== id));
         }
+    };
+
+    const handleSelectAllChange = (event: ChangeEvent<HTMLInputElement>) => {
+        handleSelectAll(event.target.checked);
+    };
+
+    const handleSelectPcChange = (id: number) => (event: ChangeEvent<HTMLInputElement>) => {
+        handleSelectPc(id, event.target.checked);
     };
 
 
@@ -463,8 +505,8 @@ export default function Index() {
                         </div>
                         <div className="w-full bg-gray-200 rounded h-3 mb-2">
                             <div
+                                ref={bulkProgressRef}
                                 className="bg-blue-600 h-3 rounded"
-                                style={{ width: `${bulkProgress.percent}%` }}
                             />
                         </div>
                         <div className="text-xs text-gray-700 dark:text-gray-300">
@@ -481,8 +523,8 @@ export default function Index() {
                         </div>
                         <div className="w-full bg-gray-200 rounded h-3 mb-2">
                             <div
+                                ref={selectedProgressRef}
                                 className="bg-green-600 h-3 rounded"
-                                style={{ width: `${selectedZipProgress.percent}%` }}
                             />
                         </div>
                         <div className="text-xs text-gray-700 dark:text-gray-300">
@@ -495,17 +537,51 @@ export default function Index() {
                 <PageHeader
                     title="PC Specs Management"
                     description="Manage complete PC specifications and configurations"
-                    createLink={pcSpecCreate.url()}
-                    createLabel="Add PC Spec"
-                >
-                    {/* Reusable search bar */}
-                    <SearchBar
-                        value={form.data.search}
-                        onChange={(value) => form.setData("search", value)}
-                        onSubmit={handleSearch}
-                        placeholder="Search PC specifications..."
-                    />
-                </PageHeader>
+                />
+
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search PC specs..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button onClick={handleFilter} className="flex-1 sm:flex-none">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
+                            </Button>
+                            <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
+                                Reset
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                            <Link href={pcSpecCreate.url()}>
+                                <Button className="flex-1 sm:flex-none">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Add PC Spec
+                                </Button>
+                            </Link>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            Showing {pcspecs.data.length} records
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
+                        </div>
+                    </div>
+                </div>
 
                 {/* QR Code Selection Actions */}
                 {selectedPcIds.length > 0 && (
@@ -549,11 +625,12 @@ export default function Index() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-12">
-                                        <input
+                                        <Input
                                             type="checkbox"
                                             checked={selectedPcIds.length === pcspecs.data.length && pcspecs.data.length > 0}
-                                            onChange={(e) => handleSelectAll(e.target.checked)}
+                                            onChange={handleSelectAllChange}
                                             className="cursor-pointer"
+                                            aria-label="Select all PC specs"
                                         />
                                     </TableHead>
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
@@ -592,8 +669,9 @@ export default function Index() {
                                                 <input
                                                     type="checkbox"
                                                     checked={selectedPcIds.includes(pc.id)}
-                                                    onChange={(e) => handleSelectPc(pc.id, e.target.checked)}
+                                                    onChange={handleSelectPcChange(pc.id)}
                                                     className="cursor-pointer"
+                                                    aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                                 />
                                             </TableCell>
                                             <TableCell className="hidden lg:table-cell">{pc.id}</TableCell>
@@ -836,11 +914,12 @@ export default function Index() {
                             <div key={pc.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div className="flex items-start gap-3 flex-1">
-                                        <input
+                                        <Input
                                             type="checkbox"
                                             checked={selectedPcIds.includes(pc.id)}
-                                            onChange={(e) => handleSelectPc(pc.id, e.target.checked)}
+                                            onChange={handleSelectPcChange(pc.id)}
                                             className="cursor-pointer mt-1"
+                                            aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                         />
                                         <div>
                                             <div className="text-xs text-muted-foreground">PC Number</div>

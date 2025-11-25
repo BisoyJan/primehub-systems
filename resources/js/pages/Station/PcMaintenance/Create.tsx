@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,12 @@ import { ArrowLeft, Save, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { SearchBar } from '@/components/SearchBar';
 import { usePageMeta } from '@/hooks';
+import {
+    index as pcMaintenanceIndexRoute,
+    create as pcMaintenanceCreateRoute,
+    store as pcMaintenanceStoreRoute,
+} from '@/routes/pc-maintenance';
+import { index as stationsIndexRoute } from '@/routes/stations';
 
 interface Site {
     id: number;
@@ -52,8 +58,6 @@ interface Station {
 interface CreateProps {
     stations: Station[];
     sites: Site[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any;
 }
 
 interface FormData {
@@ -65,8 +69,7 @@ interface FormData {
     status: 'completed' | 'pending' | 'overdue';
 }
 
-export default function Create() {
-    const { stations, sites } = usePage<CreateProps>().props;
+export default function Create({ stations, sites }: CreateProps) {
     const [loading, setLoading] = useState(false);
     const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
     const [siteFilter, setSiteFilter] = useState<string>('all');
@@ -80,11 +83,12 @@ export default function Create() {
         status: 'completed',
     });
 
-    const { breadcrumbs } = usePageMeta({
+    const { title, breadcrumbs } = usePageMeta({
         title: 'Create PC Maintenance',
         breadcrumbs: [
-            { title: 'PC Maintenance', href: '/pc-maintenance' },
-            { title: 'Create', href: '/pc-maintenance/create' }
+            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'PC Maintenance', href: pcMaintenanceIndexRoute().url },
+            { title: 'Create', href: pcMaintenanceCreateRoute().url }
         ]
     });
 
@@ -151,7 +155,7 @@ export default function Create() {
 
         setLoading(true);
 
-        router.post('/pc-maintenance', {
+        router.post(pcMaintenanceStoreRoute().url, {
             station_ids: selectedStationIds,
             ...formData,
         }, {
@@ -168,12 +172,12 @@ export default function Create() {
     };
 
     const handleCancel = () => {
-        router.visit('/pc-maintenance');
+        router.visit(pcMaintenanceIndexRoute().url);
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create PC Maintenance Record" />
+            <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <PageHeader

@@ -1,5 +1,6 @@
 import React from "react";
 import { Link } from "@inertiajs/react";
+import { Button } from "@/components/ui/button";
 
 export interface PaginationLink {
     url: string | null;
@@ -52,7 +53,7 @@ export default function PaginationNav({ links, className = "", onPageChange, onl
             if (onPageChange) {
                 const pageNum = getPageNumber(link.url);
                 return (
-                    <button
+                    <Button
                         key={key}
                         type="button"
                         className={`${base} ${active ? activeClasses : normalClasses}`}
@@ -77,7 +78,7 @@ export default function PaginationNav({ links, className = "", onPageChange, onl
         }
 
         return (
-            <button
+            <Button
                 key={key}
                 type="button"
                 disabled
@@ -85,7 +86,7 @@ export default function PaginationNav({ links, className = "", onPageChange, onl
                 aria-disabled="true"
             >
                 <span dangerouslySetInnerHTML={{ __html: link.label }} />
-            </button>
+            </Button>
         );
     };
 

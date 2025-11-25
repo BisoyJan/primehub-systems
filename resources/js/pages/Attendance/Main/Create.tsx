@@ -18,16 +18,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-    Breadcrumb,
-    BreadcrumbItem,
-    BreadcrumbLink,
-    BreadcrumbList,
-    BreadcrumbPage,
-    BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
 import { AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFlashMessage, usePageMeta } from '@/hooks';
+import { index as attendanceIndex, create as attendanceCreate, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
 
 interface User {
     id: number;
@@ -54,10 +48,19 @@ interface Props {
 }
 
 export default function Create({ users, campaigns }: Props) {
+    useFlashMessage();
     const { auth } = usePage<{ auth: { user: { time_format: string } } }>().props;
     const rawTimeFormat = auth.user?.time_format;
     const timeFormat = String(rawTimeFormat || '24');
     const is24HourFormat = timeFormat === '24';
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Create Manual Attendance',
+        breadcrumbs: [
+            { title: 'Attendance', href: attendanceIndex().url },
+            { title: 'Manual Entry', href: attendanceCreate().url },
+        ],
+    });
 
     console.log('Raw time format:', rawTimeFormat, 'Converted:', timeFormat, 'Is 24 hour:', is24HourFormat);
 
@@ -185,11 +188,11 @@ export default function Create({ users, campaigns }: Props) {
         });
 
         // Use transform to modify data before submission
-        post('/attendance', {
+        post(attendanceStore().url, {
             preserveScroll: true,
             onSuccess: () => {
                 toast.success('Attendance record created successfully!');
-                router.visit('/attendance');
+                router.visit(attendanceIndex().url);
             },
             onError: () => {
                 toast.error('Failed to create attendance record', {
@@ -211,11 +214,11 @@ export default function Create({ users, campaigns }: Props) {
             return;
         }
 
-        bulkPost('/attendance/bulk', {
+        bulkPost(attendanceBulkStore().url, {
             preserveScroll: true,
             onSuccess: () => {
                 toast.success(`${selectedUserIds.length} attendance records created successfully!`);
-                router.visit('/attendance');
+                router.visit(attendanceIndex().url);
             },
             onError: () => {
                 toast.error('Failed to create attendance records', {
@@ -316,21 +319,10 @@ export default function Create({ users, campaigns }: Props) {
     };
 
     return (
-        <AppLayout>
-            <Head title="Create Manual Attendance" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
-                <Breadcrumb>
-                    <BreadcrumbList>
-                        <BreadcrumbItem>
-                            <BreadcrumbLink href="/attendance">Attendance</BreadcrumbLink>
-                        </BreadcrumbItem>
-                        <BreadcrumbSeparator />
-                        <BreadcrumbItem>
-                            <BreadcrumbPage>Create Manual Attendance</BreadcrumbPage>
-                        </BreadcrumbItem>
-                    </BreadcrumbList>
-                </Breadcrumb>
 
                 <PageHeader
                     title="Create Manual Attendance"
@@ -514,12 +506,12 @@ export default function Create({ users, campaigns }: Props) {
                                                             >
                                                                 <Check
                                                                     className={`mr-2 h-4 w-4 ${isBulkMode
-                                                                            ? selectedUserIds.includes(user.id)
-                                                                                ? 'opacity-100'
-                                                                                : 'opacity-0'
-                                                                            : Number(data.user_id) === user.id
-                                                                                ? 'opacity-100'
-                                                                                : 'opacity-0'
+                                                                        ? selectedUserIds.includes(user.id)
+                                                                            ? 'opacity-100'
+                                                                            : 'opacity-0'
+                                                                        : Number(data.user_id) === user.id
+                                                                            ? 'opacity-100'
+                                                                            : 'opacity-0'
                                                                         }`}
                                                                 />
                                                                 <div className="flex flex-col">
@@ -981,7 +973,7 @@ export default function Create({ users, campaigns }: Props) {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => router.visit('/attendance')}
+                                        onClick={() => router.visit(attendanceIndex().url)}
                                     >
                                         Cancel
                                     </Button>

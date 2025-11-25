@@ -17,6 +17,11 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import {
+    index as employeeSchedulesIndex,
+    edit as employeeSchedulesEdit,
+    update as employeeSchedulesUpdate,
+} from "@/routes/employee-schedules";
 
 interface User {
     id: number;
@@ -93,8 +98,8 @@ export default function EmployeeScheduleEdit() {
     const { title, breadcrumbs } = usePageMeta({
         title: "Edit Employee Schedule",
         breadcrumbs: [
-            { title: "Employee Schedules", href: "/employee-schedules" },
-            { title: "Edit", href: "" },
+            { title: "Employee Schedules", href: employeeSchedulesIndex().url },
+            { title: "Edit", href: employeeSchedulesEdit({ employee_schedule: schedule.id }).url },
         ],
     });
 
@@ -115,7 +120,7 @@ export default function EmployeeScheduleEdit() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/employee-schedules/${schedule.id}`, {
+        put(employeeSchedulesUpdate({ employee_schedule: schedule.id }).url, {
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
                 toast.error(firstError || "Failed to update employee schedule");
@@ -374,7 +379,7 @@ export default function EmployeeScheduleEdit() {
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => router.get("/employee-schedules")}
+                                    onClick={() => router.get(employeeSchedulesIndex().url)}
                                 >
                                     Cancel
                                 </Button>

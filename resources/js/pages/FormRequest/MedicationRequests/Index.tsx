@@ -1,16 +1,10 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
-import React, { useState } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import {
-    Popover,
-    PopoverContent,
-    PopoverTrigger,
-} from '@/components/ui/popover';
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import {
     Table,
     TableBody,
@@ -19,26 +13,18 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import { Plus, Search, Eye, Trash2, X, Check, ChevronsUpDown, XCircle } from 'lucide-react';
-import { Can } from '@/components/authorization';
-import type { SharedData } from '@/types';
+import { Plus, Search, Eye, Trash2, RefreshCw, Filter } from 'lucide-react';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Can } from '@/components/authorization';
+import { index as medicationIndexRoute, create as medicationCreateRoute, show as medicationShowRoute, destroy as medicationDestroyRoute } from '@/routes/medication-requests';
 
 interface MedicationRequest {
     id: number;
     name: string;
+    work_email: string;
     medication_type: string;
     reason: string;
     onset_of_symptoms: string;
@@ -49,18 +35,18 @@ interface MedicationRequest {
     };
 }
 
-interface User {
-    id: number;
-    name: string;
+interface PaginationMeta {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
 }
 
 interface Props {
     medicationRequests: {
         data: MedicationRequest[];
-        current_page: number;
-        last_page: number;
-        per_page: number;
-        total: number;
+        links?: PaginationLink[];
+        meta?: PaginationMeta;
     };
     filters: {
         search?: string;
@@ -68,74 +54,66 @@ interface Props {
         medication_type?: string;
     };
     medicationTypes: string[];
-    users: User[];
 }
 
-export default function Index({ medicationRequests, filters, medicationTypes, users }: Props) {
-    const { auth } = usePage<SharedData>().props;
-    const canViewActions = ['Super Admin', 'Admin', 'Team Lead', 'HR'].includes(auth.user?.role || '');
-
+export default function Index({ medicationRequests, filters, medicationTypes }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Medication Requests',
         breadcrumbs: [
-            { title: 'Medication Requests', href: '/form-requests/medication-requests' },
+            { title: 'Form Requests', href: '/form-requests' },
+            { title: 'Medication Requests', href: medicationIndexRoute().url },
         ],
     });
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
-    const [selectedUserId, setSelectedUserId] = useState(filters.search || '');
-    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
-    const [userSearchQuery, setUserSearchQuery] = useState('');
-    const [status, setStatus] = useState(filters.status || '');
-    const [medicationType, setMedicationType] = useState(filters.medication_type || '');
-    const [deleteId, setDeleteId] = useState<number | null>(null);
-    const [cancelId, setCancelId] = useState<number | null>(null);
+    const [search, setSearch] = useState(filters.search || '');
+    const [status, setStatus] = useState(filters.status || 'all');
+    const [medicationType, setMedicationType] = useState(filters.medication_type || 'all');
+    const [localLoading, setLocalLoading] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
-    // Filter users based on search query
-    const filteredUsers = React.useMemo(() => {
-        if (!userSearchQuery) return users;
-        return users.filter(user =>
-            user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
-        );
-    }, [users, userSearchQuery]);
+    const showClearFilters = Boolean(search) || status !== 'all' || medicationType !== 'all';
 
-    const handleSearch = () => {
-        router.get('/form-requests/medication-requests', {
-            search: selectedUserId || undefined,
-            status: status && status !== 'all' ? status : undefined,
-            medication_type: medicationType && medicationType !== 'all' ? medicationType : undefined,
-        }, {
+    const buildFilterParams = () => {
+        const params: Record<string, string> = {};
+        if (search) {
+            params.search = search;
+        }
+        if (status !== 'all') {
+            params.status = status;
+        }
+        if (medicationType !== 'all') {
+            params.medication_type = medicationType;
+        }
+        return params;
+    };
+
+    const requestWithFilters = (params: Record<string, string>) => {
+        setLocalLoading(true);
+        router.get(medicationIndexRoute().url, params, {
             preserveState: true,
             preserveScroll: true,
+            replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLocalLoading(false),
         });
     };
 
-    const clearFilters = () => {
-        setSelectedUserId('');
-        setUserSearchQuery('');
-        setStatus('');
-        setMedicationType('');
-        router.get('/form-requests/medication-requests');
+    const handleSearch = () => {
+        requestWithFilters(buildFilterParams());
     };
 
     const handleDelete = (id: number) => {
-        router.delete(`/form-requests/medication-requests/${id}`, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setDeleteId(null);
-            },
-        });
-    };
-
-    const handleCancel = (id: number) => {
-        router.delete(`/form-requests/medication-requests/${id}/cancel`, {
-            preserveScroll: true,
-            onSuccess: () => {
-                setCancelId(null);
-            },
-        });
+        if (confirm('Are you sure you want to delete this medication request?')) {
+            setLocalLoading(true);
+            router.delete(medicationDestroyRoute(id).url, {
+                preserveScroll: true,
+                onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => setLocalLoading(false),
+            });
+        }
     };
 
     const getStatusBadge = (status: string) => {
@@ -153,109 +131,77 @@ export default function Index({ medicationRequests, filters, medicationTypes, us
         );
     };
 
+    const handleManualRefresh = () => {
+        requestWithFilters(buildFilterParams());
+    };
+
+    const clearFilters = () => {
+        setSearch('');
+        setStatus('all');
+        setMedicationType('all');
+        requestWithFilters({});
+    };
+
+    const paginationMeta: PaginationMeta = medicationRequests.meta || {
+        current_page: 1,
+        last_page: 1,
+        per_page: medicationRequests.data.length || 1,
+        total: medicationRequests.data.length,
+    };
+    const paginationLinks = medicationRequests.links || [];
+
+    const hasResults = medicationRequests.data.length > 0;
+    const showingStart = hasResults ? (paginationMeta.per_page * (paginationMeta.current_page - 1)) + 1 : 0;
+    const showingEnd = hasResults ? showingStart + medicationRequests.data.length - 1 : 0;
+    const summaryText = hasResults
+        ? `Showing ${showingStart}-${showingEnd} of ${paginationMeta.total} requests`
+        : 'No medication requests to display';
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
-                <LoadingOverlay isLoading={isPageLoading} />
+                <LoadingOverlay isLoading={isPageLoading || localLoading} />
 
                 <PageHeader
                     title="Medication Requests"
                     description="Manage medication requests from employees"
                 />
 
-                <div className="flex justify-end">
-                    <Can permission="medication_requests.create">
-                        <Link href="/form-requests/medication-requests/create">
-                            <Button>
-                                <Plus className="mr-2 h-4 w-4" />
-                                New Request
-                            </Button>
-                        </Link>
-                    </Can>
-                </div>
-
-                {/* Filters */}
-                <Card className="mb-6">
-                    <CardHeader>
-                        <CardTitle>Filter Requests</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-wrap gap-4">
-                            <div className="flex-1 min-w-[200px]">
-                                <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
-                                    <PopoverTrigger asChild>
-                                        <Button
-                                            variant="outline"
-                                            role="combobox"
-                                            aria-expanded={isUserPopoverOpen}
-                                            className="w-full justify-between font-normal"
-                                        >
-                                            <span className="truncate">
-                                                {selectedUserId
-                                                    ? users.find(u => u.id.toString() === selectedUserId)?.name || "Select employee..."
-                                                    : "All Employees"}
-                                            </span>
-                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                        </Button>
-                                    </PopoverTrigger>
-                                    <PopoverContent className="w-full p-0" align="start">
-                                        <Command shouldFilter={false}>
-                                            <CommandInput
-                                                placeholder="Search employee..."
-                                                value={userSearchQuery}
-                                                onValueChange={setUserSearchQuery}
-                                            />
-                                            <CommandList>
-                                                <CommandEmpty>No employee found.</CommandEmpty>
-                                                <CommandGroup>
-                                                    <CommandItem
-                                                        value="all"
-                                                        onSelect={() => {
-                                                            setSelectedUserId("");
-                                                            setIsUserPopoverOpen(false);
-                                                            setUserSearchQuery("");
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"}`}
-                                                        />
-                                                        All Employees
-                                                    </CommandItem>
-                                                    {filteredUsers.map((user) => (
-                                                        <CommandItem
-                                                            key={user.id}
-                                                            value={user.name}
-                                                            onSelect={() => {
-                                                                setSelectedUserId(user.id.toString());
-                                                                setIsUserPopoverOpen(false);
-                                                                setUserSearchQuery("");
-                                                            }}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Check
-                                                                className={`mr-2 h-4 w-4 ${selectedUserId === user.id.toString()
-                                                                    ? "opacity-100"
-                                                                    : "opacity-0"
-                                                                    }`}
-                                                            />
-                                                            {user.name}
-                                                        </CommandItem>
-                                                    ))}
-                                                </CommandGroup>
-                                            </CommandList>
-                                        </Command>
-                                    </PopoverContent>
-                                </Popover>
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                    className="pl-8"
+                                />
                             </div>
-                            <Select value={medicationType} onValueChange={setMedicationType}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Medication Type" />
+
+                            <Select value={status} onValueChange={setStatus}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All statuses" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Medications</SelectItem>
+                                    <SelectItem value="all">All statuses</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="approved">Approved</SelectItem>
+                                    <SelectItem value="dispensed">Dispensed</SelectItem>
+                                    <SelectItem value="rejected">Rejected</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={medicationType} onValueChange={setMedicationType}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All medication types" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All medication types</SelectItem>
                                     {medicationTypes.map((type) => (
                                         <SelectItem key={type} value={type}>
                                             {type}
@@ -263,178 +209,106 @@ export default function Index({ medicationRequests, filters, medicationTypes, us
                                     ))}
                                 </SelectContent>
                             </Select>
-                            <Select value={status} onValueChange={setStatus}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Statuses</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="approved">Approved</SelectItem>
-                                    <SelectItem value="dispensed">Dispensed</SelectItem>
-                                    <SelectItem value="rejected">Rejected</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <Button onClick={handleSearch}>
-                                <Search className="mr-2 h-4 w-4" />
-                                Search
+                        </div>
+
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button variant="outline" onClick={handleSearch} className="flex-1 sm:flex-none">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
                             </Button>
-                            {(selectedUserId || status || medicationType) && (
-                                <Button onClick={clearFilters} variant="outline">
-                                    <X className="mr-2 h-4 w-4" />
-                                    Clear
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
+                                    Reset
                                 </Button>
                             )}
-                        </div>
-                    </CardContent>
-                </Card>
 
-                {/* Table */}
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
+                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Refresh
+                            </Button>
+
+                            <Can permission="medication_requests.create">
+                                <Link href={medicationCreateRoute().url} className="flex-1 sm:flex-none">
+                                    <Button className="w-full sm:w-auto">
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        New Request
+                                    </Button>
+                                </Link>
+                            </Can>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            {summaryText}
+                            {showClearFilters && hasResults && ' (filtered)'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                    </div>
+                </div>
+
+                <div className="overflow-hidden rounded-md border bg-card">
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Employee Name</TableHead>
+                                    <TableHead>Email</TableHead>
+                                    <TableHead>Medication Type</TableHead>
+                                    <TableHead>Onset of Symptoms</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Requested Date</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {medicationRequests.data.length === 0 ? (
                                     <TableRow>
-                                        <TableHead>Employee Name</TableHead>
-                                        <TableHead>Medication Type</TableHead>
-                                        <TableHead>Onset of Symptoms</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Requested Date</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
+                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                            No medication requests found
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {medicationRequests.data.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
-                                                No medication requests found
+                                ) : (
+                                    medicationRequests.data.map((request) => (
+                                        <TableRow key={request.id}>
+                                            <TableCell className="font-medium">{request.name}</TableCell>
+                                            <TableCell>{request.work_email}</TableCell>
+                                            <TableCell>{request.medication_type}</TableCell>
+                                            <TableCell className="capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</TableCell>
+                                            <TableCell>{getStatusBadge(request.status)}</TableCell>
+                                            <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Link href={medicationShowRoute(request.id).url}>
+                                                        <Button variant="ghost" size="sm">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </Link>
+                                                    <Can permission="medication_requests.delete">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDelete(request.id)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4 text-red-600" />
+                                                        </Button>
+                                                    </Can>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
-                                    ) : (
-                                        medicationRequests.data.map((request) => (
-                                            <TableRow key={request.id}>
-                                                <TableCell className="font-medium">{request.name}</TableCell>
-                                                <TableCell>{request.medication_type}</TableCell>
-                                                <TableCell className="capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</TableCell>
-                                                <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                                <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        {canViewActions && (
-                                                            <Link href={`/form-requests/medication-requests/${request.id}`}>
-                                                                <Button variant="ghost" size="sm">
-                                                                    <Eye className="h-4 w-4" />
-                                                                </Button>
-                                                            </Link>
-                                                        )}
-                                                        {request.user && request.user.name === auth.user?.name && request.status === 'pending' && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => setCancelId(request.id)}
-                                                            >
-                                                                <XCircle className="h-4 w-4 text-orange-600" />
-                                                            </Button>
-                                                        )}
-                                                        {canViewActions && (
-                                                            <Can permission="medication_requests.delete">
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="sm"
-                                                                    onClick={() => setDeleteId(request.id)}
-                                                                >
-                                                                    <Trash2 className="h-4 w-4 text-red-600" />
-                                                                </Button>
-                                                            </Can>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
+
+                    {paginationLinks.length > 0 && (
+                        <div className="border-t px-4 py-3 flex justify-center">
+                            <PaginationNav links={paginationLinks} />
                         </div>
-
-                        {/* Pagination */}
-                        {medicationRequests.last_page > 1 && (
-                            <div className="flex items-center justify-between mt-6">
-                                <p className="text-sm text-muted-foreground">
-                                    Showing {((medicationRequests.current_page - 1) * medicationRequests.per_page) + 1} to{' '}
-                                    {Math.min(medicationRequests.current_page * medicationRequests.per_page, medicationRequests.total)} of{' '}
-                                    {medicationRequests.total} results
-                                </p>
-                                <div className="flex gap-2">
-                                    {medicationRequests.current_page > 1 && (
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => router.get(`/form-requests/medication-requests?page=${medicationRequests.current_page - 1}`, {
-                                                search: selectedUserId || undefined,
-                                                status: status && status !== 'all' ? status : undefined,
-                                                medication_type: medicationType && medicationType !== 'all' ? medicationType : undefined,
-                                            })}
-                                        >
-                                            Previous
-                                        </Button>
-                                    )}
-                                    {medicationRequests.current_page < medicationRequests.last_page && (
-                                        <Button
-                                            variant="outline"
-                                            onClick={() => router.get(`/form-requests/medication-requests?page=${medicationRequests.current_page + 1}`, {
-                                                search: selectedUserId || undefined,
-                                                status: status && status !== 'all' ? status : undefined,
-                                                medication_type: medicationType && medicationType !== 'all' ? medicationType : undefined,
-                                            })}
-                                        >
-                                            Next
-                                        </Button>
-                                    )}
-                                </div>
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
-
-                <AlertDialog open={deleteId !== null} onOpenChange={() => setDeleteId(null)}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Delete Medication Request</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Are you sure you want to delete this medication request? This action cannot be undone.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={() => deleteId && handleDelete(deleteId)}
-                                className="bg-red-600 hover:bg-red-700"
-                            >
-                                Delete
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
-
-                <AlertDialog open={cancelId !== null} onOpenChange={() => setCancelId(null)}>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                            <AlertDialogTitle>Cancel Medication Request</AlertDialogTitle>
-                            <AlertDialogDescription>
-                                Are you sure you want to cancel this medication request? This action cannot be undone.
-                            </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                            <AlertDialogCancel>No, Keep it</AlertDialogCancel>
-                            <AlertDialogAction
-                                onClick={() => cancelId && handleCancel(cancelId)}
-                                className="bg-orange-600 hover:bg-orange-700"
-                            >
-                                Yes, Cancel Request
-                            </AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+                    )}
+                </div>
             </div>
         </AppLayout>
     );

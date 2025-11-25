@@ -9,8 +9,11 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Can } from '@/components/authorization';
+import { index as attendanceIndex } from '@/routes/attendance';
+import biometricExportRoutes, { index as biometricExportIndex } from '@/routes/biometric-export';
 
 interface User {
     id: number;
@@ -27,8 +30,8 @@ export default function Export({ users, sites }: { users: User[]; sites: Site[] 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Export Records',
         breadcrumbs: [
-            { title: 'Attendance', href: '/attendance' },
-            { title: 'Export Records', href: '/biometric-export' },
+            { title: 'Attendance', href: attendanceIndex().url },
+            { title: 'Export Records', href: biometricExportIndex().url },
         ],
     });
 
@@ -62,7 +65,7 @@ export default function Export({ users, sites }: { users: User[]; sites: Site[] 
         selectedSites.forEach(id => params.append('site_ids[]', id.toString()));
 
         // Trigger download via direct link
-        const url = `/biometric-export/export?${params.toString()}`;
+        const url = `${biometricExportRoutes.export.url()}?${params.toString()}`;
         window.location.href = url;
 
         // Reset loading state after a short delay
@@ -145,15 +148,18 @@ export default function Export({ users, sites }: { users: User[]; sites: Site[] 
 
                             <div className="space-y-2">
                                 <Label htmlFor="export-format">Export Format</Label>
-                                <select
-                                    id="export-format"
+                                <Select
                                     value={exportFormat}
-                                    onChange={(e) => setExportFormat(e.target.value as 'csv' | 'xlsx')}
-                                    className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    onValueChange={(value: 'csv' | 'xlsx') => setExportFormat(value)}
                                 >
-                                    <option value="csv">CSV (Comma-Separated Values)</option>
-                                    <option value="xlsx">Excel (XLSX)</option>
-                                </select>
+                                    <SelectTrigger id="export-format" className="w-full">
+                                        <SelectValue placeholder="Select format" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="csv">CSV (Comma-Separated Values)</SelectItem>
+                                        <SelectItem value="xlsx">Excel (XLSX)</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
 
                             <div className="space-y-3">

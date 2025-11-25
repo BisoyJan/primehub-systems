@@ -23,6 +23,7 @@ class ItConcernRequest extends FormRequest
             'site_id' => ['required', 'exists:sites,id'],
             'station_number' => ['required', 'string', 'max:50'],
             'category' => ['required', 'in:Hardware,Software,Network/Connectivity,Other'],
+            'priority' => ['required', 'in:low,medium,high,urgent'],
             'description' => ['required', 'string', 'max:1000'],
         ];
 
@@ -45,6 +46,7 @@ class ItConcernRequest extends FormRequest
             'site_id' => 'site',
             'station_number' => 'station number',
             'category' => 'category',
+            'priority' => 'priority',
             'description' => 'description',
             'resolution_notes' => 'resolution notes',
         ];
@@ -60,6 +62,8 @@ class ItConcernRequest extends FormRequest
             'station_number.required' => 'The station number is required.',
             'category.required' => 'Please select a category.',
             'category.in' => 'Invalid category selected.',
+            'priority.required' => 'Please select a priority level.',
+            'priority.in' => 'Invalid priority level selected.',
             'description.required' => 'Please provide a description of the IT concern.',
             'description.max' => 'The description may not be greater than 1000 characters.',
         ];

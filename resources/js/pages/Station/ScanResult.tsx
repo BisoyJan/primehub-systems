@@ -1,7 +1,15 @@
 import { useEffect, useState } from "react";
-import { Head } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
+import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import {
+    index as stationsIndexRoute,
+    edit as stationsEditRoute,
+} from "@/routes/stations";
+import { transferPage } from "@/routes/pc-transfers";
 
 interface Monitor {
     id: number;
@@ -45,30 +53,45 @@ interface Station {
 export default function ScanResult({ stationId, station: initialStation, error: initialError }: { stationId?: number, station?: Station, error?: string }) {
     const [station, setStation] = useState<Station | null>(initialStation ?? null);
     const [error, setError] = useState<string | null>(initialError ?? null);
+    const [isFetching, setIsFetching] = useState(false);
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: station ? `Station #${station.station_number}` : "Station Scan",
+        breadcrumbs: [{ title: "Stations", href: stationsIndexRoute().url }],
+    });
 
     useEffect(() => {
         if (!station && !error && stationId) {
+            setIsFetching(true);
             fetch(`/stations/${stationId}/json`)
                 .then(res => {
                     if (!res.ok) throw new Error('Not found');
                     return res.json();
                 })
                 .then(setStation)
-                .catch(() => setError('Station not found or you are not authorized.'));
+                .catch(() => setError('Station not found or you are not authorized.'))
+                .finally(() => setIsFetching(false));
         }
     }, [stationId, station, error]);
 
 
-    if (error) return (
-        <div className="p-8 text-center text-red-600 text-base sm:text-lg md:text-xl">{error}</div>
-    );
-    if (!station) return (
-        <div className="p-8 text-center text-base sm:text-lg md:text-xl">Loading...</div>
-    );
+    const renderContent = () => {
+        if (error) {
+            return (
+                <div className="p-8 text-center text-red-600 text-base sm:text-lg md:text-xl">{error}</div>
+            );
+        }
 
-    return (
-        <AppLayout>
-            <Head title={`Station #${station.station_number}`} />
+        if (!station) {
+            return (
+                <div className="p-8 text-center text-base sm:text-lg md:text-xl">Loading...</div>
+            );
+        }
+
+        return (
             <div className="mx-auto mt-4 sm:mt-8 w-full max-w-md sm:max-w-lg md:max-w-2xl lg:max-w-3xl px-1 sm:px-4 md:px-8">
                 <div className="bg-card border rounded-lg shadow p-2 sm:p-4 md:p-6 space-y-4">
                     <div className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-500 text-center">Station #{station.station_number}</div>
@@ -103,29 +126,33 @@ export default function ScanResult({ stationId, station: initialStation, error: 
                     <div className="flex flex-col sm:flex-row gap-3 mt-6">
                         <Button
                             className="w-full sm:w-auto sm:flex-1 text-base sm:text-lg md:text-xl py-3"
-                            onClick={() => window.location.href = `/stations/${station.id}/edit`}
+                            onClick={() => router.get(stationsEditRoute(station.id).url)}
                         >
                             Edit Station
                         </Button>
-                        {!station.pcSpec ? (
-                            <Button
-                                className="w-full sm:w-auto sm:flex-1 text-base sm:text-lg md:text-xl py-3"
-                                variant="outline"
-                                onClick={() => window.location.href = `/pc-transfers/transfer/${station.id}`}
-                            >
-                                Assign PC
-                            </Button>
-                        ) : (
-                            <Button
-                                className="w-full sm:w-auto sm:flex-1 text-base sm:text-lg md:text-xl py-3"
-                                variant="outline"
-                                onClick={() => window.location.href = `/pc-transfers/transfer/${station.id}`}
-                            >
-                                Transfer PC
-                            </Button>
-                        )}
+                        <Button
+                            className="w-full sm:w-auto sm:flex-1 text-base sm:text-lg md:text-xl py-3"
+                            variant="outline"
+                            onClick={() => router.visit(transferPage(station.id).url)}
+                        >
+                            {station.pcSpec ? 'Transfer PC' : 'Assign PC'}
+                        </Button>
                     </div>
                 </div>
+            </div>
+        );
+    };
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
+            <div className="relative">
+                <LoadingOverlay isLoading={isPageLoading || isFetching} />
+                <PageHeader
+                    title={station ? `Station #${station.station_number}` : "Station Scan Result"}
+                    description={station ? 'Live station details from QR scan' : 'Fetching station details...'}
+                />
+                {renderContent()}
             </div>
         </AppLayout>
     );

@@ -1,5 +1,6 @@
-import { Head, usePage, Link } from '@inertiajs/react';
-import { ArrowLeft, Clock } from 'lucide-react';
+import { Head, Link, router } from '@inertiajs/react';
+import { useState, useMemo } from 'react';
+import { ArrowLeft, Clock, RefreshCw } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -20,13 +21,14 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-
-import type { BreadcrumbItem } from '@/types';
-import { index as pcTransfersIndex } from '@/routes/pc-transfers';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'PC Transfer History', href: `${pcTransfersIndex().url}/history` }
-];
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import {
+    history as pcTransfersHistoryRoute,
+    index as pcTransfersIndexRoute,
+} from '@/routes/pc-transfers';
+import { index as stationsIndexRoute } from '@/routes/stations';
 
 type Transfer = {
     id: number;
@@ -54,9 +56,51 @@ type PageProps = {
     transfers: TransfersPayload;
 };
 
-export default function History() {
-    const page = usePage<PageProps>();
-    const { transfers } = page.props;
+export default function History({ transfers }: PageProps) {
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'PC Transfer History',
+        breadcrumbs: [
+            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'PC Transfer', href: pcTransfersIndexRoute().url },
+            { title: 'History', href: pcTransfersHistoryRoute().url },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+    const summary = useMemo(() => {
+        const showingStart = transfers.data.length > 0
+            ? transfers.meta.per_page * (transfers.meta.current_page - 1) + 1
+            : 0;
+        const showingEnd = transfers.data.length > 0
+            ? showingStart + transfers.data.length - 1
+            : 0;
+        return transfers.data.length > 0
+            ? `Showing ${showingStart}-${showingEnd} of ${transfers.meta.total} transfers`
+            : 'No transfers to display';
+    }, [transfers]);
+
+    const handlePaginate = (pageNumber: number) => {
+        router.get(pcTransfersHistoryRoute().url, { page: pageNumber }, {
+            preserveScroll: true,
+            preserveState: true,
+            replace: true,
+            only: ['transfers'],
+        });
+    };
+
+    const handleRefresh = () => {
+        router.get(pcTransfersHistoryRoute().url, {}, {
+            preserveScroll: true,
+            preserveState: true,
+            replace: true,
+            only: ['transfers'],
+            onSuccess: () => setLastRefresh(new Date()),
+        });
+    };
 
     function getTransferTypeVariant(type: string): 'default' | 'secondary' | 'destructive' | 'outline' {
         switch (type) {
@@ -73,18 +117,28 @@ export default function History() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="PC Transfer History" />
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
-                <div className="flex items-center justify-between gap-3">
-                    <h2 className="text-2xl font-bold">PC Transfer History</h2>
-                    <Link href="/pc-transfers">
-                        <Button variant="outline">
-                            <ArrowLeft className="mr-2 h-4 w-4" />
-                            Back to Transfers
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+                <LoadingOverlay isLoading={isPageLoading} />
+
+                <PageHeader
+                    title="PC Transfer History"
+                    description="Complete log of assignments, swaps, and removals"
+                >
+                    <div className="flex items-center gap-2">
+                        <Button variant="ghost" onClick={handleRefresh}>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            Refresh
                         </Button>
-                    </Link>
-                </div>
+                        <Link href={pcTransfersIndexRoute().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to Transfers
+                            </Button>
+                        </Link>
+                    </div>
+                </PageHeader>
 
                 <Card>
                     <CardHeader>
@@ -168,26 +222,19 @@ export default function History() {
                             </Table>
                         </div>
 
-                        {/* Stats */}
-                        <div className="mt-4 flex items-center justify-between text-sm text-muted-foreground">
-                            <div>
-                                Showing {transfers.data.length} of {transfers.meta.total} transfers
-                            </div>
-                            <div>
-                                Page {transfers.meta.current_page} of {transfers.meta.last_page}
-                            </div>
+                        <div className="mt-4 flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                            <span>{summary}</span>
+                            <span className="text-xs">Last updated: {lastRefresh.toLocaleTimeString()}</span>
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Pagination */}
                 {transfers.links && transfers.links.length > 0 && (
                     <div className="flex justify-center mt-4">
                         <PaginationNav
                             links={transfers.links}
-                            onPageChange={(page) => {
-                                window.location.href = `/pc-transfers/history?page=${page}`;
-                            }}
+                            onPageChange={handlePaginate}
+                            only={['transfers']}
                         />
                     </div>
                 )}

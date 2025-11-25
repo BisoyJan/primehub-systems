@@ -17,6 +17,11 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
+import {
+    index as employeeSchedulesIndex,
+    create as employeeSchedulesCreate,
+    store as employeeSchedulesStore,
+} from "@/routes/employee-schedules";
 
 interface User {
     id: number;
@@ -77,8 +82,8 @@ export default function EmployeeScheduleCreate() {
     const { title, breadcrumbs } = usePageMeta({
         title: "Create Employee Schedule",
         breadcrumbs: [
-            { title: "Employee Schedules", href: "/employee-schedules" },
-            { title: "Create", href: "" },
+            { title: "Employee Schedules", href: employeeSchedulesIndex().url },
+            { title: "Create", href: employeeSchedulesCreate().url },
         ],
     });
 
@@ -100,7 +105,7 @@ export default function EmployeeScheduleCreate() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post("/employee-schedules", {
+        post(employeeSchedulesStore().url, {
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
                 toast.error(firstError || "Failed to create employee schedule");
@@ -359,7 +364,7 @@ export default function EmployeeScheduleCreate() {
                                 <Button
                                     type="button"
                                     variant="outline"
-                                    onClick={() => router.get("/employee-schedules")}
+                                    onClick={() => router.get(employeeSchedulesIndex().url)}
                                 >
                                     Cancel
                                 </Button>

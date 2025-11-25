@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
+import { ArrowLeft } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -12,10 +13,14 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { ArrowLeft } from 'lucide-react';
-
-import { useFlashMessage } from '@/hooks';
-import { update, index } from '@/routes/processorspecs';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import {
+    update as processorSpecsUpdateRoute,
+    index as processorSpecsIndexRoute,
+    edit as processorSpecsEditRoute,
+} from '@/routes/processorspecs';
 
 const intelSockets = ['LGA1151', 'LGA1200', 'LGA1700'];
 const amdSockets = ['AM3+', 'AM4', 'AM5', 'TR4', 'sTRX4'];
@@ -38,9 +43,17 @@ interface Props {
 }
 
 export default function Edit({ processorspec }: Props) {
-    useFlashMessage(); // Automatically handles flash messages
+    useFlashMessage();
 
-    const { data, setData, put, errors } = useForm({
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Edit Processor Specification',
+        breadcrumbs: [
+            { title: 'Processor Specifications', href: processorSpecsIndexRoute().url },
+            { title: 'Edit', href: processorSpecsEditRoute({ processorspec: processorspec.id }).url },
+        ],
+    });
+
+    const { data, setData, put, errors, processing } = useForm({
         manufacturer: processorspec.manufacturer,
         model: processorspec.model,
         socket_type: processorspec.socket_type,
@@ -61,31 +74,40 @@ export default function Edit({ processorspec }: Props) {
 
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
-        put(update.url(processorspec.id));
+        put(processorSpecsUpdateRoute({ processorspec: processorspec.id }).url);
     };
 
+    const isPageLoading = usePageLoading();
+
     return (
-        <AppLayout breadcrumbs={[
-            { title: 'Processor Specifications', href: index().url },
-            { title: 'Edit', href: '#' }
-        ]}>
-            <Head title="Edit Processor Specification" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={index.url()}>
-                        <Button>
-                            <ArrowLeft /> Return
-                        </Button>
-                    </Link>
-                </div>
+            <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Updating processor spec...' : undefined}
+                />
 
-                <form onSubmit={handleUpdate} className="grid grid-cols-2 gap-4">
+                <PageHeader
+                    title="Edit Processor Specification"
+                    description={`${processorspec.manufacturer} ${processorspec.model}`}
+                    actions={(
+                        <Link href={processorSpecsIndexRoute().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
+
+                <form onSubmit={handleUpdate} className="grid grid-cols-1 gap-4 md:grid-cols-2">
 
 
                     {/* Row 1: manufacturer & model */}
                     <div>
-                        <Label htmlFor="manufacturer">manufacturer</Label>
+                        <Label htmlFor="manufacturer">Manufacturer</Label>
                         <Select
                             value={data.manufacturer}
                             onValueChange={(val) => {
@@ -102,10 +124,10 @@ export default function Edit({ processorspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
+                        {errors.manufacturer && <p className="mt-1 text-sm text-red-600">{errors.manufacturer}</p>}
                     </div>
                     <div>
-                        <Label htmlFor="model">model</Label>
+                        <Label htmlFor="model">Model</Label>
                         <Input
                             id="model"
                             name="model"
@@ -113,7 +135,7 @@ export default function Edit({ processorspec }: Props) {
                             value={data.model}
                             onChange={(e) => setData('model', e.target.value)}
                         />
-                        {errors.model && <p className="text-red-600">{errors.model}</p>}
+                        {errors.model && <p className="mt-1 text-sm text-red-600">{errors.model}</p>}
                     </div>
 
                     {/* Row 2: Socket & Cores */}
@@ -132,7 +154,7 @@ export default function Edit({ processorspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.socket_type && <p className="text-red-600">{errors.socket_type}</p>}
+                        {errors.socket_type && <p className="mt-1 text-sm text-red-600">{errors.socket_type}</p>}
                     </div>
                     <div>
                         <Label htmlFor="core_count">Core Count</Label>
@@ -145,7 +167,7 @@ export default function Edit({ processorspec }: Props) {
                             value={data.core_count}
                             onChange={(e) => setData('core_count', Number(e.target.value))}
                         />
-                        {errors.core_count && <p className="text-red-600">{errors.core_count}</p>}
+                        {errors.core_count && <p className="mt-1 text-sm text-red-600">{errors.core_count}</p>}
                     </div>
 
                     {/* Row 3: Threads & Base Clock */}
@@ -160,7 +182,7 @@ export default function Edit({ processorspec }: Props) {
                             value={data.thread_count}
                             onChange={(e) => setData('thread_count', Number(e.target.value))}
                         />
-                        {errors.thread_count && <p className="text-red-600">{errors.thread_count}</p>}
+                        {errors.thread_count && <p className="mt-1 text-sm text-red-600">{errors.thread_count}</p>}
                     </div>
                     <div>
                         <Label htmlFor="base_clock_ghz">Base Clock (GHz)</Label>
@@ -174,7 +196,7 @@ export default function Edit({ processorspec }: Props) {
                             value={data.base_clock_ghz}
                             onChange={(e) => setData('base_clock_ghz', Number(e.target.value))}
                         />
-                        {errors.base_clock_ghz && <p className="text-red-600">{errors.base_clock_ghz}</p>}
+                        {errors.base_clock_ghz && <p className="mt-1 text-sm text-red-600">{errors.base_clock_ghz}</p>}
                     </div>
 
                     {/* Row 4: Boost Clock & Integrated Graphics */}
@@ -190,7 +212,7 @@ export default function Edit({ processorspec }: Props) {
                             value={data.boost_clock_ghz}
                             onChange={(e) => setData('boost_clock_ghz', Number(e.target.value))}
                         />
-                        {errors.boost_clock_ghz && <p className="text-red-600">{errors.boost_clock_ghz}</p>}
+                        {errors.boost_clock_ghz && <p className="mt-1 text-sm text-red-600">{errors.boost_clock_ghz}</p>}
                     </div>
                     <div>
                         <Label htmlFor="integrated_graphics">Integrated Graphics</Label>
@@ -201,7 +223,9 @@ export default function Edit({ processorspec }: Props) {
                             value={data.integrated_graphics}
                             onChange={(e) => setData('integrated_graphics', e.target.value)}
                         />
-                        {errors.integrated_graphics && (<p className="text-red-600">{errors.integrated_graphics}</p>)}
+                        {errors.integrated_graphics && (
+                            <p className="mt-1 text-sm text-red-600">{errors.integrated_graphics}</p>
+                        )}
                     </div>
 
                     {/* Row 5: TDP */}
@@ -216,10 +240,12 @@ export default function Edit({ processorspec }: Props) {
                             value={data.tdp_watts}
                             onChange={(e) => setData('tdp_watts', Number(e.target.value))}
                         />
-                        {errors.tdp_watts && <p className="text-red-600">{errors.tdp_watts}</p>}
+                        {errors.tdp_watts && <p className="mt-1 text-sm text-red-600">{errors.tdp_watts}</p>}
                     </div>
-                    <div className="flex items-end justify-end">
-                        <Button type="submit">Edit Processor Spec</Button>
+                    <div className="md:col-span-2 flex justify-end">
+                        <Button type="submit" disabled={processing}>
+                            {processing ? 'Saving...' : 'Update Processor Spec'}
+                        </Button>
                     </div>
                 </form>
             </div>

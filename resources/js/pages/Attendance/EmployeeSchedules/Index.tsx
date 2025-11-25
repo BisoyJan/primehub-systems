@@ -21,7 +21,14 @@ import { Check, ChevronsUpDown } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, XCircle } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, XCircle, RefreshCw, Search } from "lucide-react";
+import {
+    index as employeeSchedulesIndex,
+    create as employeeSchedulesCreate,
+    edit as employeeSchedulesEdit,
+    destroy as employeeSchedulesDestroy,
+    toggleActive as employeeSchedulesToggleActive,
+} from "@/routes/employee-schedules";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -142,7 +149,7 @@ export default function EmployeeSchedulesIndex() {
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Employee Schedules",
-        breadcrumbs: [{ title: "Employee Schedules", href: "/employee-schedules" }],
+        breadcrumbs: [{ title: "Employee Schedules", href: employeeSchedulesIndex().url }],
     });
 
     useFlashMessage();
@@ -150,18 +157,17 @@ export default function EmployeeSchedulesIndex() {
 
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(appliedFilters.search || "");
-    const [debouncedSearch, setDebouncedSearch] = useState(appliedFilters.search || "");
     const [userFilter, setUserFilter] = useState(appliedFilters.user_id || "all");
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [campaignFilter, setCampaignFilter] = useState(appliedFilters.campaign_id || "all");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
     const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
     // Update local state when filters prop changes (e.g., when navigating back)
     useEffect(() => {
         setSearch(appliedFilters.search || "");
-        setDebouncedSearch(appliedFilters.search || "");
         setUserFilter(appliedFilters.user_id || "all");
         setCampaignFilter(appliedFilters.campaign_id || "all");
         setStatusFilter(appliedFilters.is_active || "all");
@@ -171,34 +177,27 @@ export default function EmployeeSchedulesIndex() {
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [scheduleToDelete, setScheduleToDelete] = useState<number | null>(null);
 
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 500);
-        return () => clearTimeout(timer);
-    }, [search]);
-
-    const isInitialMount = React.useRef(true);
-
-    useEffect(() => {
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            return;
-        }
-
+    const handleSearch = () => {
         const params: Record<string, string> = {};
-        if (debouncedSearch) params.search = debouncedSearch;
+        if (search) params.search = search;
         if (userFilter !== "all") params.user_id = userFilter;
         if (campaignFilter !== "all") params.campaign_id = campaignFilter;
         if (statusFilter !== "all") params.is_active = statusFilter;
         if (activeOnly) params.active_only = "1";
 
         setLoading(true);
-        router.get("/employee-schedules", params, {
+        router.get(employeeSchedulesIndex().url, params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, userFilter, campaignFilter, statusFilter, activeOnly]);
+    };
+
+    const handleManualRefresh = () => {
+        handleSearch();
+    };
 
     const showClearFilters =
         userFilter !== "all" ||
@@ -213,10 +212,20 @@ export default function EmployeeSchedulesIndex() {
         setCampaignFilter("all");
         setStatusFilter("all");
         setActiveOnly(false);
+
+        // Trigger reload with cleared filters
+        setLoading(true);
+        router.get(employeeSchedulesIndex().url, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
     };
 
     const handleToggleActive = (scheduleId: number) => {
-        router.post(`/employee-schedules/${scheduleId}/toggle-active`, {}, {
+        router.post(employeeSchedulesToggleActive({ employeeSchedule: scheduleId }).url, {}, {
             preserveScroll: true,
         });
     };
@@ -228,7 +237,7 @@ export default function EmployeeSchedulesIndex() {
 
     const confirmDelete = () => {
         if (scheduleToDelete) {
-            router.delete(`/employee-schedules/${scheduleToDelete}`, {
+            router.delete(employeeSchedulesDestroy({ employee_schedule: scheduleToDelete }).url, {
                 preserveScroll: true,
                 onSuccess: () => {
                     setDeleteDialogOpen(false);
@@ -250,7 +259,7 @@ export default function EmployeeSchedulesIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="w-full">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                         <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                             <PopoverTrigger asChild>
                                 <Button
@@ -324,9 +333,6 @@ export default function EmployeeSchedulesIndex() {
                                 </Command>
                             </PopoverContent>
                         </Popover>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 
                         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
                             <SelectTrigger className="w-full">
@@ -361,29 +367,44 @@ export default function EmployeeSchedulesIndex() {
                             <CheckCircle className="mr-2 h-4 w-4" />
                             Active Only
                         </Button>
-
-                        {showClearFilters && (
-                            <Button variant="outline" onClick={clearFilters} className="w-full">
-                                Clear Filters
-                            </Button>
-                        )}
                     </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <Can permission="schedules.create">
-                            <Button onClick={() => router.get("/employee-schedules/create")}>
+                            <Button onClick={() => router.get(employeeSchedulesCreate().url)} className="w-full sm:w-auto">
                                 <Plus className="mr-2 h-4 w-4" />
                                 Add Employee Schedule
                             </Button>
                         </Can>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:flex-1">
+                            <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
+                                <Search className="mr-2 h-4 w-4" />
+                                Apply Filters
+                            </Button>
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+                                    Clear Filters
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} className="w-full sm:w-auto">
+                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                <div className="flex justify-between items-center text-sm">
-                    <div className="text-muted-foreground">
+                <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <div>
                         Showing {scheduleData.data.length} of {scheduleData.meta.total} schedule
                         {scheduleData.meta.total === 1 ? "" : "s"}
                         {showClearFilters ? " (filtered)" : ""}
+                    </div>
+                    <div className="text-xs">
+                        Last updated: {lastRefresh.toLocaleTimeString()}
                     </div>
                 </div>
 
@@ -435,7 +456,7 @@ export default function EmployeeSchedulesIndex() {
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => router.get(`/employee-schedules/${schedule.id}/edit`)}
+                                                        onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
                                                     >
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
@@ -518,7 +539,7 @@ export default function EmployeeSchedulesIndex() {
                                     variant="outline"
                                     size="sm"
                                     className="flex-1"
-                                    onClick={() => router.get(`/employee-schedules/${schedule.id}/edit`)}
+                                    onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
                                 >
                                     <Edit className="mr-2 h-4 w-4" />
                                     Edit

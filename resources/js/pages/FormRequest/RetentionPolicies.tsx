@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
@@ -15,6 +16,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Can } from '@/components/authorization';
+import {
+    index as retentionPoliciesIndexRoute,
+    store as retentionPoliciesStoreRoute,
+    update as retentionPoliciesUpdateRoute,
+    destroy as retentionPoliciesDestroyRoute,
+    toggle as retentionPoliciesToggleRoute,
+} from '@/routes/form-requests/retention-policies';
 
 interface Site {
     id: number;
@@ -50,7 +58,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
         title: 'Form Request Retention Policies',
         breadcrumbs: [
             { title: 'Form Requests', href: '/form-requests' },
-            { title: 'Retention Policies', href: '/form-requests/retention-policies' },
+            { title: 'Retention Policies', href: retentionPoliciesIndexRoute().url },
         ],
     });
 
@@ -121,7 +129,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
         };
 
         if (editingPolicy) {
-            router.put(`/form-requests/retention-policies/${editingPolicy.id}`, payload, {
+            router.put(retentionPoliciesUpdateRoute(editingPolicy.id).url, payload, {
                 onSuccess: () => {
                     setIsDialogOpen(false);
                     resetForm();
@@ -129,7 +137,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                 onFinish: () => setIsSubmitting(false),
             });
         } else {
-            router.post('/form-requests/retention-policies', payload, {
+            router.post(retentionPoliciesStoreRoute().url, payload, {
                 onSuccess: () => {
                     setIsDialogOpen(false);
                     resetForm();
@@ -144,11 +152,11 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
             return;
         }
 
-        router.delete(`/form-requests/retention-policies/${policyId}`);
+        router.delete(retentionPoliciesDestroyRoute(policyId).url);
     };
 
     const handleToggle = (policyId: number) => {
-        router.post(`/form-requests/retention-policies/${policyId}/toggle`);
+        router.post(retentionPoliciesToggleRoute(policyId).url);
     };
 
     const getFormTypeBadge = (formType: string) => {
@@ -251,59 +259,67 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
 
                                     <div className="space-y-2">
                                         <Label htmlFor="form-type">Form Type *</Label>
-                                        <select
-                                            id="form-type"
+                                        <Select
                                             value={formData.form_type}
-                                            onChange={(e) => setFormData({
+                                            onValueChange={(value) => setFormData({
                                                 ...formData,
-                                                form_type: e.target.value as FormData['form_type']
+                                                form_type: value as FormData['form_type'],
                                             })}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
-                                            <option value="all">All Form Types</option>
-                                            <option value="leave_request">Leave Requests Only</option>
-                                            <option value="it_concern">IT Concerns Only</option>
-                                            <option value="medication_request">Medication Requests Only</option>
-                                        </select>
+                                            <SelectTrigger id="form-type" className="w-full">
+                                                <SelectValue placeholder="Select form type" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Form Types</SelectItem>
+                                                <SelectItem value="leave_request">Leave Requests Only</SelectItem>
+                                                <SelectItem value="it_concern">IT Concerns Only</SelectItem>
+                                                <SelectItem value="medication_request">Medication Requests Only</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     <div className="space-y-2">
                                         <Label htmlFor="applies-to-type">Applies To *</Label>
-                                        <select
-                                            id="applies-to-type"
+                                        <Select
                                             value={formData.applies_to_type}
-                                            onChange={(e) => setFormData({
+                                            onValueChange={(value) => setFormData({
                                                 ...formData,
-                                                applies_to_type: e.target.value as 'global' | 'site',
-                                                applies_to_id: e.target.value === 'global' ? null : formData.applies_to_id
+                                                applies_to_type: value as 'global' | 'site',
+                                                applies_to_id: value === 'global' ? null : formData.applies_to_id,
                                             })}
-                                            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                         >
-                                            <option value="global">All Sites (Global)</option>
-                                            <option value="site">Specific Site</option>
-                                        </select>
+                                            <SelectTrigger id="applies-to-type" className="w-full">
+                                                <SelectValue placeholder="Select scope" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="global">All Sites (Global)</SelectItem>
+                                                <SelectItem value="site">Specific Site</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     {formData.applies_to_type === 'site' && (
                                         <div className="space-y-2">
                                             <Label htmlFor="site">Select Site *</Label>
-                                            <select
-                                                id="site"
-                                                value={formData.applies_to_id || ''}
-                                                onChange={(e) => setFormData({
+                                            <Select
+                                                value={formData.applies_to_id ? String(formData.applies_to_id) : ''}
+                                                onValueChange={(value) => setFormData({
                                                     ...formData,
-                                                    applies_to_id: parseInt(e.target.value)
+                                                    applies_to_id: value ? parseInt(value, 10) : null,
                                                 })}
-                                                required
-                                                className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                             >
-                                                <option value="">Select a site...</option>
-                                                {sites.map((site) => (
-                                                    <option key={site.id} value={site.id}>
-                                                        {site.name}
-                                                    </option>
-                                                ))}
-                                            </select>
+                                                <SelectTrigger id="site" className="w-full">
+                                                    <SelectValue placeholder="Select a site..." />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="">Select a site...</SelectItem>
+                                                    {sites.map((site) => (
+                                                        <SelectItem key={site.id} value={String(site.id)}>
+                                                            {site.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
                                         </div>
                                     )}
 

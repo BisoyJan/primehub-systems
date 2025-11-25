@@ -569,7 +569,7 @@ export default function AttendanceReview() {
                                     <TableHeader>
                                         <TableRow>
                                             <TableHead className="w-12">
-                                                <input
+                                                <Input
                                                     type="checkbox"
                                                     checked={selectedRecords.size === attendanceData.data.length && attendanceData.data.length > 0}
                                                     onChange={handleSelectAll}
@@ -593,12 +593,12 @@ export default function AttendanceReview() {
                                                 key={record.id}
                                                 ref={highlightedRecordId === record.id ? highlightedRowRef as React.RefObject<HTMLTableRowElement> : null}
                                                 className={`transition-colors duration-300 ${highlightedRecordId === record.id
-                                                        ? 'bg-blue-100 dark:bg-blue-900/30'
-                                                        : ''
+                                                    ? 'bg-blue-100 dark:bg-blue-900/30'
+                                                    : ''
                                                     }`}
                                             >
                                                 <TableCell>
-                                                    <input
+                                                    <Input
                                                         type="checkbox"
                                                         checked={selectedRecords.has(record.id)}
                                                         onChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
@@ -721,12 +721,12 @@ export default function AttendanceReview() {
                                     key={record.id}
                                     ref={highlightedRecordId === record.id ? highlightedRowRef as React.RefObject<HTMLDivElement> : null}
                                     className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 transition-colors duration-300 ${highlightedRecordId === record.id
-                                            ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
-                                            : ''
+                                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/30'
+                                        : ''
                                         }`}
                                 >
                                     <div className="flex justify-between items-start">
-                                        <input
+                                        <Input
                                             type="checkbox"
                                             checked={selectedRecords.has(record.id)}
                                             onChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
@@ -896,7 +896,7 @@ export default function AttendanceReview() {
                         {hasOvertimeRecords() && (
                             <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                                 <div className="flex items-center gap-2">
-                                    <input
+                                    <Input
                                         type="checkbox"
                                         id="batch_overtime_approved"
                                         checked={batchData.overtime_approved}
@@ -1324,7 +1324,7 @@ export default function AttendanceReview() {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <input
+                                        <Input
                                             type="checkbox"
                                             id="overtime_approved"
                                             checked={data.overtime_approved}

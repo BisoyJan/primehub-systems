@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { router, usePage, useForm, Head } from "@inertiajs/react";
+import { router, useForm, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -7,12 +7,14 @@ import { Input } from "@/components/ui/input";
 import PcSpecTable from "@/components/PcSpecTable";
 import MonitorSpecTable from "@/components/MonitorSpecTable";
 import { toast } from "sonner";
-import type { BreadcrumbItem } from "@/types";
-import { index as stationsIndex } from "@/routes/stations";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: "Stations", href: stationsIndex().url }
-];
+import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import {
+    index as stationsIndexRoute,
+    edit as stationsEditRoute,
+    update as stationsUpdateRoute,
+} from "@/routes/stations";
 
 interface Site { id: number; name: string; }
 interface Campaign { id: number; name: string; }
@@ -54,8 +56,7 @@ interface StationEditProps {
     [key: string]: unknown;
 }
 
-export default function StationEdit() {
-    const { station, sites, campaigns, pcSpecs, usedPcSpecIds, monitorSpecs } = usePage<StationEditProps>().props;
+export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPcSpecIds, monitorSpecs }: StationEditProps) {
     const [showNoSpecWarning, setShowNoSpecWarning] = useState(false);
     const [showSpecSelectedInfo, setShowSpecSelectedInfo] = useState(false);
 
@@ -75,6 +76,17 @@ export default function StationEdit() {
         monitor_ids: initialMonitorIds as Array<{ id: number; quantity: number }>,
     });
 
+    const { title, breadcrumbs } = usePageMeta({
+        title: "Edit Station",
+        breadcrumbs: [
+            { title: "Stations", href: stationsIndexRoute().url },
+            { title: "Edit", href: stationsEditRoute(station.id).url },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+
     // Auto-hide messages after 6 seconds when PC spec selection changes
     useEffect(() => {
         const hasSpec = !!data.pc_spec_id;
@@ -91,10 +103,10 @@ export default function StationEdit() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(`/stations/${station.id}`, {
+        put(stationsUpdateRoute(station.id).url, {
             onSuccess: () => {
                 toast.success("Station updated");
-                router.get("/stations");
+                router.visit(stationsIndexRoute().url);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
@@ -105,9 +117,13 @@ export default function StationEdit() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit Station" />
-            <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6">
-                <h2 className="text-xl md:text-2xl font-semibold mb-4">Edit Station</h2>
+            <Head title={title} />
+            <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6 relative">
+                <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? "Saving station..." : undefined} />
+                <PageHeader
+                    title="Edit Station"
+                    description="Update assignment details, PC specs, and monitor configuration"
+                />
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
@@ -264,7 +280,14 @@ export default function StationEdit() {
                         <Button type="submit" disabled={processing} className="w-full sm:w-auto">
                             {processing ? "Saving..." : "Save"}
                         </Button>
-                        <Button variant="outline" type="button" onClick={() => router.get("/stations")} className="w-full sm:w-auto">Cancel</Button>
+                        <Button
+                            variant="outline"
+                            type="button"
+                            onClick={() => router.visit(stationsIndexRoute().url)}
+                            className="w-full sm:w-auto"
+                        >
+                            Cancel
+                        </Button>
                     </div>
                 </form>
             </div>

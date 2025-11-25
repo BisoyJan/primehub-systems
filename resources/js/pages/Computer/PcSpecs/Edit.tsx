@@ -12,15 +12,15 @@ import {
     SelectTrigger,
     SelectValue,
     SelectContent,
-    // SelectGroup,
-    // SelectLabel,
     SelectItem,
 } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
 
-import type { BreadcrumbItem } from '@/types';
-import { index as pcSpecIndex, update as pcSpecUpdate } from '@/routes/pcspecs';
+import { index as pcSpecIndex, update as pcSpecUpdate, edit as pcSpecEdit } from '@/routes/pcspecs';
 
 const memoryTypes = ['DDR3', 'DDR4', 'DDR5'];
 const ramSlotOptions = [1, 2, 4, 6, 8];
@@ -29,10 +29,6 @@ const sataPortOptions = [2, 4, 6, 8];
 const maxRamCapacityOptions = [16, 32, 64, 128, 256];
 const formFactorOptions = ['ATX', 'Micro-ATX', 'Mini-ITX'];
 //const ethernetSpeedOptions = ['1GbE', '2.5GbE', '5GbE', '10GbE'];
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Edit a PC Specification', href: pcSpecIndex().url },
-];
 
 interface Option {
     id: number;
@@ -81,10 +77,22 @@ interface Props {
     ramOptions: RamOption[];
     diskOptions: Option[];
     processorOptions: ProcessorOption[];
-    flash?: { message?: string; type?: string };
 }
 
-export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions, flash }: Props) {
+export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions }: Props) {
+    useFlashMessage();
+
+    const specLabel = pcspec.pc_number?.trim() || pcspec.model || `PC Spec #${pcspec.id}`;
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: `Edit ${specLabel}`,
+        breadcrumbs: [
+            { title: 'PC Specifications', href: pcSpecIndex().url },
+            { title: specLabel, href: pcSpecEdit({ pcspec: pcspec.id }).url },
+        ],
+    });
+
+    const isPageLoading = usePageLoading();
     // helper: build initial ram_specs (id => qty) from incoming motherboard data.
     // server may provide ramSpecs as [id, id...] or [{id, pivot:{quantity}}...]
     const initialRamSpecs = (() => {
@@ -113,7 +121,7 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
         return out;
     })();
 
-    const { data, setData, put, errors } = useForm({
+    const { data, setData, put, errors, processing } = useForm({
         pc_number: pcspec.pc_number ?? '',
         manufacturer: pcspec.manufacturer ?? '',
         model: pcspec.model ?? '',
@@ -143,13 +151,6 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
         [data.ram_specs]
     );
     const remainingRamSlots = data.ram_slots - totalRamSelected;
-
-    // flash messages
-    useEffect(() => {
-        if (!flash?.message) return;
-        if (flash.type === 'error') toast.error(flash.message);
-        else toast.success(flash.message);
-    }, [flash?.message, flash?.type]);
 
     // auto-prune incompatible ram selections when memory_type changes
     useEffect(() => {
@@ -188,7 +189,7 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
             return;
         }
 
-        put(pcSpecUpdate.url(pcspec.id));
+        put(pcSpecUpdate({ pcspec: pcspec.id }).url);
     }
 
     // RAM helpers (same vs different) - patched: capacity and stock checks, no quantity input in 'same' mode
@@ -252,13 +253,25 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit PC Spec" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={pcSpecIndex.url()}>
-                        <Button><ArrowLeft /> Return</Button>
-                    </Link>
-                </div>
+            <Head title={title} />
+            <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Updating PC specification...' : undefined}
+                />
+
+                <PageHeader
+                    title={title}
+                    description="Revise motherboard attributes and component pairings."
+                    actions={(
+                        <Link href={pcSpecIndex().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
 
                 <form onSubmit={handleUpdate} className="space-y-8">
                     {/* Core Info */}
@@ -345,11 +358,11 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
                         {/* same vs different toggle */}
                         <div className="mt-4 flex items-center gap-6">
                             <div className="flex items-center gap-2">
-                                <input id="ram_mode_same" name="ram_mode" type="radio" className="cursor-pointer" checked={data.ram_mode === 'same'} onChange={() => setData('ram_mode', 'same')} />
+                                <Input id="ram_mode_same" name="ram_mode" type="radio" className="cursor-pointer" checked={data.ram_mode === 'same'} onChange={() => setData('ram_mode', 'same')} />
                                 <Label htmlFor="ram_mode_same">Use same module for all slots</Label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input id="ram_mode_diff" name="ram_mode" type="radio" className="cursor-pointer" checked={data.ram_mode === 'different'} onChange={() => setData('ram_mode', 'different')} />
+                                <Input id="ram_mode_diff" name="ram_mode" type="radio" className="cursor-pointer" checked={data.ram_mode === 'different'} onChange={() => setData('ram_mode', 'different')} />
                                 <Label htmlFor="ram_mode_diff">Use different modules</Label>
                             </div>
                             <div className="ml-auto text-sm text-gray-600">
@@ -461,11 +474,11 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
                         {/* disk same/different toggle */}
                         <div className="mt-4 flex items-center gap-6">
                             <div className="flex items-center gap-2">
-                                <input id="disk_mode_same" name="disk_mode" type="radio" checked={data.disk_mode === 'same'} onChange={() => setData('disk_mode', 'same')} />
+                                <Input id="disk_mode_same" name="disk_mode" type="radio" checked={data.disk_mode === 'same'} onChange={() => setData('disk_mode', 'same')} />
                                 <Label htmlFor="disk_mode_same">Use same drive for all slots</Label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <input id="disk_mode_diff" name="disk_mode" type="radio" checked={data.disk_mode === 'different'} onChange={() => setData('disk_mode', 'different')} />
+                                <Input id="disk_mode_diff" name="disk_mode" type="radio" checked={data.disk_mode === 'different'} onChange={() => setData('disk_mode', 'different')} />
                                 <Label htmlFor="disk_mode_diff">Use different drives</Label>
                             </div>
                         </div>

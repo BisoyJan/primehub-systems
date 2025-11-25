@@ -1,8 +1,8 @@
-import { useEffect, useState, useRef, useCallback } from 'react'; // Correctly manage imports
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import type { Page as InertiaPage } from '@inertiajs/core';
 import { toast } from 'sonner';
-import { Plus, Trash, Edit, RefreshCw, Search } from 'lucide-react';
+import { Plus, Trash, Edit, RefreshCw, Search, Filter } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -26,18 +26,15 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-
-import type { BreadcrumbItem } from '@/types';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import {
     index as stocksIndex,
     store as stocksStore,
     update as stocksUpdate,
     destroy as stocksDestroy,
 } from '@/routes/stocks';
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Stocks', href: stocksIndex().url }
-];
 
 type SpecType = 'ram' | 'disk' | 'processor' | 'monitor';
 
@@ -80,12 +77,11 @@ type PageProps = {
 };
 
 export default function Index() {
-    const page = usePage<PageProps>();
-    const props = page.props;
+    const { stocks, filterType: filterTypeProp } = usePage<PageProps>().props;
 
-    const initialStocks = (props.stocks?.data ?? []) as StockRow[];
-    const initialLinks = (props.stocks?.links ?? []) as PaginationLink[];
-    const initialFilter = (props.filterType as SpecType) ?? ('all' as const);
+    const initialStocks = (stocks?.data ?? []) as StockRow[];
+    const initialLinks = (stocks?.links ?? []) as PaginationLink[];
+    const initialFilter = (filterTypeProp as SpecType | undefined) ?? 'all';
 
     const [rows, setRows] = useState<StockRow[]>(initialStocks);
     const [links, setLinks] = useState<PaginationLink[]>(initialLinks);
@@ -105,6 +101,7 @@ export default function Index() {
 
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteRow, setDeleteRow] = useState<StockRow | null>(null);
+    const [lastRefresh, setLastRefresh] = useState(new Date());
 
     const { data, setData, reset, processing, errors } = useForm({
         type: 'ram' as SpecType,
@@ -118,11 +115,22 @@ export default function Index() {
     const typedErrors = errors as Record<string, string | string[] | undefined>;
     const isInitialMount = useRef(true);
 
-    useEffect(() => {
-        if (!props.flash?.message) return;
-        if (props.flash.type === 'error') toast.error(props.flash.message);
-        else toast.success(props.flash.message);
-    }, [props.flash?.message, props.flash?.type]);
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Stocks',
+        breadcrumbs: [{ title: 'Stocks', href: stocksIndex().url }],
+    });
+
+    const resolveUrl = useCallback((pageUrl?: string) => {
+        if (!pageUrl) return stocksIndex().url;
+        try {
+            const parsed = new URL(pageUrl, window.location.origin);
+            return `${parsed.pathname}${parsed.search}` || stocksIndex().url;
+        } catch {
+            return pageUrl;
+        }
+    }, []);
 
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -131,7 +139,6 @@ export default function Index() {
         return () => clearTimeout(timer);
     }, [searchQuery]);
 
-    // FIX: Wrap fetchIndex in useCallback to stabilize its reference
     const fetchIndex = useCallback((pageUrl?: string) => {
         setLoading(true);
 
@@ -139,7 +146,7 @@ export default function Index() {
         if (filterType !== 'all') params.type = filterType;
         if (debouncedSearchQuery) params.search = debouncedSearchQuery;
 
-        const url = pageUrl ?? stocksIndex().url;
+        const url = resolveUrl(pageUrl);
 
         router.get(url, params, {
             preserveState: true,
@@ -152,26 +159,30 @@ export default function Index() {
             },
             onFinish: () => setLoading(false),
         });
-    }, [filterType, debouncedSearchQuery]); // Dependencies for useCallback
+    }, [filterType, debouncedSearchQuery, resolveUrl]);
 
-    // FIX: Corrected useEffect for filtering and searching
     useEffect(() => {
         if (isInitialMount.current) {
             isInitialMount.current = false;
             return;
         }
         fetchIndex();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [filterType, debouncedSearchQuery]); // Only trigger when filters change, not when fetchIndex changes
+    }, [filterType, debouncedSearchQuery, fetchIndex]);
 
-    // FIX: Corrected useEffect for polling
     useEffect(() => {
         if (!pollMs || pollMs <= 0) return;
-        // Pass the current page URL to maintain pagination during polling
-        const t = window.setInterval(() => fetchIndex(window.location.href), pollMs);
-        return () => clearInterval(t);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [pollMs]); // Only trigger when polling interval changes, not when fetchIndex changes
+        const intervalId = window.setInterval(() => fetchIndex(window.location.href), pollMs);
+        return () => clearInterval(intervalId);
+    }, [pollMs, fetchIndex]);
+
+    const refreshCurrentPage = useCallback(() => {
+        fetchIndex(window.location.href);
+    }, [fetchIndex]);
+
+    const handleManualRefresh = () => {
+        setLastRefresh(new Date());
+        refreshCurrentPage();
+    };
 
     function mapTypeFromStockable(stockableType: string): SpecType {
         if (!stockableType) return 'ram';
@@ -227,12 +238,9 @@ export default function Index() {
             notes: data.notes || null,
         };
 
-        // FIX: Removed unused onFinish variable
-
         const handleSuccess = () => {
             setOpen(false);
-            // Re-fetch data for the CURRENT page to see the update
-            fetchIndex(window.location.href);
+            refreshCurrentPage();
         };
 
         if (editing) {
@@ -278,7 +286,7 @@ export default function Index() {
             onSuccess: () => {
                 setAdjustOpen(false);
                 setAdjustRow(null);
-                fetchIndex(window.location.href); // Stay on current page
+                refreshCurrentPage();
             },
             onError: () => toast.error('Adjust failed'),
         });
@@ -297,62 +305,86 @@ export default function Index() {
                 toast.success('Deleted');
                 setDeleteOpen(false);
                 setDeleteRow(null);
-                fetchIndex(window.location.href); // Stay on current page
+                refreshCurrentPage();
             },
             onError: () => toast.error('Delete failed'),
         });
     }
 
+    const overlayMessage = processing
+        ? (editing ? 'Updating stock...' : 'Saving stock...')
+        : undefined;
+    const showOverlay = isPageLoading || loading || processing;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Stocks" />
+            <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
-                <div className="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-                    <h2 className="text-lg md:text-xl font-semibold">Stock Management</h2>
+                <LoadingOverlay isLoading={showOverlay} message={overlayMessage} />
+                <PageHeader
+                    title="Stock Management"
+                    description="Monitor inventory levels, reservations, and locations for all specs"
+                />
 
-                    <div className="flex flex-col sm:flex-row sm:ml-auto items-stretch sm:items-center gap-2 w-full sm:w-auto">
-                        <div className="relative flex-1 sm:flex-initial">
-                            <Search className="absolute left-2.5 top-3 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                type="search"
-                                placeholder="Search location, notes, model..."
-                                className="pl-8 w-full sm:w-[300px]"
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                            />
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search location, notes, model..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
+
+                            <Select
+                                value={filterType}
+                                onValueChange={(v: string) => setFilterType(v as SpecType | 'all')}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All types</SelectItem>
+                                    <SelectItem value="ram">RAM</SelectItem>
+                                    <SelectItem value="disk">Disk</SelectItem>
+                                    <SelectItem value="processor">Processor</SelectItem>
+                                    <SelectItem value="monitor">Monitor</SelectItem>
+                                </SelectContent>
+                            </Select>
                         </div>
 
-                        <Select
-                            value={filterType}
-                            onValueChange={(v: string) => setFilterType(v as SpecType | 'all')}
-                        >
-                            <SelectTrigger className="w-full sm:w-36">
-                                <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All types</SelectItem>
-                                <SelectItem value="ram">RAM</SelectItem>
-                                <SelectItem value="disk">Disk</SelectItem>
-                                <SelectItem value="processor">Processor</SelectItem>
-                                <SelectItem value="monitor">Monitor</SelectItem>
-                            </SelectContent>
-                        </Select>
-
-                        <div className="flex gap-2">
-                            <Button onClick={() => fetchIndex(window.location.href)} className="flex-1 sm:flex-initial">
-                                <RefreshCw size={16} />
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button onClick={refreshCurrentPage} className="flex-1 sm:flex-none">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <RefreshCw className="h-4 w-4" />
                             </Button>
                             <Button
                                 onClick={() => setPollMs(pollMs ? null : 15000)}
                                 variant="outline"
-                                className="flex-1 sm:flex-initial"
+                                className="flex-1 sm:flex-none"
                             >
                                 {pollMs ? 'Stop Poll' : 'Poll'}
                             </Button>
-                            <Button onClick={openCreate} className="flex-1 sm:flex-initial">
-                                <Plus size={16} /> <span className="ml-1">Add</span>
+                            <Button onClick={openCreate} className="flex-1 sm:flex-none">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Add Stock
                             </Button>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            Showing {rows.length} records
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
                         </div>
                     </div>
                 </div>

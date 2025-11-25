@@ -9,6 +9,7 @@ import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Input } from "@/components/ui/input"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Select,
@@ -20,7 +21,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown } from "lucide-react";
+import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search } from "lucide-react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -33,6 +34,16 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+    index as attendanceIndex,
+    calendar as attendanceCalendar,
+    create as attendanceCreate,
+    importMethod as attendanceImport,
+    review as attendanceReview,
+    bulkDelete as attendanceBulkDelete,
+    bulkQuickApprove as attendanceBulkQuickApprove,
+    quickApprove as attendanceQuickApprove,
+} from "@/routes/attendance";
 
 interface User {
     id: number;
@@ -244,7 +255,7 @@ export default function AttendanceIndex() {
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Attendance",
-        breadcrumbs: [{ title: "Attendance", href: "/attendance" }],
+        breadcrumbs: [{ title: "Attendance", href: attendanceIndex().url }],
     });
 
     useFlashMessage();
@@ -261,6 +272,7 @@ export default function AttendanceIndex() {
     const [needsVerification, setNeedsVerification] = useState(appliedFilters.needs_verification || false);
     const [selectedRecords, setSelectedRecords] = useState<number[]>([]);
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
     // Update local state when filters prop changes (e.g., when navigating back or pagination)
     useEffect(() => {
@@ -287,12 +299,7 @@ export default function AttendanceIndex() {
         );
     }, [users, userSearchQuery]);
 
-    useEffect(() => {
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            return;
-        }
-
+    const handleSearch = () => {
         const params: Record<string, string> = {};
 
         // For Agent, IT, and Utility roles, automatically filter to their own records
@@ -309,13 +316,18 @@ export default function AttendanceIndex() {
         if (needsVerification) params.needs_verification = "1";
 
         setLoading(true);
-        router.get("/attendance", params, {
+        router.get(attendanceIndex().url, params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
         });
-    }, [selectedUserId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
+    };
+
+    const handleManualRefresh = () => {
+        handleSearch();
+    };
 
     const showClearFilters =
         statusFilter !== "all" ||
@@ -331,6 +343,16 @@ export default function AttendanceIndex() {
         setStartDate("");
         setEndDate("");
         setNeedsVerification(false);
+
+        // Trigger reload with cleared filters
+        setLoading(true);
+        router.get(attendanceIndex().url, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
     };
 
     const toggleSelectAll = () => {
@@ -363,7 +385,7 @@ export default function AttendanceIndex() {
     };
 
     const confirmBulkDelete = () => {
-        router.delete("/attendance/bulk-delete", {
+        router.delete(attendanceBulkDelete().url, {
             data: { ids: selectedRecords },
             onSuccess: () => {
                 setSelectedRecords([]);
@@ -386,7 +408,7 @@ export default function AttendanceIndex() {
             return;
         }
 
-        router.post("/attendance/bulk-quick-approve", {
+        router.post(attendanceBulkQuickApprove().url, {
             ids: eligibleRecords.map(r => r.id),
         }, {
             preserveScroll: true,
@@ -405,7 +427,7 @@ export default function AttendanceIndex() {
     };
 
     const handleQuickApprove = (recordId: number) => {
-        router.post(`/attendance/${recordId}/quick-approve`, {}, {
+        router.post(attendanceQuickApprove({ attendance: recordId }).url, {}, {
             preserveScroll: true,
             preserveState: true,
         });
@@ -445,8 +467,8 @@ export default function AttendanceIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    {!isRestrictedUser && (
-                        <div className="w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        {!isRestrictedUser && (
                             <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -500,8 +522,8 @@ export default function AttendanceIndex() {
                                                     >
                                                         <Check
                                                             className={`mr-2 h-4 w-4 ${selectedUserId === user.id.toString()
-                                                                    ? "opacity-100"
-                                                                    : "opacity-0"
+                                                                ? "opacity-100"
+                                                                : "opacity-0"
                                                                 }`}
                                                         />
                                                         {user.name}
@@ -512,10 +534,8 @@ export default function AttendanceIndex() {
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                        </div>
-                    )}
+                        )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Status" />
@@ -536,7 +556,7 @@ export default function AttendanceIndex() {
 
                         <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
-                            <input
+                            <Input
                                 type="date"
                                 value={startDate}
                                 onChange={event => setStartDate(event.target.value)}
@@ -546,7 +566,7 @@ export default function AttendanceIndex() {
 
                         <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                             <span className="text-muted-foreground text-xs">To:</span>
-                            <input
+                            <Input
                                 type="date"
                                 value={endDate}
                                 onChange={event => setEndDate(event.target.value)}
@@ -562,33 +582,51 @@ export default function AttendanceIndex() {
                             <AlertCircle className="mr-2 h-4 w-4" />
                             Needs Verification
                         </Button>
-
-                        {showClearFilters && (
-                            <Button variant="outline" onClick={clearFilters} className="w-full">
-                                Clear Filters
-                            </Button>
-                        )}
                     </div>
 
-                    <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 sm:justify-between min-w-0">
-                        <div className="flex flex-col sm:flex-row gap-3">
-                            <Button
-                                onClick={() => router.get("/attendance/calendar")}
-                                className="w-full sm:w-auto"
-                                variant="outline"
-                            >
-                                <CalendarIcon className="mr-2 h-4 w-4" />
-                                Calendar View
-                            </Button>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                             <Can permission="attendance.create">
                                 <Button
-                                    onClick={() => router.get("/attendance/create")}
+                                    onClick={() => router.get(attendanceCreate().url)}
                                     className="w-full sm:w-auto"
                                     variant="default"
                                 >
                                     Add Manual Attendance
                                 </Button>
                             </Can>
+                            <Button
+                                onClick={() => router.get(attendanceCalendar().url)}
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                            >
+                                <CalendarIcon className="mr-2 h-4 w-4" />
+                                Calendar View
+                            </Button>
+                        </div>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:flex-1">
+                            <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
+                                <Search className="mr-2 h-4 w-4" />
+                                Apply Filters
+                            </Button>
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+                                    Clear Filters
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} className="w-full sm:w-auto">
+                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </Button>
+                        </div>
+                    </div>
+
+                    {/* Bulk Actions Row */}
+                    {(selectedRecords.length > 0 || can('attendance.import') || can('attendance.review')) && (
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end border-t pt-3">
                             {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
                                 <Can permission="attendance.approve">
                                     <Button
@@ -615,24 +653,25 @@ export default function AttendanceIndex() {
                             )}
                             <Can permission="attendance.import">
                                 <Button
-                                    onClick={() => router.get("/attendance/import")}
+                                    onClick={() => router.get(attendanceImport().url)}
                                     className="w-full sm:w-auto"
+                                    variant="outline"
                                 >
-                                    Import Biometric File (.txt)
+                                    Import Biometric File
                                 </Button>
                             </Can>
                             <Can permission="attendance.review">
                                 <Button
-                                    onClick={() => router.get("/attendance/review")}
+                                    onClick={() => router.get(attendanceReview().url)}
                                     className="w-full sm:w-auto"
                                     variant="outline"
                                 >
                                     <AlertCircle className="mr-2 h-4 w-4" />
-                                    Review Flagged Records
+                                    Review Flagged
                                 </Button>
                             </Can>
                         </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
@@ -641,13 +680,16 @@ export default function AttendanceIndex() {
                         {attendanceData.meta.total === 1 ? "" : "s"}
                         {showClearFilters ? " (filtered)" : ""}
                     </div>
-                    {selectedRecords.length > 0 && (
-                        <div className="text-sm">
+                    <div className="flex items-center gap-4">
+                        {selectedRecords.length > 0 && (
                             <Badge variant="secondary" className="font-normal">
                                 {selectedRecords.length} record{selectedRecords.length === 1 ? "" : "s"} selected
                             </Badge>
+                        )}
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
                         </div>
-                    )}
+                    </div>
                 </div>
 
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
@@ -776,7 +818,7 @@ export default function AttendanceIndex() {
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
-                                                            onClick={() => window.open(`/attendance/review?verify=${record.id}`, '_blank')}
+                                                            onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
                                                             className="h-8 text-amber-600 border-amber-600"
                                                         >
                                                             <AlertCircle className="h-3 w-3 mr-1" />
@@ -906,7 +948,7 @@ export default function AttendanceIndex() {
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
-                                                        onClick={() => window.open(`/attendance/review?verify=${record.id}`, '_blank')}
+                                                        onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
                                                         className="w-full text-amber-600 border-amber-600"
                                                     >
                                                         <AlertCircle className="h-3 w-3 mr-1" />

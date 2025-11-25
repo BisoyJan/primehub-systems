@@ -25,6 +25,13 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Can } from '@/components/authorization';
+import { index as attendanceIndex } from '@/routes/attendance';
+import {
+    index as biometricReprocessingIndex,
+    preview as biometricReprocessingPreview,
+    reprocess as biometricReprocessingReprocess,
+    fixStatuses as biometricReprocessingFixStatuses,
+} from '@/routes/biometric-reprocessing';
 
 interface Stats {
     total_records: number;
@@ -77,8 +84,8 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
     const { title, breadcrumbs } = usePageMeta({
         title: 'Reprocess Attendance',
         breadcrumbs: [
-            { title: 'Attendance', href: '/attendance' },
-            { title: 'Reprocess Attendance', href: '/biometric-reprocessing' },
+            { title: 'Attendance', href: attendanceIndex().url },
+            { title: 'Reprocess Attendance', href: biometricReprocessingIndex().url },
         ],
     });
 
@@ -105,7 +112,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
 
         setIsLoading(true);
         router.post(
-            '/biometric-reprocessing/preview',
+            biometricReprocessingPreview().url,
             {
                 start_date: startDate,
                 end_date: endDate,
@@ -140,7 +147,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
         setIsLoading(true);
         setShowPreview(false);
         router.post(
-            '/biometric-reprocessing/reprocess',
+            biometricReprocessingReprocess().url,
             {
                 start_date: startDate,
                 end_date: endDate,
@@ -176,7 +183,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
         setShowFixStatusConfirm(false);
         setIsLoading(true);
         router.post(
-            '/biometric-reprocessing/fix-statuses',
+            biometricReprocessingFixStatuses().url,
             {
                 start_date: startDate,
                 end_date: endDate,
@@ -281,7 +288,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                 </div>
 
                                 <div className="flex items-center space-x-2">
-                                    <input
+                                    <Input
                                         type="checkbox"
                                         id="delete-existing"
                                         checked={deleteExisting}
@@ -294,7 +301,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                 </div>
 
                                 <div className="flex items-center space-x-2">
-                                    <input
+                                    <Input
                                         type="checkbox"
                                         id="rescan-points"
                                         checked={rescanPoints}

@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback } from 'react';
-import { Head, usePage, router, Link } from '@inertiajs/react';
+import { useState } from 'react';
+import { Head, router, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { ArrowRight, Search, Trash2, History, CheckSquare, List } from 'lucide-react';
+import { ArrowRight, Search, Trash2, History, CheckSquare, List, RefreshCw } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -25,14 +25,17 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { index as pcTransfersIndex, transferPage } from '@/routes/pc-transfers';
-
-// New reusable components and hooks
+import {
+    index as pcTransfersIndexRoute,
+    transferPage as pcTransfersTransferPageRoute,
+    history as pcTransfersHistoryRoute,
+    remove as pcTransfersRemoveRoute,
+} from '@/routes/pc-transfers';
+import { index as stationsIndexRoute } from '@/routes/stations';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { Can } from '@/components/authorization';
-import { usePermission } from '@/hooks/useAuthorization';
 
 type PcSpecDetails = {
     manufacturer: string;
@@ -61,12 +64,6 @@ type Station = {
     pc_spec_details: PcSpecDetails | null;
 };
 
-type PcSpec = {
-    id: number;
-    label: string;
-    details: PcSpecDetails;
-};
-
 type Site = {
     id: number;
     name: string;
@@ -79,8 +76,8 @@ type Campaign = {
 
 type StationsPayload = {
     data: Station[];
-    links: PaginationLink[];
-    meta: {
+    links?: PaginationLink[];
+    meta?: {
         current_page: number;
         last_page: number;
         per_page: number;
@@ -88,88 +85,90 @@ type StationsPayload = {
     };
 };
 
+type FilterOptions = {
+    sites: Site[];
+    campaigns: Campaign[];
+};
+
 type PageProps = {
     stations: StationsPayload;
-    pcSpecs: PcSpec[];
-    filters: {
-        sites: Site[];
-        campaigns: Campaign[];
-    };
+    filters: FilterOptions;
     flash?: { message?: string; type?: string };
 };
 
-export default function Index() {
-    const page = usePage<PageProps>();
-    const props = page.props;
+const getInitialParam = (key: string, fallback = '') => {
+    if (typeof window === 'undefined') {
+        return fallback;
+    }
+    const params = new URLSearchParams(window.location.search);
+    return params.get(key) ?? fallback;
+};
 
-    // Use new hooks for cleaner code
+export default function Index({ stations: stationsPayload, filters }: PageProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'PC Transfer',
-        breadcrumbs: [{ title: 'PC Transfer', href: pcTransfersIndex().url }]
+        breadcrumbs: [
+            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'PC Transfer', href: pcTransfersIndexRoute().url },
+        ]
     });
 
-    useFlashMessage(); // Automatically handles flash messages
-    const isPageLoading = usePageLoading(); // Track page loading state
-    const { can } = usePermission(); // Check permissions
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
 
-    const [stations, setStations] = useState<Station[]>(props.stations.data);
-    const [links, setLinks] = useState<PaginationLink[]>(props.stations.links);
-
-    const [search, setSearch] = useState('');
-    const [debouncedSearch, setDebouncedSearch] = useState('');
-    const [siteFilter, setSiteFilter] = useState('all');
-    const [campaignFilter, setCampaignFilter] = useState('all');
-
-
-
-    // Bulk transfer states
+    const [search, setSearch] = useState(() => getInitialParam('search', ''));
+    const [siteFilter, setSiteFilter] = useState(() => getInitialParam('site', 'all'));
+    const [campaignFilter, setCampaignFilter] = useState(() => getInitialParam('campaign', 'all'));
+    const [isFilterLoading, setIsFilterLoading] = useState(false);
+    const [isMutating, setIsMutating] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [bulkMode, setBulkMode] = useState(false);
     const [selectedStations, setSelectedStations] = useState<Set<number>>(new Set());
 
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 500);
-        return () => clearTimeout(timer);
-    }, [search]);
+    const showClearFilters = Boolean(search.trim()) || siteFilter !== 'all' || campaignFilter !== 'all';
 
-    const fetchStations = useCallback((pageUrl?: string) => {
-        // If pageUrl is provided (from pagination), use it directly
-        // as it already contains the query string from backend
-        if (pageUrl) {
-            router.get(pageUrl, {}, {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: ['stations'],
-            });
-            return;
-        }
-
-        // For filter changes, build params manually
+    const buildFilterParams = () => {
         const params: Record<string, string> = {};
-        if (debouncedSearch) params.search = debouncedSearch;
-        if (siteFilter !== 'all') params.site = siteFilter;
-        if (campaignFilter !== 'all') params.campaign = campaignFilter;
+        if (search.trim()) {
+            params.search = search.trim();
+        }
+        if (siteFilter !== 'all') {
+            params.site = siteFilter;
+        }
+        if (campaignFilter !== 'all') {
+            params.campaign = campaignFilter;
+        }
+        return params;
+    };
 
-        router.get('/pc-transfers', params, {
-            preserveState: true,
+    const requestWithFilters = (params: Record<string, string>) => {
+        setIsFilterLoading(true);
+        router.get(pcTransfersIndexRoute().url, params, {
             preserveScroll: true,
+            preserveState: true,
             replace: true,
             only: ['stations'],
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setIsFilterLoading(false),
         });
-    }, [debouncedSearch, siteFilter, campaignFilter]);
+    };
 
-    useEffect(() => {
-        setStations(props.stations.data);
-        setLinks(props.stations.links);
-    }, [props.stations.data, props.stations.links]);
+    const handleApplyFilters = () => {
+        requestWithFilters(buildFilterParams());
+    };
 
-    // Only fetch when filters change, not when fetchStations changes
-    useEffect(() => {
-        fetchStations();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [debouncedSearch, siteFilter, campaignFilter]);
+    const handleClearFilters = () => {
+        setSearch('');
+        setSiteFilter('all');
+        setCampaignFilter('all');
+        requestWithFilters({});
+    };
 
-    function handleRemovePC(station: Station) {
+    const handleManualRefresh = () => {
+        requestWithFilters(buildFilterParams());
+    };
+
+    const handleRemovePC = (station: Station) => {
         if (!station.pc_spec_id) {
             toast.error('No PC assigned to this station');
             return;
@@ -177,42 +176,63 @@ export default function Index() {
 
         if (!confirm(`Remove PC from ${station.station_number}?`)) return;
 
-        router.delete('/pc-transfers/remove', {
+        setIsMutating(true);
+        router.delete(pcTransfersRemoveRoute().url, {
             data: { station_id: station.id },
             preserveScroll: true,
+            preserveState: true,
+            replace: true,
+            only: ['stations'],
             onSuccess: () => {
                 toast.success('PC removed successfully');
-                fetchStations(window.location.href);
+                setLastRefresh(new Date());
             },
             onError: () => toast.error('Removal failed'),
+            onFinish: () => setIsMutating(false),
         });
-    }
+    };
 
-    // Bulk transfer functions
-    function toggleBulkMode() {
-        setBulkMode(!bulkMode);
+    const toggleBulkMode = () => {
+        setBulkMode((prev) => !prev);
         setSelectedStations(new Set());
-    }
+    };
 
-    function toggleStationSelection(stationId: number) {
-        const newSelection = new Set(selectedStations);
-        if (newSelection.has(stationId)) {
-            newSelection.delete(stationId);
-        } else {
-            newSelection.add(stationId);
-        }
-        setSelectedStations(newSelection);
-    }
+    const toggleStationSelection = (stationId: number) => {
+        setSelectedStations((prev) => {
+            const updated = new Set(prev);
+            if (updated.has(stationId)) {
+                updated.delete(stationId);
+            } else {
+                updated.add(stationId);
+            }
+            return updated;
+        });
+    };
+
+    const stationRows = stationsPayload.data;
+    const paginationMeta = stationsPayload.meta || {
+        current_page: 1,
+        last_page: 1,
+        per_page: stationRows.length || 1,
+        total: stationRows.length,
+    };
+    const paginationLinks = stationsPayload.links || [];
+    const hasStations = stationRows.length > 0;
+    const showingStart = hasStations ? paginationMeta.per_page * (paginationMeta.current_page - 1) + 1 : 0;
+    const showingEnd = hasStations ? showingStart + stationRows.length - 1 : 0;
+    const summaryText = hasStations
+        ? `Showing ${showingStart}-${showingEnd} of ${paginationMeta.total} stations`
+        : 'No stations to display';
+
+    const overlayMessage = isMutating ? 'Processing request...' : 'Loading transfers...';
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
-                {/* Loading overlay for page transitions */}
-                <LoadingOverlay isLoading={isPageLoading} />
+                <LoadingOverlay isLoading={isPageLoading || isFilterLoading || isMutating} message={overlayMessage} />
 
-                {/* Page header with actions */}
                 <PageHeader
                     title="PC Transfer Management"
                     description="Transfer PCs between stations and manage configurations"
@@ -231,38 +251,38 @@ export default function Index() {
                             {bulkMode ? 'Cancel Bulk Mode' : 'Bulk Transfer'}
                         </Button>
                         {bulkMode && selectedStations.size > 0 && (
-                            <Button onClick={() => {
-                                const stationIds = Array.from(selectedStations).join(',');
-                                router.visit(`/pc-transfers/transfer?stations=${stationIds}`);
-                            }}>
+                            <Button
+                                onClick={() => {
+                                    const stationIds = Array.from(selectedStations).join(',');
+                                    router.visit(`${pcTransfersTransferPageRoute().url}?stations=${stationIds}`);
+                                }}
+                            >
                                 <List size={16} className="mr-2" />
                                 Configure Transfers
                             </Button>
                         )}
-                        <Link href="/pc-transfers/transfer">
+                        <Link href={pcTransfersTransferPageRoute().url}>
                             <Button variant="outline">
                                 <ArrowRight size={16} className="mr-2" />
                                 Transfer
                             </Button>
                         </Link>
-                        <Button
-                            variant="outline"
-                            onClick={() => router.visit('/pc-transfers/history')}
-                        >
-                            <History size={16} className="mr-2" />
-                            View History
-                        </Button>
+                        <Link href={pcTransfersHistoryRoute().url}>
+                            <Button variant="outline">
+                                <History size={16} className="mr-2" />
+                                View History
+                            </Button>
+                        </Link>
                     </div>
                 </PageHeader>
 
-                {/* Filters */}
                 <Card>
                     <CardHeader>
                         <CardTitle>Filters</CardTitle>
                         <CardDescription>Search and filter stations</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                        <div className="grid grid-cols-1 gap-4 md:grid-cols-4">
                             <div>
                                 <Label>Search</Label>
                                 <div className="relative">
@@ -272,7 +292,8 @@ export default function Index() {
                                         placeholder="Station, site, campaign..."
                                         className="pl-8"
                                         value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
+                                        onChange={(event) => setSearch(event.target.value)}
+                                        onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
                                     />
                                 </div>
                             </div>
@@ -285,7 +306,7 @@ export default function Index() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Sites</SelectItem>
-                                        {props.filters.sites.map((site) => (
+                                        {filters.sites.map((site) => (
                                             <SelectItem key={site.id} value={String(site.id)}>
                                                 {site.name}
                                             </SelectItem>
@@ -302,7 +323,7 @@ export default function Index() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Campaigns</SelectItem>
-                                        {props.filters.campaigns.map((campaign) => (
+                                        {filters.campaigns.map((campaign) => (
                                             <SelectItem key={campaign.id} value={String(campaign.id)}>
                                                 {campaign.name}
                                             </SelectItem>
@@ -311,24 +332,43 @@ export default function Index() {
                                 </Select>
                             </div>
 
-                            <div className="flex items-end">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-end">
+                                <Button onClick={handleApplyFilters} disabled={isFilterLoading} className="w-full md:w-auto">
+                                    <Search className="h-4 w-4 mr-2" />
+                                    Apply Filters
+                                </Button>
+                                {showClearFilters && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={handleClearFilters}
+                                        disabled={isFilterLoading}
+                                        className="w-full md:w-auto"
+                                    >
+                                        Clear Filters
+                                    </Button>
+                                )}
                                 <Button
-                                    variant="outline"
-                                    onClick={() => {
-                                        setSearch('');
-                                        setSiteFilter('all');
-                                        setCampaignFilter('all');
-                                    }}
-                                    className="w-full"
+                                    variant="ghost"
+                                    onClick={handleManualRefresh}
+                                    disabled={isFilterLoading}
+                                    className="w-full md:w-auto"
                                 >
-                                    Clear Filters
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Refresh
                                 </Button>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                {/* Stations Table */}
+                <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <span>
+                        {summaryText}
+                        {showClearFilters && hasStations ? ' (filtered)' : ''}
+                    </span>
+                    <span className="text-xs">Last updated: {lastRefresh.toLocaleTimeString()}</span>
+                </div>
+
                 <Card>
                     <CardHeader>
                         <CardTitle>Stations</CardTitle>
@@ -354,7 +394,7 @@ export default function Index() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {stations.map((station) => (
+                                    {stationRows.map((station) => (
                                         <TableRow
                                             key={station.id}
                                             className={bulkMode && selectedStations.has(station.id) ? 'bg-blue-800' : ''}
@@ -366,6 +406,7 @@ export default function Index() {
                                                         checked={selectedStations.has(station.id)}
                                                         onChange={() => toggleStationSelection(station.id)}
                                                         className="w-4 h-4 cursor-pointer"
+                                                        aria-label={`Select station ${station.station_number}`}
                                                     />
                                                 </TableCell>
                                             )}
@@ -424,10 +465,8 @@ export default function Index() {
                                                 {!bulkMode && (
                                                     <div className="flex justify-end gap-2">
                                                         <Can permission="pc_transfers.create">
-                                                            <Link href={transferPage(station.id).url}>
-                                                                <Button
-                                                                    size="sm"
-                                                                >
+                                                            <Link href={pcTransfersTransferPageRoute(station.id).url}>
+                                                                <Button size="sm">
                                                                     <ArrowRight size={14} className="mr-1" />
                                                                     {station.pc_spec_id ? 'Transfer PC' : 'Assign PC'}
                                                                 </Button>
@@ -450,9 +489,9 @@ export default function Index() {
                                         </TableRow>
                                     ))}
 
-                                    {stations.length === 0 && (
+                                    {stationRows.length === 0 && (
                                         <TableRow>
-                                            <TableCell colSpan={7} className="text-center py-8 text-gray-500">
+                                            <TableCell colSpan={8} className="text-center py-8 text-gray-500">
                                                 No stations found
                                             </TableCell>
                                         </TableRow>
@@ -463,25 +502,9 @@ export default function Index() {
                     </CardContent>
                 </Card>
 
-                {/* Pagination */}
                 <div className="flex justify-center mt-4">
-                    {links && links.length > 0 && (
-                        <PaginationNav
-                            links={links}
-                            onPageChange={(page) => {
-                                const params: Record<string, string> = { page: String(page) };
-                                if (debouncedSearch) params.search = debouncedSearch;
-                                if (siteFilter !== 'all') params.site = siteFilter;
-                                if (campaignFilter !== 'all') params.campaign = campaignFilter;
-
-                                router.get('/pc-transfers', params, {
-                                    preserveState: true,
-                                    preserveScroll: true,
-                                    replace: true,
-                                    only: ['stations'],
-                                });
-                            }}
-                        />
+                    {paginationLinks.length > 0 && (
+                        <PaginationNav links={paginationLinks} only={['stations']} />
                     )}
                 </div>
             </div>

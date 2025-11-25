@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
-import { useFlashMessage } from "@/hooks";
+import { useFlashMessage, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -19,12 +19,12 @@ import {
     DialogTitle,
 } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, Calendar as CalendarIcon, ShieldCheck } from "lucide-react";
-import type { BreadcrumbItem } from "@/types";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Attendance', href: '/attendance' },
-    { title: 'Calendar', href: '/attendance/calendar' }
-];
+import {
+    index as attendanceIndex,
+    calendar as attendanceCalendar,
+    review as attendanceReview,
+    quickApprove as attendanceQuickApprove,
+} from "@/routes/attendance";
 
 interface User {
     id: number;
@@ -138,6 +138,14 @@ export default function AttendanceCalendar() {
 
     useFlashMessage();
 
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Attendance Calendar',
+        breadcrumbs: [
+            { title: 'Attendance', href: attendanceIndex().url },
+            { title: 'Calendar', href: attendanceCalendar().url },
+        ],
+    });
+
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -194,7 +202,7 @@ export default function AttendanceCalendar() {
         if (verificationFilter !== 'all') {
             params.verification_filter = verificationFilter;
         }
-        router.get('/attendance/calendar', params, { preserveState: true });
+        router.get(attendanceCalendar().url, params, { preserveState: true });
     };
 
     const handleUserSelect = (userId: number | null) => {
@@ -205,7 +213,7 @@ export default function AttendanceCalendar() {
         if (verificationFilter !== 'all') {
             params.verification_filter = verificationFilter;
         }
-        router.get('/attendance/calendar', params);
+        router.get(attendanceCalendar().url, params);
         setIsUserPopoverOpen(false);
         setUserSearchQuery("");
     };
@@ -219,7 +227,7 @@ export default function AttendanceCalendar() {
         if (value !== 'all') {
             params.verification_filter = value;
         }
-        router.get('/attendance/calendar', params, { preserveState: true });
+        router.get(attendanceCalendar().url, params, { preserveState: true });
     };
 
     const handleDayClick = (day: number) => {
@@ -240,7 +248,7 @@ export default function AttendanceCalendar() {
     const handleQuickApprove = () => {
         if (!selectedAttendance) return;
 
-        router.post(`/attendance/${selectedAttendance.id}/quick-approve`, {}, {
+        router.post(attendanceQuickApprove({ attendance: selectedAttendance.id }).url, {}, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsDetailDialogOpen(false);
@@ -253,15 +261,15 @@ export default function AttendanceCalendar() {
         if (!selectedAttendance) return;
 
         // Open review page with verify parameter in new tab
-        window.open(`/attendance/review?verify=${selectedAttendance.id}`, '_blank');
+        window.open(attendanceReview({ query: { verify: selectedAttendance.id } }).url, '_blank');
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Attendance Calendar" />
+            <Head title={title} />
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <PageHeader
-                    title="Attendance Calendar"
+                    title={title}
                     description="View employee attendance in calendar format"
                 />
 

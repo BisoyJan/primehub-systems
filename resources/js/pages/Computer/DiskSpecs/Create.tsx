@@ -14,13 +14,25 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 
-import { useFlashMessage } from '@/hooks';
+import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { store, create, index } from '@/routes/diskspecs';
 
 export default function Create() {
     useFlashMessage(); // Automatically handles flash messages
 
-    const { data, setData, post, errors } = useForm({
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Create Disk Specification',
+        breadcrumbs: [
+            { title: 'Disk Specifications', href: index().url },
+            { title: 'Create', href: create().url },
+        ],
+    });
+
+    const isPageLoading = usePageLoading();
+
+    const { data, setData, post, errors, processing } = useForm({
         manufacturer: '',
         model: '',
         capacity_gb: '' as number | '',
@@ -33,24 +45,31 @@ export default function Create() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(store.url());
+        post(store().url);
     };
 
     return (
-        <AppLayout breadcrumbs={[
-            { title: 'Disk Specifications', href: index.url() },
-            { title: 'Create', href: create.url() }
-        ]}>
-            <Head title="Create Disk Specification" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={index.url()}>
-                        <Button>
-                            <ArrowLeft /> Return
-                        </Button>
-                    </Link>
-                </div>
+            <div className="relative mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Saving disk specification...' : undefined}
+                />
+
+                <PageHeader
+                    title={title}
+                    description="Record disk models with performance metrics and available stock."
+                    actions={(
+                        <Link href={index().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
 
                 <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Core Info */}

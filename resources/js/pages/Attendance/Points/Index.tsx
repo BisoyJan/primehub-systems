@@ -1,10 +1,10 @@
 import React, { useState } from "react";
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage } from "@/hooks";
+import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
-import type { BreadcrumbItem, SharedData, UserRole } from "@/types";
+import type { SharedData, UserRole } from "@/types";
 import { toast } from "sonner";
 import { Can } from '@/components/authorization';
 import {
@@ -48,11 +48,19 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, Filter, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown } from "lucide-react";
+import { AlertCircle, Filter, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search } from "lucide-react";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import {
+    index as attendancePointsIndex,
+    show as attendancePointsShow,
+    rescan as attendancePointsRescan,
+    exportAll as attendancePointsExportAll,
+    exportAllExcel as attendancePointsExportAllExcel,
+    excuse as attendancePointsExcuse,
+    unexcuse as attendancePointsUnexcuse,
+} from "@/routes/attendance-points";
 
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Attendance Points', href: '/attendance-points' }
-];
+const defaultTitle = "Attendance Points";
 
 interface User {
     id: number;
@@ -170,9 +178,13 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-export default function AttendancePointsIndex({ points, users, stats, filters }: PageProps) {
+export default function AttendancePointsIndex({ points, users, stats, filters, auth }: PageProps) {
     useFlashMessage();
-    const { auth } = usePage<PageProps>().props;
+    const { title, breadcrumbs } = usePageMeta({
+        title: defaultTitle,
+        breadcrumbs: [{ title: defaultTitle, href: attendancePointsIndex().url }],
+    });
+    const isPageLoading = usePageLoading();
     const timeFormat = auth.user.time_format as '12' | '24';
 
     // Roles that should only see their own attendance points
@@ -201,6 +213,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
     const [pointToUnexcuse, setPointToUnexcuse] = useState<number | null>(null);
     const [isViolationDetailsOpen, setIsViolationDetailsOpen] = useState(false);
     const [selectedViolationPoint, setSelectedViolationPoint] = useState<AttendancePoint | null>(null);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
     const pointsData = {
         data: points?.data || [],
@@ -215,20 +228,31 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
         }
     };
 
+    const buildFilterQuery = () => {
+        const query: Record<string, string> = {};
+        if (selectedUserId) query.user_id = selectedUserId;
+        if (selectedPointType) query.point_type = selectedPointType;
+        if (selectedStatus) query.status = selectedStatus;
+        if (dateFrom) query.date_from = dateFrom;
+        if (dateTo) query.date_to = dateTo;
+        if (filterExpiringSoon) query.expiring_soon = 'true';
+        if (filterGbroEligible) query.gbro_eligible = 'true';
+        return query;
+    };
+
     const handleFilter = () => {
         router.get(
-            "/attendance-points",
+            attendancePointsIndex().url,
+            buildFilterQuery(),
             {
-                user_id: selectedUserId,
-                point_type: selectedPointType,
-                status: selectedStatus,
-                date_from: dateFrom,
-                date_to: dateTo,
-                expiring_soon: filterExpiringSoon ? 'true' : undefined,
-                gbro_eligible: filterGbroEligible ? 'true' : undefined,
-            },
-            { preserveState: true }
+                preserveState: true,
+                onSuccess: () => setLastRefresh(new Date())
+            }
         );
+    };
+
+    const handleManualRefresh = () => {
+        handleFilter();
     };
 
     const handleReset = () => {
@@ -240,7 +264,12 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
         setDateTo("");
         setFilterExpiringSoon(false);
         setFilterGbroEligible(false);
-        router.get("/attendance-points");
+
+        // Trigger reload with cleared filters
+        router.get(attendancePointsIndex().url, {}, {
+            preserveState: true,
+            onSuccess: () => setLastRefresh(new Date())
+        });
     };
 
     const handleRescan = () => {
@@ -251,7 +280,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
 
         setIsRescanning(true);
         router.post(
-            "/attendance-points/rescan",
+            attendancePointsRescan().url,
             {
                 date_from: rescanDateFrom,
                 date_to: rescanDateTo
@@ -274,33 +303,17 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
     };
 
     const handleExportAllCSV = () => {
-        const params = new URLSearchParams({
-            ...(selectedUserId && { user_id: selectedUserId }),
-            ...(selectedPointType && { point_type: selectedPointType }),
-            ...(selectedStatus && { status: selectedStatus }),
-            ...(dateFrom && { date_from: dateFrom }),
-            ...(dateTo && { date_to: dateTo }),
-            ...(filterExpiringSoon && { expiring_soon: 'true' }),
-            ...(filterGbroEligible && { gbro_eligible: 'true' }),
-        });
-        window.location.href = `/attendance-points/export-all?${params.toString()}`;
+        const url = attendancePointsExportAll({ query: buildFilterQuery() }).url;
+        window.location.href = url;
     };
 
     const handleExportAllExcel = () => {
-        const params = new URLSearchParams({
-            ...(selectedUserId && { user_id: selectedUserId }),
-            ...(selectedPointType && { point_type: selectedPointType }),
-            ...(selectedStatus && { status: selectedStatus }),
-            ...(dateFrom && { date_from: dateFrom }),
-            ...(dateTo && { date_to: dateTo }),
-            ...(filterExpiringSoon && { expiring_soon: 'true' }),
-            ...(filterGbroEligible && { gbro_eligible: 'true' }),
-        });
-        window.location.href = `/attendance-points/export-all-excel?${params.toString()}`;
+        const url = attendancePointsExportAllExcel({ query: buildFilterQuery() }).url;
+        window.location.href = url;
     };
 
     const viewUserDetails = (userId: number) => {
-        router.get(`/attendance-points/${userId}`);
+        router.get(attendancePointsShow({ user: userId }).url);
     };
 
     const openExcuseDialog = (point: AttendancePoint) => {
@@ -318,7 +331,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
 
         setIsSubmitting(true);
         router.post(
-            `/attendance-points/${selectedPoint.id}/excuse`,
+            attendancePointsExcuse({ point: selectedPoint.id }).url,
             {
                 excuse_reason: excuseReason,
                 notes: notes,
@@ -350,7 +363,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
         if (!pointToUnexcuse) return;
 
         router.post(
-            `/attendance-points/${pointToUnexcuse}/unexcuse`,
+            attendancePointsUnexcuse({ point: pointToUnexcuse }).url,
             {},
             {
                 onSuccess: () => {
@@ -371,10 +384,11 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Attendance Points" />
-            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+            <Head title={title} />
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+                <LoadingOverlay isLoading={isPageLoading} />
                 <PageHeader
-                    title="Attendance Points"
+                    title={title}
                     description="Track and manage employee attendance violations and points"
                 />
 
@@ -475,8 +489,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                         )}
                     </div>
 
-                    {!isRestrictedUser && (
-                        <div className="w-full">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        {!isRestrictedUser && (
                             <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -514,8 +528,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                                                 >
                                                     <Check
                                                         className={`mr-2 h-4 w-4 ${!selectedUserId
-                                                                ? "opacity-100"
-                                                                : "opacity-0"
+                                                            ? "opacity-100"
+                                                            : "opacity-0"
                                                             }`}
                                                     />
                                                     All Employees
@@ -538,8 +552,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                                                         >
                                                             <Check
                                                                 className={`mr-2 h-4 w-4 ${selectedUserId === String(user.id)
-                                                                        ? "opacity-100"
-                                                                        : "opacity-0"
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
                                                                     }`}
                                                             />
                                                             {user.name}
@@ -550,10 +564,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                        </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                        )}
 
                         <Select value={selectedPointType || undefined} onValueChange={(value) => setSelectedPointType(value || "")}>
                             <SelectTrigger className="w-full">
@@ -579,7 +590,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
 
                         <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
-                            <input
+                            <Input
                                 type="date"
                                 value={dateFrom}
                                 onChange={(e) => setDateFrom(e.target.value)}
@@ -589,56 +600,65 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
 
                         <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                             <span className="text-muted-foreground text-xs">To:</span>
-                            <input
+                            <Input
                                 type="date"
                                 value={dateTo}
                                 onChange={(e) => setDateTo(e.target.value)}
                                 className="w-full bg-transparent outline-none text-sm"
                             />
                         </div>
-
-                        <Button onClick={handleFilter} className="w-full">
-                            <Filter className="h-4 w-4 mr-2" />
-                            Apply Filters
-                        </Button>
                     </div>
 
                     {/* Additional Filters Row */}
-                    <div className="flex flex-wrap gap-4 items-center">
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="expiring-soon"
-                                checked={filterExpiringSoon}
-                                onCheckedChange={(checked) => setFilterExpiringSoon(checked as boolean)}
-                            />
-                            <label
-                                htmlFor="expiring-soon"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                            >
-                                Expiring within 30 days
-                            </label>
+                    <div className="flex flex-wrap gap-4 items-center justify-between">
+                        <div className="flex flex-wrap gap-4 items-center">
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="expiring-soon"
+                                    checked={filterExpiringSoon}
+                                    onCheckedChange={(checked) => setFilterExpiringSoon(checked as boolean)}
+                                />
+                                <label
+                                    htmlFor="expiring-soon"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                >
+                                    Expiring within 30 days
+                                </label>
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="gbro-eligible"
+                                    checked={filterGbroEligible}
+                                    onCheckedChange={(checked) => setFilterGbroEligible(checked as boolean)}
+                                />
+                                <label
+                                    htmlFor="gbro-eligible"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                >
+                                    GBRO Eligible Only
+                                </label>
+                            </div>
                         </div>
 
-                        <div className="flex items-center space-x-2">
-                            <Checkbox
-                                id="gbro-eligible"
-                                checked={filterGbroEligible}
-                                onCheckedChange={(checked) => setFilterGbroEligible(checked as boolean)}
-                            />
-                            <label
-                                htmlFor="gbro-eligible"
-                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                            >
-                                GBRO Eligible Only
-                            </label>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
+                            <Button variant="default" onClick={handleFilter} className="w-full sm:w-auto">
+                                <Search className="mr-2 h-4 w-4" />
+                                Apply Filters
+                            </Button>
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
+                                    Clear Filters
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} className="w-full sm:w-auto">
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Refresh
+                            </Button>
                         </div>
                     </div>
-
-                    {showClearFilters && (
-                        <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
-                            Reset Filters
-                        </Button>
-                    )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
@@ -646,6 +666,9 @@ export default function AttendancePointsIndex({ points, users, stats, filters }:
                         Showing {pointsData.meta.from} to {pointsData.meta.to} of {pointsData.meta.total} point
                         {pointsData.meta.total === 1 ? "" : "s"}
                         {showClearFilters ? " (filtered)" : ""}
+                    </div>
+                    <div className="text-xs">
+                        Last updated: {lastRefresh.toLocaleTimeString()}
                     </div>
                 </div>
 

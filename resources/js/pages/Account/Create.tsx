@@ -7,16 +7,24 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import type { BreadcrumbItem } from "@/types";
-import { index as accountsIndex, create as accountsCreate } from "@/routes/accounts";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: "Accounts", href: accountsIndex().url },
-    { title: "Create", href: accountsCreate().url }
-];
+import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { index as accountsIndex, create as accountsCreate, store as accountsStore } from "@/routes/accounts";
 
 export default function AccountCreate() {
     const { roles } = usePage<{ roles: string[] }>().props;
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: "Create User Account",
+        breadcrumbs: [
+            { title: "Accounts", href: accountsIndex().url },
+            { title: "Create", href: accountsCreate().url },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
 
     const { data, setData, post, processing, errors } = useForm({
         first_name: "",
@@ -31,10 +39,10 @@ export default function AccountCreate() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post("/accounts", {
+        post(accountsStore().url, {
             onSuccess: () => {
                 toast.success("User account created successfully");
-                router.get("/accounts");
+                router.get(accountsIndex().url);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
@@ -45,8 +53,10 @@ export default function AccountCreate() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create User Account" />
-            <div className="max-w-4xl mx-auto p-6">
+            <Head title={title} />
+            <LoadingOverlay isLoading={isPageLoading || processing} message={processing ? "Saving account..." : undefined} />
+            <div className="max-w-4xl mx-auto p-6 space-y-6">
+                <PageHeader title="Create User Account" description="Add a new user to the system" />
                 <Card>
                     <CardHeader>
                         <CardTitle>Create User Account</CardTitle>
@@ -184,7 +194,7 @@ export default function AccountCreate() {
                                 <Button
                                     variant="outline"
                                     type="button"
-                                    onClick={() => router.get("/accounts")}
+                                    onClick={() => router.get(accountsIndex().url)}
                                 >
                                     Cancel
                                 </Button>

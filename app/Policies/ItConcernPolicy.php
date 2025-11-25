@@ -55,6 +55,12 @@ class ItConcernPolicy
      */
     public function update(User $user, ItConcern $itConcern): bool
     {
+        // Users can edit their own concerns if status is pending or in_progress
+        if ($itConcern->user_id === $user->id) {
+            return in_array($itConcern->status, ['pending', 'in_progress']);
+        }
+
+        // Others need edit permission
         return $this->permissionService->userHasPermission($user, 'it_concerns.edit');
     }
 

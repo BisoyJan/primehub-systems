@@ -142,6 +142,22 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the notifications for the user.
+     */
+    public function notifications()
+    {
+        return $this->hasMany(Notification::class)->orderBy('created_at', 'desc');
+    }
+
+    /**
+     * Get the unread notifications for the user.
+     */
+    public function unreadNotifications()
+    {
+        return $this->hasMany(Notification::class)->whereNull('read_at')->orderBy('created_at', 'desc');
+    }
+
+    /**
      * Check if user has a specific permission
      *
      * @param string $permission

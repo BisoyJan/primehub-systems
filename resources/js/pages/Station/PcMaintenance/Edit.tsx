@@ -1,5 +1,5 @@
 import { useState, FormEvent } from 'react';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -17,6 +17,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ArrowLeft, Save, Calendar } from 'lucide-react';
 import { PageHeader } from '@/components/PageHeader';
 import { usePageMeta } from '@/hooks';
+import {
+    index as pcMaintenanceIndexRoute,
+    edit as pcMaintenanceEditRoute,
+    update as pcMaintenanceUpdateRoute,
+} from '@/routes/pc-maintenance';
+import { index as stationsIndexRoute } from '@/routes/stations';
 
 interface Site {
     id: number;
@@ -54,9 +60,6 @@ interface Maintenance {
 interface EditProps {
     maintenance: Maintenance;
     stations: Station[];
-    sites: Site[];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any;
 }
 
 interface FormData {
@@ -69,8 +72,7 @@ interface FormData {
     status: 'completed' | 'pending' | 'overdue';
 }
 
-export default function Edit() {
-    const { maintenance, stations } = usePage<EditProps>().props;
+export default function Edit({ maintenance, stations }: EditProps) {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState<FormData>({
         station_id: maintenance.station_id,
@@ -82,11 +84,12 @@ export default function Edit() {
         status: maintenance.status,
     });
 
-    const { breadcrumbs } = usePageMeta({
+    const { title, breadcrumbs } = usePageMeta({
         title: 'Edit PC Maintenance',
         breadcrumbs: [
-            { title: 'PC Maintenance', href: '/pc-maintenance' },
-            { title: 'Edit', href: `/pc-maintenance/${maintenance.id}/edit` }
+            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'PC Maintenance', href: pcMaintenanceIndexRoute().url },
+            { title: 'Edit', href: pcMaintenanceEditRoute(maintenance.id).url }
         ]
     });
 
@@ -106,7 +109,7 @@ export default function Edit() {
 
         setLoading(true);
 
-        router.put(`/pc-maintenance/${maintenance.id}`, {
+        router.put(pcMaintenanceUpdateRoute(maintenance.id).url, {
             station_id: formData.station_id,
             last_maintenance_date: formData.last_maintenance_date,
             next_due_date: formData.next_due_date,
@@ -128,12 +131,12 @@ export default function Edit() {
     };
 
     const handleCancel = () => {
-        router.visit('/pc-maintenance');
+        router.visit(pcMaintenanceIndexRoute().url);
     };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Edit PC Maintenance Record" />
+            <Head title={title} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <PageHeader

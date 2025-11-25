@@ -6,8 +6,16 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { index as accountsIndex, create as accountsCreate } from "@/routes/accounts";
+import {
+    index as accountsIndex,
+    create as accountsCreate,
+    edit as accountsEdit,
+    destroy as accountsDestroy,
+    approve as accountsApprove,
+    unapprove as accountsUnapprove,
+} from "@/routes/accounts";
 import { toast } from "sonner";
+import { Plus, RefreshCw, Search } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -17,7 +25,6 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 
 // Authorization components and hooks
 import { Can } from "@/components/authorization";
-import { usePermission } from "@/hooks/useAuthorization";
 
 interface User {
     id: number;
@@ -53,16 +60,10 @@ export default function AccountIndex() {
     const { users, filters } = usePage<{ users: UsersPayload; filters: Filters }>().props;
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(filters.search || "");
-    const [debouncedSearch, setDebouncedSearch] = useState(filters.search || "");
     const [roleFilter, setRoleFilter] = useState(filters.role || "all");
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const auth = usePage().props.auth as { user?: { id: number } };
     const currentUserId = auth?.user?.id;
-
-    // Get permissions
-    const { can } = usePermission();
-
-    // Track initial mount to prevent effect on first render
-    const isInitialMount = useRef(true);
 
     // Use new hooks
     const { title, breadcrumbs } = usePageMeta({
@@ -72,36 +73,35 @@ export default function AccountIndex() {
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading();
 
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 500);
-        return () => clearTimeout(timer);
-    }, [search]);
+    const showClearFilters = roleFilter !== "all" || Boolean(search);
 
-    useEffect(() => {
-        // Skip the effect on initial mount to avoid duplicate requests
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
-            return;
-        }
-
+    const buildFilterParams = (
+        searchValue: string,
+        roleValue: string,
+        options: { resetPage?: boolean } = {}
+    ) => {
         const params: Record<string, string | number> = {};
-        if (debouncedSearch) params.search = debouncedSearch;
-        if (roleFilter && roleFilter !== "all") params.role = roleFilter;
-        // Reset to page 1 when filters change
-        params.page = 1;
+        if (searchValue) params.search = searchValue;
+        if (roleValue && roleValue !== "all") params.role = roleValue;
+        if (options.resetPage) params.page = 1;
+        return params;
+    };
 
+    const handleSearch = () => {
+        const params = buildFilterParams(search, roleFilter, { resetPage: true });
         setLoading(true);
-        router.get("/accounts", params, {
+        router.get(accountsIndex().url, params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, roleFilter]);
+    };
 
     const handleDelete = (userId: number) => {
         setLoading(true);
-        router.delete(`/accounts/${userId}`, {
+        router.delete(accountsDestroy(userId).url, {
             preserveScroll: true,
             onFinish: () => setLoading(false),
             onSuccess: () => toast.success("User account deleted successfully"),
@@ -111,7 +111,7 @@ export default function AccountIndex() {
 
     const handleApprove = (userId: number) => {
         setLoading(true);
-        router.post(`/accounts/${userId}/approve`, {}, {
+        router.post(accountsApprove(userId).url, {}, {
             preserveScroll: true,
             onFinish: () => setLoading(false),
             onSuccess: () => toast.success("User account approved successfully"),
@@ -121,11 +121,37 @@ export default function AccountIndex() {
 
     const handleUnapprove = (userId: number) => {
         setLoading(true);
-        router.post(`/accounts/${userId}/unapprove`, {}, {
+        router.post(accountsUnapprove(userId).url, {}, {
             preserveScroll: true,
             onFinish: () => setLoading(false),
             onSuccess: () => toast.success("User account approval revoked successfully"),
             onError: () => toast.error("Failed to revoke user approval"),
+        });
+    };
+
+    const clearFilters = () => {
+        setSearch("");
+        setRoleFilter("all");
+        // Trigger a reload with cleared filters
+        setLoading(true);
+        router.get(accountsIndex().url, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
+    };
+
+    const handleManualRefresh = () => {
+        setLoading(true);
+        router.get(accountsIndex().url, buildFilterParams(search, roleFilter), {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            only: ["users"],
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
         });
     };
 
@@ -151,33 +177,24 @@ export default function AccountIndex() {
                 {/* Loading overlay for page transitions */}
                 <LoadingOverlay isLoading={isPageLoading || loading} message="Loading accounts..." />
 
-                {/* Page header with create button */}
-                <Can permission="accounts.create" fallback={
-                    <PageHeader
-                        title="Account Management"
-                        description="Manage user accounts and permissions"
-                    />
-                }>
-                    <PageHeader
-                        title="Account Management"
-                        description="Manage user accounts and permissions"
-                        createLink={accountsCreate().url}
-                        createLabel="Create Account"
-                    />
-                </Can>
+                <PageHeader
+                    title="Account Management"
+                    description="Manage user accounts and permissions"
+                />
 
-                {/* Filters */}
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-2 sm:flex sm:flex-row gap-3">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
                         <Input
                             type="search"
                             placeholder="Search by name or email..."
                             value={search}
                             onChange={e => setSearch(e.target.value)}
-                            className="col-span-2 sm:w-64"
+                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                            className="w-full"
                         />
+
                         <Select value={roleFilter} onValueChange={setRoleFilter}>
-                            <SelectTrigger className="sm:w-48">
+                            <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Filter by Role" />
                             </SelectTrigger>
                             <SelectContent>
@@ -188,25 +205,44 @@ export default function AccountIndex() {
                                 <SelectItem value="HR">HR</SelectItem>
                             </SelectContent>
                         </Select>
+                    </div>
 
-                        {(roleFilter !== "all" || search) && (
-                            <Button
-                                variant="outline"
-                                onClick={() => {
-                                    setSearch("");
-                                    setRoleFilter("all");
-                                }}
-                            >
-                                Clear Filters
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <Can permission="accounts.create">
+                            <Button onClick={() => router.get(accountsCreate().url)} className="w-full sm:w-auto">
+                                <Plus className="mr-2 h-4 w-4" />
+                                Create Account
                             </Button>
-                        )}
+                        </Can>
+
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:flex-1">
+                            <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
+                                <Search className="mr-2 h-4 w-4" />
+                                Apply Filters
+                            </Button>
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+                                    Clear Filters
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} className="w-full sm:w-auto">
+                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                Refresh
+                            </Button>
+                        </div>
                     </div>
                 </div>
 
-                {/* Table section */}
-                <div className="text-sm text-muted-foreground mb-2">
-                    Showing {users.data.length} of {users.meta.total} user account{users.meta.total !== 1 ? 's' : ''}
-                    {(roleFilter !== "all" || search) && ' (filtered)'}
+                <div className="flex flex-col gap-2 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
+                    <div>
+                        Showing {users.data.length} of {users.meta.total} user account{users.meta.total !== 1 ? 's' : ''}
+                        {showClearFilters && ' (filtered)'}
+                    </div>
+                    <div className="text-xs">
+                        Last updated: {lastRefresh.toLocaleTimeString()}
+                    </div>
                 </div>
 
                 {/* Desktop Table */}
@@ -242,8 +278,8 @@ export default function AccountIndex() {
                                         </TableCell>
                                         <TableCell>
                                             <span className={`px-3 py-1 rounded-full text-xs font-medium border ${user.is_approved
-                                                    ? 'bg-green-100 text-green-800 border-green-200'
-                                                    : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                                ? 'bg-green-100 text-green-800 border-green-200'
+                                                : 'bg-yellow-100 text-yellow-800 border-yellow-200'
                                                 }`}>
                                                 {user.is_approved ? 'Approved' : 'Pending'}
                                             </span>
@@ -255,7 +291,7 @@ export default function AccountIndex() {
                                         <TableCell>
                                             <div className="flex items-center gap-2">
                                                 <Can permission="accounts.edit">
-                                                    <Link href={`/accounts/${user.id}/edit`}>
+                                                    <Link href={accountsEdit(user.id).url}>
                                                         <Button variant="outline" size="sm" disabled={loading}>
                                                             Edit
                                                         </Button>
@@ -326,8 +362,8 @@ export default function AccountIndex() {
                                         {user.role}
                                     </span>
                                     <span className={`px-2 py-1 rounded-full text-xs font-medium border ${user.is_approved
-                                            ? 'bg-green-100 text-green-800 border-green-200'
-                                            : 'bg-yellow-100 text-yellow-800 border-yellow-200'
+                                        ? 'bg-green-100 text-green-800 border-green-200'
+                                        : 'bg-yellow-100 text-yellow-800 border-yellow-200'
                                         }`}>
                                         {user.is_approved ? 'Approved' : 'Pending'}
                                     </span>
@@ -342,7 +378,7 @@ export default function AccountIndex() {
                             <div className="flex flex-col gap-2 pt-2">
                                 <div className="flex gap-2">
                                     <Can permission="accounts.edit">
-                                        <Link href={`/accounts/${user.id}/edit`} className="flex-1">
+                                        <Link href={accountsEdit(user.id).url} className="flex-1">
                                             <Button variant="outline" size="sm" className="w-full" disabled={loading}>
                                                 Edit
                                             </Button>
@@ -356,7 +392,7 @@ export default function AccountIndex() {
                                                 title="Delete User Account"
                                                 description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone.`}
                                                 disabled={loading || user.id === currentUserId}
-                                                buttonProps={{ size: "sm", className: "w-full" }}
+                                                triggerClassName="w-full"
                                             />
                                         </div>
                                     </Can>

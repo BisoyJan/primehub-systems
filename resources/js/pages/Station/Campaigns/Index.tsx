@@ -1,309 +1,404 @@
-import React, { useState, useEffect, useRef } from "react";
-import { router, usePage, Head } from "@inertiajs/react";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import AppLayout from "@/layouts/app-layout";
-import { toast } from "sonner";
-import { Label } from "@/components/ui/label";
-import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import type { BreadcrumbItem } from "@/types";
-import { index as campaignsIndex } from "@/routes/campaigns";
-import { Can } from "@/components/authorization";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Campaigns', href: campaignsIndex().url }
-];
+import { useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AppLayout from '@/layouts/app-layout';
+import { Label } from '@/components/ui/label';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Can } from '@/components/authorization';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { Search, RefreshCw, Plus, Filter } from 'lucide-react';
+import {
+    index as campaignsIndexRoute,
+    store as campaignsStoreRoute,
+    update as campaignsUpdateRoute,
+    destroy as campaignsDestroyRoute,
+} from '@/routes/campaigns';
+import { index as stationsIndexRoute } from '@/routes/stations';
 
 interface Campaign {
     id: number;
     name: string;
 }
 
-interface PaginatedCampaigns {
-    data: Campaign[];
-    links: PaginationLink[];
-    meta?: {
-        current_page: number;
-        last_page: number;
-        per_page: number;
-        total: number;
-    };
+interface PaginationMeta {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
 }
 
-interface Flash {
-    message?: string;
-    type?: string;
+interface PaginatedCampaigns {
+    data: Campaign[];
+    links?: PaginationLink[];
+    meta?: PaginationMeta;
 }
 
 interface Filters {
     search?: string;
 }
 
-export default function CampaignManagement() {
-    const { campaigns, flash, filters = {} } = usePage<{ campaigns: PaginatedCampaigns, flash?: Flash, filters?: Filters }>().props;
-    const [open, setOpen] = useState(false);
-    const [editCampaign, setEditCampaign] = useState<Campaign | null>(null);
-    const [name, setName] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-    const [deleteOpen, setDeleteOpen] = useState(false);
-    const [deleteCampaign, setDeleteCampaign] = useState<Campaign | null>(null);
+interface CampaignPageProps {
+    campaigns: PaginatedCampaigns;
+    filters?: Filters;
+}
 
-    // Search state
-    const [search, setSearch] = useState(filters.search || "");
-    const [debouncedSearch, setDebouncedSearch] = useState(filters.search || "");
-    const isInitialMount = useRef(true);
+export default function CampaignManagement({ campaigns, filters = {} }: CampaignPageProps) {
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Campaign Management',
+        breadcrumbs: [
+            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'Campaigns', href: campaignsIndexRoute().url },
+        ],
+    });
 
-    useEffect(() => {
-        if (flash?.message) {
-            if (flash.type === 'error') toast.error(flash.message);
-            else toast.success(flash.message);
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+
+    const [search, setSearch] = useState(filters.search || '');
+    const [isFilterLoading, setIsFilterLoading] = useState(false);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
+    const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
+    const [formName, setFormName] = useState('');
+    const [formError, setFormError] = useState<string | null>(null);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [campaignPendingDelete, setCampaignPendingDelete] = useState<Campaign | null>(null);
+    const [isDeleting, setIsDeleting] = useState(false);
+
+    const showClearFilters = Boolean(search.trim());
+
+    const buildFilterParams = () => {
+        const params: Record<string, string> = {};
+        if (search.trim()) {
+            params.search = search.trim();
         }
-    }, [flash?.message, flash?.type]);
+        return params;
+    };
 
-    // Debounce search input
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 500);
-        return () => clearTimeout(timer);
-    }, [search]);
+    const requestWithFilters = (params: Record<string, string>) => {
+        setIsFilterLoading(true);
+        router.get(campaignsIndexRoute().url, params, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setIsFilterLoading(false),
+        });
+    };
 
-    // Handle search changes
-    useEffect(() => {
-        // Skip the effect on initial mount to avoid duplicate requests
-        if (isInitialMount.current) {
-            isInitialMount.current = false;
+    const handleApplyFilters = () => {
+        requestWithFilters(buildFilterParams());
+    };
+
+    const handleClearFilters = () => {
+        setSearch('');
+        requestWithFilters({});
+    };
+
+    const handleManualRefresh = () => {
+        requestWithFilters(buildFilterParams());
+    };
+
+    const openCreateDialog = () => {
+        setEditingCampaign(null);
+        setFormName('');
+        setFormError(null);
+        setIsDialogOpen(true);
+    };
+
+    const openEditDialog = (campaign: Campaign) => {
+        setEditingCampaign(campaign);
+        setFormName(campaign.name);
+        setFormError(null);
+        setIsDialogOpen(true);
+    };
+
+    const closeDialog = () => {
+        setIsDialogOpen(false);
+        setEditingCampaign(null);
+        setFormName('');
+        setFormError(null);
+    };
+
+    const handleDialogOpenChange = (open: boolean) => {
+        if (!open) {
+            closeDialog();
+        } else {
+            setIsDialogOpen(true);
+        }
+    };
+
+    const openDeleteDialog = (campaign: Campaign) => {
+        setCampaignPendingDelete(campaign);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const closeDeleteDialog = () => {
+        setIsDeleteDialogOpen(false);
+        setCampaignPendingDelete(null);
+    };
+
+    const handleDeleteOpenChange = (open: boolean) => {
+        if (!open) {
+            closeDeleteDialog();
+        } else {
+            setIsDeleteDialogOpen(true);
+        }
+    };
+
+    const handleSave = (event: React.FormEvent) => {
+        event.preventDefault();
+        setFormError(null);
+
+        const trimmedName = formName.trim();
+        if (!trimmedName) {
+            setFormError('Campaign name is required.');
             return;
         }
 
-        const params: Record<string, string> = {};
-        if (debouncedSearch) params.search = debouncedSearch;
-
-        setLoading(true);
-        router.get("/campaigns", params, {
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-            onFinish: () => setLoading(false),
-        });
-    }, [debouncedSearch]);
-
-    // Add new campaign
-    const handleAdd = () => {
-        setEditCampaign(null);
-        setName("");
-        setError(null);
-        setOpen(true);
-    };
-
-    // Edit campaign
-    const handleEdit = (campaign: Campaign) => {
-        setEditCampaign(campaign);
-        setName(campaign.name);
-        setError(null);
-        setOpen(true);
-    };
-
-    // Delete campaign (open dialog)
-    const handleDelete = (campaign: Campaign) => {
-        setDeleteCampaign(campaign);
-        setDeleteOpen(true);
-    };
-
-    // Confirm delete
-    const confirmDelete = () => {
-        if (!deleteCampaign) return;
-        setLoading(true);
-        router.delete(`/campaigns/${deleteCampaign.id}`, {
-            onFinish: () => {
-                setLoading(false);
-                setDeleteOpen(false);
-                setDeleteCampaign(null);
-            },
-            preserveState: true,
-            preserveScroll: true,
-            replace: true,
-        });
-    };
-
-    // Save (add or update)
-    const handleSave = (e: React.FormEvent) => {
-        e.preventDefault();
-        setLoading(true);
-        setError(null);
-
-        // Check for duplicate names (case-insensitive)
-        const trimmedName = name.trim();
-        const isDuplicate = campaigns.data.some(campaign =>
-            campaign.name.toLowerCase() === trimmedName.toLowerCase() &&
-            campaign.id !== editCampaign?.id
+        const isDuplicate = campaigns.data.some((campaign) =>
+            campaign.name.toLowerCase() === trimmedName.toLowerCase() && campaign.id !== editingCampaign?.id
         );
 
         if (isDuplicate) {
-            setError(`A campaign with the name "${trimmedName}" already exists.`);
-            setLoading(false);
+            setFormError(`A campaign with the name "${trimmedName}" already exists.`);
             return;
         }
 
+        setIsSubmitting(true);
+
         const payload = { name: trimmedName };
-        const options = {
-            onFinish: () => {
-                setLoading(false);
-                setOpen(false);
-            },
-            onError: (errors: Record<string, string | string[]>) => {
-                // Handle backend validation errors
-                if (errors.name) {
-                    setError(Array.isArray(errors.name) ? errors.name[0] : errors.name);
-                }
-            },
+        const requestOptions = {
             preserveState: true,
             preserveScroll: true,
             replace: true,
-        };
-        if (editCampaign) {
-            router.put(`/campaigns/${editCampaign.id}`, payload, options);
+            onSuccess: () => {
+                closeDialog();
+                setLastRefresh(new Date());
+            },
+            onError: (errors: Record<string, string | string[]>) => {
+                if (errors.name) {
+                    setFormError(Array.isArray(errors.name) ? errors.name[0] : errors.name);
+                }
+            },
+            onFinish: () => setIsSubmitting(false),
+        } as const;
+
+        if (editingCampaign) {
+            router.put(campaignsUpdateRoute(editingCampaign.id).url, payload, requestOptions);
         } else {
-            router.post(`/campaigns`, payload, options);
+            router.post(campaignsStoreRoute().url, payload, requestOptions);
         }
     };
 
+    const handleDeleteConfirm = () => {
+        if (!campaignPendingDelete) return;
+        setIsDeleting(true);
+
+        router.delete(campaignsDestroyRoute(campaignPendingDelete.id).url, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => {
+                setIsDeleting(false);
+                closeDeleteDialog();
+            },
+        });
+    };
+
+    const paginationMeta: PaginationMeta = campaigns.meta || {
+        current_page: 1,
+        last_page: 1,
+        per_page: campaigns.data.length || 1,
+        total: campaigns.data.length,
+    };
+
+    const paginationLinks = campaigns.links || [];
+    const hasResults = campaigns.data.length > 0;
+    const showingStart = hasResults ? paginationMeta.per_page * (paginationMeta.current_page - 1) + 1 : 0;
+    const showingEnd = hasResults ? showingStart + campaigns.data.length - 1 : 0;
+    const summaryText = hasResults
+        ? `Showing ${showingStart}-${showingEnd} of ${paginationMeta.total} campaigns`
+        : 'No campaigns to display';
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Campaign Management" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                <div className="flex flex-col gap-3 mb-4">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-semibold">Campaign Management</h2>
-                        <Can permission="campaigns.create">
-                            <Button onClick={handleAdd} disabled={loading}>
-                                {loading ? 'Loading...' : 'Add Campaign'}
+            <Head title={title} />
+
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+                <LoadingOverlay isLoading={isPageLoading || isFilterLoading} />
+
+                <PageHeader
+                    title="Campaign Management"
+                    description="Create and maintain campaign labels for stations"
+                />
+
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search campaigns by name..."
+                                    value={search}
+                                    onChange={(event) => setSearch(event.target.value)}
+                                    onKeyDown={(event) => event.key === 'Enter' && handleApplyFilters()}
+                                    className="pl-8"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button variant="outline" onClick={handleApplyFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
                             </Button>
-                        </Can>
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={handleClearFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
+                                    Reset
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} disabled={isFilterLoading} className="flex-1 sm:flex-none">
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Refresh
+                            </Button>
+
+                            <Can permission="campaigns.create">
+                                <Button onClick={openCreateDialog} className="flex-1 sm:flex-none">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Add Campaign
+                                </Button>
+                            </Can>
+                        </div>
                     </div>
 
-                    {/* Search Input */}
-                    <Input
-                        type="search"
-                        placeholder="Search campaigns by name..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="max-w-md"
-                    />
-
-                    {/* Clear search button */}
-                    {search && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSearch("")}
-                            className="w-fit"
-                        >
-                            Clear Search
-                        </Button>
-                    )}
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            {summaryText}
+                            {showClearFilters && hasResults ? ' (filtered)' : ''}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                    </div>
                 </div>
-                <div className="shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto ">
+
+                <div className="overflow-hidden rounded-md border bg-card">
+                    <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
                                     <TableHead>ID</TableHead>
                                     <TableHead>Name</TableHead>
-                                    <TableHead>Actions</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {campaigns.data.map((campaign) => (
-                                    <TableRow key={campaign.id}>
-                                        <TableCell>{campaign.id}</TableCell>
-                                        <TableCell>{campaign.name}</TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Can permission="campaigns.edit">
-                                                    <Button variant="outline" size="sm" onClick={() => handleEdit(campaign)} disabled={loading}>
-                                                        Edit
-                                                    </Button>
-                                                </Can>
-                                                <Can permission="campaigns.delete">
-                                                    <Button variant="destructive" size="sm" onClick={() => handleDelete(campaign)} className="ml-2" disabled={loading}>
-                                                        Delete
-                                                    </Button>
-                                                </Can>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                                {campaigns.data.length === 0 && !loading && (
+                                {!hasResults ? (
                                     <TableRow>
-                                        <TableCell colSpan={3} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
                                             No campaigns found
                                         </TableCell>
                                     </TableRow>
+                                ) : (
+                                    campaigns.data.map((campaign) => (
+                                        <TableRow key={campaign.id}>
+                                            <TableCell>{campaign.id}</TableCell>
+                                            <TableCell className="font-medium">{campaign.name}</TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Can permission="campaigns.edit">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => openEditDialog(campaign)}
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                    </Can>
+                                                    <Can permission="campaigns.delete">
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            onClick={() => openDeleteDialog(campaign)}
+                                                        >
+                                                            Delete
+                                                        </Button>
+                                                    </Can>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
                                 )}
                             </TableBody>
                         </Table>
                     </div>
+
+                    {paginationLinks.length > 0 && (
+                        <div className="border-t px-4 py-3 flex justify-center">
+                            <PaginationNav links={paginationLinks} />
+                        </div>
+                    )}
                 </div>
-
-                {/* Pagination */}
-                {campaigns.links && campaigns.links.length > 0 && (
-                    <div className="flex justify-center mt-4">
-                        <PaginationNav links={campaigns.links} />
-                    </div>
-                )}
-
-                {/* Results count */}
-                {campaigns.meta && (
-                    <div className="text-sm text-muted-foreground text-center">
-                        Showing {campaigns.data.length} of {campaigns.meta.total} campaign{campaigns.meta.total !== 1 ? 's' : ''}
-                    </div>
-                )}
             </div>
-            <Dialog open={open} onOpenChange={setOpen}>
+
+            <Dialog open={isDialogOpen} onOpenChange={handleDialogOpenChange}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>{editCampaign ? "Edit Campaign" : "Add Campaign"}</DialogTitle>
+                        <DialogTitle>{editingCampaign ? 'Edit Campaign' : 'Add Campaign'}</DialogTitle>
                     </DialogHeader>
                     <form onSubmit={handleSave} className="space-y-4">
-                        <Label htmlFor="campaign-name">Name</Label>
-                        <Input
-                            id="campaign-name"
-                            value={name}
-                            onChange={(e) => setName(e.target.value)}
-                            required
-                            placeholder="Campaign name"
-                            disabled={loading}
-                        />
-                        {error && <div className="text-red-500 text-sm">{error}</div>}
+                        <div className="space-y-2">
+                            <Label htmlFor="campaign-name">Name</Label>
+                            <Input
+                                id="campaign-name"
+                                value={formName}
+                                onChange={(event) => setFormName(event.target.value)}
+                                placeholder="Campaign name"
+                                disabled={isSubmitting}
+                                required
+                            />
+                        </div>
+                        {formError && <p className="text-sm text-destructive">{formError}</p>}
                         <DialogFooter>
-                            <Button type="submit" disabled={loading}>
-                                {loading ? 'Saving...' : 'Save'}
-                            </Button>
-                            <Button variant="outline" type="button" onClick={() => setOpen(false)} disabled={loading}>
+                            <Button type="button" variant="outline" onClick={closeDialog} disabled={isSubmitting}>
                                 Cancel
+                            </Button>
+                            <Button type="submit" disabled={isSubmitting}>
+                                {isSubmitting ? 'Saving...' : 'Save'}
                             </Button>
                         </DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
-            <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+
+            <Dialog open={isDeleteDialogOpen} onOpenChange={handleDeleteOpenChange}>
                 <DialogContent>
                     <DialogHeader>
-                        <DialogTitle>Confirm Delete</DialogTitle>
+                        <DialogTitle>Delete Campaign</DialogTitle>
                     </DialogHeader>
-                    <div className="py-2 text-sm">
-                        {deleteCampaign && (
-                            <>Are you sure you want to delete campaign <b>{deleteCampaign.name}</b>? This action cannot be undone.</>
+                    <div className="py-2 text-sm text-muted-foreground">
+                        {campaignPendingDelete ? (
+                            <>Are you sure you want to delete the campaign <b>{campaignPendingDelete.name}</b>? This action cannot be undone.</>
+                        ) : (
+                            'Select a campaign to delete.'
                         )}
                     </div>
                     <DialogFooter className="flex gap-2">
-                        <Button variant="outline" onClick={() => setDeleteOpen(false)} disabled={loading}>
+                        <Button variant="outline" onClick={closeDeleteDialog} disabled={isDeleting}>
                             Cancel
                         </Button>
-                        <Button variant="destructive" onClick={confirmDelete} disabled={loading}>
-                            Delete
+                        <Button variant="destructive" onClick={handleDeleteConfirm} disabled={isDeleting || !campaignPendingDelete}>
+                            {isDeleting ? 'Deleting...' : 'Delete'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -6,6 +6,7 @@ use App\Http\Requests\LeaveRequestRequest;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\LeaveCreditService;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -14,10 +15,12 @@ use Inertia\Inertia;
 class LeaveRequestController extends Controller
 {
     protected $leaveCreditService;
+    protected $notificationService;
 
-    public function __construct(LeaveCreditService $leaveCreditService)
+    public function __construct(LeaveCreditService $leaveCreditService, NotificationService $notificationService)
     {
         $this->leaveCreditService = $leaveCreditService;
+        $this->notificationService = $notificationService;
     }
 
     /**
@@ -234,6 +237,20 @@ class LeaveRequestController extends Controller
                 'attendance_points_at_request' => $attendancePoints,
             ]);
 
+            // Notify HR/Admin users about new leave request
+            $hrAdminUsers = User::whereIn('role', ['Super Admin', 'Admin', 'HR'])
+                ->where('is_approved', true)
+                ->get();
+
+            foreach ($hrAdminUsers as $admin) {
+                $this->notificationService->notifyLeaveRequest(
+                    $admin->id,
+                    $targetUser->name,
+                    $request->leave_type,
+                    $leaveRequest->id
+                );
+            }
+
             DB::commit();
 
             return redirect()->route('leave-requests.show', $leaveRequest)
@@ -307,6 +324,14 @@ class LeaveRequestController extends Controller
             // TODO: Create attendance records for the leave period
             // This will mark the days as on leave in the attendance table
 
+            // Notify the employee about approval
+            $this->notificationService->notifyLeaveRequestStatusChange(
+                $leaveRequest->user_id,
+                'approved',
+                $leaveRequest->leave_type,
+                $leaveRequest->id
+            );
+
             DB::commit();
 
             return redirect()->route('leave-requests.show', $leaveRequest)
@@ -342,6 +367,14 @@ class LeaveRequestController extends Controller
                 'reviewed_at' => now(),
                 'review_notes' => $request->review_notes,
             ]);
+
+            // Notify the employee about denial
+            $this->notificationService->notifyLeaveRequestStatusChange(
+                $leaveRequest->user_id,
+                'denied',
+                $leaveRequest->leave_type,
+                $leaveRequest->id
+            );
 
             DB::commit();
 

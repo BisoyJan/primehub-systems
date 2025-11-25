@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { router, usePage, useForm, Head } from "@inertiajs/react";
+import { router, useForm, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
@@ -9,12 +9,15 @@ import MonitorSpecTable from "@/components/MonitorSpecTable";
 import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import type { BreadcrumbItem } from "@/types";
-import { index as stationsIndex } from "@/routes/stations";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: "Stations", href: stationsIndex().url }
-];
+import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import {
+    index as stationsIndexRoute,
+    create as stationsCreateRoute,
+    store as stationsStoreRoute,
+    bulk as stationsBulkRoute,
+} from "@/routes/stations";
 
 interface Site { id: number; name: string; }
 interface Campaign { id: number; name: string; }
@@ -37,14 +40,22 @@ interface PcSpec {
     [key: string]: unknown;
 }
 
-export default function StationCreate() {
-    const { sites, campaigns, pcSpecs, usedPcSpecIds, monitorSpecs } = usePage<{
-        sites: Site[];
-        campaigns: Campaign[];
-        pcSpecs: PcSpec[];
-        usedPcSpecIds: number[];
-        monitorSpecs: MonitorSpec[];
-    }>().props;
+interface StationCreateProps {
+    sites: Site[];
+    campaigns: Campaign[];
+    pcSpecs: PcSpec[];
+    usedPcSpecIds: number[];
+    monitorSpecs: MonitorSpec[];
+    flash?: { message?: string; type?: string };
+}
+
+export default function StationCreate({
+    sites,
+    campaigns,
+    pcSpecs,
+    usedPcSpecIds,
+    monitorSpecs,
+}: StationCreateProps) {
 
     const [bulkMode, setBulkMode] = useState(false);
     const [showNoSpecWarning, setShowNoSpecWarning] = useState(false);
@@ -63,6 +74,17 @@ export default function StationCreate() {
         starting_number: "",
         increment_type: "number", // "number", "letter", or "both"
     });
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: "Create Station",
+        breadcrumbs: [
+            { title: "Stations", href: stationsIndexRoute().url },
+            { title: "Create", href: stationsCreateRoute().url },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
 
     // Auto-hide messages after 6 seconds when PC spec selection changes
     useEffect(() => {
@@ -83,7 +105,7 @@ export default function StationCreate() {
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        const endpoint = bulkMode ? "/stations/bulk" : "/stations";
+        const endpoint = bulkMode ? stationsBulkRoute().url : stationsStoreRoute().url;
 
         post(endpoint, {
             onSuccess: () => {
@@ -91,7 +113,7 @@ export default function StationCreate() {
                     ? `Successfully created ${data.quantity} station(s)`
                     : "Station created";
                 toast.success(message);
-                router.get("/stations");
+                router.visit(stationsIndexRoute().url);
             },
             onError: (errors) => {
                 const firstError = Object.values(errors)[0] as string;
@@ -158,10 +180,17 @@ export default function StationCreate() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Create Station" />
-            <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6">
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-4 gap-3">
-                    <h2 className="text-xl md:text-2xl font-semibold">Add Station</h2>
+            <Head title={title} />
+            <div className="max-w-7xl mx-auto mt-4 p-3 md:p-6 relative">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? "Saving stations..." : undefined}
+                />
+
+                <PageHeader
+                    title="Add Station"
+                    description="Create single or bulk stations and optionally link PC or monitor specs"
+                >
                     <div className="flex items-center space-x-2">
                         <Checkbox
                             id="bulk-mode"
@@ -172,7 +201,7 @@ export default function StationCreate() {
                             Create Multiple Stations
                         </Label>
                     </div>
-                </div>
+                </PageHeader>
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -431,7 +460,14 @@ export default function StationCreate() {
                         <Button type="submit" disabled={processing} className="w-full sm:w-auto">
                             {processing ? "Saving..." : bulkMode ? `Create ${data.quantity} Station(s)` : "Save"}
                         </Button>
-                        <Button variant="outline" type="button" onClick={() => router.get("/stations")} className="w-full sm:w-auto">Cancel</Button>
+                        <Button
+                            variant="outline"
+                            type="button"
+                            onClick={() => router.visit(stationsIndexRoute().url)}
+                            className="w-full sm:w-auto"
+                        >
+                            Cancel
+                        </Button>
                     </div>
                 </form>
             </div>

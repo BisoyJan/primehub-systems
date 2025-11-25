@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { router, usePage, Head } from "@inertiajs/react";
+import { router, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -8,18 +8,17 @@ import {
     index as sitesIndex,
     store as siteStore,
     update as siteUpdate,
+    destroy as siteDestroy,
 } from '@/routes/sites';
 import AppLayout from "@/layouts/app-layout";
-import { toast } from "sonner";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import type { BreadcrumbItem } from "@/types";
 import { Can } from "@/components/authorization";
-import { usePermission } from "@/hooks/useAuthorization";
-
-const breadcrumbs: BreadcrumbItem[] = [
-    { title: 'Sites', href: sitesIndex().url }
-];
+import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
+import { index as stationsIndexRoute } from "@/routes/stations";
+import { RefreshCw, Search, Plus } from 'lucide-react';
 
 interface Site {
     id: number;
@@ -46,10 +45,13 @@ interface Filters {
     search?: string;
 }
 
-export default function SiteManagement() {
-    // Fix: Use correct prop name for paginated data
-    const { sites, flash, filters = {} } = usePage<{ sites: PaginatedSites, flash?: Flash, filters?: Filters }>().props;
-    const { can } = usePermission(); // Check permissions
+interface SiteManagementProps {
+    sites: PaginatedSites;
+    flash?: Flash;
+    filters?: Filters;
+}
+
+export default function SiteManagement({ sites, filters = {} }: SiteManagementProps) {
     const [open, setOpen] = useState(false);
     const [editSite, setEditSite] = useState<Site | null>(null);
     const [name, setName] = useState("");
@@ -57,18 +59,23 @@ export default function SiteManagement() {
     const [error, setError] = useState<string | null>(null);
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteSite, setDeleteSite] = useState<Site | null>(null);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
     // Search state
     const [search, setSearch] = useState(filters.search || "");
     const [debouncedSearch, setDebouncedSearch] = useState(filters.search || "");
     const isInitialMount = useRef(true);
 
-    useEffect(() => {
-        if (flash?.message) {
-            if (flash.type === 'error') toast.error(flash.message);
-            else toast.success(flash.message);
-        }
-    }, [flash?.message, flash?.type]);
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Site Management',
+        breadcrumbs: [
+            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'Sites', href: sitesIndex().url },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
 
     // Debounce search input
     useEffect(() => {
@@ -88,10 +95,11 @@ export default function SiteManagement() {
         if (debouncedSearch) params.search = debouncedSearch;
 
         setLoading(true);
-        router.get("/sites", params, {
+        router.get(sitesIndex().url, params, {
             preserveState: true,
             preserveScroll: true,
             replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
         });
     }, [debouncedSearch]);
@@ -122,7 +130,7 @@ export default function SiteManagement() {
     const confirmDelete = () => {
         if (!deleteSite) return;
         setLoading(true);
-        router.delete(`/sites/${deleteSite.id}`, {
+        router.delete(siteDestroy(deleteSite.id).url, {
             onFinish: () => {
                 setLoading(false);
                 setDeleteOpen(false);
@@ -176,40 +184,67 @@ export default function SiteManagement() {
         }
     };
 
+    const handleManualRefresh = () => {
+        setLoading(true);
+        router.reload({
+            only: ['sites'],
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title="Site Management" />
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3">
-                <div className="flex flex-col gap-3 mb-4">
-                    <div className="flex items-center justify-between">
-                        <h2 className="text-xl font-semibold">Site Management</h2>
-                        <Can permission="sites.create">
-                            <Button onClick={handleAdd} disabled={loading}>
-                                {loading ? 'Loading...' : 'Add Site'}
+            <Head title={title} />
+            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 relative">
+                <LoadingOverlay isLoading={isPageLoading || loading} message={loading ? 'Processing...' : undefined} />
+
+                <PageHeader
+                    title="Site Management"
+                    description="Manage the list of available site locations"
+                />
+
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search sites by name..."
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            {search && (
+                                <Button variant="outline" onClick={() => setSearch("")} className="flex-1 sm:flex-none">
+                                    Reset
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Refresh
                             </Button>
-                        </Can>
+
+                            <Can permission="sites.create">
+                                <Button onClick={handleAdd} disabled={loading} className="flex-1 sm:flex-none">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Add Site
+                                </Button>
+                            </Can>
+                        </div>
                     </div>
 
-                    {/* Search Input */}
-                    <Input
-                        type="search"
-                        placeholder="Search sites by name..."
-                        value={search}
-                        onChange={e => setSearch(e.target.value)}
-                        className="max-w-md"
-                    />
-
-                    {/* Clear search button */}
-                    {search && (
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setSearch("")}
-                            className="w-fit"
-                        >
-                            Clear Search
-                        </Button>
-                    )}
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            Showing {sites.data.length} of {sites.meta?.total || 0} site{sites.meta?.total !== 1 ? 's' : ''}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                    </div>
                 </div>
                 <div className="shadow rounded-md overflow-hidden">
                     <div className="overflow-x-auto ">
@@ -261,12 +296,7 @@ export default function SiteManagement() {
                     </div>
                 )}
 
-                {/* Results count */}
-                {sites.meta && (
-                    <div className="text-sm text-muted-foreground text-center">
-                        Showing {sites.data.length} of {sites.meta.total} site{sites.meta.total !== 1 ? 's' : ''}
-                    </div>
-                )}
+
             </div>
             <Dialog open={open} onOpenChange={setOpen}>
                 <DialogContent>

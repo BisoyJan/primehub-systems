@@ -14,8 +14,10 @@ import {
 } from '@/components/ui/select';
 import { ArrowLeft } from 'lucide-react';
 
-import { useFlashMessage } from '@/hooks';
-import { update, index } from '@/routes/diskspecs';
+import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { update, index, edit } from '@/routes/diskspecs';
 
 interface DiskSpec {
     id: number;
@@ -35,7 +37,19 @@ interface Props {
 export default function Edit({ diskspec }: Props) {
     useFlashMessage(); // Automatically handles flash messages
 
-    const { data, setData, put, errors } = useForm({
+    const specLabel = `${diskspec.manufacturer} ${diskspec.model}`.trim() || `Disk Spec #${diskspec.id}`;
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: `Edit ${specLabel}`,
+        breadcrumbs: [
+            { title: 'Disk Specifications', href: index().url },
+            { title: specLabel, href: edit({ diskspec: diskspec.id }).url },
+        ],
+    });
+
+    const isPageLoading = usePageLoading();
+
+    const { data, setData, put, errors, processing } = useForm({
         manufacturer: diskspec.manufacturer,
         model: diskspec.model,
         capacity_gb: diskspec.capacity_gb,
@@ -47,24 +61,31 @@ export default function Edit({ diskspec }: Props) {
 
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
-        put(update.url(diskspec.id));
+        put(update({ diskspec: diskspec.id }).url);
     };
 
     return (
-        <AppLayout breadcrumbs={[
-            { title: 'Disk Specifications', href: index().url },
-            { title: 'Edit', href: '#' }
-        ]}>
-            <Head title="Edit Disk Specification" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="flex h-full flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 w-full md:w-10/12 lg:w-8/12 mx-auto">
-                <div className="flex justify-start">
-                    <Link href={index.url()}>
-                        <Button>
-                            <ArrowLeft /> Return
-                        </Button>
-                    </Link>
-                </div>
+            <div className="relative mx-auto flex h-full w-full max-w-5xl flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 md:p-6">
+                <LoadingOverlay
+                    isLoading={isPageLoading || processing}
+                    message={processing ? 'Updating disk specification...' : undefined}
+                />
+
+                <PageHeader
+                    title={title}
+                    description="Adjust disk specification details and performance metrics."
+                    actions={(
+                        <Link href={index().url}>
+                            <Button variant="outline">
+                                <ArrowLeft className="mr-2 h-4 w-4" />
+                                Back to list
+                            </Button>
+                        </Link>
+                    )}
+                />
 
                 <form onSubmit={handleUpdate} className="space-y-8">
                     {/* Core Info */}

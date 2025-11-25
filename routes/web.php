@@ -26,6 +26,7 @@ use App\Http\Controllers\FormRequestRetentionPolicyController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\ItConcernController;
 use App\Http\Controllers\MedicationRequestController;
+use App\Http\Controllers\NotificationController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -298,6 +299,17 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::delete('/{policy}', [FormRequestRetentionPolicyController::class, 'destroy'])->name('destroy');
             Route::post('/{policy}/toggle', [FormRequestRetentionPolicyController::class, 'toggle'])->name('toggle');
         });
+
+    // Notifications
+    Route::prefix('notifications')->name('notifications.')->group(function () {
+        Route::get('/', [NotificationController::class, 'index'])->name('index');
+        Route::get('/unread-count', [NotificationController::class, 'unreadCount'])->name('unread-count');
+        Route::get('/recent', [NotificationController::class, 'recent'])->name('recent');
+        Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
+        Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
+        Route::delete('/read/all', [NotificationController::class, 'deleteAllRead'])->name('delete-all-read');
+    });
 });
 
 require __DIR__ . '/settings.php';

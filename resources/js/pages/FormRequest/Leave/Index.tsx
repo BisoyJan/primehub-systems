@@ -30,9 +30,13 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Plus, Filter, Eye, Ban } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Search, Filter } from 'lucide-react';
 import { toast } from 'sonner';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import PaginationNav from '@/components/pagination-nav';
+import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -66,8 +70,8 @@ interface PaginationMeta {
 interface Props {
     leaveRequests: {
         data: LeaveRequest[];
-        links: PaginationLink[];
-        meta: PaginationMeta;
+        links?: PaginationLink[];
+        meta?: PaginationMeta;
     };
     filters: {
         status?: string;
@@ -86,20 +90,65 @@ interface Props {
 }
 
 export default function Index({ leaveRequests, filters, isAdmin, hasPendingRequests, auth }: Props) {
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Leave Requests',
+        breadcrumbs: [
+            { title: 'Form Requests', href: '/form-requests' },
+            { title: 'Leave Requests', href: leaveIndexRoute().url },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+
     const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
     const [filterType, setFilterType] = useState(filters.type || 'all');
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+    const paginationMeta: PaginationMeta = leaveRequests.meta || {
+        current_page: 1,
+        last_page: 1,
+        per_page: leaveRequests.data.length || 1,
+        total: leaveRequests.data.length,
+    };
+    const paginationLinks = leaveRequests.links || [];
+
+    const showClearFilters = filterStatus !== 'all' || filterType !== 'all';
+
+    const buildFilterParams = () => {
+        const params: Record<string, string> = {};
+        if (filterStatus !== 'all') {
+            params.status = filterStatus;
+        }
+        if (filterType !== 'all') {
+            params.type = filterType;
+        }
+        return params;
+    };
+
+    const requestWithFilters = (params: Record<string, string>) => {
+        router.get(leaveIndexRoute().url, params, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+            onSuccess: () => setLastRefresh(new Date()),
+        });
+    };
 
     const handleFilter = () => {
-        router.get(
-            '/leave-requests',
-            {
-                status: filterStatus === 'all' ? '' : filterStatus,
-                type: filterType === 'all' ? '' : filterType
-            },
-            { preserveState: true }
-        );
+        requestWithFilters(buildFilterParams());
+    };
+
+    const handleManualRefresh = () => {
+        requestWithFilters(buildFilterParams());
+    };
+
+    const clearFilters = () => {
+        setFilterStatus('all');
+        setFilterType('all');
+        requestWithFilters({});
     };
 
     const handleCancelRequest = (id: number) => {
@@ -111,7 +160,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
         if (!selectedLeaveId) return;
 
         router.post(
-            `/leave-requests/${selectedLeaveId}/cancel`,
+            leaveCancelRoute(selectedLeaveId).url,
             {},
             {
                 onSuccess: () => {
@@ -155,164 +204,163 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
     };
 
     return (
-        <AppLayout>
-            <Head title="Leave Requests" />
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
 
-            <div className="container mx-auto px-4 py-8">
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <h1 className="text-3xl font-bold">Leave Requests</h1>
-                        <p className="text-muted-foreground mt-2">
-                            {isAdmin ? 'Manage all leave requests' : 'View your leave requests'}
-                        </p>
-                    </div>
-                    <Can permission="leave.create">
-                        <Link href="/leave-requests/create" onClick={handleRequestLeaveClick}>
-                            <Button disabled={hasPendingRequests}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Request Leave
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+                <LoadingOverlay isLoading={isPageLoading} />
+
+                <PageHeader
+                    title="Leave Requests"
+                    description={isAdmin ? 'Manage all leave requests' : 'View your leave requests'}
+                />
+
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                            <Select value={filterStatus} onValueChange={setFilterStatus}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Statuses" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Statuses</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="approved">Approved</SelectItem>
+                                    <SelectItem value="denied">Denied</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={filterType} onValueChange={setFilterType}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Types" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Types</SelectItem>
+                                    <SelectItem value="VL">Vacation Leave</SelectItem>
+                                    <SelectItem value="SL">Sick Leave</SelectItem>
+                                    <SelectItem value="BL">Birthday Leave</SelectItem>
+                                    <SelectItem value="SPL">Solo Parent Leave</SelectItem>
+                                    <SelectItem value="LOA">Leave of Absence</SelectItem>
+                                    <SelectItem value="LDV">Leave for Doctor's Visit</SelectItem>
+                                    <SelectItem value="UPTO">Unpaid Time Off</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button variant="outline" onClick={handleFilter} className="flex-1 sm:flex-none">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
                             </Button>
-                        </Link>
-                    </Can>
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
+                                    Reset
+                                </Button>
+                            )}
+
+                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
+                                <RefreshCw className="mr-2 h-4 w-4" />
+                                Refresh
+                            </Button>
+
+                            <Can permission="leave.create">
+                                <Link href={leaveCreateRoute().url} onClick={handleRequestLeaveClick} className="flex-1 sm:flex-none">
+                                    <Button disabled={hasPendingRequests} className="w-full sm:w-auto">
+                                        <Plus className="mr-2 h-4 w-4" />
+                                        Request Leave
+                                    </Button>
+                                </Link>
+                            </Can>
+                        </div>
+                    </div>
+
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            Showing {leaveRequests.data.length} of {paginationMeta.total} leave request{paginationMeta.total === 1 ? '' : 's'}
+                            {showClearFilters && ' (filtered)'}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Last updated: {lastRefresh.toLocaleTimeString()}</div>
+                    </div>
                 </div>
 
-                {/* Filters */}
-                <Card className="mb-6">
-                    <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
-                            <Filter className="h-5 w-5" />
-                            Filters
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col md:flex-row gap-4">
-                            <div className="flex-1">
-                                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="All Statuses" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Statuses</SelectItem>
-                                        <SelectItem value="pending">Pending</SelectItem>
-                                        <SelectItem value="approved">Approved</SelectItem>
-                                        <SelectItem value="denied">Denied</SelectItem>
-                                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <div className="flex-1">
-                                <Select value={filterType} onValueChange={setFilterType}>
-                                    <SelectTrigger>
-                                        <SelectValue placeholder="All Types" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Types</SelectItem>
-                                        <SelectItem value="VL">Vacation Leave</SelectItem>
-                                        <SelectItem value="SL">Sick Leave</SelectItem>
-                                        <SelectItem value="BL">Birthday Leave</SelectItem>
-                                        <SelectItem value="SPL">Solo Parent Leave</SelectItem>
-                                        <SelectItem value="LOA">Leave of Absence</SelectItem>
-                                        <SelectItem value="LDV">Leave for Doctor's Visit</SelectItem>
-                                        <SelectItem value="UPTO">Unpaid Time Off</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
-
-                            <Button onClick={handleFilter}>Apply Filters</Button>
-                        </div>
-                    </CardContent>
-                </Card>
-
-                {/* Table */}
-                <Card>
-                    <CardContent className="pt-6">
-                        <div className="overflow-x-auto">
-                            <Table>
-                                <TableHeader>
+                <div className="shadow rounded-md overflow-hidden bg-card">
+                    <div className="overflow-x-auto">
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    {isAdmin && <TableHead>Employee</TableHead>}
+                                    <TableHead>Type</TableHead>
+                                    <TableHead>Start Date</TableHead>
+                                    <TableHead>End Date</TableHead>
+                                    <TableHead>Days</TableHead>
+                                    <TableHead>Status</TableHead>
+                                    <TableHead>Submitted</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {leaveRequests.data.length === 0 ? (
                                     <TableRow>
-                                        {isAdmin && <TableHead>Employee</TableHead>}
-                                        <TableHead>Type</TableHead>
-                                        <TableHead>Start Date</TableHead>
-                                        <TableHead>End Date</TableHead>
-                                        <TableHead>Days</TableHead>
-                                        <TableHead>Status</TableHead>
-                                        <TableHead>Submitted</TableHead>
-                                        <TableHead className="text-right">Actions</TableHead>
+                                        <TableCell
+                                            colSpan={isAdmin ? 8 : 7}
+                                            className="text-center py-8 text-muted-foreground"
+                                        >
+                                            No leave requests found
+                                        </TableCell>
                                     </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {leaveRequests.data.length === 0 ? (
-                                        <TableRow>
-                                            <TableCell
-                                                colSpan={isAdmin ? 8 : 7}
-                                                className="text-center py-8 text-muted-foreground"
-                                            >
-                                                No leave requests found
+                                ) : (
+                                    leaveRequests.data.map((request) => (
+                                        <TableRow key={request.id}>
+                                            {isAdmin && (
+                                                <TableCell className="font-medium">
+                                                    {request.user.name}
+                                                </TableCell>
+                                            )}
+                                            <TableCell>{getLeaveTypeBadge(request.leave_type)}</TableCell>
+                                            <TableCell>
+                                                {format(parseISO(request.start_date), 'MMM d, yyyy')}
+                                            </TableCell>
+                                            <TableCell>
+                                                {format(parseISO(request.end_date), 'MMM d, yyyy')}
+                                            </TableCell>
+                                            <TableCell>{request.days_requested}</TableCell>
+                                            <TableCell>{getStatusBadge(request.status)}</TableCell>
+                                            <TableCell className="text-sm text-muted-foreground">
+                                                {format(parseISO(request.created_at), 'MMM d, yyyy')}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex justify-end gap-2">
+                                                    <Link href={leaveShowRoute(request.id).url}>
+                                                        <Button size="sm" variant="ghost">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </Link>
+                                                    {request.status === 'pending' && auth.user.id === request.user.id && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => handleCancelRequest(request.id)}
+                                                        >
+                                                            <Ban className="h-4 w-4 text-red-500" />
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
-                                    ) : (
-                                        leaveRequests.data.map((request) => (
-                                            <TableRow key={request.id}>
-                                                {isAdmin && (
-                                                    <TableCell className="font-medium">
-                                                        {request.user.name}
-                                                    </TableCell>
-                                                )}
-                                                <TableCell>{getLeaveTypeBadge(request.leave_type)}</TableCell>
-                                                <TableCell>
-                                                    {format(parseISO(request.start_date), 'MMM d, yyyy')}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {format(parseISO(request.end_date), 'MMM d, yyyy')}
-                                                </TableCell>
-                                                <TableCell>{request.days_requested}</TableCell>
-                                                <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                                <TableCell className="text-sm text-muted-foreground">
-                                                    {format(parseISO(request.created_at), 'MMM d, yyyy')}
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Link href={`/leave-requests/${request.id}`}>
-                                                            <Button size="sm" variant="ghost">
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-                                                        </Link>
-                                                        {request.status === 'pending' && auth.user.id === request.user.id && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
-                                                                onClick={() => handleCancelRequest(request.id)}
-                                                            >
-                                                                <Ban className="h-4 w-4 text-red-500" />
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
-                        </div>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </div>
 
-                        {/* Pagination */}
-                        {leaveRequests.meta && leaveRequests.meta.last_page > 1 && (
-                            <div className="flex justify-center gap-2 mt-6">
-                                {leaveRequests.links.map((link: PaginationLink, index: number) => (
-                                    <Button
-                                        key={index}
-                                        variant={link.active ? 'default' : 'outline'}
-                                        size="sm"
-                                        disabled={!link.url}
-                                        onClick={() => link.url && router.visit(link.url)}
-                                        dangerouslySetInnerHTML={{ __html: link.label }}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </CardContent>
-                </Card>
+                    {paginationLinks.length > 0 && (
+                        <div className="border-t px-4 py-3 flex justify-center">
+                            <PaginationNav links={paginationLinks} />
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Cancel Confirmation Dialog */}

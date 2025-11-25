@@ -39,6 +39,11 @@ import {
     TooltipProvider,
     TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+    index as attendanceIndex,
+    importMethod as attendanceImport,
+    upload as attendanceUpload,
+} from "@/routes/attendance";
 
 interface FileUploadItem {
     id: string;
@@ -86,8 +91,8 @@ export default function AttendanceImport() {
     const { title, breadcrumbs } = usePageMeta({
         title: "Import Attendance",
         breadcrumbs: [
-            { title: "Attendance", href: "/attendance" },
-            { title: "Import", href: "/attendance/import" },
+            { title: "Attendance", href: attendanceIndex().url },
+            { title: "Import", href: attendanceImport().url },
         ],
     });
 
@@ -144,7 +149,7 @@ export default function AttendanceImport() {
             formData.append('notes', notes);
 
             try {
-                await fetch('/attendance/upload', {
+                await fetch(attendanceUpload().url, {
                     method: 'POST',
                     body: formData,
                     headers: {
@@ -365,7 +370,7 @@ export default function AttendanceImport() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        onClick={() => router.get("/attendance")}
+                                        onClick={() => router.get(attendanceIndex().url)}
                                     >
                                         Cancel
                                     </Button>

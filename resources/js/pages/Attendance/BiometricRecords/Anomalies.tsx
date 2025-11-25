@@ -21,6 +21,9 @@ import {
     SelectValue
 } from '@/components/ui/select';
 import { type SharedData } from '@/types';
+import { Input } from '@headlessui/react';
+import { index as attendanceIndex, review as attendanceReview } from '@/routes/attendance';
+import { index as biometricAnomaliesIndex, detect as biometricAnomaliesDetect } from '@/routes/biometric-anomalies';
 
 interface Anomaly {
     type: string;
@@ -99,8 +102,8 @@ export default function Anomalies({ stats, results }: PageProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Anomaly Detection',
         breadcrumbs: [
-            { title: 'Attendance', href: '/attendance' },
-            { title: 'Anomaly Detection', href: '/biometric-anomalies' },
+            { title: 'Attendance', href: attendanceIndex().url },
+            { title: 'Anomaly Detection', href: biometricAnomaliesIndex().url },
         ],
     });
 
@@ -140,7 +143,7 @@ export default function Anomalies({ stats, results }: PageProps) {
 
         setIsLoading(true);
         router.post(
-            '/biometric-anomalies/detect',
+            biometricAnomaliesDetect().url,
             {
                 start_date: startDate,
                 end_date: endDate,
@@ -263,7 +266,7 @@ export default function Anomalies({ stats, results }: PageProps) {
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
                             <div className="flex items-center gap-2 rounded-md border px-3 py-2">
                                 <span className="text-muted-foreground text-xs whitespace-nowrap">From:</span>
-                                <input
+                                <Input
                                     type="date"
                                     value={startDate}
                                     onChange={(e) => setStartDate(e.target.value)}
@@ -273,7 +276,7 @@ export default function Anomalies({ stats, results }: PageProps) {
 
                             <div className="flex items-center gap-2 rounded-md border px-3 py-2">
                                 <span className="text-muted-foreground text-xs whitespace-nowrap">To:</span>
-                                <input
+                                <Input
                                     type="date"
                                     value={endDate}
                                     onChange={(e) => setEndDate(e.target.value)}
@@ -370,7 +373,7 @@ export default function Anomalies({ stats, results }: PageProps) {
                             {detectionResults && (
                                 <Button
                                     variant="outline"
-                                    onClick={() => router.get('/attendance/review')}
+                                    onClick={() => router.get(attendanceReview().url)}
                                     className="w-full sm:w-auto"
                                 >
                                     <AlertCircle className="mr-2 h-4 w-4" />

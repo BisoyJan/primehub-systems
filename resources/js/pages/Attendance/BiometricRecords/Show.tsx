@@ -1,14 +1,16 @@
 import React from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage } from "@/hooks";
+import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
+import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Clock, MapPin, Calendar } from "lucide-react";
-import type { BreadcrumbItem, SharedData } from "@/types";
+import type { SharedData } from "@/types";
+import { index as biometricRecordsIndex } from "@/routes/biometric-records";
 
 interface User {
     id: number;
@@ -76,21 +78,32 @@ export default function BiometricRecordsShow() {
     useFlashMessage();
     const timeFormat = auth.user.time_format || '24';
 
-    const breadcrumbs: BreadcrumbItem[] = [
-        { title: 'Biometric Records', href: '/biometric-records' },
-        { title: `${user.name} - ${new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`, href: '' }
-    ];
-
-    const goBack = () => {
-        router.get("/biometric-records");
-    };
-
     const formattedDate = new Date(date).toLocaleDateString('en-US', {
         weekday: 'long',
         month: 'long',
         day: 'numeric',
         year: 'numeric'
     });
+
+    const shortDate = new Date(date).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric',
+    });
+
+    const { title, breadcrumbs } = usePageMeta({
+        title: `${user.name} – ${shortDate}`,
+        breadcrumbs: [
+            { title: 'Biometric Records', href: biometricRecordsIndex().url },
+            { title: `${user.name} (${shortDate})`, href: '' },
+        ],
+    });
+
+    const isPageLoading = usePageLoading();
+
+    const goBack = () => {
+        router.get(biometricRecordsIndex().url);
+    };
 
     // Group records by upload
     const groupedRecords = records.reduce((acc, record) => {
@@ -104,7 +117,8 @@ export default function BiometricRecordsShow() {
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
-            <Head title={`Biometric Records - ${user.name}`} />
+            <Head title={title} />
+            <LoadingOverlay isLoading={isPageLoading} />
 
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <div className="flex items-center justify-between">
@@ -115,7 +129,7 @@ export default function BiometricRecordsShow() {
                     <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => router.get("/biometric-records", { user_id: user.id })}
+                        onClick={() => router.get(biometricRecordsIndex().url, { user_id: user.id })}
                     >
                         <Clock className="h-4 w-4 mr-2" />
                         View All Records

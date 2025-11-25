@@ -19,7 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Search, Filter } from "lucide-react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -30,6 +30,8 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
 
 interface User {
     id: number;
@@ -195,6 +197,11 @@ export default function ItConcernsIndex() {
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [concernToDelete, setConcernToDelete] = useState<number | null>(null);
+    const [resolveDialogOpen, setResolveDialogOpen] = useState(false);
+    const [concernToResolve, setConcernToResolve] = useState<ItConcern | null>(null);
+    const [resolutionNotes, setResolutionNotes] = useState("");
+    const [resolveStatus, setResolveStatus] = useState("resolved");
+    const [resolvePriority, setResolvePriority] = useState("medium");
 
     // Auto-refresh every 30 seconds to check for new concerns
     useEffect(() => {
@@ -289,6 +296,33 @@ export default function ItConcernsIndex() {
         setDeleteDialogOpen(true);
     };
 
+    const handleResolve = (concern: ItConcern) => {
+        setConcernToResolve(concern);
+        setResolutionNotes(concern.resolution_notes || "");
+        setResolveStatus(concern.status);
+        setResolvePriority(concern.priority);
+        setResolveDialogOpen(true);
+    };
+
+    const confirmResolve = () => {
+        if (concernToResolve) {
+            router.post(`/form-requests/it-concerns/${concernToResolve.id}/resolve`, {
+                resolution_notes: resolutionNotes,
+                status: resolveStatus,
+                priority: resolvePriority,
+            }, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setResolveDialogOpen(false);
+                    setConcernToResolve(null);
+                    setResolutionNotes("");
+                    setResolveStatus("resolved");
+                    setResolvePriority("medium");
+                },
+            });
+        }
+    };
+
     const confirmDelete = () => {
         if (concernToDelete) {
             router.delete(`/form-requests/it-concerns/${concernToDelete}`, {
@@ -322,100 +356,101 @@ export default function ItConcernsIndex() {
                     description="Submit and track IT issues reported by agents"
                 />
 
-                <div className="flex flex-col gap-3">
-                    <div className="w-full">
-                        <Input
-                            placeholder="Search by station or description..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="w-full"
-                        />
-                    </div>
+                <div className="flex flex-col gap-4">
+                    <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
+                        <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                            <div className="relative">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                                <Input
+                                    placeholder="Search..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="pl-8"
+                                />
+                            </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <Select value={siteFilter} onValueChange={setSiteFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Site" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Sites</SelectItem>
-                                {sitesList.map((site) => (
-                                    <SelectItem key={site.id} value={String(site.id)}>
-                                        {site.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                            <Select value={siteFilter} onValueChange={setSiteFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Site" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Sites</SelectItem>
+                                    {sitesList.map((site) => (
+                                        <SelectItem key={site.id} value={String(site.id)}>
+                                            {site.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
 
-                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Category" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Categories</SelectItem>
-                                <SelectItem value="Hardware">Hardware</SelectItem>
-                                <SelectItem value="Software">Software</SelectItem>
-                                <SelectItem value="Network/Connectivity">Network/Connectivity</SelectItem>
-                                <SelectItem value="Other">Other</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Category" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Categories</SelectItem>
+                                    <SelectItem value="Hardware">Hardware</SelectItem>
+                                    <SelectItem value="Software">Software</SelectItem>
+                                    <SelectItem value="Network/Connectivity">Network</SelectItem>
+                                    <SelectItem value="Other">Other</SelectItem>
+                                </SelectContent>
+                            </Select>
 
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Status</SelectItem>
-                                <SelectItem value="pending">Pending</SelectItem>
-                                <SelectItem value="in_progress">In Progress</SelectItem>
-                                <SelectItem value="resolved">Resolved</SelectItem>
-                                <SelectItem value="cancelled">Cancelled</SelectItem>
-                            </SelectContent>
-                        </Select>
+                            <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Status</SelectItem>
+                                    <SelectItem value="pending">Pending</SelectItem>
+                                    <SelectItem value="in_progress">In Progress</SelectItem>
+                                    <SelectItem value="resolved">Resolved</SelectItem>
+                                    <SelectItem value="cancelled">Cancelled</SelectItem>
+                                </SelectContent>
+                            </Select>
 
-                        <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-                            <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Priority" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Priorities</SelectItem>
-                                <SelectItem value="low">Low</SelectItem>
-                                <SelectItem value="medium">Medium</SelectItem>
-                                <SelectItem value="high">High</SelectItem>
-                                <SelectItem value="urgent">Urgent</SelectItem>
-                            </SelectContent>
-                        </Select>
-                    </div>
+                            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Priority" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Priorities</SelectItem>
+                                    <SelectItem value="low">Low</SelectItem>
+                                    <SelectItem value="medium">Medium</SelectItem>
+                                    <SelectItem value="high">High</SelectItem>
+                                    <SelectItem value="urgent">Urgent</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
 
-                    <div className="flex flex-col sm:flex-row gap-3">
-                        <Can permission="it_concerns.create">
-                            <Button onClick={() => router.get("/form-requests/it-concerns/create")}>
-                                <Plus className="mr-2 h-4 w-4" />
-                                Submit IT Concern
+                        <div className="flex gap-2 w-full sm:w-auto">
+                            <Button variant="outline" onClick={handleManualRefresh} disabled={loading} className="flex-1 sm:flex-none">
+                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                Refresh
                             </Button>
-                        </Can>
-
-                        <Button variant="outline" onClick={handleManualRefresh} disabled={loading}>
-                            <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                            Refresh
-                        </Button>
-
-                        {showClearFilters && (
-                            <Button variant="outline" onClick={clearFilters}>
-                                Clear Filters
-                            </Button>
-                        )}
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
+                                    Reset
+                                </Button>
+                            )}
+                            <Can permission="it_concerns.create">
+                                <Button onClick={() => router.get("/form-requests/it-concerns/create")} className="flex-1 sm:flex-none">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Submit
+                                </Button>
+                            </Can>
+                        </div>
                     </div>
-                </div>
 
-                <div className="flex justify-between items-center text-sm">
-                    <div className="text-muted-foreground">
-                        Showing {concernData.data.length} of {concernData.meta.total} concern
-                        {concernData.meta.total === 1 ? "" : "s"}
-                        {showClearFilters ? " (filtered)" : ""}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                        Last updated: {lastRefresh.toLocaleTimeString()}
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            Showing {concernData.data.length} of {concernData.meta.total} concern
+                            {concernData.meta.total === 1 ? "" : "s"}
+                            {showClearFilters ? " (filtered)" : ""}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                            Last updated: {lastRefresh.toLocaleTimeString()}
+                        </div>
                     </div>
                 </div>
 
@@ -453,6 +488,18 @@ export default function ItConcernsIndex() {
                                         {auth.user.role !== 'Agent' && (
                                             <TableCell>
                                                 <div className="flex gap-2">
+                                                    <Can permission="it_concerns.resolve">
+                                                        {concern.status !== 'resolved' && (
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleResolve(concern)}
+                                                                title="Quick Resolve"
+                                                            >
+                                                                <CheckCircle className="h-4 w-4 text-green-500" />
+                                                            </Button>
+                                                        )}
+                                                    </Can>
                                                     <Can permission="it_concerns.edit">
                                                         <Button
                                                             variant="ghost"
@@ -471,6 +518,22 @@ export default function ItConcernsIndex() {
                                                             <Trash2 className="h-4 w-4 text-red-500" />
                                                         </Button>
                                                     </Can>
+                                                </div>
+                                            </TableCell>
+                                        )}
+                                        {auth.user.role === 'Agent' && concern.user?.id === auth.user.id && (
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    {(concern.status === 'pending' || concern.status === 'in_progress') && (
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                                            title="Edit"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         )}
@@ -525,6 +588,18 @@ export default function ItConcernsIndex() {
 
                             {auth.user.role !== 'Agent' && (
                                 <div className="flex gap-2 pt-2 border-t">
+                                    <Can permission="it_concerns.resolve">
+                                        {concern.status !== 'resolved' && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleResolve(concern)}
+                                            >
+                                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                                Resolve
+                                            </Button>
+                                        )}
+                                    </Can>
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -540,6 +615,19 @@ export default function ItConcernsIndex() {
                                         onClick={() => handleDelete(concern.id)}
                                     >
                                         <Trash2 className="h-4 w-4 text-red-500" />
+                                    </Button>
+                                </div>
+                            )}
+                            {auth.user.role === 'Agent' && concern.user?.id === auth.user.id && (concern.status === 'pending' || concern.status === 'in_progress') && (
+                                <div className="flex gap-2 pt-2 border-t">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex-1"
+                                        onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                    >
+                                        <Edit className="mr-2 h-4 w-4" />
+                                        Edit
                                     </Button>
                                 </div>
                             )}
@@ -570,6 +658,88 @@ export default function ItConcernsIndex() {
                         <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={resolveDialogOpen} onOpenChange={setResolveDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Resolve IT Concern</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {concernToResolve && (
+                                    <div className="space-y-3 mt-4">
+                                        <div>
+                                            <span className="font-medium">Station:</span> {concernToResolve.station_number}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Category:</span> {concernToResolve.category}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Description:</span> {concernToResolve.description}
+                                        </div>
+
+                                        <div className="grid grid-cols-2 gap-3 mt-4">
+                                            <div className="space-y-2">
+                                                <Label htmlFor="resolve_status" className="text-foreground">
+                                                    Status <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Select value={resolveStatus} onValueChange={setResolveStatus}>
+                                                    <SelectTrigger id="resolve_status">
+                                                        <SelectValue placeholder="Select status" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="pending">Pending</SelectItem>
+                                                        <SelectItem value="in_progress">In Progress</SelectItem>
+                                                        <SelectItem value="resolved">Resolved</SelectItem>
+                                                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+
+                                            <div className="space-y-2">
+                                                <Label htmlFor="resolve_priority" className="text-foreground">
+                                                    Priority <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Select value={resolvePriority} onValueChange={setResolvePriority}>
+                                                    <SelectTrigger id="resolve_priority">
+                                                        <SelectValue placeholder="Select priority" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="low">Low</SelectItem>
+                                                        <SelectItem value="medium">Medium</SelectItem>
+                                                        <SelectItem value="high">High</SelectItem>
+                                                        <SelectItem value="urgent">Urgent</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+
+                                        <div className="mt-4">
+                                            <Label htmlFor="resolution_notes" className="text-foreground">
+                                                Resolution Notes <span className="text-red-500">*</span>
+                                            </Label>
+                                            <Textarea
+                                                id="resolution_notes"
+                                                placeholder="Describe how this issue was resolved..."
+                                                value={resolutionNotes}
+                                                onChange={(e) => setResolutionNotes(e.target.value)}
+                                                rows={4}
+                                                className="mt-2"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={confirmResolve}
+                                disabled={!resolutionNotes.trim()}
+                            >
+                                Update IT Concern
+                            </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>

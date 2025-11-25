@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { router } from '@inertiajs/react';
+import { index as medicationIndexRoute, store as medicationStoreRoute, checkPending as medicationCheckPendingRoute } from '@/routes/medication-requests';
 
 interface User {
     id: number;
@@ -30,7 +30,7 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
     const { title, breadcrumbs } = usePageMeta({
         title: 'New Medication Request',
         breadcrumbs: [
-            { title: 'Medication Requests', href: '/form-requests/medication-requests' },
+            { title: 'Medication Requests', href: medicationIndexRoute().url },
         ],
     });
 
@@ -38,7 +38,6 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
     const isPageLoading = usePageLoading();
     const [currentStep, setCurrentStep] = useState(1);
     const [hasPendingRequest, setHasPendingRequest] = useState(false);
-    const [checkingPending, setCheckingPending] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         requested_for_user_id: undefined as number | undefined,
@@ -57,16 +56,13 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                 return;
             }
 
-            setCheckingPending(true);
             try {
-                const response = await fetch(`/form-requests/medication-requests/check-pending/${userId}`);
+                const response = await fetch(medicationCheckPendingRoute(userId).url);
                 const result = await response.json();
                 setHasPendingRequest(result.hasPendingRequest);
             } catch (error) {
                 console.error('Error checking pending request:', error);
                 setHasPendingRequest(false);
-            } finally {
-                setCheckingPending(false);
             }
         };
 
@@ -75,7 +71,7 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post('/form-requests/medication-requests');
+        post(medicationStoreRoute().url);
     };
 
     const goToNextStep = () => {
