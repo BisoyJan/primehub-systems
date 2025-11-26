@@ -27,6 +27,7 @@ use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\ItConcernController;
 use App\Http\Controllers\MedicationRequestController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\ActivityLogController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -127,6 +128,11 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::post('accounts/{account}/unapprove', [AccountController::class, 'unapprove'])
         ->middleware('permission:accounts.edit')
         ->name('accounts.unapprove');
+
+    // Activity Logs
+    Route::get('activity-logs', [ActivityLogController::class, 'index'])
+        ->middleware('permission:activity_logs.view')
+        ->name('activity-logs.index');
 
     // PC Transfer
     Route::prefix('pc-transfers')->name('pc-transfers.')

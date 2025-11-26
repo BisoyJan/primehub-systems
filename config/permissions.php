@@ -146,6 +146,9 @@ return [
         'settings.view' => 'Access Settings',
         'settings.account' => 'Manage Account Settings',
         'settings.password' => 'Change Password',
+
+        // Activity Logs
+        'activity_logs.view' => 'View Activity Logs',
     ],
 
     /*

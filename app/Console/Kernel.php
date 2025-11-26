@@ -18,6 +18,12 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->onOneServer();
 
+        // Clean form request records based on retention policies - runs daily at 2:30 AM
+        $schedule->command('form-request:clean-old-records --force')
+            ->dailyAt('02:30')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Process attendance point expirations (SRO and GBRO) - runs daily at 3:00 AM
         $schedule->command('points:process-expirations')
             ->dailyAt('03:00')
@@ -29,5 +35,8 @@ class Kernel extends ConsoleKernel
             ->monthlyOn(date('t'), '23:00') // Last day of the month at 11 PM
             ->withoutOverlapping()
             ->onOneServer();
+
+        // Clean old activity logs (older than 90 days) - runs daily at 1:00 AM
+        $schedule->command('activitylog:clean')->dailyAt('01:00');
     }
 }

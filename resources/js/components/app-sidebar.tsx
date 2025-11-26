@@ -20,7 +20,7 @@ import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
 import { index as medicationRequestsIndex } from '@/routes/medication-requests'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane, LucideIcon, AlertCircle, Pill } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane, LucideIcon, AlertCircle, Pill, Activity } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -216,6 +216,12 @@ const getNavigationConfig = (userId: number, userRole: string) => {
                     href: '/accounts',
                     icon: User,
                     permission: 'accounts.view',
+                },
+                {
+                    title: 'Activity Logs',
+                    href: '/activity-logs',
+                    icon: Activity,
+                    permission: 'activity_logs.view',
                 },
             ],
         },
