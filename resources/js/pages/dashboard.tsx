@@ -609,325 +609,327 @@ export default function Dashboard({
                     </motion.div>
                 )}
 
-                {/* Stats Grid - Only show for non-restricted roles */}
-                {!isRestrictedRole && (
-                    <motion.div
-                        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ duration: 0.5, delay: 0.2 }}
-                    >
+                {/* Stats Grid */}
+                <motion.div
+                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.5, delay: 0.2 }}
+                >
 
-                        {/* Current Date & Time */}
-                        <StatCard
-                            title="Current Date & Time"
-                            value={
-                                <div className="flex flex-col">
-                                    <span className="font-semibold text-base">{currentDateTime.date}</span>
-                                    <span className="text-lg text-muted-foreground">{currentDateTime.time}</span>
-                                </div>
-                            }
-                            icon={Calendar}
-                            onClick={() => setActiveDialog('dateTime')}
-                            delay={0.25}
-                        />
-
-                        {/* Total Stations */}
-                        <StatCard
-                            title="Total Stations"
-                            value={totalStations?.total || 0}
-                            icon={Server}
-                            description="Click for breakdown by site"
-                            onClick={() => setActiveDialog('stations')}
-                            delay={0.3}
-                        />
-
-                        {/* Available PC Specs */}
-                        <StatCard
-                            title="Available PCs"
-                            value={unassignedPcSpecs?.length || 0}
-                            icon={Server}
-                            description="PC specs not assigned to any station"
-                            onClick={() => setActiveDialog('availablePcs')}
-                            variant={(unassignedPcSpecs?.length || 0) > 0 ? "success" : "default"}
-                            delay={0.35}
-                        />
-                        {/* No PCs */}
-                        <StatCard
-                            title="Stations Without PCs"
-                            value={noPcs?.total || 0}
-                            icon={AlertCircle}
-                            description="Requires PC assignment"
-                            onClick={() => setActiveDialog('noPcs')}
-                            variant="warning"
-                            delay={0.4}
-                        />
-
-                        {/* Vacant Stations */}
-                        <StatCard
-                            title="Vacant Stations"
-                            value={vacantStations?.total || 0}
-                            icon={XCircle}
-                            description="Available for deployment"
-                            onClick={() => setActiveDialog('vacantStations')}
-                            delay={0.45}
-                        />
-
-                        {/* PCs with SSD & HDD Combined */}
-                        <StatCard
-                            title="PCs with SSD & HDD"
-                            value={
-                                <div className="flex flex-row gap-2">
-                                    <span>
-                                        <span className="font-semibold">{hddPcs?.total || 0}</span>
-                                        <span className="text-xs text-muted-foreground ml-1">HDD</span>
-                                    </span>
-                                    <span>
-                                        <span className="font-semibold text-green-600 dark:text-green-400">{ssdPcs?.total || 0}</span>
-                                        <span className="text-xs text-muted-foreground ml-1">SSD</span>
-                                    </span>
-                                </div>
-                            }
-                            icon={HardDrive}
-                            description="Solid State & Hard Disk Drives"
-                            onClick={() => setActiveDialog('diskPcs')}
-                            variant="success"
-                            delay={0.5}
-                        />
-
-                        {/* Dual Monitor */}
-                        <StatCard
-                            title="Dual Monitor Setups"
-                            value={dualMonitor?.total || 0}
-                            icon={Monitor}
-                            description="Stations with 2 monitors"
-                            onClick={() => setActiveDialog('dualMonitor')}
-                            delay={0.55}
-                        />
-
-                        {/* Maintenance Due */}
-                        <StatCard
-                            title="Maintenance Due"
-                            value={maintenanceDue?.total || 0}
-                            icon={Wrench}
-                            description="Requires attention"
-                            onClick={() => setActiveDialog('maintenanceDue')}
-                            variant={(maintenanceDue?.total || 0) > 0 ? "danger" : "default"}
-                            delay={0.6}
-                        />
-
-                        {/* IT Concerns Widget */}
-                        <div className="col-span-1 md:col-span-2 lg:col-span-4">
-                            <div className="flex items-center justify-between mb-4">
-                                <div className="flex items-center gap-2">
-                                    <h3 className="font-semibold text-lg">
-                                        {itConcernViewMode === 'cards' ? 'IT Concerns Overview' : 'IT Concern Trends'}
-                                    </h3>
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <span className="text-xs text-muted-foreground mr-2">
-                                        Switch View
-                                    </span>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        className="h-8 w-8 rounded-full"
-                                        onClick={() => setItConcernViewMode(prev => prev === 'cards' ? 'chart' : 'cards')}
-                                    >
-                                        {itConcernViewMode === 'cards' ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-                                    </Button>
-                                </div>
+                    {/* Current Date & Time */}
+                    <StatCard
+                        title="Current Date & Time"
+                        value={
+                            <div className="flex flex-col">
+                                <span className="font-semibold text-base">{currentDateTime.date}</span>
+                                <span className="text-lg text-muted-foreground">{currentDateTime.time}</span>
                             </div>
+                        }
+                        icon={Calendar}
+                        onClick={() => setActiveDialog('dateTime')}
+                        delay={0.25}
+                    />
 
-                            {itConcernViewMode === 'cards' ? (
-                                <motion.div
-                                    initial={{ opacity: 0, x: -20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: 20 }}
-                                    transition={{ duration: 0.3 }}
-                                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                                >
-                                    <StatCard
-                                        title="IT Concerns (All)"
-                                        value={totalConcerns}
-                                        icon={ClipboardList}
-                                        description="Click for per-site breakdown"
-                                        onClick={() => setActiveDialog('itConcernsBySite')}
-                                        variant={totalConcerns > 0 ? 'success' : 'default'}
-                                        delay={0.63}
-                                    />
-                                    <StatCard
-                                        title="IT Concerns (Pending)"
-                                        value={concernStats.pending}
-                                        icon={Clock}
-                                        description="Awaiting acknowledgement"
-                                        onClick={() => goToItConcerns('pending')}
-                                        variant={concernStats.pending > 0 ? 'warning' : 'default'}
-                                        delay={0.68}
-                                    />
-                                    <StatCard
-                                        title="IT Concerns (In Progress)"
-                                        value={concernStats.in_progress}
-                                        icon={Loader2}
-                                        description="Currently being handled"
-                                        onClick={() => goToItConcerns('in_progress')}
-                                        delay={0.73}
-                                    />
-                                    <StatCard
-                                        title="IT Concerns (Resolved)"
-                                        value={concernStats.resolved}
-                                        icon={CheckCircle2}
-                                        description="Closed this period"
-                                        onClick={() => goToItConcerns('resolved')}
-                                        variant="success"
-                                        delay={0.78}
-                                    />
-                                </motion.div>
-                            ) : (
-                                <motion.div
-                                    initial={{ opacity: 0, x: 20 }}
-                                    animate={{ opacity: 1, x: 0 }}
-                                    exit={{ opacity: 0, x: -20 }}
-                                    transition={{ duration: 0.3 }}
-                                >
-                                    <Card>
-                                        <CardHeader className="pb-0">
-                                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                                <div>
-                                                    <CardTitle className="text-base">Trend Analysis</CardTitle>
-                                                    <CardDescription className="text-xs">
-                                                        {activeItTrendSlide.description}
-                                                    </CardDescription>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <div className="text-sm font-medium">
-                                                        {activeItTrendSlide.label}
+                    {!isRestrictedRole && (
+                        <>
+                            {/* Total Stations */}
+                            <StatCard
+                                title="Total Stations"
+                                value={totalStations?.total || 0}
+                                icon={Server}
+                                description="Click for breakdown by site"
+                                onClick={() => setActiveDialog('stations')}
+                                delay={0.3}
+                            />
+
+                            {/* Available PC Specs */}
+                            <StatCard
+                                title="Available PCs"
+                                value={unassignedPcSpecs?.length || 0}
+                                icon={Server}
+                                description="PC specs not assigned to any station"
+                                onClick={() => setActiveDialog('availablePcs')}
+                                variant={(unassignedPcSpecs?.length || 0) > 0 ? "success" : "default"}
+                                delay={0.35}
+                            />
+                            {/* No PCs */}
+                            <StatCard
+                                title="Stations Without PCs"
+                                value={noPcs?.total || 0}
+                                icon={AlertCircle}
+                                description="Requires PC assignment"
+                                onClick={() => setActiveDialog('noPcs')}
+                                variant="warning"
+                                delay={0.4}
+                            />
+
+                            {/* Vacant Stations */}
+                            <StatCard
+                                title="Vacant Stations"
+                                value={vacantStations?.total || 0}
+                                icon={XCircle}
+                                description="Available for deployment"
+                                onClick={() => setActiveDialog('vacantStations')}
+                                delay={0.45}
+                            />
+
+                            {/* PCs with SSD & HDD Combined */}
+                            <StatCard
+                                title="PCs with SSD & HDD"
+                                value={
+                                    <div className="flex flex-row gap-2">
+                                        <span>
+                                            <span className="font-semibold">{hddPcs?.total || 0}</span>
+                                            <span className="text-xs text-muted-foreground ml-1">HDD</span>
+                                        </span>
+                                        <span>
+                                            <span className="font-semibold text-green-600 dark:text-green-400">{ssdPcs?.total || 0}</span>
+                                            <span className="text-xs text-muted-foreground ml-1">SSD</span>
+                                        </span>
+                                    </div>
+                                }
+                                icon={HardDrive}
+                                description="Solid State & Hard Disk Drives"
+                                onClick={() => setActiveDialog('diskPcs')}
+                                variant="success"
+                                delay={0.5}
+                            />
+
+                            {/* Dual Monitor */}
+                            <StatCard
+                                title="Dual Monitor Setups"
+                                value={dualMonitor?.total || 0}
+                                icon={Monitor}
+                                description="Stations with 2 monitors"
+                                onClick={() => setActiveDialog('dualMonitor')}
+                                delay={0.55}
+                            />
+
+                            {/* Maintenance Due */}
+                            <StatCard
+                                title="Maintenance Due"
+                                value={maintenanceDue?.total || 0}
+                                icon={Wrench}
+                                description="Requires attention"
+                                onClick={() => setActiveDialog('maintenanceDue')}
+                                variant={(maintenanceDue?.total || 0) > 0 ? "danger" : "default"}
+                                delay={0.6}
+                            />
+
+                            {/* IT Concerns Widget */}
+                            <div className="col-span-1 md:col-span-2 lg:col-span-4">
+                                <div className="flex items-center justify-between mb-4">
+                                    <div className="flex items-center gap-2">
+                                        <h3 className="font-semibold text-lg">
+                                            {itConcernViewMode === 'cards' ? 'IT Concerns Overview' : 'IT Concern Trends'}
+                                        </h3>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-xs text-muted-foreground mr-2">
+                                            Switch View
+                                        </span>
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-8 w-8 rounded-full"
+                                            onClick={() => setItConcernViewMode(prev => prev === 'cards' ? 'chart' : 'cards')}
+                                        >
+                                            {itConcernViewMode === 'cards' ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {itConcernViewMode === 'cards' ? (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: -20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: 20 }}
+                                        transition={{ duration: 0.3 }}
+                                        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+                                    >
+                                        <StatCard
+                                            title="IT Concerns (All)"
+                                            value={totalConcerns}
+                                            icon={ClipboardList}
+                                            description="Click for per-site breakdown"
+                                            onClick={() => setActiveDialog('itConcernsBySite')}
+                                            variant={totalConcerns > 0 ? 'success' : 'default'}
+                                            delay={0.63}
+                                        />
+                                        <StatCard
+                                            title="IT Concerns (Pending)"
+                                            value={concernStats.pending}
+                                            icon={Clock}
+                                            description="Awaiting acknowledgement"
+                                            onClick={() => goToItConcerns('pending')}
+                                            variant={concernStats.pending > 0 ? 'warning' : 'default'}
+                                            delay={0.68}
+                                        />
+                                        <StatCard
+                                            title="IT Concerns (In Progress)"
+                                            value={concernStats.in_progress}
+                                            icon={Loader2}
+                                            description="Currently being handled"
+                                            onClick={() => goToItConcerns('in_progress')}
+                                            delay={0.73}
+                                        />
+                                        <StatCard
+                                            title="IT Concerns (Resolved)"
+                                            value={concernStats.resolved}
+                                            icon={CheckCircle2}
+                                            description="Closed this period"
+                                            onClick={() => goToItConcerns('resolved')}
+                                            variant="success"
+                                            delay={0.78}
+                                        />
+                                    </motion.div>
+                                ) : (
+                                    <motion.div
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: -20 }}
+                                        transition={{ duration: 0.3 }}
+                                    >
+                                        <Card>
+                                            <CardHeader className="pb-0">
+                                                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                                    <div>
+                                                        <CardTitle className="text-base">Trend Analysis</CardTitle>
+                                                        <CardDescription className="text-xs">
+                                                            {activeItTrendSlide.description}
+                                                        </CardDescription>
                                                     </div>
                                                     <div className="flex items-center gap-2">
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleTrendPrev}
-                                                            className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
-                                                            aria-label="Previous trend"
-                                                        >
-                                                            <ChevronLeft className="h-4 w-4" />
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleTrendNext}
-                                                            className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
-                                                            aria-label="Next trend"
-                                                        >
-                                                            <ChevronRight className="h-4 w-4" />
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-xs font-medium">Filter Date:</span>
-                                                    <input
-                                                        type="date"
-                                                        value={dateRange.start}
-                                                        onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                                                        className="h-8 px-2 border rounded-md text-xs"
-                                                        aria-label="Start date"
-                                                    />
-                                                    <span className="text-muted-foreground text-xs">to</span>
-                                                    <input
-                                                        type="date"
-                                                        value={dateRange.end}
-                                                        onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                                                        className="h-8 px-2 border rounded-md text-xs"
-                                                        aria-label="End date"
-                                                    />
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={handleDateRangeChange}
-                                                        className="h-8 text-xs"
-                                                    >
-                                                        Apply
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                        </CardHeader>
-                                        <CardContent className="pt-4">
-                                            {itTrends.length === 0 ? (
-                                                <div className="py-10 text-center text-muted-foreground">
-                                                    No IT concern activity recorded for the selected window.
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <ChartContainer
-                                                        config={{
-                                                            [activeItTrendSlide.key]: {
-                                                                label: activeItTrendSlide.label,
-                                                                color: activeItTrendSlide.color,
-                                                            }
-                                                        }}
-                                                        className="h-[320px] w-full"
-                                                    >
-                                                        <ResponsiveContainer width="100%" height="100%">
-                                                            <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>
-                                                                <defs>
-                                                                    <linearGradient id={activeTrendGradientId} x1="0" y1="0" x2="0" y2="1">
-                                                                        <stop offset="5%" stopColor={activeItTrendSlide.color} stopOpacity={0.8} />
-                                                                        <stop offset="95%" stopColor={activeItTrendSlide.color} stopOpacity={0.05} />
-                                                                    </linearGradient>
-                                                                </defs>
-                                                                <CartesianGrid strokeDasharray="3 3" />
-                                                                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval="preserveStartEnd" />
-                                                                <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
-                                                                <ChartTooltip
-                                                                    cursor={false}
-                                                                    content={<ChartTooltipContent />}
-                                                                />
-                                                                <Area
-                                                                    type="monotone"
-                                                                    dataKey={activeItTrendSlide.key as 'total' | 'pending' | 'in_progress' | 'resolved'}
-                                                                    stroke={activeItTrendSlide.color}
-                                                                    fill={`url(#${activeTrendGradientId})`}
-                                                                    strokeWidth={2}
-                                                                    activeDot={{ r: 5 }}
-                                                                />
-                                                            </AreaChart>
-                                                        </ResponsiveContainer>
-                                                    </ChartContainer>
-                                                    <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
-                                                        <div>
-                                                            <p className="text-muted-foreground text-xs uppercase">Latest Month</p>
-                                                            <p className="font-semibold">{latestItTrend?.label ?? 'N/A'}</p>
+                                                        <div className="text-sm font-medium">
+                                                            {activeItTrendSlide.label}
                                                         </div>
-                                                        <div className="flex flex-wrap gap-4">
-                                                            <div>
-                                                                <p className="text-muted-foreground text-xs uppercase">Total</p>
-                                                                <p className="font-semibold">{latestItTrend?.total ?? 0}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-muted-foreground text-xs uppercase">Pending</p>
-                                                                <p className="font-semibold">{latestItTrend?.pending ?? 0}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-muted-foreground text-xs uppercase">In Progress</p>
-                                                                <p className="font-semibold">{latestItTrend?.in_progress ?? 0}</p>
-                                                            </div>
-                                                            <div>
-                                                                <p className="text-muted-foreground text-xs uppercase">Resolved</p>
-                                                                <p className="font-semibold">{latestItTrend?.resolved ?? 0}</p>
-                                                            </div>
+                                                        <div className="flex items-center gap-2">
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleTrendPrev}
+                                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                                aria-label="Previous trend"
+                                                            >
+                                                                <ChevronLeft className="h-4 w-4" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={handleTrendNext}
+                                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                                aria-label="Next trend"
+                                                            >
+                                                                <ChevronRight className="h-4 w-4" />
+                                                            </button>
                                                         </div>
                                                     </div>
-                                                </>
-                                            )}
-                                        </CardContent>
-                                    </Card>
-                                </motion.div>
-                            )}
-                        </div>
+                                                </div>
+                                                <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-xs font-medium">Filter Date:</span>
+                                                        <input
+                                                            type="date"
+                                                            value={dateRange.start}
+                                                            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                                                            className="h-8 px-2 border rounded-md text-xs"
+                                                            aria-label="Start date"
+                                                        />
+                                                        <span className="text-muted-foreground text-xs">to</span>
+                                                        <input
+                                                            type="date"
+                                                            value={dateRange.end}
+                                                            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                                                            className="h-8 px-2 border rounded-md text-xs"
+                                                            aria-label="End date"
+                                                        />
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={handleDateRangeChange}
+                                                            className="h-8 text-xs"
+                                                        >
+                                                            Apply
+                                                        </Button>
+                                                    </div>
+                                                </div>
+                                            </CardHeader>
+                                            <CardContent className="pt-4">
+                                                {itTrends.length === 0 ? (
+                                                    <div className="py-10 text-center text-muted-foreground">
+                                                        No IT concern activity recorded for the selected window.
+                                                    </div>
+                                                ) : (
+                                                    <>
+                                                        <ChartContainer
+                                                            config={{
+                                                                [activeItTrendSlide.key]: {
+                                                                    label: activeItTrendSlide.label,
+                                                                    color: activeItTrendSlide.color,
+                                                                }
+                                                            }}
+                                                            className="h-[320px] w-full"
+                                                        >
+                                                            <ResponsiveContainer width="100%" height="100%">
+                                                                <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>
+                                                                    <defs>
+                                                                        <linearGradient id={activeTrendGradientId} x1="0" y1="0" x2="0" y2="1">
+                                                                            <stop offset="5%" stopColor={activeItTrendSlide.color} stopOpacity={0.8} />
+                                                                            <stop offset="95%" stopColor={activeItTrendSlide.color} stopOpacity={0.05} />
+                                                                        </linearGradient>
+                                                                    </defs>
+                                                                    <CartesianGrid strokeDasharray="3 3" />
+                                                                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval="preserveStartEnd" />
+                                                                    <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
+                                                                    <ChartTooltip
+                                                                        cursor={false}
+                                                                        content={<ChartTooltipContent />}
+                                                                    />
+                                                                    <Area
+                                                                        type="monotone"
+                                                                        dataKey={activeItTrendSlide.key as 'total' | 'pending' | 'in_progress' | 'resolved'}
+                                                                        stroke={activeItTrendSlide.color}
+                                                                        fill={`url(#${activeTrendGradientId})`}
+                                                                        strokeWidth={2}
+                                                                        activeDot={{ r: 5 }}
+                                                                    />
+                                                                </AreaChart>
+                                                            </ResponsiveContainer>
+                                                        </ChartContainer>
+                                                        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
+                                                            <div>
+                                                                <p className="text-muted-foreground text-xs uppercase">Latest Month</p>
+                                                                <p className="font-semibold">{latestItTrend?.label ?? 'N/A'}</p>
+                                                            </div>
+                                                            <div className="flex flex-wrap gap-4">
+                                                                <div>
+                                                                    <p className="text-muted-foreground text-xs uppercase">Total</p>
+                                                                    <p className="font-semibold">{latestItTrend?.total ?? 0}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-muted-foreground text-xs uppercase">Pending</p>
+                                                                    <p className="font-semibold">{latestItTrend?.pending ?? 0}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-muted-foreground text-xs uppercase">In Progress</p>
+                                                                    <p className="font-semibold">{latestItTrend?.in_progress ?? 0}</p>
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-muted-foreground text-xs uppercase">Resolved</p>
+                                                                    <p className="font-semibold">{latestItTrend?.resolved ?? 0}</p>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+                                    </motion.div>
+                                )}
+                            </div>
 
-                        {/* Cards removed as requested */}
-                    </motion.div>
-                )}
+                            {/* Cards removed as requested */}
+                        </>
+                    )}
+                </motion.div>
 
                 {/* Attendance Statistics Section */}
                 <motion.div
@@ -1649,7 +1651,7 @@ export default function Dashboard({
                     description="View the current month and date. Holidays are highlighted."
                 >
                     <div className="flex flex-col items-center py-4 w-full">
-                        <CalendarWithHolidays countryCode="PH" width={420} />
+                        <CalendarWithHolidays countryCode={['PH', 'US']} width={420} />
                     </div>
                 </DetailDialog>
 

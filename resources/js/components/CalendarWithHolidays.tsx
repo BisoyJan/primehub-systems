@@ -17,7 +17,7 @@ export interface Holiday {
 }
 
 interface CalendarWithHolidaysProps {
-    countryCode?: string; // defaults to 'PH'
+    countryCode?: string | string[]; // defaults to 'PH'
     initialDate?: Date; // defaults to today
     width?: number; // calendar width in px, defaults to 420
     className?: string;
@@ -38,10 +38,16 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     const fetchHolidays = async (year: number) => {
         setLoading(true);
         try {
-            const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${countryCode}`);
-            if (!res.ok) throw new Error('Failed to fetch holidays');
-            const data: Holiday[] = await res.json();
-            setHolidays(data);
+            const codes = Array.isArray(countryCode) ? countryCode : [countryCode];
+            const promises = codes.map(async (code) => {
+                const res = await fetch(`https://date.nager.at/api/v3/PublicHolidays/${year}/${code}`);
+                if (!res.ok) throw new Error(`Failed to fetch holidays for ${code}`);
+                return res.json();
+            });
+
+            const results = await Promise.all(promises);
+            const allHolidays = results.flat() as Holiday[];
+            setHolidays(allHolidays);
         } catch (e) {
             console.error('Holiday fetch failed:', e);
             setHolidays([]);
@@ -54,7 +60,7 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     useEffect(() => {
         fetchHolidays(currentMonth.getFullYear());
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [currentMonth.getFullYear(), countryCode]);
+    }, [currentMonth.getFullYear(), Array.isArray(countryCode) ? countryCode.join(',') : countryCode]);
 
     // Holidays for the current visible month
     const monthHolidays = useMemo(() => {
@@ -69,9 +75,9 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
     const containerStyle: React.CSSProperties = { width: `${width}px`, maxWidth: '100%' };
 
     const selectedISO = selectedDate ? selectedDate.toISOString().slice(0, 10) : null;
-    const selectedHoliday = selectedISO
-        ? holidays.find((h) => h.date === selectedISO)
-        : undefined;
+    const selectedHolidays = selectedISO
+        ? holidays.filter((h) => h.date === selectedISO)
+        : [];
 
     return (
         <div className={className}>
@@ -100,7 +106,7 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                         DayButton: ({ day, modifiers, ...props }) => {
                             const isHoliday = modifiers.holiday;
                             const dateStr = day.date.toISOString().slice(0, 10);
-                            const holiday = monthHolidays.find((h) => h.date === dateStr);
+                            const dayHolidays = monthHolidays.filter((h) => h.date === dateStr);
                             return (
                                 <div className="relative group">
                                     <button {...props} className={props.className}>
@@ -112,9 +118,13 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                                             ></span>
                                         )}
                                     </button>
-                                    {isHoliday && holiday && (
+                                    {isHoliday && dayHolidays.length > 0 && (
                                         <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-opacity pointer-events-none">
-                                            🎉 {holiday.name}
+                                            {dayHolidays.map((h, i) => (
+                                                <div key={i}>
+                                                    🎉 {h.name} ({h.countryCode})
+                                                </div>
+                                            ))}
                                             <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1 border-4 border-transparent border-t-gray-900"></div>
                                         </div>
                                     )}
@@ -125,19 +135,23 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                 />
 
                 {/* Selected Holiday Banner */}
-                {selectedHoliday && (
-                    <div className="mt-4 p-3 rounded-lg bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700">
-                        <div className="flex items-start gap-2">
-                            <span className="text-xl">🎉</span>
-                            <div className="flex-1">
-                                <div className="font-semibold text-yellow-900 dark:text-yellow-100">
-                                    {selectedHoliday.name}
-                                </div>
-                                <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
-                                    {selectedHoliday.types.join(', ')} • {selectedHoliday.date}
+                {selectedHolidays.length > 0 && (
+                    <div className="mt-4 space-y-2">
+                        {selectedHolidays.map((holiday, idx) => (
+                            <div key={idx} className="p-3 rounded-lg bg-yellow-100 dark:bg-yellow-900/20 border border-yellow-300 dark:border-yellow-700">
+                                <div className="flex items-start gap-2">
+                                    <span className="text-xl">🎉</span>
+                                    <div className="flex-1">
+                                        <div className="font-semibold text-yellow-900 dark:text-yellow-100">
+                                            {holiday.name} <span className="text-xs font-normal text-yellow-800 dark:text-yellow-200">({holiday.countryCode})</span>
+                                        </div>
+                                        <div className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                                            {holiday.types.join(', ')} • {holiday.date}
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        ))}
                     </div>
                 )}
 
@@ -155,7 +169,7 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                         <div className="text-sm text-muted-foreground text-center py-4">No holidays this month</div>
                     ) : (
                         <div className="space-y-2">
-                            {monthHolidays.map((h) => {
+                            {monthHolidays.map((h, idx) => {
                                 const holidayDate = new Date(h.date);
                                 const formattedDate = holidayDate.toLocaleDateString('en-US', {
                                     weekday: 'short',
@@ -164,13 +178,13 @@ const CalendarWithHolidays: React.FC<CalendarWithHolidaysProps> = ({
                                 });
                                 return (
                                     <div
-                                        key={h.date}
+                                        key={`${h.date}-${h.countryCode}-${idx}`}
                                         className="flex items-center justify-between p-2 rounded-lg hover:bg-muted/50 transition-colors"
                                     >
                                         <div className="flex items-center gap-3">
                                             <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                                             <div>
-                                                <span className="font-medium text-sm">🎉 {h.name}</span>
+                                                <span className="font-medium text-sm">🎉 {h.name} <span className="text-xs text-muted-foreground">({h.countryCode})</span></span>
                                                 <div className="text-xs text-muted-foreground">{h.types.join(', ')}</div>
                                             </div>
                                         </div>
