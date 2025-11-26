@@ -10,9 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { AlertCircle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { index as medicationIndexRoute, store as medicationStoreRoute, checkPending as medicationCheckPendingRoute } from '@/routes/medication-requests';
 
 interface User {
     id: number;
@@ -30,14 +29,13 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
     const { title, breadcrumbs } = usePageMeta({
         title: 'New Medication Request',
         breadcrumbs: [
-            { title: 'Medication Requests', href: medicationIndexRoute().url },
+            { title: 'Medication Requests', href: '/form-requests/medication-requests' },
         ],
     });
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
     const [currentStep, setCurrentStep] = useState(1);
-    const [hasPendingRequest, setHasPendingRequest] = useState(false);
 
     const { data, setData, post, processing, errors } = useForm({
         requested_for_user_id: undefined as number | undefined,
@@ -47,31 +45,9 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
         agrees_to_policy: false,
     });
 
-    // Check for pending requests when user selection changes
-    useEffect(() => {
-        const checkPendingRequest = async () => {
-            const userId = data.requested_for_user_id;
-            if (!userId) {
-                setHasPendingRequest(false);
-                return;
-            }
-
-            try {
-                const response = await fetch(medicationCheckPendingRoute(userId).url);
-                const result = await response.json();
-                setHasPendingRequest(result.hasPendingRequest);
-            } catch (error) {
-                console.error('Error checking pending request:', error);
-                setHasPendingRequest(false);
-            }
-        };
-
-        checkPendingRequest();
-    }, [data.requested_for_user_id]);
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(medicationStoreRoute().url);
+        post('/form-requests/medication-requests');
     };
 
     const goToNextStep = () => {
@@ -102,17 +78,6 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                 />
 
                 <div className="max-w-3xl mx-auto w-full">
-                    {hasPendingRequest && (
-                        <Alert className="mb-6 border-yellow-500 bg-yellow-50">
-                            <AlertCircle className="h-4 w-4 text-yellow-600" />
-                            <AlertDescription className="text-yellow-800">
-                                <strong>Notice:</strong> {canRequestForOthers && data.requested_for_user_id
-                                    ? `${users?.find(u => u.id === data.requested_for_user_id)?.name || 'This employee'} already has`
-                                    : 'You already have'} a pending medication request. Please wait for it to be processed before submitting a new one.
-                            </AlertDescription>
-                        </Alert>
-                    )}
-
                     {/* Progress Indicator */}
                     <div className="mb-8">
                         <div className="flex items-center justify-center gap-4">
@@ -157,111 +122,103 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-6">
-                                    {hasPendingRequest ? (
-                                        <p className="text-center text-muted-foreground py-8">
-                                            You cannot submit a new request while you have a pending request.
-                                        </p>
-                                    ) : (
-                                        <>
-                                            {/* User Selection for Privileged Roles */}
-                                            {canRequestForOthers && users && (
-                                                <div className="space-y-2">
-                                                    <Label htmlFor="requested_for_user_id">
-                                                        Request for Employee <span className="text-red-500">*</span>
-                                                    </Label>
-                                                    <Select
-                                                        value={data.requested_for_user_id?.toString()}
-                                                        onValueChange={(value) => setData('requested_for_user_id', parseInt(value))}
-                                                    >
-                                                        <SelectTrigger>
-                                                            <SelectValue placeholder="Select employee" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {users.map((user) => (
-                                                                <SelectItem key={user.id} value={user.id.toString()}>
-                                                                    {user.name}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    {errors.requested_for_user_id && (
-                                                        <p className="text-sm text-red-500">{errors.requested_for_user_id}</p>
-                                                    )}
-                                                </div>
+                                    {/* User Selection for Privileged Roles */}
+                                    {canRequestForOthers && users && (
+                                        <div className="space-y-2">
+                                            <Label htmlFor="requested_for_user_id">
+                                                Request for Employee <span className="text-red-500">*</span>
+                                            </Label>
+                                            <Select
+                                                value={data.requested_for_user_id?.toString()}
+                                                onValueChange={(value) => setData('requested_for_user_id', parseInt(value))}
+                                            >
+                                                <SelectTrigger>
+                                                    <SelectValue placeholder="Select employee" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {users.map((user) => (
+                                                        <SelectItem key={user.id} value={user.id.toString()}>
+                                                            {user.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {errors.requested_for_user_id && (
+                                                <p className="text-sm text-red-500">{errors.requested_for_user_id}</p>
                                             )}
-
-                                            {/* Type of Medication */}
-                                            <div className="space-y-3">
-                                                <Label>
-                                                    Type of Medication <span className="text-red-500">*</span>
-                                                </Label>
-                                                <RadioGroup
-                                                    value={data.medication_type}
-                                                    onValueChange={(value) => setData('medication_type', value)}
-                                                >
-                                                    {medicationTypes.map((type) => (
-                                                        <div key={type} className="flex items-center space-x-2">
-                                                            <RadioGroupItem value={type} id={type} />
-                                                            <Label htmlFor={type} className="cursor-pointer font-normal">
-                                                                {type}
-                                                            </Label>
-                                                        </div>
-                                                    ))}
-                                                </RadioGroup>
-                                                {errors.medication_type && (
-                                                    <p className="text-sm text-red-500">{errors.medication_type}</p>
-                                                )}
-                                            </div>
-
-                                            {/* Reason for Request */}
-                                            <div className="space-y-2">
-                                                <Label htmlFor="reason">
-                                                    Reason for Request <span className="text-red-500">*</span>
-                                                </Label>
-                                                <Textarea
-                                                    id="reason"
-                                                    value={data.reason}
-                                                    onChange={(e) => setData('reason', e.target.value)}
-                                                    placeholder="Please describe your symptoms"
-                                                    rows={4}
-                                                    required
-                                                />
-                                                {errors.reason && (
-                                                    <p className="text-sm text-red-500">{errors.reason}</p>
-                                                )}
-                                            </div>
-
-                                            {/* Onset of symptoms */}
-                                            <div className="space-y-3">
-                                                <Label>
-                                                    Onset of symptoms <span className="text-red-500">*</span>
-                                                </Label>
-                                                <RadioGroup
-                                                    value={data.onset_of_symptoms}
-                                                    onValueChange={(value) => setData('onset_of_symptoms', value)}
-                                                >
-                                                    {onsetOptions.map((option) => (
-                                                        <div key={option} className="flex items-center space-x-2">
-                                                            <RadioGroupItem value={option} id={option} />
-                                                            <Label htmlFor={option} className="cursor-pointer font-normal capitalize">
-                                                                {option.replace(/_/g, ' ')}
-                                                            </Label>
-                                                        </div>
-                                                    ))}
-                                                </RadioGroup>
-                                                {errors.onset_of_symptoms && (
-                                                    <p className="text-sm text-red-500">{errors.onset_of_symptoms}</p>
-                                                )}
-                                            </div>
-
-                                            <div className="flex justify-end">
-                                                <Button type="button" onClick={goToNextStep}>
-                                                    Next
-                                                    <ArrowRight className="ml-2 h-4 w-4" />
-                                                </Button>
-                                            </div>
-                                        </>
+                                        </div>
                                     )}
+
+                                    {/* Type of Medication */}
+                                    <div className="space-y-3">
+                                        <Label>
+                                            Type of Medication <span className="text-red-500">*</span>
+                                        </Label>
+                                        <RadioGroup
+                                            value={data.medication_type}
+                                            onValueChange={(value) => setData('medication_type', value)}
+                                        >
+                                            {medicationTypes.map((type) => (
+                                                <div key={type} className="flex items-center space-x-2">
+                                                    <RadioGroupItem value={type} id={type} />
+                                                    <Label htmlFor={type} className="cursor-pointer font-normal">
+                                                        {type}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </RadioGroup>
+                                        {errors.medication_type && (
+                                            <p className="text-sm text-red-500">{errors.medication_type}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Reason for Request */}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="reason">
+                                            Reason for Request <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Textarea
+                                            id="reason"
+                                            value={data.reason}
+                                            onChange={(e) => setData('reason', e.target.value)}
+                                            placeholder="Please describe your symptoms"
+                                            rows={4}
+                                            required
+                                        />
+                                        {errors.reason && (
+                                            <p className="text-sm text-red-500">{errors.reason}</p>
+                                        )}
+                                    </div>
+
+                                    {/* Onset of symptoms */}
+                                    <div className="space-y-3">
+                                        <Label>
+                                            Onset of symptoms <span className="text-red-500">*</span>
+                                        </Label>
+                                        <RadioGroup
+                                            value={data.onset_of_symptoms}
+                                            onValueChange={(value) => setData('onset_of_symptoms', value)}
+                                        >
+                                            {onsetOptions.map((option) => (
+                                                <div key={option} className="flex items-center space-x-2">
+                                                    <RadioGroupItem value={option} id={option} />
+                                                    <Label htmlFor={option} className="cursor-pointer font-normal capitalize">
+                                                        {option.replace(/_/g, ' ')}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </RadioGroup>
+                                        {errors.onset_of_symptoms && (
+                                            <p className="text-sm text-red-500">{errors.onset_of_symptoms}</p>
+                                        )}
+                                    </div>
+
+                                    <div className="flex justify-end">
+                                        <Button type="button" onClick={goToNextStep}>
+                                            Next
+                                            <ArrowRight className="ml-2 h-4 w-4" />
+                                        </Button>
+                                    </div>
                                 </CardContent>
                             </Card>
                         )}
@@ -314,7 +271,7 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                                             <ArrowLeft className="mr-2 h-4 w-4" />
                                             Back
                                         </Button>
-                                        <Button type="submit" disabled={processing}>
+                                        <Button type="submit" disabled={processing || !data.agrees_to_policy}>
                                             Submit Request
                                         </Button>
                                     </div>

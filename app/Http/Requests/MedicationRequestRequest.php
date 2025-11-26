@@ -24,7 +24,7 @@ class MedicationRequestRequest extends FormRequest
             'medication_type' => ['required', 'in:Declogen,Biogesic,Mefenamic Acid,Kremil-S,Cetirizine,Saridon,Diatabs'],
             'reason' => ['required', 'string', 'max:1000'],
             'onset_of_symptoms' => ['required', 'in:Just today,More than 1 day,More than 1 week'],
-            'agrees_to_policy' => ['required', 'boolean'],
+            'agrees_to_policy' => ['required', 'boolean', 'accepted'],
         ];
     }
 

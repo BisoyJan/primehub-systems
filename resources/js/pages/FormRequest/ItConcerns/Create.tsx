@@ -22,13 +22,19 @@ interface Site {
     name: string;
 }
 
+interface User {
+    id: number;
+    name: string;
+}
+
 interface PageProps {
     sites: Site[];
+    users?: User[];
     [key: string]: unknown;
 }
 
 export default function ItConcernCreate() {
-    const { sites } = usePage<PageProps>().props;
+    const { sites, users } = usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Submit IT Concern",
@@ -42,6 +48,7 @@ export default function ItConcernCreate() {
     const isPageLoading = usePageLoading();
 
     const { data, setData, post, processing, errors } = useForm({
+        user_id: "",
         site_id: "",
         station_number: "",
         category: "Hardware",
@@ -77,6 +84,32 @@ export default function ItConcernCreate() {
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSubmit} className="space-y-6">
+                                {users && (
+                                    <div className="space-y-2">
+                                        <Label htmlFor="user_id">
+                                            Request for Agent <span className="text-red-500">*</span>
+                                        </Label>
+                                        <Select
+                                            value={data.user_id}
+                                            onValueChange={(value) => setData("user_id", value)}
+                                        >
+                                            <SelectTrigger className={errors.user_id ? "border-red-500" : ""}>
+                                                <SelectValue placeholder="Select an agent" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {users.map((user) => (
+                                                    <SelectItem key={user.id} value={String(user.id)}>
+                                                        {user.name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {errors.user_id && (
+                                            <p className="text-sm text-red-500">{errors.user_id}</p>
+                                        )}
+                                    </div>
+                                )}
+
                                 <div className="space-y-2">
                                     <Label htmlFor="site_id">
                                         Site <span className="text-red-500">*</span>

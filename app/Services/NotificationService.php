@@ -86,7 +86,12 @@ class NotificationService
             'leave_request',
             "Leave Request {$statusText}",
             "Your {$leaveType} request has been {$status}.",
-            ['status' => $status, 'type' => $leaveType, 'request_id' => $requestId]
+            [
+                'status' => $status,
+                'type' => $leaveType,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId)
+            ]
         );
     }
 
@@ -177,5 +182,193 @@ class NotificationService
     {
         $userIds = User::where('role', $role)->where('is_approved', true)->pluck('id')->toArray();
         $this->createForMultipleUsers($userIds, $type, $title, $message, $data);
+    }
+
+    /**
+     * Notify about attendance status.
+     */
+    public function notifyAttendanceStatus(User|int $user, string $status, string $date, ?float $points = null): Notification
+    {
+        $statusText = ucfirst(str_replace('_', ' ', $status));
+        $message = "Your attendance for {$date} has been verified as {$statusText}.";
+
+        if ($points !== null && $points > 0) {
+            $message .= " You have incurred {$points} attendance point(s).";
+        }
+
+        return $this->create(
+            $user,
+            'attendance_status',
+            'Attendance Verified',
+            $message,
+            [
+                'status' => $status,
+                'date' => $date,
+                'points' => $points,
+                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user)
+            ]
+        );
+    }
+
+    /**
+     * Notify IT roles about a new IT concern.
+     */
+    public function notifyItRolesAboutNewConcern(string $stationNumber, string $siteName, string $agentName, string $category, string $priority, string $description, int $concernId): void
+    {
+        $title = 'New IT Concern Reported';
+        $message = "{$agentName} reported a {$priority} priority {$category} issue at {$siteName} - Station {$stationNumber}.";
+
+        $data = [
+            'station_number' => $stationNumber,
+            'site_name' => $siteName,
+            'agent_name' => $agentName,
+            'category' => $category,
+            'priority' => $priority,
+            'description' => $description,
+            'concern_id' => $concernId,
+            'link' => route('it-concerns.show', $concernId)
+        ];
+
+        $this->notifyUsersByRole('IT', 'it_concern', $title, $message, $data);
+        // Also notify Super Admin
+        $this->notifyUsersByRole('Super Admin', 'it_concern', $title, $message, $data);
+    }
+
+    /**
+     * Notify IT roles about an IT concern update by agent.
+     */
+    public function notifyItRolesAboutConcernUpdate(string $stationNumber, string $siteName, string $agentName, int $concernId): void
+    {
+        $title = 'IT Concern Updated';
+        $message = "{$agentName} updated the IT concern for Station {$stationNumber} at {$siteName}.";
+
+        $data = [
+            'station_number' => $stationNumber,
+            'site_name' => $siteName,
+            'agent_name' => $agentName,
+            'concern_id' => $concernId,
+            'link' => route('it-concerns.show', $concernId)
+        ];
+
+        $this->notifyUsersByRole('IT', 'it_concern', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'it_concern', $title, $message, $data);
+    }
+
+    /**
+     * Notify IT roles about an IT concern deletion by agent.
+     */
+    public function notifyItRolesAboutConcernDeletion(string $stationNumber, string $siteName, string $agentName): void
+    {
+        $title = 'IT Concern Deleted';
+        $message = "{$agentName} deleted the IT concern for Station {$stationNumber} at {$siteName}.";
+
+        $data = [
+            'station_number' => $stationNumber,
+            'site_name' => $siteName,
+            'agent_name' => $agentName,
+        ];
+
+        $this->notifyUsersByRole('IT', 'it_concern', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'it_concern', $title, $message, $data);
+    }
+
+    /**
+     * Notify HR roles about a new leave request.
+     */
+    public function notifyHrRolesAboutNewLeaveRequest(string $requesterName, string $leaveType, string $startDate, string $endDate, int $requestId): void
+    {
+        $title = 'New Leave Request';
+        $message = "{$requesterName} has submitted a {$leaveType} request from {$startDate} to {$endDate}.";
+
+        $data = [
+            'requester' => $requesterName,
+            'type' => $leaveType,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'request_id' => $requestId,
+            'link' => route('leave-requests.show', $requestId)
+        ];
+
+        $this->notifyUsersByRole('HR', 'leave_request', $title, $message, $data);
+        $this->notifyUsersByRole('Admin', 'leave_request', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'leave_request', $title, $message, $data);
+    }
+
+    /**
+     * Notify HR roles about a leave request cancellation.
+     */
+    public function notifyHrRolesAboutLeaveCancellation(string $requesterName, string $leaveType, string $startDate, string $endDate): void
+    {
+        $title = 'Leave Request Cancelled';
+        $message = "{$requesterName} has cancelled their {$leaveType} request from {$startDate} to {$endDate}.";
+
+        $data = [
+            'requester' => $requesterName,
+            'type' => $leaveType,
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+        ];
+
+        $this->notifyUsersByRole('HR', 'leave_request', $title, $message, $data);
+        $this->notifyUsersByRole('Admin', 'leave_request', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'leave_request', $title, $message, $data);
+    }
+
+    /**
+     * Notify HR roles about a new medication request.
+     */
+    public function notifyHrRolesAboutNewMedicationRequest(string $requesterName, string $medicationType, int $requestId): void
+    {
+        $title = 'New Medication Request';
+        $message = "{$requesterName} has requested {$medicationType}.";
+
+        $data = [
+            'requester' => $requesterName,
+            'medication_type' => $medicationType,
+            'request_id' => $requestId,
+            'link' => route('medication-requests.show', $requestId)
+        ];
+
+        $this->notifyUsersByRole('HR', 'medication_request', $title, $message, $data);
+        $this->notifyUsersByRole('Admin', 'medication_request', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'medication_request', $title, $message, $data);
+    }
+
+    /**
+     * Notify about medication request status change.
+     */
+    public function notifyMedicationRequestStatusChange(User|int $user, string $status, string $medicationType, int $requestId): Notification
+    {
+        $statusText = ucfirst($status);
+        return $this->create(
+            $user,
+            'medication_request',
+            "Medication Request {$statusText}",
+            "Your request for {$medicationType} has been {$status}.",
+            [
+                'status' => $status,
+                'medication_type' => $medicationType,
+                'request_id' => $requestId,
+                'link' => route('medication-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
+     * Notify HR roles about a medication request cancellation.
+     */
+    public function notifyHrRolesAboutMedicationRequestCancellation(string $requesterName, string $medicationType): void
+    {
+        $title = 'Medication Request Cancelled';
+        $message = "{$requesterName} has cancelled their request for {$medicationType}.";
+
+        $data = [
+            'requester' => $requesterName,
+            'medication_type' => $medicationType,
+        ];
+
+        $this->notifyUsersByRole('HR', 'medication_request', $title, $message, $data);
+        $this->notifyUsersByRole('Admin', 'medication_request', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'medication_request', $title, $message, $data);
     }
 }

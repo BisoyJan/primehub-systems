@@ -1,0 +1,59 @@
+<?php
+
+namespace App\Mail;
+
+use App\Models\MedicationRequest;
+use App\Models\User;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
+use Illuminate\Mail\Mailable;
+use Illuminate\Mail\Mailables\Content;
+use Illuminate\Mail\Mailables\Envelope;
+use Illuminate\Queue\SerializesModels;
+
+class MedicationRequestStatusUpdated extends Mailable implements ShouldQueue
+{
+    use Queueable, SerializesModels;
+
+    public $medicationRequest;
+    public $user;
+
+    /**
+     * Create a new message instance.
+     */
+    public function __construct(MedicationRequest $medicationRequest, User $user)
+    {
+        $this->medicationRequest = $medicationRequest;
+        $this->user = $user;
+    }
+
+    /**
+     * Get the message envelope.
+     */
+    public function envelope(): Envelope
+    {
+        return new Envelope(
+            subject: 'Medication Request Status Update: ' . ucfirst($this->medicationRequest->status),
+        );
+    }
+
+    /**
+     * Get the message content definition.
+     */
+    public function content(): Content
+    {
+        return new Content(
+            view: 'emails.medication-request-status',
+        );
+    }
+
+    /**
+     * Get the attachments for the message.
+     *
+     * @return array<int, \Illuminate\Mail\Mailables\Attachment>
+     */
+    public function attachments(): array
+    {
+        return [];
+    }
+}

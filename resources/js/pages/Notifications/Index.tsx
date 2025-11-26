@@ -80,6 +80,29 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
         }
     };
 
+    const handleDeleteAll = async () => {
+        if (!confirm('Are you sure you want to clear all notifications? This action cannot be undone.')) {
+            return;
+        }
+
+        toast.promise(
+            fetch('/notifications/all', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                },
+            }).then(() => {
+                router.reload({ only: ['notifications', 'unreadCount'] });
+            }),
+            {
+                loading: 'Clearing all notifications...',
+                success: 'All notifications cleared',
+                error: 'Failed to clear notifications',
+            }
+        );
+    };
+
     const handleDelete = async (notificationId: number) => {
         toast.promise(
             fetch(`/notifications/${notificationId}`, {
@@ -99,6 +122,16 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
         );
     };
 
+    const handleNotificationClick = (notification: Notification) => {
+        if (!notification.read_at) {
+            handleMarkAsRead(notification.id);
+        }
+
+        if (notification.data && typeof notification.data.link === 'string') {
+            router.visit(notification.data.link);
+        }
+    };
+
     const getNotificationColor = (type: string) => {
         const colors: Record<string, string> = {
             maintenance_due: 'bg-orange-500',
@@ -107,6 +140,7 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
             medication_request: 'bg-purple-500',
             pc_assignment: 'bg-green-500',
             system: 'bg-gray-500',
+            attendance_status: 'bg-yellow-500',
         };
         return colors[type] || 'bg-gray-500';
     };
@@ -124,6 +158,12 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                                 <RefreshCw className="h-4 w-4 mr-2" />
                                 Refresh
                             </Button>
+                            {notifications.data.length > 0 && (
+                                <Button variant="destructive" onClick={handleDeleteAll} size="sm">
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Clear All
+                                </Button>
+                            )}
                             {unreadCount > 0 && (
                                 <Button onClick={handleMarkAllAsRead} size="sm">
                                     <Check className="h-4 w-4 mr-2" />
@@ -146,9 +186,10 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                             <Card
                                 key={notification.id}
                                 className={cn(
-                                    'p-4 transition-colors hover:bg-muted/50',
+                                    'p-4 transition-colors hover:bg-muted/50 cursor-pointer',
                                     !notification.read_at && 'border-l-4 border-l-blue-500 bg-blue-50/50 dark:bg-blue-950/10'
                                 )}
+                                onClick={() => handleNotificationClick(notification)}
                             >
                                 <div className="flex gap-4">
                                     <div className={cn('h-10 w-10 rounded-full flex items-center justify-center shrink-0', getNotificationColor(notification.type))}>
@@ -177,7 +218,10 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                                                     <Button
                                                         variant="ghost"
                                                         size="sm"
-                                                        onClick={() => handleMarkAsRead(notification.id)}
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            handleMarkAsRead(notification.id);
+                                                        }}
                                                     >
                                                         <Check className="h-4 w-4" />
                                                     </Button>
@@ -185,7 +229,10 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                                                 <Button
                                                     variant="ghost"
                                                     size="sm"
-                                                    onClick={() => handleDelete(notification.id)}
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        handleDelete(notification.id);
+                                                    }}
                                                 >
                                                     <Trash2 className="h-4 w-4 text-destructive" />
                                                 </Button>

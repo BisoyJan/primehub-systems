@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Head, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
@@ -9,7 +10,7 @@ import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Label, RadialBar, RadialBarChart, PolarGrid, Area, AreaChart, Legend, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
+import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Label, RadialBar, RadialBarChart, PolarGrid, Area, AreaChart, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
 
 import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList } from 'lucide-react';
 
@@ -242,18 +243,40 @@ export default function Dashboard({
     const [selectedCampaignId, setSelectedCampaignId] = useState<string>(initialCampaignId || "all");
     const [verificationFilter, setVerificationFilter] = useState<string>(initialVerificationFilter || "verified");
     const [radialChartIndex, setRadialChartIndex] = useState(0);
-    const [areaChartFilter, setAreaChartFilter] = useState<string>("all");
     const [selectedMonth, setSelectedMonth] = useState<string>("all");
+    const [itConcernViewMode, setItConcernViewMode] = useState<'cards' | 'chart'>('cards');
     const concernStatusConfig = [
         { key: 'pending', label: 'Pending' },
         { key: 'in_progress', label: 'In Progress' },
         { key: 'resolved', label: 'Resolved' },
     ];
     const itTrendSlides = [
+        { key: 'total', label: 'All Concerns Trend', description: 'Overview of all IT concerns over time', color: 'hsl(280, 65%, 60%)' },
         { key: 'pending', label: 'Pending Trend', description: 'Monitors new issues awaiting action', color: 'hsl(45, 93%, 47%)' },
         { key: 'in_progress', label: 'In-Progress Trend', description: 'Tracks workload currently being handled', color: 'hsl(221, 83%, 53%)' },
         { key: 'resolved', label: 'Resolved Trend', description: 'Measures closure rate per month', color: 'hsl(142, 71%, 45%)' },
     ];
+
+    const [attendanceTrendSlideIndex, setAttendanceTrendSlideIndex] = useState(0);
+    const attendanceTrendSlides = [
+        { key: 'all', label: 'All Status', description: 'Overview of all attendance statuses', color: 'hsl(220, 10%, 40%)' },
+        { key: 'on_time', label: 'On Time', description: 'Employees arriving on schedule', color: 'hsl(142, 71%, 45%)' },
+        { key: 'time_adjustment', label: 'Time Adjustment', description: 'Overtime and undertime adjustments', color: 'hsl(280, 65%, 60%)' },
+        { key: 'tardy', label: 'Tardy', description: 'Late arrivals', color: 'hsl(45, 93%, 47%)' },
+        { key: 'half_day', label: 'Half Day', description: 'Half day leaves', color: 'hsl(25, 95%, 53%)' },
+        { key: 'ncns', label: 'NCNS', description: 'No Call No Show', color: 'hsl(0, 84%, 60%)' },
+        { key: 'advised', label: 'Advised', description: 'Advised absences', color: 'hsl(221, 83%, 53%)' },
+    ];
+    const activeAttendanceSlide = attendanceTrendSlides[attendanceTrendSlideIndex];
+    const activeAttendanceGradientId = `attendance-trend-${activeAttendanceSlide.key}`;
+
+    const handleAttendanceTrendPrev = () => {
+        setAttendanceTrendSlideIndex((prev) => (prev === 0 ? attendanceTrendSlides.length - 1 : prev - 1));
+    };
+
+    const handleAttendanceTrendNext = () => {
+        setAttendanceTrendSlideIndex((prev) => (prev === attendanceTrendSlides.length - 1 ? 0 : prev + 1));
+    };
 
     // Generate month options from date range
     const monthOptions = (() => {
@@ -274,7 +297,7 @@ export default function Dashboard({
     // Calculate filtered statistics based on selected month and status
     const filteredStatistics = (() => {
         // If no filters applied, return original statistics
-        if (selectedMonth === "all" && areaChartFilter === "all") {
+        if (selectedMonth === "all") {
             return attendanceStatistics;
         }
 
@@ -283,7 +306,7 @@ export default function Dashboard({
         const monthFraction = selectedMonth === "all" ? 1 : (1 / totalMonths);
 
         // Apply month filter
-        let stats = {
+        const stats = {
             total: selectedMonth === "all" ? attendanceStatistics.total : Math.floor(attendanceStatistics.total * monthFraction),
             on_time: selectedMonth === "all" ? attendanceStatistics.on_time : Math.floor(attendanceStatistics.on_time * monthFraction),
             time_adjustment: selectedMonth === "all" ? attendanceStatistics.time_adjustment : Math.floor(attendanceStatistics.time_adjustment * monthFraction),
@@ -293,23 +316,6 @@ export default function Dashboard({
             advised: selectedMonth === "all" ? attendanceStatistics.advised : Math.floor(attendanceStatistics.advised * monthFraction),
             needs_verification: selectedMonth === "all" ? attendanceStatistics.needs_verification : Math.floor(attendanceStatistics.needs_verification * monthFraction),
         };
-
-        // Apply status filter
-        if (areaChartFilter !== "all") {
-            const statusKey = areaChartFilter as keyof typeof stats;
-            const statusValue = stats[statusKey] as number;
-
-            stats = {
-                total: statusValue,
-                on_time: areaChartFilter === "on_time" ? statusValue : 0,
-                time_adjustment: areaChartFilter === "time_adjustment" ? statusValue : 0,
-                tardy: areaChartFilter === "tardy" ? statusValue : 0,
-                half_day: areaChartFilter === "half_day" ? statusValue : 0,
-                ncns: areaChartFilter === "ncns" ? statusValue : 0,
-                advised: areaChartFilter === "advised" ? statusValue : 0,
-                needs_verification: areaChartFilter === "needs_verification" ? statusValue : 0,
-            };
-        }
 
         return stats;
     })();
@@ -423,6 +429,82 @@ export default function Dashboard({
     const handleTrendNext = () => {
         setItTrendSlideIndex((prev) => (prev === itTrendSlides.length - 1 ? 0 : prev + 1));
     };
+
+    // Calculate attendance trend data
+    const attendanceTrendData = (() => {
+        const start = new Date(dateRange.start);
+        const end = new Date(dateRange.end);
+
+        // If a specific month is selected, show daily data for that month
+        if (selectedMonth !== "all") {
+            // Parse the selected month (e.g., "Nov 2025")
+            const [monthStr, yearStr] = selectedMonth.split(' ');
+
+            const monthDate = new Date(`${monthStr} 1, ${yearStr}`);
+            // Format as YYYY-MM using local date components
+            const selectedYear = monthDate.getFullYear();
+            const selectedMonthNum = monthDate.getMonth() + 1;
+            const monthKey = `${selectedYear}-${String(selectedMonthNum).padStart(2, '0')}`;
+
+            // Get daily data for this month from backend
+            const dailyRecords = dailyAttendanceData[monthKey] || [];
+
+            // Get the number of days in the selected month
+            const daysInMonth = new Date(selectedYear, selectedMonthNum, 0).getDate();
+
+            // Create array with all days, filling in zeros for days without data
+            const data = [];
+            for (let day = 1; day <= daysInMonth; day++) {
+                const dayRecord = dailyRecords.find(r => Number(r.day) === day);
+                data.push({
+                    month: `${day}`,
+                    total: Number(dayRecord?.total || 0),
+                    on_time: Number(dayRecord?.on_time || 0),
+                    time_adjustment: Number(dayRecord?.time_adjustment || 0),
+                    tardy: Number(dayRecord?.tardy || 0),
+                    half_day: Number(dayRecord?.half_day || 0),
+                    ncns: Number(dayRecord?.ncns || 0),
+                    advised: Number(dayRecord?.advised || 0),
+                });
+            }
+
+            return data;
+        } else {
+
+            // Show monthly data when "All Months" is selected
+            const current = new Date(start);
+            current.setDate(1); // Set to first day of month
+            const data = [];
+
+            while (current <= end) {
+                // Format as YYYY-MM using local date components, not UTC
+                const year = current.getFullYear();
+                const month = String(current.getMonth() + 1).padStart(2, '0');
+                const monthKey = `${year}-${month}`;
+                const monthName = current.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+
+                // Get monthly data from backend
+                const monthRecord = monthlyAttendanceData[monthKey];
+
+                data.push({
+                    month: monthName,
+                    total: Number(monthRecord?.total || 0),
+                    on_time: Number(monthRecord?.on_time || 0),
+                    time_adjustment: Number(monthRecord?.time_adjustment || 0),
+                    tardy: Number(monthRecord?.tardy || 0),
+                    half_day: Number(monthRecord?.half_day || 0),
+                    ncns: Number(monthRecord?.ncns || 0),
+                    advised: Number(monthRecord?.advised || 0),
+                });
+
+                current.setMonth(current.getMonth() + 1);
+            }
+
+            return data;
+        }
+    })();
+
+    const latestAttendanceTrend = attendanceTrendData.length > 0 ? attendanceTrendData[attendanceTrendData.length - 1] : null;
 
     // calendar and holidays handled inside CalendarWithHolidays component
 
@@ -634,42 +716,214 @@ export default function Dashboard({
                             delay={0.6}
                         />
 
-                        {/* IT Concerns */}
-                        <StatCard
-                            title="IT Concerns (All)"
-                            value={totalConcerns}
-                            icon={ClipboardList}
-                            description="Click for per-site breakdown"
-                            onClick={() => setActiveDialog('itConcernsBySite')}
-                            variant={totalConcerns > 0 ? 'success' : 'default'}
-                            delay={0.63}
-                        />
-                        <StatCard
-                            title="IT Concerns (Pending)"
-                            value={concernStats.pending}
-                            icon={Clock}
-                            description="Awaiting acknowledgement"
-                            onClick={() => goToItConcerns('pending')}
-                            variant={concernStats.pending > 0 ? 'warning' : 'default'}
-                            delay={0.68}
-                        />
-                        <StatCard
-                            title="IT Concerns (In Progress)"
-                            value={concernStats.in_progress}
-                            icon={Loader2}
-                            description="Currently being handled"
-                            onClick={() => goToItConcerns('in_progress')}
-                            delay={0.73}
-                        />
-                        <StatCard
-                            title="IT Concerns (Resolved)"
-                            value={concernStats.resolved}
-                            icon={CheckCircle2}
-                            description="Closed this period"
-                            onClick={() => goToItConcerns('resolved')}
-                            variant="success"
-                            delay={0.78}
-                        />
+                        {/* IT Concerns Widget */}
+                        <div className="col-span-1 md:col-span-2 lg:col-span-4">
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="font-semibold text-lg">
+                                        {itConcernViewMode === 'cards' ? 'IT Concerns Overview' : 'IT Concern Trends'}
+                                    </h3>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-xs text-muted-foreground mr-2">
+                                        Switch View
+                                    </span>
+                                    <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-8 w-8 rounded-full"
+                                        onClick={() => setItConcernViewMode(prev => prev === 'cards' ? 'chart' : 'cards')}
+                                    >
+                                        {itConcernViewMode === 'cards' ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {itConcernViewMode === 'cards' ? (
+                                <motion.div
+                                    initial={{ opacity: 0, x: -20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: 20 }}
+                                    transition={{ duration: 0.3 }}
+                                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
+                                >
+                                    <StatCard
+                                        title="IT Concerns (All)"
+                                        value={totalConcerns}
+                                        icon={ClipboardList}
+                                        description="Click for per-site breakdown"
+                                        onClick={() => setActiveDialog('itConcernsBySite')}
+                                        variant={totalConcerns > 0 ? 'success' : 'default'}
+                                        delay={0.63}
+                                    />
+                                    <StatCard
+                                        title="IT Concerns (Pending)"
+                                        value={concernStats.pending}
+                                        icon={Clock}
+                                        description="Awaiting acknowledgement"
+                                        onClick={() => goToItConcerns('pending')}
+                                        variant={concernStats.pending > 0 ? 'warning' : 'default'}
+                                        delay={0.68}
+                                    />
+                                    <StatCard
+                                        title="IT Concerns (In Progress)"
+                                        value={concernStats.in_progress}
+                                        icon={Loader2}
+                                        description="Currently being handled"
+                                        onClick={() => goToItConcerns('in_progress')}
+                                        delay={0.73}
+                                    />
+                                    <StatCard
+                                        title="IT Concerns (Resolved)"
+                                        value={concernStats.resolved}
+                                        icon={CheckCircle2}
+                                        description="Closed this period"
+                                        onClick={() => goToItConcerns('resolved')}
+                                        variant="success"
+                                        delay={0.78}
+                                    />
+                                </motion.div>
+                            ) : (
+                                <motion.div
+                                    initial={{ opacity: 0, x: 20 }}
+                                    animate={{ opacity: 1, x: 0 }}
+                                    exit={{ opacity: 0, x: -20 }}
+                                    transition={{ duration: 0.3 }}
+                                >
+                                    <Card>
+                                        <CardHeader className="pb-0">
+                                            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                                <div>
+                                                    <CardTitle className="text-base">Trend Analysis</CardTitle>
+                                                    <CardDescription className="text-xs">
+                                                        {activeItTrendSlide.description}
+                                                    </CardDescription>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <div className="text-sm font-medium">
+                                                        {activeItTrendSlide.label}
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleTrendPrev}
+                                                            className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                            aria-label="Previous trend"
+                                                        >
+                                                            <ChevronLeft className="h-4 w-4" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={handleTrendNext}
+                                                            className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                            aria-label="Next trend"
+                                                        >
+                                                            <ChevronRight className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xs font-medium">Filter Date:</span>
+                                                    <input
+                                                        type="date"
+                                                        value={dateRange.start}
+                                                        onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                                                        className="h-8 px-2 border rounded-md text-xs"
+                                                        aria-label="Start date"
+                                                    />
+                                                    <span className="text-muted-foreground text-xs">to</span>
+                                                    <input
+                                                        type="date"
+                                                        value={dateRange.end}
+                                                        onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                                                        className="h-8 px-2 border rounded-md text-xs"
+                                                        aria-label="End date"
+                                                    />
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={handleDateRangeChange}
+                                                        className="h-8 text-xs"
+                                                    >
+                                                        Apply
+                                                    </Button>
+                                                </div>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent className="pt-4">
+                                            {itTrends.length === 0 ? (
+                                                <div className="py-10 text-center text-muted-foreground">
+                                                    No IT concern activity recorded for the selected window.
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <ChartContainer
+                                                        config={{
+                                                            [activeItTrendSlide.key]: {
+                                                                label: activeItTrendSlide.label,
+                                                                color: activeItTrendSlide.color,
+                                                            }
+                                                        }}
+                                                        className="h-[320px] w-full"
+                                                    >
+                                                        <ResponsiveContainer width="100%" height="100%">
+                                                            <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>
+                                                                <defs>
+                                                                    <linearGradient id={activeTrendGradientId} x1="0" y1="0" x2="0" y2="1">
+                                                                        <stop offset="5%" stopColor={activeItTrendSlide.color} stopOpacity={0.8} />
+                                                                        <stop offset="95%" stopColor={activeItTrendSlide.color} stopOpacity={0.05} />
+                                                                    </linearGradient>
+                                                                </defs>
+                                                                <CartesianGrid strokeDasharray="3 3" />
+                                                                <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval="preserveStartEnd" />
+                                                                <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
+                                                                <ChartTooltip
+                                                                    cursor={false}
+                                                                    content={<ChartTooltipContent />}
+                                                                />
+                                                                <Area
+                                                                    type="monotone"
+                                                                    dataKey={activeItTrendSlide.key as 'total' | 'pending' | 'in_progress' | 'resolved'}
+                                                                    stroke={activeItTrendSlide.color}
+                                                                    fill={`url(#${activeTrendGradientId})`}
+                                                                    strokeWidth={2}
+                                                                    activeDot={{ r: 5 }}
+                                                                />
+                                                            </AreaChart>
+                                                        </ResponsiveContainer>
+                                                    </ChartContainer>
+                                                    <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">Latest Month</p>
+                                                            <p className="font-semibold">{latestItTrend?.label ?? 'N/A'}</p>
+                                                        </div>
+                                                        <div className="flex flex-wrap gap-4">
+                                                            <div>
+                                                                <p className="text-muted-foreground text-xs uppercase">Total</p>
+                                                                <p className="font-semibold">{latestItTrend?.total ?? 0}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-muted-foreground text-xs uppercase">Pending</p>
+                                                                <p className="font-semibold">{latestItTrend?.pending ?? 0}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-muted-foreground text-xs uppercase">In Progress</p>
+                                                                <p className="font-semibold">{latestItTrend?.in_progress ?? 0}</p>
+                                                            </div>
+                                                            <div>
+                                                                <p className="text-muted-foreground text-xs uppercase">Resolved</p>
+                                                                <p className="font-semibold">{latestItTrend?.resolved ?? 0}</p>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                </motion.div>
+                            )}
+                        </div>
 
                         {/* Cards removed as requested */}
                     </motion.div>
@@ -763,7 +1017,7 @@ export default function Dashboard({
                                 <CardContent>
                                     <div className="text-2xl font-bold">{filteredStatistics.total}</div>
                                     <p className="text-xs text-muted-foreground mt-1">
-                                        {selectedMonth !== "all" || areaChartFilter !== "all" ? "Filtered" : "All"} attendance entries
+                                        {selectedMonth !== "all" ? "Filtered" : "All"} attendance entries
                                     </p>
                                 </CardContent>
                             </Card>
@@ -1157,7 +1411,7 @@ export default function Dashboard({
 
                     </motion.div>
 
-                    {/* IT Concern Trends Carousel */}
+                    {/* Area Chart - Monthly Statistics */}
                     <motion.div
                         className="mt-6"
                         initial={{ opacity: 0, y: 20 }}
@@ -1168,19 +1422,19 @@ export default function Dashboard({
                             <CardHeader className="pb-0">
                                 <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                                     <div>
-                                        <CardTitle className="text-base">IT Concern Trends</CardTitle>
+                                        <CardTitle className="text-base">Monthly Attendance Trends</CardTitle>
                                         <CardDescription className="text-xs">
-                                            Slide through statuses to review monthly performance
+                                            {activeAttendanceSlide.description}
                                         </CardDescription>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <div className="text-sm font-medium">
-                                            {activeItTrendSlide.label}
+                                            {activeAttendanceSlide.label}
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <button
                                                 type="button"
-                                                onClick={handleTrendPrev}
+                                                onClick={handleAttendanceTrendPrev}
                                                 className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
                                                 aria-label="Previous trend"
                                             >
@@ -1188,7 +1442,7 @@ export default function Dashboard({
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={handleTrendNext}
+                                                onClick={handleAttendanceTrendNext}
                                                 className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
                                                 aria-label="Next trend"
                                             >
@@ -1197,95 +1451,11 @@ export default function Dashboard({
                                         </div>
                                     </div>
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-2">
-                                    {activeItTrendSlide.description}
-                                </p>
-                            </CardHeader>
-                            <CardContent className="pt-4">
-                                {itTrends.length === 0 ? (
-                                    <div className="py-10 text-center text-muted-foreground">
-                                        No IT concern activity recorded for the selected window.
-                                    </div>
-                                ) : (
-                                    <>
-                                        <ChartContainer
-                                            config={{
-                                                [activeItTrendSlide.key]: {
-                                                    label: activeItTrendSlide.label,
-                                                    color: activeItTrendSlide.color,
-                                                }
-                                            }}
-                                            className="h-[320px] w-full"
-                                        >
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>
-                                                    <defs>
-                                                        <linearGradient id={activeTrendGradientId} x1="0" y1="0" x2="0" y2="1">
-                                                            <stop offset="5%" stopColor={activeItTrendSlide.color} stopOpacity={0.8} />
-                                                            <stop offset="95%" stopColor={activeItTrendSlide.color} stopOpacity={0.05} />
-                                                        </linearGradient>
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" />
-                                                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval="preserveStartEnd" />
-                                                    <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
-                                                    <ChartTooltip
-                                                        cursor={false}
-                                                        content={<ChartTooltipContent />}
-                                                    />
-                                                    <Area
-                                                        type="monotone"
-                                                        dataKey={activeItTrendSlide.key as 'pending' | 'in_progress' | 'resolved'}
-                                                        stroke={activeItTrendSlide.color}
-                                                        fill={`url(#${activeTrendGradientId})`}
-                                                        strokeWidth={2}
-                                                        activeDot={{ r: 5 }}
-                                                    />
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </ChartContainer>
-                                        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
-                                            <div>
-                                                <p className="text-muted-foreground text-xs uppercase">Latest Month</p>
-                                                <p className="font-semibold">{latestItTrend?.label ?? 'N/A'}</p>
-                                            </div>
-                                            <div className="flex flex-wrap gap-4">
-                                                <div>
-                                                    <p className="text-muted-foreground text-xs uppercase">Pending</p>
-                                                    <p className="font-semibold">{latestItTrend?.pending ?? 0}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-muted-foreground text-xs uppercase">In Progress</p>
-                                                    <p className="font-semibold">{latestItTrend?.in_progress ?? 0}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-muted-foreground text-xs uppercase">Resolved</p>
-                                                    <p className="font-semibold">{latestItTrend?.resolved ?? 0}</p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    {/* Area Chart - Monthly Statistics */}
-                    <motion.div
-                        className="mt-6"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 2.0 }}
-                    >
-                        <Card>
-                            <CardHeader className="pb-0">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle className="text-lg">Monthly Attendance Trends</CardTitle>
-                                        <CardDescription className="text-sm">Linear progression of attendance status over time</CardDescription>
-                                    </div>
+                                <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">
                                     <div className="flex items-center gap-2">
+                                        <span className="text-xs font-medium">Filter Month:</span>
                                         <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                            <SelectTrigger className="w-[160px]">
+                                            <SelectTrigger className="h-8 w-[140px] text-xs">
                                                 <SelectValue placeholder="All Months" />
                                             </SelectTrigger>
                                             <SelectContent>
@@ -1295,212 +1465,105 @@ export default function Dashboard({
                                                 ))}
                                             </SelectContent>
                                         </Select>
-                                        <Select value={areaChartFilter} onValueChange={setAreaChartFilter}>
-                                            <SelectTrigger className="w-[180px]">
-                                                <SelectValue placeholder="All Statuses" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Statuses</SelectItem>
-                                                <SelectItem value="on_time">On Time</SelectItem>
-                                                <SelectItem value="time_adjustment">Time Adjustment</SelectItem>
-                                                <SelectItem value="tardy">Tardy</SelectItem>
-                                                <SelectItem value="half_day">Half Day</SelectItem>
-                                                <SelectItem value="ncns">NCNS</SelectItem>
-                                                <SelectItem value="advised">Advised</SelectItem>
-                                            </SelectContent>
-                                        </Select>
                                     </div>
                                 </div>
                             </CardHeader>
                             <CardContent className="pt-4">
-                                <ChartContainer
-                                    config={{
-                                        on_time: {
-                                            label: "On Time",
-                                            color: "hsl(142, 71%, 45%)",
-                                        },
-                                        time_adjustment: {
-                                            label: "Time Adjustment",
-                                            color: "hsl(280, 65%, 60%)",
-                                        },
-                                        tardy: {
-                                            label: "Tardy",
-                                            color: "hsl(45, 93%, 47%)",
-                                        },
-                                        half_day: {
-                                            label: "Half Day",
-                                            color: "hsl(25, 95%, 53%)",
-                                        },
-                                        ncns: {
-                                            label: "NCNS",
-                                            color: "hsl(0, 84%, 60%)",
-                                        },
-                                        advised: {
-                                            label: "Advised",
-                                            color: "hsl(221, 83%, 53%)",
-                                        },
-                                    }}
-                                    className="h-[400px] w-full"
-                                >
-                                    <ResponsiveContainer width="100%" height="100%">
-                                        <AreaChart
-                                            data={(() => {
-                                                const start = new Date(dateRange.start);
-                                                const end = new Date(dateRange.end);
-
-                                                // If a specific month is selected, show daily data for that month
-                                                if (selectedMonth !== "all") {
-                                                    // Parse the selected month (e.g., "Nov 2025")
-                                                    const [monthStr, yearStr] = selectedMonth.split(' ');
-
-                                                    const monthDate = new Date(`${monthStr} 1, ${yearStr}`);
-                                                    // Format as YYYY-MM using local date components
-                                                    const selectedYear = monthDate.getFullYear();
-                                                    const selectedMonthNum = monthDate.getMonth() + 1;
-                                                    const monthKey = `${selectedYear}-${String(selectedMonthNum).padStart(2, '0')}`;
-
-                                                    // Get daily data for this month from backend
-                                                    const dailyRecords = dailyAttendanceData[monthKey] || [];
-
-                                                    // Get the number of days in the selected month
-                                                    const daysInMonth = new Date(selectedYear, selectedMonthNum, 0).getDate();
-
-                                                    // Create array with all days, filling in zeros for days without data
-                                                    const data = [];
-                                                    for (let day = 1; day <= daysInMonth; day++) {
-                                                        const dayRecord = dailyRecords.find(r => Number(r.day) === day);
-                                                        data.push({
-                                                            month: `${day}`,
-                                                            on_time: Number(dayRecord?.on_time || 0),
-                                                            time_adjustment: Number(dayRecord?.time_adjustment || 0),
-                                                            tardy: Number(dayRecord?.tardy || 0),
-                                                            half_day: Number(dayRecord?.half_day || 0),
-                                                            ncns: Number(dayRecord?.ncns || 0),
-                                                            advised: Number(dayRecord?.advised || 0),
-                                                        });
+                                {attendanceTrendData.length === 0 ? (
+                                    <div className="py-10 text-center text-muted-foreground">
+                                        No attendance data available for the selected period.
+                                    </div>
+                                ) : (
+                                    <>
+                                        <ChartContainer
+                                            config={
+                                                activeAttendanceSlide.key === 'all'
+                                                    ? attendanceTrendSlides.slice(1).reduce((acc, slide) => ({ ...acc, [slide.key]: { label: slide.label, color: slide.color } }), {})
+                                                    : {
+                                                        [activeAttendanceSlide.key]: {
+                                                            label: activeAttendanceSlide.label,
+                                                            color: activeAttendanceSlide.color,
+                                                        }
                                                     }
-
-                                                    return data;
-                                                } else {
-
-                                                    // Show monthly data when "All Months" is selected
-                                                    const current = new Date(start);
-                                                    current.setDate(1); // Set to first day of month
-                                                    const data = [];
-
-                                                    while (current <= end) {
-                                                        // Format as YYYY-MM using local date components, not UTC
-                                                        const year = current.getFullYear();
-                                                        const month = String(current.getMonth() + 1).padStart(2, '0');
-                                                        const monthKey = `${year}-${month}`;
-                                                        const monthName = current.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-
-                                                        // Get monthly data from backend
-                                                        const monthRecord = monthlyAttendanceData[monthKey];
-
-                                                        data.push({
-                                                            month: monthName,
-                                                            on_time: Number(monthRecord?.on_time || 0),
-                                                            time_adjustment: Number(monthRecord?.time_adjustment || 0),
-                                                            tardy: Number(monthRecord?.tardy || 0),
-                                                            half_day: Number(monthRecord?.half_day || 0),
-                                                            ncns: Number(monthRecord?.ncns || 0),
-                                                            advised: Number(monthRecord?.advised || 0),
-                                                        });
-
-                                                        current.setMonth(current.getMonth() + 1);
-                                                    }
-
-                                                    return data;
-                                                }
-                                            })()}
-                                            margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                                            }
+                                            className="h-[320px] w-full"
                                         >
-                                            <CartesianGrid strokeDasharray="3 3" />
-                                            <XAxis
-                                                dataKey="month"
-                                                fontSize={12}
-                                                tickLine={false}
-                                                interval={selectedMonth !== "all" ? "preserveStartEnd" : 0}
-                                            />
-                                            <YAxis
-                                                fontSize={12}
-                                                tickLine={false}
-                                            />
-                                            <ChartTooltip content={<ChartTooltipContent />} />
-                                            <Legend
-                                                wrapperStyle={{ paddingTop: '20px' }}
-                                                iconType="line"
-                                            />
-                                            {(areaChartFilter === "all" || areaChartFilter === "on_time") && (
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="on_time"
-                                                    stackId="1"
-                                                    stroke="hsl(142, 71%, 45%)"
-                                                    fill="hsl(142, 71%, 45%)"
-                                                    fillOpacity={0.6}
-                                                    name="On Time"
-                                                />
-                                            )}
-                                            {(areaChartFilter === "all" || areaChartFilter === "time_adjustment") && (
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="time_adjustment"
-                                                    stackId="1"
-                                                    stroke="hsl(280, 65%, 60%)"
-                                                    fill="hsl(280, 65%, 60%)"
-                                                    fillOpacity={0.6}
-                                                    name="Time Adjustment"
-                                                />
-                                            )}
-                                            {(areaChartFilter === "all" || areaChartFilter === "tardy") && (
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="tardy"
-                                                    stackId="1"
-                                                    stroke="hsl(45, 93%, 47%)"
-                                                    fill="hsl(45, 93%, 47%)"
-                                                    fillOpacity={0.6}
-                                                    name="Tardy"
-                                                />
-                                            )}
-                                            {(areaChartFilter === "all" || areaChartFilter === "half_day") && (
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="half_day"
-                                                    stackId="1"
-                                                    stroke="hsl(25, 95%, 53%)"
-                                                    fill="hsl(25, 95%, 53%)"
-                                                    fillOpacity={0.6}
-                                                    name="Half Day"
-                                                />
-                                            )}
-                                            {(areaChartFilter === "all" || areaChartFilter === "ncns") && (
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="ncns"
-                                                    stackId="1"
-                                                    stroke="hsl(0, 84%, 60%)"
-                                                    fill="hsl(0, 84%, 60%)"
-                                                    fillOpacity={0.6}
-                                                    name="NCNS"
-                                                />
-                                            )}
-                                            {(areaChartFilter === "all" || areaChartFilter === "advised") && (
-                                                <Area
-                                                    type="monotone"
-                                                    dataKey="advised"
-                                                    stackId="1"
-                                                    stroke="hsl(221, 83%, 53%)"
-                                                    fill="hsl(221, 83%, 53%)"
-                                                    fillOpacity={0.6}
-                                                    name="Advised"
-                                                />
-                                            )}
-                                        </AreaChart>
-                                    </ResponsiveContainer>
-                                </ChartContainer>
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <AreaChart data={attendanceTrendData} margin={{ left: 10, right: 10 }}>
+                                                    <defs>
+                                                        {activeAttendanceSlide.key === 'all' ? (
+                                                            attendanceTrendSlides.slice(1).map(slide => (
+                                                                <linearGradient key={slide.key} id={`attendance-trend-${slide.key}`} x1="0" y1="0" x2="0" y2="1">
+                                                                    <stop offset="5%" stopColor={slide.color} stopOpacity={0.8} />
+                                                                    <stop offset="95%" stopColor={slide.color} stopOpacity={0.05} />
+                                                                </linearGradient>
+                                                            ))
+                                                        ) : (
+                                                            <linearGradient id={activeAttendanceGradientId} x1="0" y1="0" x2="0" y2="1">
+                                                                <stop offset="5%" stopColor={activeAttendanceSlide.color} stopOpacity={0.8} />
+                                                                <stop offset="95%" stopColor={activeAttendanceSlide.color} stopOpacity={0.05} />
+                                                            </linearGradient>
+                                                        )}
+                                                    </defs>
+                                                    <CartesianGrid strokeDasharray="3 3" />
+                                                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} interval={selectedMonth !== "all" ? "preserveStartEnd" : 0} />
+                                                    <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
+                                                    <ChartTooltip
+                                                        cursor={false}
+                                                        content={<ChartTooltipContent />}
+                                                    />
+                                                    {activeAttendanceSlide.key === 'all' ? (
+                                                        attendanceTrendSlides.slice(1).map(slide => (
+                                                            <Area
+                                                                key={slide.key}
+                                                                type="monotone"
+                                                                dataKey={slide.key}
+                                                                stroke={slide.color}
+                                                                fill={`url(#attendance-trend-${slide.key})`}
+                                                                strokeWidth={2}
+                                                                activeDot={{ r: 5 }}
+                                                                stackId="1"
+                                                            />
+                                                        ))
+                                                    ) : (
+                                                        <Area
+                                                            type="monotone"
+                                                            dataKey={activeAttendanceSlide.key}
+                                                            stroke={activeAttendanceSlide.color}
+                                                            fill={`url(#${activeAttendanceGradientId})`}
+                                                            strokeWidth={2}
+                                                            activeDot={{ r: 5 }}
+                                                        />
+                                                    )}
+                                                </AreaChart>
+                                            </ResponsiveContainer>
+                                        </ChartContainer>
+                                        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
+                                            <div>
+                                                <p className="text-muted-foreground text-xs uppercase">Latest Period</p>
+                                                <p className="font-semibold">{latestAttendanceTrend?.month ?? 'N/A'}</p>
+                                            </div>
+                                            <div className="flex flex-wrap gap-4">
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs uppercase">Total</p>
+                                                    <p className="font-semibold">{latestAttendanceTrend?.total ?? 0}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs uppercase">On Time</p>
+                                                    <p className="font-semibold">{latestAttendanceTrend?.on_time ?? 0}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs uppercase">Tardy</p>
+                                                    <p className="font-semibold">{latestAttendanceTrend?.tardy ?? 0}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs uppercase">Absences</p>
+                                                    <p className="font-semibold">{(latestAttendanceTrend?.ncns ?? 0) + (latestAttendanceTrend?.advised ?? 0)}</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
                             </CardContent>
                         </Card>
                     </motion.div>

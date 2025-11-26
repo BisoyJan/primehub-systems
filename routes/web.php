@@ -307,6 +307,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('/recent', [NotificationController::class, 'recent'])->name('recent');
         Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
         Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        Route::delete('/all', [NotificationController::class, 'deleteAll'])->name('delete-all');
         Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
         Route::delete('/read/all', [NotificationController::class, 'deleteAllRead'])->name('delete-all-read');
     });

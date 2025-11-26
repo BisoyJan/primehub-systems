@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { usePermission } from "@/hooks/useAuthorization";
 import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -170,6 +171,7 @@ export default function ItConcernsIndex() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { can } = usePermission();
 
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(appliedFilters.search || "");
@@ -468,7 +470,7 @@ export default function ItConcernsIndex() {
                                     <TableHead>Status</TableHead>
                                     <TableHead>Resolved By</TableHead>
                                     <TableHead>Date</TableHead>
-                                    {auth.user.role !== 'Agent' && <TableHead>Actions</TableHead>}
+                                    <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -485,58 +487,47 @@ export default function ItConcernsIndex() {
                                         <TableCell>{getStatusBadge(concern.status)}</TableCell>
                                         <TableCell className="text-sm">{concern.resolved_by?.name || '-'}</TableCell>
                                         <TableCell className="text-xs">{formatDate(concern.created_at)}</TableCell>
-                                        {auth.user.role !== 'Agent' && (
-                                            <TableCell>
-                                                <div className="flex gap-2">
-                                                    <Can permission="it_concerns.resolve">
-                                                        {concern.status !== 'resolved' && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => handleResolve(concern)}
-                                                                title="Quick Resolve"
-                                                            >
-                                                                <CheckCircle className="h-4 w-4 text-green-500" />
-                                                            </Button>
-                                                        )}
-                                                    </Can>
-                                                    <Can permission="it_concerns.edit">
+                                        <TableCell>
+                                            <div className="flex gap-2">
+                                                {/* Resolve Button - IT/Admin */}
+                                                <Can permission="it_concerns.resolve">
+                                                    {concern.status !== 'resolved' && (
                                                         <Button
                                                             variant="ghost"
                                                             size="sm"
-                                                            onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                                            onClick={() => handleResolve(concern)}
+                                                            title="Quick Resolve"
                                                         >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
-                                                    </Can>
-                                                    <Can permission="it_concerns.delete">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleDelete(concern.id)}
-                                                        >
-                                                            <Trash2 className="h-4 w-4 text-red-500" />
-                                                        </Button>
-                                                    </Can>
-                                                </div>
-                                            </TableCell>
-                                        )}
-                                        {auth.user.role === 'Agent' && concern.user?.id === auth.user.id && (
-                                            <TableCell>
-                                                <div className="flex gap-2">
-                                                    {(concern.status === 'pending' || concern.status === 'in_progress') && (
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
-                                                            title="Edit"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
+                                                            <CheckCircle className="h-4 w-4 text-green-500" />
                                                         </Button>
                                                     )}
-                                                </div>
-                                            </TableCell>
-                                        )}
+                                                </Can>
+
+                                                {/* Edit Button - Global permission OR Owner (pending/in_progress) */}
+                                                {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                                        title="Edit"
+                                                    >
+                                                        <Edit className="h-4 w-4" />
+                                                    </Button>
+                                                )}
+
+                                                {/* Delete Button - Global permission OR Owner (pending) */}
+                                                {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleDelete(concern.id)}
+                                                        title="Delete"
+                                                    >
+                                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </TableCell>
                                     </TableRow>
                                 ))}
                                 {concernData.data.length === 0 && !loading && (
@@ -586,20 +577,21 @@ export default function ItConcernsIndex() {
                                 </div>
                             </div>
 
-                            {auth.user.role !== 'Agent' && (
-                                <div className="flex gap-2 pt-2 border-t">
-                                    <Can permission="it_concerns.resolve">
-                                        {concern.status !== 'resolved' && (
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() => handleResolve(concern)}
-                                            >
-                                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                                                Resolve
-                                            </Button>
-                                        )}
-                                    </Can>
+                            <div className="flex gap-2 pt-2 border-t">
+                                <Can permission="it_concerns.resolve">
+                                    {concern.status !== 'resolved' && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleResolve(concern)}
+                                        >
+                                            <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                            Resolve
+                                        </Button>
+                                    )}
+                                </Can>
+
+                                {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -609,6 +601,9 @@ export default function ItConcernsIndex() {
                                         <Edit className="mr-2 h-4 w-4" />
                                         Edit
                                     </Button>
+                                )}
+
+                                {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -616,21 +611,8 @@ export default function ItConcernsIndex() {
                                     >
                                         <Trash2 className="h-4 w-4 text-red-500" />
                                     </Button>
-                                </div>
-                            )}
-                            {auth.user.role === 'Agent' && concern.user?.id === auth.user.id && (concern.status === 'pending' || concern.status === 'in_progress') && (
-                                <div className="flex gap-2 pt-2 border-t">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex-1"
-                                        onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
-                                    >
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Edit
-                                    </Button>
-                                </div>
-                            )}
+                                )}
+                            </div>
                         </div>
                     ))}
 

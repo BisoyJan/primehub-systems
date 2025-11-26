@@ -93,7 +93,7 @@ const getNavigationConfig = (userId: number, userRole: string) => {
                     title: 'Stocks',
                     href: stocksIndex.url(),
                     icon: Folder,
-                    permission: 'stocks.view',
+                    permission: 'stock.view',
                 }
             ],
         },

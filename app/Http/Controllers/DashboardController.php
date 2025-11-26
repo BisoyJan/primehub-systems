@@ -63,6 +63,13 @@ class DashboardController extends Controller
             });
         }
 
+        // Determine DB driver for date functions
+        $driver = $attendanceQuery->getConnection()->getDriverName();
+        $isSqlite = $driver === 'sqlite';
+
+        $monthExpression = $isSqlite ? 'strftime("%Y-%m", shift_date)' : 'DATE_FORMAT(shift_date, "%Y-%m")';
+        $dayExpression = $isSqlite ? 'CAST(strftime("%d", shift_date) AS INTEGER)' : 'DAY(shift_date)';
+
         // Add attendance statistics - combine overtime and undertime
         $attendanceStats = [
             'total' => (clone $attendanceQuery)->count(),
@@ -88,16 +95,16 @@ class DashboardController extends Controller
 
         // Get monthly breakdown for area chart
         $monthlyData = (clone $attendanceQuery)
-            ->selectRaw('
-                DATE_FORMAT(shift_date, "%Y-%m") as month,
+            ->selectRaw("
+                {$monthExpression} as month,
                 COUNT(*) as total,
-                SUM(CASE WHEN status = "on_time" THEN 1 ELSE 0 END) as on_time,
-                SUM(CASE WHEN overtime_minutes > 0 OR status = "undertime" THEN 1 ELSE 0 END) as time_adjustment,
-                SUM(CASE WHEN status = "tardy" THEN 1 ELSE 0 END) as tardy,
-                SUM(CASE WHEN status = "half_day_absence" THEN 1 ELSE 0 END) as half_day,
-                SUM(CASE WHEN status = "ncns" THEN 1 ELSE 0 END) as ncns,
-                SUM(CASE WHEN status = "advised_absence" THEN 1 ELSE 0 END) as advised
-            ')
+                SUM(CASE WHEN status = 'on_time' THEN 1 ELSE 0 END) as on_time,
+                SUM(CASE WHEN overtime_minutes > 0 OR status = 'undertime' THEN 1 ELSE 0 END) as time_adjustment,
+                SUM(CASE WHEN status = 'tardy' THEN 1 ELSE 0 END) as tardy,
+                SUM(CASE WHEN status = 'half_day_absence' THEN 1 ELSE 0 END) as half_day,
+                SUM(CASE WHEN status = 'ncns' THEN 1 ELSE 0 END) as ncns,
+                SUM(CASE WHEN status = 'advised_absence' THEN 1 ELSE 0 END) as advised
+            ")
             ->groupBy('month')
             ->orderBy('month')
             ->get()
@@ -106,17 +113,17 @@ class DashboardController extends Controller
 
         // Get daily breakdown for each month
         $dailyData = (clone $attendanceQuery)
-            ->selectRaw('
-                DATE_FORMAT(shift_date, "%Y-%m") as month,
-                DAY(shift_date) as day,
+            ->selectRaw("
+                {$monthExpression} as month,
+                {$dayExpression} as day,
                 COUNT(*) as total,
-                SUM(CASE WHEN status = "on_time" THEN 1 ELSE 0 END) as on_time,
-                SUM(CASE WHEN overtime_minutes > 0 OR status = "undertime" THEN 1 ELSE 0 END) as time_adjustment,
-                SUM(CASE WHEN status = "tardy" THEN 1 ELSE 0 END) as tardy,
-                SUM(CASE WHEN status = "half_day_absence" THEN 1 ELSE 0 END) as half_day,
-                SUM(CASE WHEN status = "ncns" THEN 1 ELSE 0 END) as ncns,
-                SUM(CASE WHEN status = "advised_absence" THEN 1 ELSE 0 END) as advised
-            ')
+                SUM(CASE WHEN status = 'on_time' THEN 1 ELSE 0 END) as on_time,
+                SUM(CASE WHEN overtime_minutes > 0 OR status = 'undertime' THEN 1 ELSE 0 END) as time_adjustment,
+                SUM(CASE WHEN status = 'tardy' THEN 1 ELSE 0 END) as tardy,
+                SUM(CASE WHEN status = 'half_day_absence' THEN 1 ELSE 0 END) as half_day,
+                SUM(CASE WHEN status = 'ncns' THEN 1 ELSE 0 END) as ncns,
+                SUM(CASE WHEN status = 'advised_absence' THEN 1 ELSE 0 END) as advised
+            ")
             ->groupBy('month', 'day')
             ->orderBy('month')
             ->orderBy('day')

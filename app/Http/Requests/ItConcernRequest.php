@@ -20,6 +20,7 @@ class ItConcernRequest extends FormRequest
     public function rules(): array
     {
         $rules = [
+            'user_id' => ['nullable', 'exists:users,id'],
             'site_id' => ['required', 'exists:sites,id'],
             'station_number' => ['required', 'string', 'max:50'],
             'category' => ['required', 'in:Hardware,Software,Network/Connectivity,Other'],

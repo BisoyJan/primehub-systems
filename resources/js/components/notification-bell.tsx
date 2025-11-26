@@ -105,6 +105,26 @@ export function NotificationBell() {
         }
     };
 
+    const handleDeleteAll = async () => {
+        try {
+            await fetch('/notifications/all', {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                },
+            });
+
+            // Update local state
+            setNotifications([]);
+            setUnreadCount(0);
+            toast.success('All notifications cleared');
+        } catch (error) {
+            console.error('Failed to clear all notifications:', error);
+            toast.error('Failed to clear all notifications');
+        }
+    };
+
     const handleDelete = async (notificationId: number) => {
         try {
             await fetch(`/notifications/${notificationId}`, {
@@ -128,10 +148,50 @@ export function NotificationBell() {
         }
     };
 
+    const handleNotificationClick = (notification: Notification) => {
+        if (!notification.read_at) {
+            handleMarkAsRead(notification.id);
+        }
+
+        if (notification.data && typeof notification.data.link === 'string') {
+            router.visit(notification.data.link);
+            setIsOpen(false);
+        }
+    };
+
     const handleViewAll = () => {
         router.visit('/notifications');
         setIsOpen(false);
     };
+
+    // Update document title with unread count
+    useEffect(() => {
+        const updateTitle = () => {
+            const title = document.title;
+            const hasNotificationPrefix = /^\(\d+\)\s/.test(title);
+
+            if (unreadCount > 0) {
+                const cleanTitle = hasNotificationPrefix ? title.replace(/^\(\d+\)\s/, '') : title;
+                if (!title.startsWith(`(${unreadCount})`)) {
+                    document.title = `(${unreadCount}) ${cleanTitle}`;
+                }
+            } else if (hasNotificationPrefix) {
+                document.title = title.replace(/^\(\d+\)\s/, '');
+            }
+        };
+
+        updateTitle();
+
+        // Re-apply title update after navigation
+        const removeListener = router.on('finish', () => {
+            // Small delay to allow Inertia to update the title first
+            setTimeout(updateTitle, 50);
+        });
+
+        return () => {
+            removeListener();
+        };
+    }, [unreadCount]);
 
     return (
         <DropdownMenu open={isOpen} onOpenChange={handleOpenChange}>
@@ -156,7 +216,9 @@ export function NotificationBell() {
                     onMarkAsRead={handleMarkAsRead}
                     onMarkAllAsRead={handleMarkAllAsRead}
                     onDelete={handleDelete}
+                    onDeleteAll={handleDeleteAll}
                     onViewAll={handleViewAll}
+                    onNotificationClick={handleNotificationClick}
                 />
             </DropdownMenuContent>
         </DropdownMenu>

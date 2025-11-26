@@ -7,6 +7,9 @@ use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
+use App\Mail\LeaveRequestStatusUpdated;
+use App\Mail\LeaveRequestSubmitted;
+use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -238,10 +241,16 @@ class LeaveRequestController extends Controller
             ]);
 
             // Notify HR/Admin users about new leave request
-            $hrAdminUsers = User::whereIn('role', ['Super Admin', 'Admin', 'HR'])
-                ->where('is_approved', true)
-                ->get();
+            $this->notificationService->notifyHrRolesAboutNewLeaveRequest(
+                $targetUser->name,
+                $request->leave_type,
+                $startDate->format('Y-m-d'),
+                $endDate->format('Y-m-d'),
+                $leaveRequest->id
+            );
 
+            // Notify HR/Admin users about new leave request (alternative method)
+            $hrAdminUsers = User::whereIn('role', ['Super Admin', 'Admin', 'HR'])->get();
             foreach ($hrAdminUsers as $admin) {
                 $this->notificationService->notifyLeaveRequest(
                     $admin->id,
@@ -249,6 +258,11 @@ class LeaveRequestController extends Controller
                     $request->leave_type,
                     $leaveRequest->id
                 );
+            }
+
+            // Send confirmation email to the employee
+            if ($targetUser->email && filter_var($targetUser->email, FILTER_VALIDATE_EMAIL)) {
+                Mail::to($targetUser->email)->send(new LeaveRequestSubmitted($leaveRequest, $targetUser));
             }
 
             DB::commit();
@@ -332,6 +346,12 @@ class LeaveRequestController extends Controller
                 $leaveRequest->id
             );
 
+            // Send Email Notification
+            $employee = $leaveRequest->user;
+            if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+                Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
+            }
+
             DB::commit();
 
             return redirect()->route('leave-requests.show', $leaveRequest)
@@ -376,6 +396,12 @@ class LeaveRequestController extends Controller
                 $leaveRequest->id
             );
 
+            // Send Email Notification
+            $employee = $leaveRequest->user;
+            if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+                Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
+            }
+
             DB::commit();
 
             return redirect()->route('leave-requests.show', $leaveRequest)
@@ -411,6 +437,14 @@ class LeaveRequestController extends Controller
             $leaveRequest->update([
                 'status' => 'cancelled',
             ]);
+
+            // Notify HR/Admin about cancellation
+            $this->notificationService->notifyHrRolesAboutLeaveCancellation(
+                $user->name,
+                $leaveRequest->leave_type,
+                \Carbon\Carbon::parse($leaveRequest->start_date)->format('Y-m-d'),
+                \Carbon\Carbon::parse($leaveRequest->end_date)->format('Y-m-d')
+            );
 
             DB::commit();
 

@@ -22,7 +22,9 @@ interface NotificationDropdownProps {
     onMarkAsRead: (id: number) => void;
     onMarkAllAsRead: () => void;
     onDelete: (id: number) => void;
+    onDeleteAll: () => void;
     onViewAll: () => void;
+    onNotificationClick: (notification: Notification) => void;
 }
 
 export function NotificationDropdown({
@@ -31,7 +33,9 @@ export function NotificationDropdown({
     onMarkAsRead,
     onMarkAllAsRead,
     onDelete,
+    onDeleteAll,
     onViewAll,
+    onNotificationClick,
 }: NotificationDropdownProps) {
     const getNotificationIcon = () => {
         // Return appropriate icon based on notification type
@@ -46,6 +50,7 @@ export function NotificationDropdown({
             medication_request: 'text-purple-500',
             pc_assignment: 'text-green-500',
             system: 'text-gray-500',
+            attendance_status: 'text-yellow-500',
         };
         return colors[type] || 'text-gray-500';
     };
@@ -90,9 +95,10 @@ export function NotificationDropdown({
                             <div
                                 key={notification.id}
                                 className={cn(
-                                    'group relative px-4 py-3 hover:bg-muted/50 transition-colors',
+                                    'group relative px-4 py-3 hover:bg-muted/50 transition-colors cursor-pointer',
                                     !notification.read_at && 'bg-blue-50/50 dark:bg-blue-950/10'
                                 )}
+                                onClick={() => onNotificationClick(notification)}
                             >
                                 <div className="flex gap-3">
                                     <div className={cn('mt-1', getNotificationColor(notification.type))}>
@@ -155,14 +161,22 @@ export function NotificationDropdown({
             {notifications.length > 0 && (
                 <>
                     <Separator />
-                    <div className="p-2">
+                    <div className="p-2 grid grid-cols-2 gap-2">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={onDeleteAll}
+                        >
+                            Clear all
+                        </Button>
                         <Button
                             variant="ghost"
                             size="sm"
                             className="w-full"
                             onClick={onViewAll}
                         >
-                            View all notifications
+                            View all
                         </Button>
                     </div>
                 </>

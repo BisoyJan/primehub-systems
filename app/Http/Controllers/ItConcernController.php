@@ -6,11 +6,18 @@ use App\Models\ItConcern;
 use App\Models\Site;
 use App\Models\User;
 use App\Http\Requests\ItConcernRequest;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
 class ItConcernController extends Controller
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
     /**
      * Display a listing of IT concerns.
      */
@@ -90,7 +97,21 @@ class ItConcernController extends Controller
         $validated = $request->validated();
         $validated['user_id'] = auth()->id();
 
-        ItConcern::create($validated);
+        $itConcern = ItConcern::create($validated);
+
+        // Load relationships for notification details
+        $itConcern->load(['site', 'user']);
+
+        // Notify IT roles
+        $this->notificationService->notifyItRolesAboutNewConcern(
+            $itConcern->station_number,
+            $itConcern->site->name,
+            $itConcern->user->name,
+            $itConcern->category,
+            $itConcern->priority,
+            $itConcern->description,
+            $itConcern->id
+        );
 
         return redirect()->route('it-concerns.index')
             ->with('flash', ['message' => 'IT concern submitted successfully', 'type' => 'success']);
@@ -130,6 +151,7 @@ class ItConcernController extends Controller
     public function update(ItConcernRequest $request, ItConcern $itConcern)
     {
         $validated = $request->validated();
+        $oldStatus = $itConcern->status;
 
         // If status is being changed to resolved, set resolved_at timestamp and resolved_by
         if (isset($validated['status']) && $validated['status'] === 'resolved') {
@@ -145,6 +167,29 @@ class ItConcernController extends Controller
 
         $itConcern->update($validated);
 
+        $user = auth()->user();
+
+        // 1. If Agent updates, notify IT roles
+        if ($user->role === 'Agent' || $user->role === 'Admin') {
+            $itConcern->load(['site']);
+            $this->notificationService->notifyItRolesAboutConcernUpdate(
+                $itConcern->station_number,
+                $itConcern->site->name,
+                $user->name,
+                $itConcern->id
+            );
+        }
+
+        // 2. If IT updates status, notify Agent
+        if (($user->role === 'IT' || $user->role === 'Super Admin') && isset($validated['status']) && $validated['status'] !== $oldStatus) {
+            $this->notificationService->notifyItConcernStatusChange(
+                $itConcern->user_id,
+                $validated['status'],
+                $itConcern->station_number,
+                $itConcern->id
+            );
+        }
+
         return redirect()->route('it-concerns.index')
             ->with('flash', ['message' => 'IT concern updated successfully', 'type' => 'success']);
     }
@@ -154,7 +199,24 @@ class ItConcernController extends Controller
      */
     public function destroy(ItConcern $itConcern)
     {
+        $user = auth()->user();
+
+        // Capture details before deletion for notification
+        $itConcern->load(['site']);
+        $stationNumber = $itConcern->station_number;
+        $siteName = $itConcern->site->name;
+        $agentName = $user->name;
+
         $itConcern->delete();
+
+        // If Agent deletes, notify IT roles
+        if ($user->role === 'Agent' || $user->role === 'Admin') {
+            $this->notificationService->notifyItRolesAboutConcernDeletion(
+                $stationNumber,
+                $siteName,
+                $agentName
+            );
+        }
 
         return redirect()->route('it-concerns.index')
             ->with('flash', ['message' => 'IT concern deleted successfully', 'type' => 'success']);
@@ -169,6 +231,7 @@ class ItConcernController extends Controller
             'status' => 'required|in:pending,in_progress,resolved,cancelled',
         ]);
 
+        $oldStatus = $itConcern->status;
         $data = ['status' => $request->status];
 
         if ($request->status === 'resolved') {
@@ -176,6 +239,16 @@ class ItConcernController extends Controller
         }
 
         $itConcern->update($data);
+
+        // Notify Agent if status changed
+        if ($request->status !== $oldStatus) {
+            $this->notificationService->notifyItConcernStatusChange(
+                $itConcern->user_id,
+                $request->status,
+                $itConcern->station_number,
+                $itConcern->id
+            );
+        }
 
         return redirect()->back()
             ->with('flash', ['message' => 'Status updated successfully', 'type' => 'success']);
@@ -210,6 +283,8 @@ class ItConcernController extends Controller
             'priority' => 'nullable|in:low,medium,high,urgent',
         ]);
 
+        $oldStatus = $itConcern->status;
+
         $data = [
             'resolution_notes' => $request->resolution_notes,
         ];
@@ -232,6 +307,16 @@ class ItConcernController extends Controller
         }
 
         $itConcern->update($data);
+
+        // Notify Agent if status changed
+        if ($itConcern->status !== $oldStatus) {
+            $this->notificationService->notifyItConcernStatusChange(
+                $itConcern->user_id,
+                $itConcern->status,
+                $itConcern->station_number,
+                $itConcern->id
+            );
+        }
 
         return redirect()->back()
             ->with('flash', ['message' => 'IT concern updated successfully', 'type' => 'success']);

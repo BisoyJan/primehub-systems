@@ -4,6 +4,10 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\MedicationRequestRequest;
 use App\Models\MedicationRequest;
+use App\Services\NotificationService;
+use App\Mail\MedicationRequestSubmitted;
+use App\Mail\MedicationRequestStatusUpdated;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -13,6 +17,13 @@ class MedicationRequestController extends Controller
 {
     use AuthorizesRequests;
 
+    protected $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
+
     /**
      * Display a listing of the medication requests.
      */
@@ -20,18 +31,12 @@ class MedicationRequestController extends Controller
     {
         $this->authorize('viewAny', MedicationRequest::class);
 
-        $user = auth()->user();
-        $canViewAll = in_array($user->role, ['Super Admin', 'Admin', 'Team Lead']);
-
         $query = MedicationRequest::with(['user', 'approvedBy'])
-            ->when(!$canViewAll, function ($query) use ($user) {
-                $query->where('user_id', $user->id);
-            })
             ->when($request->search, function ($query, $search) {
-                $query->where('name', 'like', "%{$search}%");
-            })
-            ->when($request->medication_type, function ($query, $medicationType) {
-                $query->where('medication_type', $medicationType);
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', "%{$search}%")
+                        ->orWhere('medication_type', 'like', "%{$search}%");
+                });
             })
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
@@ -40,24 +45,7 @@ class MedicationRequestController extends Controller
 
         return Inertia::render('FormRequest/MedicationRequests/Index', [
             'medicationRequests' => $query->paginate(15)->withQueryString(),
-            'filters' => $request->only(['search', 'status', 'medication_type']),
-            'medicationTypes' => [
-                'Declogen',
-                'Biogesic',
-                'Mefenamic Acid',
-                'Kremil-S',
-                'Cetirizine',
-                'Saridon',
-                'Diatabs',
-            ],
-            'users' => \App\Models\User::select('id', 'first_name', 'middle_name', 'last_name')
-                ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get()
-                ->map(fn($user) => [
-                    'id' => $user->id,
-                    'name' => $user->name,
-                ]),
+            'filters' => $request->only(['search', 'status']),
         ]);
     }
 
@@ -87,31 +75,11 @@ class MedicationRequestController extends Controller
             ],
             'canRequestForOthers' => $canRequestForOthers,
             'users' => $canRequestForOthers
-                ? \App\Models\User::select('id', 'first_name', 'middle_name', 'last_name')
-                    ->orderBy('first_name')
-                    ->orderBy('last_name')
+                ? \App\Models\User::select('id', 'name')
+                    ->where('status', 'active')
+                    ->orderBy('name')
                     ->get()
-                    ->map(fn($user) => [
-                        'id' => $user->id,
-                        'name' => $user->name,
-                    ])
                 : null,
-        ]);
-    }
-
-    /**
-     * Check if a user has a pending medication request.
-     */
-    public function checkPendingRequest($userId)
-    {
-        $this->authorize('create', MedicationRequest::class);
-
-        $hasPendingRequest = MedicationRequest::where('user_id', $userId)
-            ->where('status', 'pending')
-            ->exists();
-
-        return response()->json([
-            'hasPendingRequest' => $hasPendingRequest,
         ]);
     }
 
@@ -125,26 +93,23 @@ class MedicationRequestController extends Controller
         $userId = $request->validated()['requested_for_user_id'] ?? auth()->id();
         $user = \App\Models\User::findOrFail($userId);
 
-        // Check if user has a pending request
-        $hasPendingRequest = MedicationRequest::where('user_id', $userId)
-            ->where('status', 'pending')
-            ->exists();
-
-        if ($hasPendingRequest) {
-            $errorMessage = $userId === auth()->id()
-                ? 'You already have a pending medication request. Please wait for it to be processed before submitting a new one.'
-                : $user->name . ' already has a pending medication request. Please wait for it to be processed before submitting a new one.';
-
-            return back()->withErrors([
-                'message' => $errorMessage
-            ]);
-        }
-
         $medicationRequest = MedicationRequest::create([
             ...$request->validated(),
             'user_id' => $userId,
             'name' => $user->name,
         ]);
+
+        // Notify HR/Admin
+        $this->notificationService->notifyHrRolesAboutNewMedicationRequest(
+            $user->name,
+            $medicationRequest->medication_type,
+            $medicationRequest->id
+        );
+
+        // Send confirmation email to the employee
+        if ($user->email && filter_var($user->email, FILTER_VALIDATE_EMAIL)) {
+            Mail::to($user->email)->send(new MedicationRequestSubmitted($medicationRequest, $user));
+        }
 
         return redirect()->route('medication-requests.index')
             ->with('success', 'Medication request submitted successfully.');
@@ -182,29 +147,21 @@ class MedicationRequestController extends Controller
             'approved_at' => now(),
         ]);
 
+        // Notify the employee about status change
+        $this->notificationService->notifyMedicationRequestStatusChange(
+            $medicationRequest->user_id,
+            $medicationRequest->status,
+            $medicationRequest->medication_type,
+            $medicationRequest->id
+        );
+
+        // Send Email Notification
+        $employee = $medicationRequest->user;
+        if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+            Mail::to($employee->email)->send(new MedicationRequestStatusUpdated($medicationRequest, $employee));
+        }
+
         return back()->with('success', 'Medication request status updated successfully.');
-    }
-
-    /**
-     * Cancel a pending medication request (user can cancel their own).
-     */
-    public function cancel(MedicationRequest $medicationRequest)
-    {
-        // User can only cancel their own pending requests
-        if ($medicationRequest->user_id !== auth()->id()) {
-            abort(403, 'You can only cancel your own requests.');
-        }
-
-        if ($medicationRequest->status !== 'pending') {
-            return back()->withErrors([
-                'message' => 'Only pending requests can be cancelled.'
-            ]);
-        }
-
-        $medicationRequest->delete();
-
-        return redirect()->route('medication-requests.index')
-            ->with('success', 'Medication request cancelled successfully.');
     }
 
     /**
@@ -214,7 +171,17 @@ class MedicationRequestController extends Controller
     {
         $this->authorize('delete', $medicationRequest);
 
+        // Capture details before deletion
+        $requesterName = $medicationRequest->name;
+        $medicationType = $medicationRequest->medication_type;
+
         $medicationRequest->delete();
+
+        // Notify HR/Admin about cancellation
+        $this->notificationService->notifyHrRolesAboutMedicationRequestCancellation(
+            $requesterName,
+            $medicationType
+        );
 
         return redirect()->route('medication-requests.index')
             ->with('success', 'Medication request deleted successfully.');

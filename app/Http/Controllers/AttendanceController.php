@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceUpload;
 use App\Models\AttendancePoint;
 use App\Services\AttendanceProcessor;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
@@ -14,10 +15,12 @@ use Carbon\Carbon;
 class AttendanceController extends Controller
 {
     protected AttendanceProcessor $processor;
+    protected NotificationService $notificationService;
 
-    public function __construct(AttendanceProcessor $processor)
+    public function __construct(AttendanceProcessor $processor, NotificationService $notificationService)
     {
         $this->processor = $processor;
+        $this->notificationService = $notificationService;
     }
 
     /**
@@ -871,6 +874,20 @@ class AttendanceController extends Controller
             $this->processor->regeneratePointsForAttendance($attendance);
         }
 
+        // Fetch points if any
+        $pointRecord = AttendancePoint::where('attendance_id', $attendance->id)->first();
+        $points = $pointRecord ? $pointRecord->points : null;
+
+        // Notify user if status is not on_time
+        if ($request->status !== 'on_time') {
+            $this->notificationService->notifyAttendanceStatus(
+                $attendance->user_id,
+                $request->status,
+                Carbon::parse($attendance->shift_date)->format('M d, Y'),
+                $points
+            );
+        }
+
         return redirect()->back()
             ->with('success', 'Attendance record verified and updated successfully.');
     }
@@ -931,6 +948,20 @@ class AttendanceController extends Controller
             // Generate points if the status requires them (and record is now verified)
             if (in_array($validated['status'], ['ncns', 'half_day_absence', 'tardy', 'undertime', 'advised_absence'])) {
                 $this->processor->regeneratePointsForAttendance($attendance);
+            }
+
+            // Fetch points if any
+            $pointRecord = AttendancePoint::where('attendance_id', $attendance->id)->first();
+            $points = $pointRecord ? $pointRecord->points : null;
+
+            // Notify user if status is not on_time
+            if ($validated['status'] !== 'on_time') {
+                $this->notificationService->notifyAttendanceStatus(
+                    $attendance->user_id,
+                    $validated['status'],
+                    Carbon::parse($attendance->shift_date)->format('M d, Y'),
+                    $points
+                );
             }
 
             $verifiedCount++;

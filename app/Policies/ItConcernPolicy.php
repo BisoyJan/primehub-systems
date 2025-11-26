@@ -90,6 +90,11 @@ class ItConcernPolicy
      */
     public function delete(User $user, ItConcern $itConcern): bool
     {
+        // Users can delete their own concerns if status is pending
+        if ($itConcern->user_id === $user->id) {
+            return $itConcern->status === 'pending';
+        }
+
         return $this->permissionService->userHasPermission($user, 'it_concerns.delete');
     }
 }
