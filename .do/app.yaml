@@ -12,10 +12,10 @@ services:
     build_command: |
       # Install PHP dependencies
       composer install --optimize-autoloader --no-dev --no-interaction
-      
+
       # Generate Wayfinder routes for type-safe routing
       php artisan wayfinder:generate --with-form
-      
+
       # Install and build frontend assets
       npm ci --prefer-offline
       npm run build
@@ -23,16 +23,16 @@ services:
     run_command: |
       # Create storage symlink
       php artisan storage:link || true
-      
+
       # Run database migrations
       php artisan migrate --force
-      
+
       # Optimize application
       php artisan config:cache
       php artisan route:cache
       php artisan view:cache
       php artisan event:cache
-      
+
       # Start the web server
       heroku-php-nginx -C nginx.conf public/
 
@@ -54,13 +54,13 @@ services:
         type: SECRET
       - key: APP_URL
         value: ${APP_URL}
-      
+
       # Logging
       - key: LOG_CHANNEL
         value: errorlog
       - key: LOG_LEVEL
         value: warning
-      
+
       # Session & Cache
       - key: SESSION_DRIVER
         value: database
@@ -70,15 +70,15 @@ services:
         value: "120"
       - key: CACHE_STORE
         value: database
-      
+
       # Queue
       - key: QUEUE_CONNECTION
         value: database
-      
+
       # Filesystem
       - key: FILESYSTEM_DISK
         value: local
-      
+
       # Database Connection
       - key: DB_CONNECTION
         value: mysql
@@ -92,7 +92,7 @@ services:
         value: ${db.USERNAME}
       - key: DB_PASSWORD
         value: ${db.PASSWORD}
-      
+
       # Mail Configuration
       - key: MAIL_MAILER
         value: smtp
@@ -143,13 +143,13 @@ services:
       - key: APP_KEY
         scope: RUN_AND_BUILD_TIME
         type: SECRET
-      
+
       # Logging
       - key: LOG_CHANNEL
         value: errorlog
       - key: LOG_LEVEL
         value: warning
-      
+
       # Database Connection
       - key: DB_CONNECTION
         value: mysql
@@ -163,13 +163,13 @@ services:
         value: ${db.USERNAME}
       - key: DB_PASSWORD
         value: ${db.PASSWORD}
-      
+
       # Queue & Cache
       - key: QUEUE_CONNECTION
         value: database
       - key: CACHE_STORE
         value: database
-      
+
       # Mail (for sending notifications from queue)
       - key: MAIL_MAILER
         value: smtp
