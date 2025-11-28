@@ -37,6 +37,7 @@ php artisan view:cache || true
 php artisan event:cache || true
 
 # Start web server
-echo "[5/5] Starting Nginx..."
+PORT=${PORT:-8080}
+echo "[5/5] Starting PHP server on port $PORT..."
 echo "========================================"
-exec heroku-php-nginx -C nginx.conf public/
+exec php -d variables_order=EGPCS -S 0.0.0.0:$PORT -t public public/index.php
