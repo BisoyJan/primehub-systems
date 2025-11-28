@@ -17,6 +17,11 @@ php artisan route:clear >/dev/null 2>&1 || true
 php artisan view:clear >/dev/null 2>&1 || true
 php artisan event:clear >/dev/null 2>&1 || true
 
+# Debug the runtime database configuration
+echo "DB_CONNECTION=${DB_CONNECTION:-unset}"
+echo "DB_HOST=${DB_HOST:-unset}"
+echo "DB_DATABASE=${DB_DATABASE:-unset}"
+
 # Create storage symlink
 echo "[1/5] Creating storage link..."
 php artisan storage:link 2>/dev/null || true
