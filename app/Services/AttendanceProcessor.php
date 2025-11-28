@@ -23,6 +23,42 @@ class AttendanceProcessor
     }
 
     /**
+     * Process uploaded attendance file and create attendance records.
+     *
+     * This method performs the following operations:
+     * 1. Updates upload status to 'processing'
+     * 2. Parses the biometric file and groups records by employee
+     * 3. Saves all raw biometric records to the database
+     * 4. Validates that file dates match the expected shift date
+     * 5. Processes each employee's records and creates attendance entries
+     * 6. Tracks matched/unmatched employees and non-work day scans
+     * 7. Updates the upload record with processing statistics
+     * 8. Detects absent employees and creates NCNS records
+     * 9. Commits transaction on success or rolls back on failure
+     *
+     * Note: Attendance points are NOT auto-generated during this process.
+     * Points should be generated only after admin verification via the review page.
+     *
+     * @param AttendanceUpload $upload The attendance upload record being processed
+     * @param string $filePath The absolute path to the uploaded biometric file
+     *
+     * @return array Processing results containing:
+     *               - total_records: Total number of biometric records parsed
+     *               - processed: Number of records successfully processed
+     *               - matched_employees: Count of employees matched to database
+     *               - unmatched_names: Array of employee names not found in system
+     *               - errors: Array of error messages encountered during processing
+     *               - date_warnings: Array of warnings about date mismatches
+     *               - dates_found: Array of unique dates found in the file
+     *               - non_work_day_scans: Array of scans detected on non-scheduled days
+     *
+     * @throws \Exception If processing fails, transaction is rolled back and exception is re-thrown
+     *
+     * @see AttendanceParser::parse() For file parsing logic
+     * @see processEmployeeRecords() For individual employee processing
+     * @see detectAbsentEmployees() For NCNS detection
+     */
+    /**
      * Process uploaded attendance file.
      *
      * @param AttendanceUpload $upload

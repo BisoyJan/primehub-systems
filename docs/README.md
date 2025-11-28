@@ -1,64 +1,146 @@
 # PrimeHub Systems - Documentation
 
-Welcome to the PrimeHub Systems documentation! This directory contains comprehensive guides for all major features and setup procedures.
+Welcome to the PrimeHub Systems comprehensive documentation! This directory contains complete guides for all major features, setup procedures, and technical references.
 
 ---
 
 ## 📂 Documentation Structure
 
+### 🖥️ **Computer & Hardware** (`computer/`) ⭐ NEW
+PC specifications, hardware inventory, QR codes, and asset management.
+
+- **[README.md](computer/README.md)** - Computer & hardware system overview
+  - PC specifications management
+  - Hardware specs (RAM, Disk, Processor, Monitor)
+  - QR code generation
+  - Stock inventory
+  - PC transfers and maintenance
+
+### 🏢 **Stations & Sites** (`stations/`) ⭐ NEW
+Workstation management, physical locations, and campaigns.
+
+- **[README.md](stations/README.md)** - Station management overview
+  - Station CRUD operations
+  - Site and campaign management
+  - QR code generation
+  - Bulk station creation
+
 ### 📋 **Attendance System** (`attendance/`)
 Complete documentation for the attendance tracking system including biometric file processing, shift detection, point expiration, and employee matching.
 
-- **[EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** ⭐ **NEW** - Point expiration system overview (SRO/GBRO)
-- **[POINT_EXPIRATION_RULES.md](attendance/POINT_EXPIRATION_RULES.md)** - Complete expiration rules documentation
-- **[AUTOMATIC_POINT_GENERATION.md](attendance/AUTOMATIC_POINT_GENERATION.md)** - Automatic point generation rules
-- **[ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** - Universal shift detection algorithm (supports all 48 shift patterns)
-- **[CROSS_UPLOAD_TIMEOUT_HANDLING.md](attendance/CROSS_UPLOAD_TIMEOUT_HANDLING.md)** - How multi-upload handling works for night shifts
+- **[README.md](attendance/README.md)** - Attendance system overview
+- **[EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** - Point expiration system (SRO/GBRO)
+- **[POINT_EXPIRATION_RULES.md](attendance/POINT_EXPIRATION_RULES.md)** - Complete expiration rules
+- **[AUTOMATIC_POINT_GENERATION.md](attendance/AUTOMATIC_POINT_GENERATION.md)** - Automatic point generation
+- **[ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** - Universal shift detection (48 patterns)
+- **[CROSS_UPLOAD_TIMEOUT_HANDLING.md](attendance/CROSS_UPLOAD_TIMEOUT_HANDLING.md)** - Multi-upload handling
 
 ### 🔐 **Biometric Records** (`biometric/`)
 Documentation for biometric record storage, audit trails, and management features.
 
-- **[BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** - Overview of biometric storage implementation
-- **[BIOMETRIC_RECORDS_STORAGE.md](biometric/BIOMETRIC_RECORDS_STORAGE.md)** - Database schema and data lifecycle (3-month retention)
-- **[BIOMETRIC_RECORDS_UI.md](biometric/BIOMETRIC_RECORDS_UI.md)** - UI features for viewing and managing biometric records
+- **[README.md](biometric/README.md)** - Biometric system overview
+- **[BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** - Implementation overview
+- **[BIOMETRIC_RECORDS_STORAGE.md](biometric/BIOMETRIC_RECORDS_STORAGE.md)** - Database schema and lifecycle
+- **[BIOMETRIC_RECORDS_UI.md](biometric/BIOMETRIC_RECORDS_UI.md)** - UI features and components
 
-### 🏖️ **Leave Management System** (`leave/`)
-Complete documentation for the employee leave management system including credits accrual, request workflow, and approval process.
+### 🏖️ **Leave Management** (`leave/`)
+Complete documentation for the employee leave management system.
 
-- **[README.md](leave/README.md)** ⭐ **NEW** - Complete leave management system documentation
-  - Leave credits accrual (monthly automatic)
-  - Leave request submission and approval workflow
-  - Business rules and validations
-  - Console commands and backfilling system
+- **[README.md](leave/README.md)** - Complete leave system documentation
+- **[LEAVE_CREDITS_ACCRUAL.md](leave/LEAVE_CREDITS_ACCRUAL.md)** - Monthly accrual system
+- **[LEAVE_REQUEST_VALIDATION.md](leave/LEAVE_REQUEST_VALIDATION.md)** - Validation rules
+- **[LEAVE_APPROVAL_WORKFLOW.md](leave/LEAVE_APPROVAL_WORKFLOW.md)** - Approval process
+
+### 📝 **Form Requests** (`form-requests/`) ⭐ NEW
+Employee form request systems documentation.
+
+- **[README.md](form-requests/README.md)** - Form requests overview
+  - IT Concerns tracking
+  - Medication requests
+  - Retention policies
+
+### 👤 **Accounts & Activity** (`accounts/`) ⭐ NEW
+User management and activity logging.
+
+- **[README.md](accounts/README.md)** - Account management overview
+  - User CRUD operations
+  - Role assignment
+  - Approval workflow
+  - Activity logging
+
+### 🔒 **Authorization** (`authorization/`)
+Role-Based Access Control (RBAC) system documentation.
+
+- **[README.md](authorization/README.md)** - RBAC overview
+- **[RBAC_GUIDE.md](authorization/RBAC_GUIDE.md)** - Complete guide
+- **[QUICK_REFERENCE.md](authorization/QUICK_REFERENCE.md)** - Quick reference
+- **[ROLE_ACCESS_MATRIX.md](authorization/ROLE_ACCESS_MATRIX.md)** - Permission matrix
+
+### 🔔 **Notifications**
+Notification system documentation.
+
+- **[NOTIFICATION_SYSTEM.md](NOTIFICATION_SYSTEM.md)** - Complete notification system
+- **[NOTIFICATION_QUICKSTART.md](NOTIFICATION_QUICKSTART.md)** - Quick start guide
+
+### 📊 **Database** (`database/`) ⭐ NEW
+Database schema and architecture.
+
+- **[SCHEMA.md](database/SCHEMA.md)** - Complete database schema reference
+
+### 🌐 **API Reference** (`api/`) ⭐ NEW
+Routes and API documentation.
+
+- **[ROUTES.md](api/ROUTES.md)** - Complete routes reference
 
 ### ⚙️ **Setup & Configuration** (`setup/`)
-Technical setup guides for server configuration and feature enablement.
+Technical setup guides for server configuration.
 
-- **[PHP_EXTENSIONS_SETUP.md](setup/PHP_EXTENSIONS_SETUP.md)** - Required PHP extensions (GD, ZIP) for QR code generation
-- **[QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD](setup/QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD)** - QR code feature setup
+- **[README.md](setup/README.md)** - Setup overview
+- **[PHP_EXTENSIONS_SETUP.md](setup/PHP_EXTENSIONS_SETUP.md)** - PHP extensions
+- **[QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD](setup/QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD)** - QR code setup
 
 ### 🚀 **Deployment Guides** (`guides/`)
-Environment setup, Docker configuration, and local development guides.
+Environment setup and deployment.
 
-- **[README.md](guides/README.md)** - Master guide index and quick start
-- **[LOCAL_SETUP_GUIDE.md](guides/LOCAL_SETUP_GUIDE.md)** - Running without Docker (Windows native)
-- **[NGROK_GUIDE.md](guides/NGROK_GUIDE.md)** - Remote access and internet exposure
+- **[README.md](guides/README.md)** - Guides overview
+- **[LOCAL_SETUP_GUIDE.md](guides/LOCAL_SETUP_GUIDE.md)** - Local development
+- **[NGROK_GUIDE.md](guides/NGROK_GUIDE.md)** - Remote access
+- **[DIGITALOCEAN_DEPLOYMENT.md](guides/DIGITALOCEAN_DEPLOYMENT.md)** - Cloud deployment
 
 ---
 
 ## 🎯 Quick Navigation
 
 ### For New Developers
-1. Start with **[guides/README.md](guides/README.md)** - Choose Docker or local setup
+1. Start with **[guides/README.md](guides/README.md)** - Choose setup method
 2. Review **[../REFACTORING_GUIDE.md](../REFACTORING_GUIDE.md)** - Code standards
 3. Check **[../.github/copilot-instructions.md](../.github/copilot-instructions.md)** - Project architecture
+4. Read **[database/SCHEMA.md](database/SCHEMA.md)** - Understand data model
+5. Review **[api/ROUTES.md](api/ROUTES.md)** - API reference
+
+### By Feature Area
+
+#### IT Department
+- **[computer/README.md](computer/README.md)** - PC & hardware management
+- **[stations/README.md](stations/README.md)** - Station management
+- **[form-requests/README.md](form-requests/README.md)** - IT concerns
+
+#### HR Department
+- **[attendance/README.md](attendance/README.md)** - Attendance system
+- **[leave/README.md](leave/README.md)** - Leave management
+- **[accounts/README.md](accounts/README.md)** - User management
+- **[biometric/README.md](biometric/README.md)** - Biometric records
+
+#### System Administration
+- **[authorization/README.md](authorization/README.md)** - RBAC system
+- **[NOTIFICATION_SYSTEM.md](NOTIFICATION_SYSTEM.md)** - Notifications
+- **[database/SCHEMA.md](database/SCHEMA.md)** - Database reference
+- **[api/ROUTES.md](api/ROUTES.md)** - API routes
 
 ### For Attendance Feature
-1. **[ATTENDANCE_FEATURES_SUMMARY.md](../ATTENDANCE_FEATURES_SUMMARY.md)** - Quick feature overview (in root)
-2. **[attendance/EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** ⭐ - Point expiration overview
+1. **[attendance/README.md](attendance/README.md)** - System overview
+2. **[attendance/EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** - Point expiration
 3. **[attendance/ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** - Algorithm deep dive
-4. **[ATTENDANCE_SYSTEM_ANALYSIS.md](../ATTENDANCE_SYSTEM_ANALYSIS.md)** - Complete analysis (in root)
-5. **[ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)** - Testing documentation (in root)
 
 ### For Biometric Features
 1. **[biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** - Feature overview
@@ -143,41 +225,70 @@ These important docs are in the project root directory:
 
 ```
 docs/
-├── README.md                          ← You are here
+├── README.md                              ← You are here
 │
-├── attendance/                        ← Attendance System Documentation
-│   ├── EXPIRATION_SYSTEM_SUMMARY.md   ⭐ NEW - Point expiration overview
-│   ├── POINT_EXPIRATION_RULES.md
-│   ├── AUTOMATIC_POINT_GENERATION.md
+├── accounts/                              ← User Account Management ⭐ NEW
+│   └── README.md
+│
+├── api/                                   ← API & Routes Reference ⭐ NEW
+│   └── ROUTES.md
+│
+├── attendance/                            ← Attendance System
+│   ├── README.md
 │   ├── ATTENDANCE_GROUPING_LOGIC.md
-│   └── CROSS_UPLOAD_TIMEOUT_HANDLING.md
+│   ├── AUTOMATIC_POINT_GENERATION.md
+│   ├── CROSS_UPLOAD_TIMEOUT_HANDLING.md
+│   ├── EXPIRATION_SYSTEM_SUMMARY.md
+│   └── POINT_EXPIRATION_RULES.md
 │
-├── biometric/                         ← Biometric Records Documentation
+├── authorization/                         ← RBAC System
+│   ├── README.md
+│   ├── IMPLEMENTATION_SUMMARY.md
+│   ├── QUICK_REFERENCE.md
+│   ├── RBAC_GUIDE.md
+│   └── ROLE_ACCESS_MATRIX.md
+│
+├── biometric/                             ← Biometric Records
+│   ├── README.md
 │   ├── BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md
 │   ├── BIOMETRIC_RECORDS_STORAGE.md
 │   └── BIOMETRIC_RECORDS_UI.md
 │
-├── leave/                             ← Leave Management Documentation
-│   └── README.md                      ⭐ NEW - Complete leave system
+├── computer/                              ← Computer & Hardware ⭐ NEW
+│   └── README.md
 │
-├── setup/                             ← Setup & Configuration Guides
+├── database/                              ← Database Schema ⭐ NEW
+│   └── SCHEMA.md
+│
+├── form-requests/                         ← Form Requests ⭐ NEW
+│   └── README.md
+│
+├── guides/                                ← Deployment & Setup
+│   ├── README.md
+│   ├── DIGITALOCEAN_APP_PLATFORM_SETUP.md
+│   ├── DIGITALOCEAN_DEPLOYMENT.md
+│   ├── inactivity-logout.md
+│   ├── LOCAL_SETUP_GUIDE.md
+│   ├── NGROK_GUIDE.md
+│   └── NGROK_SETUP.md
+│
+├── leave/                                 ← Leave Management
+│   ├── README.md
+│   ├── LEAVE_APPROVAL_WORKFLOW.md
+│   ├── LEAVE_CREDITS_ACCRUAL.md
+│   └── LEAVE_REQUEST_VALIDATION.md
+│
+├── setup/                                 ← Server Setup
+│   ├── README.md
 │   ├── PHP_EXTENSIONS_SETUP.md
 │   └── QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD
 │
-└── guides/                            ← Deployment & Environment Setup
-    ├── README.md                      ← Guides master index
-    ├── LOCAL_SETUP_GUIDE.md           ← Local development setup
-    └── NGROK_GUIDE.md                 ← Remote access guide
-
-Root Level (../)                       ← Project Root Documentation
-├── ATTENDANCE_FEATURES_SUMMARY.md     ← Quick attendance reference
-├── ATTENDANCE_SYSTEM_ANALYSIS.md      ← Complete attendance analysis
-├── ATTENDANCE_TESTS_SUMMARY.md        ← Testing documentation
-├── BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md  ← New features
-├── BIOMETRIC_ENHANCEMENTS_STATUS.md   ← Implementation status
-├── BIOMETRIC_UI_FIXES.md              ← UI troubleshooting
-├── REFACTORING_GUIDE.md               ← Code standards
-└── .github/copilot-instructions.md    ← Project architecture
+├── stations/                              ← Station Management ⭐ NEW
+│   └── README.md
+│
+├── NOTIFICATION_IMPLEMENTATION_SUMMARY.md
+├── NOTIFICATION_QUICKSTART.md
+└── NOTIFICATION_SYSTEM.md
 ```
 
 ---
@@ -188,32 +299,60 @@ Root Level (../)                       ← Project Root Documentation
 1. Read **[guides/README.md](guides/README.md)** → Choose setup method
 2. Review **[../.github/copilot-instructions.md](../.github/copilot-instructions.md)** → Understand architecture
 3. Check **[../REFACTORING_GUIDE.md](../REFACTORING_GUIDE.md)** → Learn code standards
-4. Browse feature docs as needed
+4. Study **[database/SCHEMA.md](database/SCHEMA.md)** → Understand data models
+5. Browse **[api/ROUTES.md](api/ROUTES.md)** → API overview
+6. Browse feature docs as needed
 
 ### Path 2: Understanding Attendance System
-1. **[../ATTENDANCE_FEATURES_SUMMARY.md](../ATTENDANCE_FEATURES_SUMMARY.md)** → Quick overview (10 min read)
-2. **[attendance/EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** ⭐ → Point expiration overview (15 min)
+1. **[attendance/README.md](attendance/README.md)** → Quick overview (10 min read)
+2. **[attendance/EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** → Point expiration overview (15 min)
 3. **[attendance/ATTENDANCE_GROUPING_LOGIC.md](attendance/ATTENDANCE_GROUPING_LOGIC.md)** → Algorithm details (20 min)
-4. **[../ATTENDANCE_SYSTEM_ANALYSIS.md](../ATTENDANCE_SYSTEM_ANALYSIS.md)** → Deep dive (45 min)
-5. **[../ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)** → Test coverage
+4. **[attendance/AUTOMATIC_POINT_GENERATION.md](attendance/AUTOMATIC_POINT_GENERATION.md)** → Point rules
+5. **[attendance/CROSS_UPLOAD_TIMEOUT_HANDLING.md](attendance/CROSS_UPLOAD_TIMEOUT_HANDLING.md)** → Edge cases
 
 ### Path 3: Working with Biometric Records
-1. **[biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** → Overview
+1. **[biometric/README.md](biometric/README.md)** → Overview
 2. **[biometric/BIOMETRIC_RECORDS_STORAGE.md](biometric/BIOMETRIC_RECORDS_STORAGE.md)** → Data lifecycle
 3. **[biometric/BIOMETRIC_RECORDS_UI.md](biometric/BIOMETRIC_RECORDS_UI.md)** → UI features
-4. **[../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)** → Recent additions
+4. **[biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** → Implementation details
 
-### Path 4: Understanding Leave Management ⭐ NEW
+### Path 4: Understanding Leave Management
 1. **[leave/README.md](leave/README.md)** → Complete system overview (30 min)
    - Leave types and credits accrual
    - Business rules and validations
    - Request workflow and approval process
    - Console commands and setup
 
-### Path 5: Production Deployment
+### Path 5: IT Department - Computer & Hardware ⭐ NEW
+1. **[computer/README.md](computer/README.md)** → Complete hardware system
+   - PC spec management and tracking
+   - Hardware components (RAM, Disk, Processor, Monitor)
+   - QR code generation for assets
+   - PC maintenance scheduling
+   - PC transfers between stations
+2. **[stations/README.md](stations/README.md)** → Station management
+   - Station, site, and campaign hierarchy
+
+### Path 6: HR Department - Form Requests ⭐ NEW
+1. **[form-requests/README.md](form-requests/README.md)** → Form request system
+   - IT concerns workflow
+   - Medication requests
+   - Retention policies
+2. **[accounts/README.md](accounts/README.md)** → User management
+   - Account creation and management
+   - Activity logging and audit trail
+
+### Path 7: Understanding Authorization ⭐ NEW
+1. **[authorization/README.md](authorization/README.md)** → RBAC overview
+2. **[authorization/RBAC_GUIDE.md](authorization/RBAC_GUIDE.md)** → Implementation guide
+3. **[authorization/ROLE_ACCESS_MATRIX.md](authorization/ROLE_ACCESS_MATRIX.md)** → Permission matrix
+4. **[authorization/QUICK_REFERENCE.md](authorization/QUICK_REFERENCE.md)** → Quick lookup
+
+### Path 8: Production Deployment
 1. **[setup/PHP_EXTENSIONS_SETUP.md](setup/PHP_EXTENSIONS_SETUP.md)** → Server requirements
 2. **[guides/LOCAL_SETUP_GUIDE.md](guides/LOCAL_SETUP_GUIDE.md)** → Environment setup
-3. **[guides/NGROK_GUIDE.md](guides/NGROK_GUIDE.md)** → Remote access (optional)
+3. **[guides/DIGITALOCEAN_DEPLOYMENT.md](guides/DIGITALOCEAN_DEPLOYMENT.md)** → Cloud deployment
+4. **[guides/NGROK_GUIDE.md](guides/NGROK_GUIDE.md)** → Remote access (optional)
 
 ---
 
@@ -221,13 +360,14 @@ Root Level (../)                       ← Project Root Documentation
 
 ### Running Tests
 ```bash
-# All attendance tests
-php artisan test --filter=Attendance
+# All tests
+php artisan test
 
-# Specific test file
-php artisan test tests/Unit/AttendanceProcessorTest.php
+# Specific feature tests
+php artisan test --filter=Attendance
+php artisan test --filter=LeaveRequest
+php artisan test --filter=Policy
 ```
-See: [../ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)
 
 ### Processing Attendance Upload
 1. Navigate to `/attendance/import`
@@ -235,7 +375,7 @@ See: [../ATTENDANCE_TESTS_SUMMARY.md](../ATTENDANCE_TESTS_SUMMARY.md)
 3. Select shift date and site
 4. Review results
    
-See: [../ATTENDANCE_FEATURES_SUMMARY.md](../ATTENDANCE_FEATURES_SUMMARY.md)
+See: [attendance/README.md](attendance/README.md)
 
 ### Cleaning Old Biometric Records
 ```bash
@@ -247,15 +387,7 @@ php artisan biometric:clean-old-records --months=6
 ```
 See: [biometric/BIOMETRIC_RECORDS_STORAGE.md](biometric/BIOMETRIC_RECORDS_STORAGE.md)
 
-### Reprocessing Attendance
-1. Navigate to `/biometric-reprocessing`
-2. Select date range
-3. Preview affected records
-4. Execute reprocessing
-
-See: [../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)
-
-### Managing Leave Credits ⭐ NEW
+### Managing Leave Credits
 ```bash
 # Accrue credits for current month (runs monthly via cron)
 php artisan leave:accrue-credits
@@ -268,17 +400,39 @@ php artisan leave:backfill-credits --user=123
 ```
 See: [leave/README.md](leave/README.md)
 
-### Submitting Leave Requests
-1. Navigate to `/leave-requests/create`
-2. View available leave credits
-3. Select leave type and dates
-4. Submit for approval
+### Managing PC Specs & Hardware ⭐ NEW
+1. Navigate to `/computer/pc-specs` → Manage PC specifications
+2. Navigate to `/computer/ram-specs` → Manage RAM inventory
+3. Navigate to `/computer/disk-specs` → Manage disk inventory
+4. Navigate to `/computer/stock` → Track available stock
+5. Use QR codes for quick asset identification
 
-See: [leave/README.md](leave/README.md)
+See: [computer/README.md](computer/README.md)
+
+### Managing Stations ⭐ NEW
+1. Navigate to `/sites` → Manage sites
+2. Navigate to `/campaigns` → Manage campaigns
+3. Navigate to `/stations` → Manage stations
+
+See: [stations/README.md](stations/README.md)
+
+### Managing User Accounts ⭐ NEW
+1. Navigate to `/accounts` → View all users
+2. Navigate to `/accounts/create` → Create new user
+3. Navigate to `/admin/activity-log` → View audit trail
+
+See: [accounts/README.md](accounts/README.md)
 
 ---
 
 ## 📊 Key Metrics & Statistics
+
+### System Overview
+- **Total Models:** 24 Eloquent models
+- **Total Controllers:** 28+ controllers
+- **User Roles:** 7 (super_admin, admin, team_lead, agent, hr, it, utility)
+- **Permissions:** 60+ defined permissions
+- **Database Tables:** 35+ tables
 
 ### Attendance System
 - **Shift Patterns Supported:** 48 (universal algorithm)
@@ -286,43 +440,57 @@ See: [leave/README.md](leave/README.md)
 - **Automated Processing:** Daily at 3:00 AM
 - **Employee Matching Accuracy:** 98.5%
 - **Test Coverage:** 72 tests, 100% pass rate
-- **Average Processing Time:** ~2 seconds for 500 employees
-- **Verification Rate:** ~10-15% of records need review
 
 ### Biometric Records
 - **Retention Period:** 3 months (90 days)
-- **Storage:** ~90 MB for 200 employees (3 months)
 - **Cleanup Schedule:** Daily at 2:00 AM
 - **Audit Trail:** Complete scan history preserved
 
-### Leave Management System ⭐ NEW
+### Leave Management System
 - **Leave Types:** 7 (VL, SL, BL, SPL, LOA, LDV, UPTO)
 - **Monthly Accrual:** 1.5 days (managers), 1.25 days (employees)
 - **Eligibility:** 6 months from hire date
-- **Automatic Backfilling:** Calculates all missing months
 - **Accrual Schedule:** Last day of month at 11:00 PM
-- **Validation Rules:** Points check, absence check, advance notice
-- **⚠️ Annual Reset:** Credits expire on Dec 31 and do NOT carry over
+- **⚠️ Annual Reset:** Credits expire on Dec 31
+
+### Computer & Hardware ⭐ NEW
+- **Hardware Types:** 5 (PC Specs, RAM, Disk, Processor, Monitor)
+- **QR Generation:** Individual and bulk ZIP download
+- **Maintenance Tracking:** Scheduled and reactive
+- **Transfer System:** Full audit trail between stations
+
+### Form Requests ⭐ NEW
+- **Request Types:** IT Concerns, Medication Requests
+- **Retention Policies:** Configurable per request type
+- **Workflow:** Submit → Review → Approve/Reject
 
 ---
 
 ## 🆘 Getting Help
 
 ### Documentation Issues
-1. Check the appropriate subfolder (attendance, biometric, setup, guides)
-2. Review related docs in project root
-3. Search for keywords in all .md files
+1. Check the appropriate subfolder (attendance, biometric, computer, stations, etc.)
+2. Review the main **[api/ROUTES.md](api/ROUTES.md)** for endpoint details
+3. Check **[database/SCHEMA.md](database/SCHEMA.md)** for data model questions
+4. Search for keywords in all .md files
 
-### Feature Questions
-- Attendance: Start with **ATTENDANCE_FEATURES_SUMMARY.md** (root)
-- Biometric: Start with **BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md** (root)
-- Leave: Start with **leave/README.md** ⭐
-- Setup: Check **guides/README.md**
+### Feature Questions by Department
+| Department | Start Here |
+|------------|------------|
+| General | **[guides/README.md](guides/README.md)** |
+| Attendance/HR | **[attendance/README.md](attendance/README.md)** |
+| Biometric | **[biometric/README.md](biometric/README.md)** |
+| Leave | **[leave/README.md](leave/README.md)** |
+| IT | **[computer/README.md](computer/README.md)** |
+| Operations | **[stations/README.md](stations/README.md)** |
+| HR Forms | **[form-requests/README.md](form-requests/README.md)** |
+| Admin | **[authorization/README.md](authorization/README.md)** |
 
 ### Technical Issues
-- Setup problems: **guides/** folder
-- Algorithm questions: **attendance/** folder
-- Database questions: **biometric/** folder
+- Setup problems: **[guides/](guides/)** folder
+- API/Routes questions: **[api/ROUTES.md](api/ROUTES.md)**
+- Database questions: **[database/SCHEMA.md](database/SCHEMA.md)**
+- Permission issues: **[authorization/](authorization/)** folder
 
 ---
 
@@ -331,18 +499,21 @@ See: [leave/README.md](leave/README.md)
 When adding new documentation:
 
 1. **Choose the right location:**
-   - Feature summaries → Project root
-   - Algorithm details → `docs/attendance/` or `docs/biometric/`
+   - Feature documentation → Appropriate `docs/` subfolder
+   - API documentation → `docs/api/`
+   - Database changes → Update `docs/database/SCHEMA.md`
    - Setup guides → `docs/setup/` or `docs/guides/`
 
 2. **Use clear naming:**
    - UPPERCASE_WITH_UNDERSCORES for main docs
    - Descriptive names (ATTENDANCE_*, BIOMETRIC_*, etc.)
+   - README.md for folder index files
 
 3. **Include in this README:**
    - Add to appropriate section
    - Update file map
    - Add to learning paths if applicable
+   - Update maintenance table
 
 4. **Link related docs:**
    - Cross-reference other documentation
@@ -355,12 +526,20 @@ When adding new documentation:
 
 | Category | Last Updated | Status |
 |----------|--------------|--------|
+| Accounts & Activity | Nov 28, 2025 | ⭐ NEW |
+| API Routes Reference | Nov 28, 2025 | ⭐ NEW |
 | Attendance System | Nov 13, 2025 | ✅ Complete |
-| Point Expiration | Nov 13, 2025 | ✅ Complete |
+| Authorization/RBAC | Nov 15, 2025 | ✅ Complete |
 | Biometric Records | Nov 10, 2025 | ✅ Complete |
-| Leave Management | Nov 15, 2025 | ⭐ NEW |
-| Setup Guides | Nov 10, 2025 | ✅ Complete |
+| Computer & Hardware | Nov 28, 2025 | ⭐ NEW |
+| Database Schema | Nov 28, 2025 | ⭐ NEW |
 | Deployment Guides | Nov 1, 2025 | ✅ Complete |
+| Form Requests | Nov 28, 2025 | ⭐ NEW |
+| Leave Management | Nov 15, 2025 | ✅ Complete |
+| Notifications | Nov 15, 2025 | ✅ Complete |
+| Point Expiration | Nov 13, 2025 | ✅ Complete |
+| Setup Guides | Nov 10, 2025 | ✅ Complete |
+| Stations & Sites | Nov 28, 2025 | ⭐ NEW |
 | Test Documentation | Nov 10, 2025 | ✅ Complete |
 
 ---
@@ -368,23 +547,35 @@ When adding new documentation:
 ## 🎯 Next Steps
 
 ### For Developers
-1. Complete environment setup using **guides/**
-2. Review attendance system docs
-3. Run tests to verify setup
-4. Start coding!
+1. Complete environment setup using **[guides/](guides/)**
+2. Review **[database/SCHEMA.md](database/SCHEMA.md)** for data models
+3. Check **[api/ROUTES.md](api/ROUTES.md)** for available endpoints
+4. Run tests to verify setup: `php artisan test`
+5. Start coding!
 
 ### For DevOps
-1. Review **setup/PHP_EXTENSIONS_SETUP.md**
+1. Review **[setup/PHP_EXTENSIONS_SETUP.md](setup/PHP_EXTENSIONS_SETUP.md)**
 2. Configure production servers
-3. Set up scheduled tasks
-4. Enable monitoring
+3. Set up scheduled tasks (see cron jobs in each feature doc)
+4. Enable monitoring and logging
+
+### For IT Department
+1. Read **[computer/README.md](computer/README.md)** for hardware management
+2. Review **[stations/README.md](stations/README.md)** for station setup
+3. Understand QR code generation workflow
+4. Plan PC maintenance schedules
+
+### For HR Department
+1. Check **[leave/README.md](leave/README.md)** for leave management
+2. Review **[form-requests/README.md](form-requests/README.md)** for form workflows
+3. Understand **[accounts/README.md](accounts/README.md)** for user management
+4. Review attendance documentation
 
 ### For Product Managers
-1. Read **ATTENDANCE_FEATURES_SUMMARY.md** (root)
-2. Review **BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md** (root)
-3. Check **leave/README.md** ⭐ for leave management features
-4. Understand business value and metrics
-5. Plan future enhancements
+1. Read feature documentation for business context
+2. Review **[authorization/ROLE_ACCESS_MATRIX.md](authorization/ROLE_ACCESS_MATRIX.md)** for access control
+3. Understand business metrics in each feature doc
+4. Plan future enhancements
 
 ---
 
@@ -392,4 +583,4 @@ When adding new documentation:
 
 For questions or documentation requests, please contact the development team.
 
-*Last updated: November 15, 2025*
+*Last updated: November 28, 2025*
