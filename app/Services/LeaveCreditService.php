@@ -61,7 +61,7 @@ class LeaveCreditService
      * NOTE: Credits are year-specific and do NOT carry over to the next year.
      * Each year starts with 0 balance and accrues monthly.
      */
-    public function getBalance(User $user, int $year = null): float
+    public function getBalance(User $user, ?int $year = null): float
     {
         $year = $year ?? now()->year;
         return LeaveCredit::getTotalBalance($user->id, $year);
@@ -70,7 +70,7 @@ class LeaveCreditService
     /**
      * Get detailed leave credits summary for a user.
      */
-    public function getSummary(User $user, int $year = null): array
+    public function getSummary(User $user, ?int $year = null): array
     {
         $year = $year ?? now()->year;
 
@@ -92,7 +92,7 @@ class LeaveCreditService
     /**
      * Accrue monthly leave credits for a user.
      */
-    public function accrueMonthly(User $user, int $year = null, int $month = null): ?LeaveCredit
+    public function accrueMonthly(User $user, ?int $year = null, ?int $month = null): ?LeaveCredit
     {
         $year = $year ?? now()->year;
         $month = $month ?? now()->month;
@@ -176,7 +176,7 @@ class LeaveCreditService
     /**
      * Deduct leave credits when a leave request is approved.
      */
-    public function deductCredits(LeaveRequest $leaveRequest, int $year = null): bool
+    public function deductCredits(LeaveRequest $leaveRequest, ?int $year = null): bool
     {
         if (!$leaveRequest->requiresCredits()) {
             return true; // Non-credited leave types don't need deduction
@@ -286,7 +286,7 @@ class LeaveCreditService
     /**
      * Check if user had any absences in the last 30 days.
      */
-    public function hasRecentAbsence(User $user, Carbon $fromDate = null): bool
+    public function hasRecentAbsence(User $user, ?Carbon $fromDate = null): bool
     {
         $fromDate = $fromDate ?? now();
         $thirtyDaysAgo = $fromDate->copy()->subDays(30);
