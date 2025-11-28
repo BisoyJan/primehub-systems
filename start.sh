@@ -5,6 +5,12 @@ echo "========================================"
 echo "  Starting PrimeHub Systems"
 echo "========================================"
 
+# Ensure platform env vars take precedence
+if [ -f .env ]; then
+    echo "[0/5] Removing local .env to use platform secrets..."
+    rm .env
+fi
+
 # Create storage symlink
 echo "[1/5] Creating storage link..."
 php artisan storage:link 2>/dev/null || true
