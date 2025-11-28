@@ -4,6 +4,13 @@ Comprehensive documentation for PC specifications, hardware inventory, QR code g
 
 ---
 
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical overview
+
+---
+
 ## 📄 Documents
 
 ### [PC_SPECS.md](PC_SPECS.md)

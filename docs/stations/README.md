@@ -4,6 +4,13 @@ Comprehensive documentation for stations, sites, campaigns, and workstation mana
 
 ---
 
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical overview
+
+---
+
 ## 📄 Documents
 
 ### [STATIONS.md](STATIONS.md)

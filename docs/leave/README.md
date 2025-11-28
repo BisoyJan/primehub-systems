@@ -4,6 +4,13 @@ Comprehensive leave request and leave credits management system with automatic a
 
 ---
 
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical overview
+
+---
+
 ## 📄 Documents
 
 ### [LEAVE_CREDITS_ACCRUAL.md](LEAVE_CREDITS_ACCRUAL.md) ⭐

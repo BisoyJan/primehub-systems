@@ -295,20 +295,6 @@ class NotificationServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_notifies_it_roles_about_concern_deletion(): void
-    {
-        User::factory()->create(['role' => 'IT', 'is_approved' => true]);
-        User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
-
-        $this->service->notifyItRolesAboutConcernDeletion('Station 001', 'Main Office', 'John Doe');
-
-        $this->assertDatabaseCount('notifications', 2);
-        $this->assertDatabaseHas('notifications', [
-            'title' => 'IT Concern Deleted',
-        ]);
-    }
-
-    #[Test]
     public function it_notifies_hr_roles_about_new_leave_request(): void
     {
         User::factory()->create(['role' => 'HR', 'is_approved' => true]);

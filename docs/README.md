@@ -10,6 +10,8 @@ Welcome to the PrimeHub Systems comprehensive documentation! This directory cont
 PC specifications, hardware inventory, QR codes, and asset management.
 
 - **[README.md](computer/README.md)** - Computer & hardware system overview
+- **[QUICKSTART.md](computer/QUICKSTART.md)** ⭐ - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](computer/IMPLEMENTATION_SUMMARY.md)** ⭐ - Technical overview
   - PC specifications management
   - Hardware specs (RAM, Disk, Processor, Monitor)
   - QR code generation
@@ -20,6 +22,8 @@ PC specifications, hardware inventory, QR codes, and asset management.
 Workstation management, physical locations, and campaigns.
 
 - **[README.md](stations/README.md)** - Station management overview
+- **[QUICKSTART.md](stations/QUICKSTART.md)** ⭐ - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](stations/IMPLEMENTATION_SUMMARY.md)** ⭐ - Technical overview
   - Station CRUD operations
   - Site and campaign management
   - QR code generation
@@ -29,6 +33,8 @@ Workstation management, physical locations, and campaigns.
 Complete documentation for the attendance tracking system including biometric file processing, shift detection, point expiration, and employee matching.
 
 - **[README.md](attendance/README.md)** - Attendance system overview
+- **[QUICKSTART.md](attendance/QUICKSTART.md)** ⭐ - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](attendance/IMPLEMENTATION_SUMMARY.md)** ⭐ - Technical overview
 - **[EXPIRATION_SYSTEM_SUMMARY.md](attendance/EXPIRATION_SYSTEM_SUMMARY.md)** - Point expiration system (SRO/GBRO)
 - **[POINT_EXPIRATION_RULES.md](attendance/POINT_EXPIRATION_RULES.md)** - Complete expiration rules
 - **[AUTOMATIC_POINT_GENERATION.md](attendance/AUTOMATIC_POINT_GENERATION.md)** - Automatic point generation
@@ -39,6 +45,7 @@ Complete documentation for the attendance tracking system including biometric fi
 Documentation for biometric record storage, audit trails, and management features.
 
 - **[README.md](biometric/README.md)** - Biometric system overview
+- **[QUICKSTART.md](biometric/QUICKSTART.md)** ⭐ - Get started quickly
 - **[BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](biometric/BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** - Implementation overview
 - **[BIOMETRIC_RECORDS_STORAGE.md](biometric/BIOMETRIC_RECORDS_STORAGE.md)** - Database schema and lifecycle
 - **[BIOMETRIC_RECORDS_UI.md](biometric/BIOMETRIC_RECORDS_UI.md)** - UI features and components
@@ -47,6 +54,8 @@ Documentation for biometric record storage, audit trails, and management feature
 Complete documentation for the employee leave management system.
 
 - **[README.md](leave/README.md)** - Complete leave system documentation
+- **[QUICKSTART.md](leave/QUICKSTART.md)** ⭐ - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](leave/IMPLEMENTATION_SUMMARY.md)** ⭐ - Technical overview
 - **[LEAVE_CREDITS_ACCRUAL.md](leave/LEAVE_CREDITS_ACCRUAL.md)** - Monthly accrual system
 - **[LEAVE_REQUEST_VALIDATION.md](leave/LEAVE_REQUEST_VALIDATION.md)** - Validation rules
 - **[LEAVE_APPROVAL_WORKFLOW.md](leave/LEAVE_APPROVAL_WORKFLOW.md)** - Approval process
@@ -55,6 +64,8 @@ Complete documentation for the employee leave management system.
 Employee form request systems documentation.
 
 - **[README.md](form-requests/README.md)** - Form requests overview
+- **[QUICKSTART.md](form-requests/QUICKSTART.md)** ⭐ - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](form-requests/IMPLEMENTATION_SUMMARY.md)** ⭐ - Technical overview
   - IT Concerns tracking
   - Medication requests
   - Retention policies
@@ -63,6 +74,8 @@ Employee form request systems documentation.
 User management and activity logging.
 
 - **[README.md](accounts/README.md)** - Account management overview
+- **[QUICKSTART.md](accounts/QUICKSTART.md)** ⭐ - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](accounts/IMPLEMENTATION_SUMMARY.md)** ⭐ - Technical overview
   - User CRUD operations
   - Role assignment
   - Approval workflow
@@ -72,6 +85,8 @@ User management and activity logging.
 Role-Based Access Control (RBAC) system documentation.
 
 - **[README.md](authorization/README.md)** - RBAC overview
+- **[QUICKSTART.md](authorization/QUICKSTART.md)** ⭐ - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](authorization/IMPLEMENTATION_SUMMARY.md)** - Technical overview
 - **[RBAC_GUIDE.md](authorization/RBAC_GUIDE.md)** - Complete guide
 - **[QUICK_REFERENCE.md](authorization/QUICK_REFERENCE.md)** - Quick reference
 - **[ROLE_ACCESS_MATRIX.md](authorization/ROLE_ACCESS_MATRIX.md)** - Permission matrix
@@ -228,13 +243,17 @@ docs/
 ├── README.md                              ← You are here
 │
 ├── accounts/                              ← User Account Management ⭐ NEW
-│   └── README.md
+│   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
+│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
 │
 ├── api/                                   ← API & Routes Reference ⭐ NEW
 │   └── ROUTES.md
 │
 ├── attendance/                            ← Attendance System
 │   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
+│   ├── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
 │   ├── ATTENDANCE_GROUPING_LOGIC.md
 │   ├── AUTOMATIC_POINT_GENERATION.md
 │   ├── CROSS_UPLOAD_TIMEOUT_HANDLING.md
@@ -243,6 +262,7 @@ docs/
 │
 ├── authorization/                         ← RBAC System
 │   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
 │   ├── IMPLEMENTATION_SUMMARY.md
 │   ├── QUICK_REFERENCE.md
 │   ├── RBAC_GUIDE.md
@@ -250,18 +270,23 @@ docs/
 │
 ├── biometric/                             ← Biometric Records
 │   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
 │   ├── BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md
 │   ├── BIOMETRIC_RECORDS_STORAGE.md
 │   └── BIOMETRIC_RECORDS_UI.md
 │
 ├── computer/                              ← Computer & Hardware ⭐ NEW
-│   └── README.md
+│   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
+│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
 │
 ├── database/                              ← Database Schema ⭐ NEW
 │   └── SCHEMA.md
 │
 ├── form-requests/                         ← Form Requests ⭐ NEW
-│   └── README.md
+│   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
+│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
 │
 ├── guides/                                ← Deployment & Setup
 │   ├── README.md
@@ -274,6 +299,8 @@ docs/
 │
 ├── leave/                                 ← Leave Management
 │   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
+│   ├── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
 │   ├── LEAVE_APPROVAL_WORKFLOW.md
 │   ├── LEAVE_CREDITS_ACCRUAL.md
 │   └── LEAVE_REQUEST_VALIDATION.md
@@ -284,7 +311,9 @@ docs/
 │   └── QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD
 │
 ├── stations/                              ← Station Management ⭐ NEW
-│   └── README.md
+│   ├── README.md
+│   ├── QUICKSTART.md                      ⭐ NEW
+│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
 │
 ├── NOTIFICATION_IMPLEMENTATION_SUMMARY.md
 ├── NOTIFICATION_QUICKSTART.md

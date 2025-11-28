@@ -4,6 +4,13 @@ This directory contains detailed documentation for the attendance tracking syste
 
 ---
 
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical overview
+
+---
+
 ## 📄 Documents
 
 ### [POINT_EXPIRATION_RULES.md](POINT_EXPIRATION_RULES.md) ⭐ NEW

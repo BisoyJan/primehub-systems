@@ -2,6 +2,17 @@
 
 A comprehensive role-based access control system for the PrimeHub Systems application, providing fine-grained permission management for both backend and frontend.
 
+---
+
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical overview
+- **[RBAC_GUIDE.md](RBAC_GUIDE.md)** - Complete guide
+- **[QUICK_REFERENCE.md](QUICK_REFERENCE.md)** - Cheat sheet
+
+---
+
 ## 🚀 Features
 
 - **Role-Based Access**: 7 predefined roles (Super Admin, Admin, Team Lead, Agent, HR, IT, Utility)

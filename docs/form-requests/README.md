@@ -4,6 +4,13 @@ Comprehensive documentation for employee form request systems including Leave Re
 
 ---
 
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical overview
+
+---
+
 ## 📂 Subsystems
 
 ### 🏖️ [Leave Management](../leave/README.md)

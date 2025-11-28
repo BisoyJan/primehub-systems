@@ -4,6 +4,13 @@ Comprehensive documentation for user account management, roles, approval system,
 
 ---
 
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[IMPLEMENTATION_SUMMARY.md](IMPLEMENTATION_SUMMARY.md)** - Technical overview
+
+---
+
 ## 📄 Documents
 
 ### [ACCOUNTS.md](ACCOUNTS.md)

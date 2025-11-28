@@ -4,6 +4,13 @@ This directory contains documentation for biometric record storage, audit trails
 
 ---
 
+## 🚀 Quick Links
+
+- **[QUICKSTART.md](QUICKSTART.md)** - Get started quickly
+- **[BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)** - Technical overview
+
+---
+
 ## 📄 Documents
 
 ### [BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md](BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md)
