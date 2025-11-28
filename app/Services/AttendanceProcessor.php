@@ -569,9 +569,13 @@ class AttendanceProcessor
             ->first();
 
         if (!$schedule) {
+            // Even without a schedule, create attendance from biometric data
+            $this->createAttendanceWithoutSchedule($user, $records, $detectedShiftDate, $biometricSiteId);
+
             return [
-                'processed' => false,
-                'error' => "No active schedule found for {$user->name} on {$detectedShiftDate->format('Y-m-d')}",
+                'processed' => true,
+                'no_schedule' => true,
+                'error' => null,
             ];
         }
 
@@ -732,6 +736,58 @@ class AttendanceProcessor
             'user_name' => $user->name,
             'shift_date' => $shiftDate->format('Y-m-d'),
             'day' => $dayName,
+            'scan_count' => $records->count(),
+        ]);
+    }
+
+    /**
+     * Create attendance record for user without a schedule.
+     * This handles cases where biometric data exists but no schedule is assigned.
+     *
+     * @param User $user
+     * @param Collection $records
+     * @param Carbon $shiftDate
+     * @param int|null $biometricSiteId
+     * @return void
+     */
+    protected function createAttendanceWithoutSchedule(
+        User $user,
+        Collection $records,
+        Carbon $shiftDate,
+        ?int $biometricSiteId = null
+    ): void {
+        // Get or create attendance record
+        $attendance = Attendance::firstOrNew([
+            'user_id' => $user->id,
+            'shift_date' => $shiftDate,
+        ]);
+
+        // If record already exists and is verified, don't modify
+        if ($attendance->exists && $attendance->admin_verified) {
+            return;
+        }
+
+        // Find TIME IN and TIME OUT from biometric scans
+        $sortedRecords = $records->sortBy(fn($r) => $r['datetime']->timestamp);
+        $timeInRecord = $sortedRecords->first();
+        $timeOutRecord = $sortedRecords->count() > 1 ? $sortedRecords->last() : null;
+
+        // Set values (no scheduled times since there's no schedule)
+        $attendance->actual_time_in = $timeInRecord ? $timeInRecord['datetime'] : null;
+        $attendance->actual_time_out = $timeOutRecord ? $timeOutRecord['datetime'] : null;
+        $attendance->bio_in_site_id = $biometricSiteId;
+        $attendance->bio_out_site_id = $biometricSiteId;
+        $attendance->status = 'needs_manual_review'; // Use valid status for unscheduled attendance
+        $attendance->admin_verified = false;
+        $attendance->notes = "No schedule found for this employee. Created from biometric data. " .
+                           "Employee has {$records->count()} scan(s) on this date. Requires verification.";
+
+        $attendance->save();
+
+        \Log::info('Created attendance record without schedule', [
+            'user_id' => $user->id,
+            'user_name' => $user->name,
+            'shift_date' => $shiftDate->format('Y-m-d'),
             'scan_count' => $records->count(),
         ]);
     }
@@ -1265,6 +1321,11 @@ class AttendanceProcessor
         $users = User::all();
         $matches = [];
 
+        // Handle comma-separated names like "Doe, John" -> normalize to "doe john"
+        $normalizedName = str_replace(',', '', $normalizedName);
+        $normalizedName = preg_replace('/\s+/', ' ', $normalizedName);
+        $normalizedName = trim($normalizedName);
+
         foreach ($users as $user) {
             $lastName = strtolower(trim($user->last_name));
             $firstName = strtolower(trim($user->first_name));
@@ -1300,6 +1361,18 @@ class AttendanceProcessor
                 }
 
                 return $user;
+            }
+
+            // Pattern 4: Full name "Last First" (e.g., "doe john")
+            $lastFirst = $lastName . ' ' . $firstName;
+            if ($normalizedName === $lastFirst) {
+                return $user; // Exact match, return immediately
+            }
+
+            // Pattern 5: Full name "First Last" (e.g., "john doe")
+            $firstLast = $firstName . ' ' . $lastName;
+            if ($normalizedName === $firstLast) {
+                return $user; // Exact match, return immediately
             }
         }
 
