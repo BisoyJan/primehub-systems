@@ -23,7 +23,7 @@ Before deploying, ensure you have:
 - [x] SSH key pair (for Droplet access)
 
 ### Cost Estimates
-- **App Platform**: $12-25/month (includes database)
+- **App Platform**: ~$22.50/month (Web: $5, Worker: $2.50, MySQL: $15)
 - **Droplet + Managed Database**: $18-30/month
 - **Droplet Only** (with local DB): $12/month
 
@@ -43,10 +43,10 @@ Before deploying, ensure you have:
 
 2. **Add required files to your repository**:
 
-   Create `.do/app.yaml` in your project root:
+   Create `.do/app.yaml` in your project root (already configured):
    ```yaml
    name: primehub-systems
-   region: nyc
+   region: sgp1
    
    services:
    - name: web
@@ -62,10 +62,12 @@ Before deploying, ensure you have:
        npm run build
      
      run_command: |
+       php artisan storage:link
+       php artisan migrate --force
        php artisan config:cache
        php artisan route:cache
        php artisan view:cache
-       heroku-php-apache2 public/
+       heroku-php-apache2 -C apache.conf public/
      
      environment_slug: php
      http_port: 8080
@@ -82,14 +84,20 @@ Before deploying, ensure you have:
      - key: APP_KEY
        scope: RUN_AND_BUILD_TIME
        type: SECRET
+     - key: APP_URL
+       value: ${APP_URL}
      - key: LOG_CHANNEL
        value: errorlog
      - key: SESSION_DRIVER
        value: database
+     - key: SESSION_ENCRYPT
+       value: "true"
      - key: CACHE_STORE
        value: database
      - key: QUEUE_CONNECTION
        value: database
+     - key: FILESYSTEM_DISK
+       value: local
      - key: DB_CONNECTION
        value: mysql
      - key: DB_HOST
@@ -102,6 +110,24 @@ Before deploying, ensure you have:
        value: ${db.USERNAME}
      - key: DB_PASSWORD
        value: ${db.PASSWORD}
+     - key: MAIL_MAILER
+       value: smtp
+     - key: MAIL_HOST
+       scope: RUN_TIME
+       type: SECRET
+     - key: MAIL_PORT
+       value: "587"
+     - key: MAIL_USERNAME
+       scope: RUN_TIME
+       type: SECRET
+     - key: MAIL_PASSWORD
+       scope: RUN_TIME
+       type: SECRET
+     - key: MAIL_FROM_ADDRESS
+       scope: RUN_TIME
+       type: SECRET
+     - key: MAIL_FROM_NAME
+       value: "PrimeHub Systems"
    
    - name: worker
      github:
@@ -118,9 +144,15 @@ Before deploying, ensure you have:
      instance_size_slug: basic-xxs
      
      envs:
+     - key: APP_NAME
+       value: "PrimeHub Systems"
+     - key: APP_ENV
+       value: production
      - key: APP_KEY
        scope: RUN_AND_BUILD_TIME
        type: SECRET
+     - key: LOG_CHANNEL
+       value: errorlog
      - key: DB_CONNECTION
        value: mysql
      - key: DB_HOST
@@ -133,64 +165,88 @@ Before deploying, ensure you have:
        value: ${db.USERNAME}
      - key: DB_PASSWORD
        value: ${db.PASSWORD}
+     - key: QUEUE_CONNECTION
+       value: database
+     - key: CACHE_STORE
+       value: database
    
    databases:
    - name: db
      engine: MYSQL
      version: "8"
      production: true
+     size: db-s-1vcpu-1gb
+   ```
+   
+   Create `apache.conf` in your project root (already configured):
+   ```apache
+   DocumentRoot /app/public
+   
+   <Directory /app/public>
+       AllowOverride All
+       Require all granted
+       Options -Indexes +FollowSymLinks
+   
+       RewriteEngine On
+       RewriteCond %{HTTP:Authorization} .
+       RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+       RewriteCond %{REQUEST_FILENAME} !-d
+       RewriteCond %{REQUEST_URI} (.+)/$
+       RewriteRule ^ %1 [L,R=301]
+       RewriteCond %{REQUEST_FILENAME} !-d
+       RewriteCond %{REQUEST_FILENAME} !-f
+       RewriteRule ^ index.php [L]
+   </Directory>
+   
+   <FilesMatch "^\.">
+       Require all denied
+   </FilesMatch>
    ```
 
-3. **Create a `.do/deploy.template.yaml`** for first-time setup:
-   ```yaml
-   spec:
-     name: primehub-systems
-     services:
-     - name: web
-       git:
-         repo_clone_url: https://github.com/BisoyJan/primehub-systems.git
-         branch: main
-   ```
-
-### Step 2: Deploy to App Platform
-
-1. **Via DigitalOcean Dashboard**:
-   - Go to [DigitalOcean Console](https://cloud.digitalocean.com/)
-   - Click **Create** → **Apps**
-   - Choose **GitHub** and authorize access
-   - Select your repository (`primehub-systems`)
-   - Choose branch (`main` or `production`)
-   - Click **Next** - App Platform will detect the `.do/app.yaml`
-   - Review configuration and click **Create Resources**
-
-2. **Generate APP_KEY**:
+3. **Generate APP_KEY**:
    ```bash
    # Run locally to generate key
    php artisan key:generate --show
    ```
    Copy the generated key (e.g., `base64:xyz123...`)
 
-3. **Add APP_KEY to environment variables**:
+4. **Add APP_KEY and other secrets to environment variables**:
    - In App Platform dashboard, go to **Settings** → **App-Level Environment Variables**
-   - Add `APP_KEY` with the generated value
-   - Mark it as **Encrypted**
+   - Add these secrets (mark all as **Encrypted**):
+   
+   | Variable | Description |
+   |----------|-------------|
+   | `APP_KEY` | Generated key from step above |
+   | `MAIL_HOST` | SMTP host (e.g., `smtp.gmail.com`) |
+   | `MAIL_USERNAME` | SMTP username |
+   | `MAIL_PASSWORD` | SMTP password |
+   | `MAIL_FROM_ADDRESS` | Sender email address |
 
-4. **Trigger deployment**:
+5. **Set APP_URL after first deployment**:
+   - Copy your app URL (e.g., `https://primehub-systems-xxxxx.ondigitalocean.app`)
+   - Add `APP_URL` environment variable with this value
+
+6. **Trigger deployment**:
    - Click **Actions** → **Force Rebuild and Deploy**
 
-### Step 3: Run Migrations
+### Step 3: Verify Deployment
 
-1. **Access Console**:
-   - In App Platform dashboard, click **Console** tab
-   - Select the `web` component
-   - Click **Open Console**
+Migrations run automatically during deployment via the `run_command` in `app.yaml`.
 
-2. **Run migrations**:
-   ```bash
-   php artisan migrate --force
-   ```
+1. **Check deployment status**:
+   - In App Platform dashboard, monitor the **Activity** tab
+   - Wait for deployment to complete (5-10 minutes)
 
-3. **Optional - Seed database**:
+2. **View Runtime Logs** if there are issues:
+   - Click **Runtime Logs** tab
+   - Look for any error messages
+
+3. **Access your app**:
+   - Click the app URL in the dashboard
+   - You should see the login page
+
+4. **Optional - Seed database via Console**:
+   - Click **Console** tab → Select `web` → **Open Console**
    ```bash
    php artisan db:seed --force
    ```
@@ -798,6 +854,20 @@ Add these secrets in GitHub repository settings:
 ---
 
 ## Troubleshooting
+
+### 403 Forbidden Error (App Platform)
+
+This error typically occurs when Apache isn't configured correctly.
+
+1. **Ensure `apache.conf` exists** in your project root with proper configuration
+2. **Verify `app.yaml` uses the Apache config**:
+   ```yaml
+   run_command: |
+     ...
+     heroku-php-apache2 -C apache.conf public/
+   ```
+3. **Check Runtime Logs** in DigitalOcean dashboard for specific errors
+4. **Force redeploy** after making changes
 
 ### 500 Internal Server Error
 
