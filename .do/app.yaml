@@ -20,7 +20,7 @@ services:
     php artisan config:cache
     php artisan route:cache
     php artisan view:cache
-    heroku-php-nginx -C nginx.conf public/
+    heroku-php-nginx public/
 
   environment_slug: php
   http_port: 8080
