@@ -39,6 +39,14 @@ class PermissionService
             return false;
         }
 
+        $roleKey = $this->normalizeRoleKey($user->role);
+        $rolePermissions = Config::get("permissions.role_permissions.{$roleKey}", []);
+
+        // If role has wildcard (*), user has all permissions
+        if (in_array('*', $rolePermissions)) {
+            return true;
+        }
+
         $permissions = $this->getPermissionsForRole($user->role);
 
         return in_array($permission, $permissions);

@@ -284,7 +284,6 @@ export default function AttendanceIndex() {
         // Don't clear selections when filters change
     }, [appliedFilters.user_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
 
-    const isInitialMount = React.useRef(true);
     const userId = auth.user?.id;
     const userRole = auth.user?.role;
     // Roles that should only see their own attendance records
@@ -554,7 +553,7 @@ export default function AttendanceIndex() {
                             </SelectContent>
                         </Select>
 
-                        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
                             <Input
                                 type="date"
@@ -564,7 +563,7 @@ export default function AttendanceIndex() {
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">To:</span>
                             <Input
                                 type="date"

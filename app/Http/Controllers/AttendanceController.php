@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\AttendanceUpload;
 use App\Models\AttendancePoint;
+use App\Models\User;
 use App\Services\AttendanceProcessor;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -76,17 +77,17 @@ class AttendanceController extends Controller
             ->paginate(25)
             ->withQueryString();
 
-        // Get all users for manual attendance creation
-        $users = \App\Models\User::select('id', 'first_name', 'last_name')
+        // Get all users for employee filter dropdown
+        $users = User::select('id', 'first_name', 'last_name')
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get()
-            ->map(function ($user) {
-                return [
-                    'id' => $user->id,
-                    'name' => $user->first_name . ' ' . $user->last_name,
-                ];
-            });
+            ->map(fn ($user) => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'name' => $user->first_name . ' ' . $user->last_name,
+            ]);
 
         return Inertia::render('Attendance/Main/Index', [
             'attendances' => $attendances,
@@ -116,7 +117,7 @@ class AttendanceController extends Controller
         // Get all users for selection (if user has permission)
         $users = [];
         if (!in_array(auth()->user()->role, $restrictedRoles)) {
-            $users = \App\Models\User::select('id', 'first_name', 'last_name')
+            $users = User::select('id', 'first_name', 'last_name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get()
@@ -131,7 +132,7 @@ class AttendanceController extends Controller
         // Get selected user info
         $selectedUser = null;
         if ($userId) {
-            $user = \App\Models\User::find($userId);
+            $user = User::find($userId);
             if ($user) {
                 $selectedUser = [
                     'id' => $user->id,
@@ -189,7 +190,7 @@ class AttendanceController extends Controller
     public function create()
     {
         // Get all users with their active schedules
-        $users = \App\Models\User::select('id', 'first_name', 'last_name', 'email')
+        $users = User::select('id', 'first_name', 'last_name', 'email')
             ->with(['employeeSchedules' => function ($query) {
                 $query->where('is_active', true)
                     ->where('effective_date', '<=', now())
@@ -702,20 +703,15 @@ class AttendanceController extends Controller
             } elseif ($request->verified === 'pending') {
                 $query->where('admin_verified', false);
             }
-            // 'all' means no filter
+            // 'all' means no filter - show all records including on_time
         } else {
-            // Default: only show unverified records (needsVerification scope)
+            // Default (no filter provided): only show unverified records (needsVerification scope)
             $query->needsVerification();
         }
 
-        // Search by employee name
-        if ($request->filled('search')) {
-            $search = $request->search;
-            $query->whereHas('user', function ($q) use ($search) {
-                $q->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
-            });
+        // Filter by specific employee
+        if ($request->filled('user_id')) {
+            $query->where('user_id', $request->user_id);
         }
 
         // Filter by status
@@ -733,10 +729,23 @@ class AttendanceController extends Controller
 
         $attendances = $query->orderBy('shift_date', 'desc')->paginate(50);
 
+        // Get all employees for the dropdown
+        $employees = User::select('id', 'first_name', 'last_name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn ($user) => [
+                'id' => $user->id,
+                'first_name' => $user->first_name,
+                'last_name' => $user->last_name,
+                'name' => $user->first_name . ' ' . $user->last_name,
+            ]);
+
         return Inertia::render('Attendance/Main/Review', [
             'attendances' => $attendances,
+            'employees' => $employees,
             'filters' => [
-                'search' => $request->search,
+                'user_id' => $request->user_id,
                 'status' => $request->status,
                 'verified' => $request->verified,
                 'date_from' => $request->date_from,

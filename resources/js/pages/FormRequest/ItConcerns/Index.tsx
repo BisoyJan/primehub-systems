@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Search, Filter } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Search } from "lucide-react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -204,6 +204,8 @@ export default function ItConcernsIndex() {
     const [resolutionNotes, setResolutionNotes] = useState("");
     const [resolveStatus, setResolveStatus] = useState("resolved");
     const [resolvePriority, setResolvePriority] = useState("medium");
+    const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
+    const [concernToCancel, setConcernToCancel] = useState<ItConcern | null>(null);
 
     // Auto-refresh every 30 seconds to check for new concerns
     useEffect(() => {
@@ -332,6 +334,23 @@ export default function ItConcernsIndex() {
                 onSuccess: () => {
                     setDeleteDialogOpen(false);
                     setConcernToDelete(null);
+                },
+            });
+        }
+    };
+
+    const handleCancel = (concern: ItConcern) => {
+        setConcernToCancel(concern);
+        setCancelDialogOpen(true);
+    };
+
+    const confirmCancel = () => {
+        if (concernToCancel) {
+            router.post(`/form-requests/it-concerns/${concernToCancel.id}/cancel`, {}, {
+                preserveScroll: true,
+                onSuccess: () => {
+                    setCancelDialogOpen(false);
+                    setConcernToCancel(null);
                 },
             });
         }
@@ -515,6 +534,18 @@ export default function ItConcernsIndex() {
                                                     </Button>
                                                 )}
 
+                                                {/* Cancel Button - Owner (pending/in_progress) */}
+                                                {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
+                                                    <Button
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => handleCancel(concern)}
+                                                        title="Cancel Request"
+                                                    >
+                                                        <XCircle className="h-4 w-4 text-orange-500" />
+                                                    </Button>
+                                                )}
+
                                                 {/* Delete Button - Global permission OR Owner (pending) */}
                                                 {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
                                                     <Button
@@ -600,6 +631,18 @@ export default function ItConcernsIndex() {
                                     >
                                         <Edit className="mr-2 h-4 w-4" />
                                         Edit
+                                    </Button>
+                                )}
+
+                                {/* Cancel Button - Owner (pending/in_progress) */}
+                                {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => handleCancel(concern)}
+                                    >
+                                        <XCircle className="mr-2 h-4 w-4 text-orange-500" />
+                                        Cancel
                                     </Button>
                                 )}
 
@@ -721,6 +764,33 @@ export default function ItConcernsIndex() {
                                 disabled={!resolutionNotes.trim()}
                             >
                                 Update IT Concern
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                <AlertDialog open={cancelDialogOpen} onOpenChange={setCancelDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Cancel IT Concern?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {concernToCancel && (
+                                    <div className="space-y-2 mt-2">
+                                        <p>Are you sure you want to cancel this IT concern?</p>
+                                        <div className="bg-muted p-3 rounded-md space-y-1 text-sm">
+                                            <div><span className="font-medium">Station:</span> {concernToCancel.station_number}</div>
+                                            <div><span className="font-medium">Category:</span> {concernToCancel.category}</div>
+                                            <div><span className="font-medium">Description:</span> {concernToCancel.description}</div>
+                                        </div>
+                                        <p className="text-muted-foreground text-sm">This will mark the request as cancelled and IT will no longer work on it.</p>
+                                    </div>
+                                )}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Keep Request</AlertDialogCancel>
+                            <AlertDialogAction onClick={confirmCancel} className="bg-orange-500 hover:bg-orange-600">
+                                Cancel Request
                             </AlertDialogAction>
                         </AlertDialogFooter>
                     </AlertDialogContent>

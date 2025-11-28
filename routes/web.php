@@ -279,6 +279,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/{itConcern}/status', [ItConcernController::class, 'updateStatus'])->name('updateStatus');
             Route::post('/{itConcern}/assign', [ItConcernController::class, 'assign'])->name('assign');
             Route::post('/{itConcern}/resolve', [ItConcernController::class, 'resolve'])->name('resolve');
+            Route::post('/{itConcern}/cancel', [ItConcernController::class, 'cancel'])->name('cancel');
         });
 
     // Form Requests - Medication Requests

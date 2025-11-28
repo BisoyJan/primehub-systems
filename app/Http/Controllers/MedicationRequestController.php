@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\MedicationRequestRequest;
 use App\Models\MedicationRequest;
+use App\Models\User;
 use App\Services\NotificationService;
 use App\Mail\MedicationRequestSubmitted;
 use App\Mail\MedicationRequestStatusUpdated;
@@ -75,7 +76,7 @@ class MedicationRequestController extends Controller
             ],
             'canRequestForOthers' => $canRequestForOthers,
             'users' => $canRequestForOthers
-                ? \App\Models\User::select('id', 'name')
+                ? User::select('id', 'name')
                     ->where('status', 'active')
                     ->orderBy('name')
                     ->get()
@@ -91,7 +92,7 @@ class MedicationRequestController extends Controller
         $this->authorize('create', MedicationRequest::class);
 
         $userId = $request->validated()['requested_for_user_id'] ?? auth()->id();
-        $user = \App\Models\User::findOrFail($userId);
+        $user = User::findOrFail($userId);
 
         $medicationRequest = MedicationRequest::create([
             ...$request->validated(),

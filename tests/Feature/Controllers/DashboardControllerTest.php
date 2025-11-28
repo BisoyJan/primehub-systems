@@ -1,12 +1,12 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Controllers;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
-class DashboardTest extends TestCase
+class DashboardControllerTest extends TestCase
 {
     use RefreshDatabase;
 
@@ -17,7 +17,10 @@ class DashboardTest extends TestCase
 
     public function test_authenticated_users_can_visit_the_dashboard()
     {
-        $this->actingAs($user = User::factory()->create());
+        $this->actingAs($user = User::factory()->create([
+            'role' => 'Agent',
+            'is_approved' => true,
+        ]));
 
         $this->get(route('dashboard'))->assertOk();
     }

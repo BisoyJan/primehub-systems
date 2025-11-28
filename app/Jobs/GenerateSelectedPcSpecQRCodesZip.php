@@ -90,7 +90,7 @@ class GenerateSelectedPcSpecQRCodesZip implements ShouldQueue
             $zip->addFromString($filename, $result->getString());
 
             $done++;
-            $percent = intval(($done / $total) * 100);
+            $percent = $total > 0 ? intval(($done / $total) * 100) : 100;
             Cache::put($statusKey, [
                 'percent' => $percent,
                 'status' => "Processing {$done}/{$total}...",
@@ -99,6 +99,12 @@ class GenerateSelectedPcSpecQRCodesZip implements ShouldQueue
         }
 
         $zip->close();
+
+        // If no files were added, ZipArchive doesn't create a physical file
+        // Ensure the file exists by creating a minimal valid ZIP file structure
+        if ($total === 0 && !file_exists($zipPath)) {
+            file_put_contents($zipPath, hex2bin('504b0506' . str_repeat('00', 18)));
+        }
 
         $downloadUrl = route('pcspecs.qrcode.selected.download', ['jobId' => $this->jobId]);
         Cache::put($statusKey, [

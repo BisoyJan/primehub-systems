@@ -63,7 +63,7 @@ class GenerateAllStationQRCodesZip implements ShouldQueue
             $fileName = "station-{$stationNumber}.{$this->format}";
             $zip->addFromString($fileName, $result->getString());
             $count++;
-            $percent = intval(($count / $total) * 100);
+            $percent = $total > 0 ? intval(($count / $total) * 100) : 100;
             Cache::put("station_qrcode_zip_job:{$this->jobId}", [
                 'percent' => $percent,
                 'status' => "Processing {$count}/{$total}",
@@ -72,6 +72,11 @@ class GenerateAllStationQRCodesZip implements ShouldQueue
             ], 600);
         }
         $zip->close();
+        // If no files were added, ZipArchive doesn't create a physical file
+        // Ensure the file exists by creating a minimal valid ZIP file structure
+        if ($total === 0 && !file_exists($zipPath)) {
+            file_put_contents($zipPath, hex2bin('504b0506' . str_repeat('00', 18)));
+        }
         Cache::put("station_qrcode_zip_job:{$this->jobId}", [
             'percent' => 100,
             'status' => 'Finished',

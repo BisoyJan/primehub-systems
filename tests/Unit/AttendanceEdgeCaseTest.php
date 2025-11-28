@@ -58,6 +58,7 @@ class AttendanceEdgeCaseTest extends TestCase
         $upload = AttendanceUpload::create([
             'uploaded_by' => $user->id,
             'original_filename' => 'test_extreme_scans.txt',
+            'stored_filename' => 'test_extreme_scans.txt',
             'file_path' => $filePath,
             'date_from' => '2025-11-10',
             'date_to' => '2025-11-10',
@@ -71,7 +72,7 @@ class AttendanceEdgeCaseTest extends TestCase
 
         // Check that attendance was flagged for manual review
         $attendance = Attendance::where('user_id', $user->id)
-            ->where('shift_date', '2025-11-10')
+            ->whereDate('shift_date', '2025-11-10')
             ->first();
 
         $this->assertNotNull($attendance);
@@ -113,6 +114,7 @@ class AttendanceEdgeCaseTest extends TestCase
         $upload = AttendanceUpload::create([
             'uploaded_by' => $user->id,
             'original_filename' => 'test_normal_scans.txt',
+            'stored_filename' => 'test_normal_scans.txt',
             'file_path' => $filePath,
             'date_from' => '2025-11-10',
             'date_to' => '2025-11-10',
@@ -126,7 +128,7 @@ class AttendanceEdgeCaseTest extends TestCase
 
         // Check that attendance was NOT flagged
         $attendance = Attendance::where('user_id', $user->id)
-            ->where('shift_date', '2025-11-10')
+            ->whereDate('shift_date', '2025-11-10')
             ->first();
 
         $this->assertNotNull($attendance);

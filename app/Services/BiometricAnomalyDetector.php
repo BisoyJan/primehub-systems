@@ -10,6 +10,38 @@ use Illuminate\Support\Facades\DB;
 class BiometricAnomalyDetector
 {
     /**
+     * Get database-specific date format expression for minute grouping
+     */
+    protected function getMinuteGroupExpression(): string
+    {
+        $driver = config('database.default');
+        $connection = config("database.connections.{$driver}.driver");
+
+        if ($connection === 'sqlite') {
+            return "strftime('%Y-%m-%d %H:%M', datetime)";
+        }
+
+        // MySQL/MariaDB
+        return 'DATE_FORMAT(datetime, "%Y-%m-%d %H:%i")';
+    }
+
+    /**
+     * Get database-specific hour extraction expression
+     */
+    protected function getHourExpression(): string
+    {
+        $driver = config('database.default');
+        $connection = config("database.connections.{$driver}.driver");
+
+        if ($connection === 'sqlite') {
+            return "CAST(strftime('%H', datetime) AS INTEGER)";
+        }
+
+        // MySQL/MariaDB
+        return 'HOUR(datetime)';
+    }
+
+    /**
      * Detect all anomalies for a given date range
      */
     public function detectAnomalies(?Carbon $startDate = null, ?Carbon $endDate = null): array
@@ -127,9 +159,11 @@ class BiometricAnomalyDetector
      */
     protected function detectDuplicateScans(Carbon $startDate, Carbon $endDate): array
     {
+        $minuteGroupExpr = $this->getMinuteGroupExpression();
+
         $duplicates = BiometricRecord::select(
                 'user_id',
-                DB::raw('DATE_FORMAT(datetime, "%Y-%m-%d %H:%i") as minute_group'),
+                DB::raw("{$minuteGroupExpr} as minute_group"),
                 DB::raw('COUNT(*) as scan_count')
             )
             ->whereBetween('record_date', [$startDate, $endDate])
@@ -142,7 +176,7 @@ class BiometricAnomalyDetector
 
         foreach ($duplicates as $dup) {
             $records = BiometricRecord::where('user_id', $dup->user_id)
-                ->whereRaw("DATE_FORMAT(datetime, '%Y-%m-%d %H:%i') = ?", [$dup->minute_group])
+                ->whereRaw("{$minuteGroupExpr} = ?", [$dup->minute_group])
                 ->with('user')
                 ->get();
 
@@ -169,9 +203,11 @@ class BiometricAnomalyDetector
         $unusualHourStart = 2; // 2 AM
         $unusualHourEnd = 5;   // 5 AM
 
+        $hourExpr = $this->getHourExpression();
+
         $records = BiometricRecord::whereBetween('record_date', [$startDate, $endDate])
             ->whereNotNull('user_id')
-            ->whereRaw('HOUR(datetime) >= ? AND HOUR(datetime) < ?', [$unusualHourStart, $unusualHourEnd])
+            ->whereRaw("{$hourExpr} >= ? AND {$hourExpr} < ?", [$unusualHourStart, $unusualHourEnd])
             ->with('user')
             ->get();
 

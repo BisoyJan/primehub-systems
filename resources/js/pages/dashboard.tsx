@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -8,11 +8,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Label, RadialBar, RadialBarChart, PolarGrid, Area, AreaChart, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
 
-import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList } from 'lucide-react';
+import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList, Building2, Users } from 'lucide-react';
+import type { SharedData, UserRole } from '@/types';
 
 //
 import { dashboard } from '@/routes';
@@ -214,6 +216,25 @@ declare global {
     }
 }
 
+// Define available tabs for each role
+type TabType = 'infrastructure' | 'attendance' | 'it-concerns';
+
+const ROLE_TABS: Record<UserRole, TabType[]> = {
+    'Super Admin': ['infrastructure', 'attendance', 'it-concerns'],
+    'Admin': ['attendance', 'infrastructure'],
+    'IT': ['infrastructure', 'it-concerns', 'attendance'],
+    'Team Lead': ['attendance'],
+    'Agent': ['attendance'],
+    'HR': ['attendance'],
+    'Utility': ['attendance'],
+};
+
+const TAB_CONFIG: Record<TabType, { label: string; icon: React.ComponentType<{ className?: string }> }> = {
+    'infrastructure': { label: 'Infrastructure', icon: Building2 },
+    'attendance': { label: 'Attendance', icon: Users },
+    'it-concerns': { label: 'IT Concerns', icon: ClipboardList },
+};
+
 export default function Dashboard({
     totalStations,
     noPcs,
@@ -235,6 +256,15 @@ export default function Dashboard({
     campaigns,
     isRestrictedRole,
 }: DashboardProps) {
+    // Get user role from shared data
+    const { auth } = usePage<SharedData>().props;
+    const userRole: UserRole = auth?.user?.role || 'Agent';
+
+    // Get available tabs based on user role
+    const availableTabs = useMemo(() => ROLE_TABS[userRole] || ['attendance'], [userRole]);
+    const defaultTab = availableTabs[0];
+
+    const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
     const [activeDialog, setActiveDialog] = useState<string | null>(null);
     const [dateRange, setDateRange] = useState({
         start: initialStartDate,
@@ -244,7 +274,6 @@ export default function Dashboard({
     const [verificationFilter, setVerificationFilter] = useState<string>(initialVerificationFilter || "verified");
     const [radialChartIndex, setRadialChartIndex] = useState(0);
     const [selectedMonth, setSelectedMonth] = useState<string>("all");
-    const [itConcernViewMode, setItConcernViewMode] = useState<'cards' | 'chart'>('cards');
     const concernStatusConfig = [
         { key: 'pending', label: 'Pending' },
         { key: 'in_progress', label: 'In Progress' },
@@ -399,7 +428,6 @@ export default function Dashboard({
     const [itTrendSlideIndex, setItTrendSlideIndex] = useState(0);
     const activeItTrendSlide = itTrendSlides[itTrendSlideIndex];
     const latestItTrend = itTrends.length > 0 ? itTrends[itTrends.length - 1] : null;
-    const activeTrendGradientId = `it-trend-${activeItTrendSlide.key}`;
 
     const handleDateRangeChange = () => {
         router.reload({
@@ -592,984 +620,865 @@ export default function Dashboard({
                 animate={{ opacity: 1 }}
                 transition={{ duration: 0.5 }}
             >
-                {/* Header - Only show for non-restricted roles */}
-                {!isRestrictedRole && (
-                    <motion.div
-                        className="flex items-center justify-between"
-                        initial={{ opacity: 0, y: -20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 0.1 }}
-                    >
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
-                            <p className="text-muted-foreground">
-                                Overview of all stations and PC specifications
-                            </p>
-                        </div>
-                    </motion.div>
-                )}
-
-                {/* Stats Grid */}
+                {/* New Header with Date/Time */}
                 <motion.div
-                    className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ duration: 0.5, delay: 0.2 }}
+                    className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between"
+                    initial={{ opacity: 0, y: -20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: 0.1 }}
                 >
-
-                    {/* Current Date & Time */}
-                    <StatCard
-                        title="Current Date & Time"
-                        value={
-                            <div className="flex flex-col">
-                                <span className="font-semibold text-base">{currentDateTime.date}</span>
-                                <span className="text-lg text-muted-foreground">{currentDateTime.time}</span>
-                            </div>
-                        }
-                        icon={Calendar}
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight">Dashboard</h1>
+                        <p className="text-muted-foreground">
+                            {isRestrictedRole
+                                ? "Your personal overview"
+                                : "System overview and analytics"
+                            }
+                        </p>
+                    </div>
+                    <button
                         onClick={() => setActiveDialog('dateTime')}
-                        delay={0.25}
-                    />
+                        className="group flex items-center gap-3 px-4 py-3 rounded-lg border bg-card hover:bg-accent hover:border-primary/50 transition-all cursor-pointer"
+                    >
+                        <Calendar className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                        <div className="text-left">
+                            <div className="text-sm font-medium">{currentDateTime.date}</div>
+                            <div className="text-lg font-bold text-primary">{currentDateTime.time}</div>
+                        </div>
+                    </button>
+                </motion.div>
 
-                    {!isRestrictedRole && (
-                        <>
-                            {/* Total Stations */}
-                            <StatCard
-                                title="Total Stations"
-                                value={totalStations?.total || 0}
-                                icon={Server}
-                                description="Click for breakdown by site"
-                                onClick={() => setActiveDialog('stations')}
-                                delay={0.3}
-                            />
+                {/* Tabbed Navigation */}
+                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as TabType)} className="space-y-6">
+                    <motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: 0.2 }}
+                    >
+                        <TabsList className="grid w-full max-w-md" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
+                            {availableTabs.map((tab) => {
+                                const config = TAB_CONFIG[tab];
+                                const Icon = config.icon;
+                                return (
+                                    <TabsTrigger key={tab} value={tab} className="flex items-center gap-2">
+                                        <Icon className="h-4 w-4" />
+                                        <span className="hidden sm:inline">{config.label}</span>
+                                    </TabsTrigger>
+                                );
+                            })}
+                        </TabsList>
+                    </motion.div>
 
-                            {/* Available PC Specs */}
-                            <StatCard
-                                title="Available PCs"
-                                value={unassignedPcSpecs?.length || 0}
-                                icon={Server}
-                                description="PC specs not assigned to any station"
-                                onClick={() => setActiveDialog('availablePcs')}
-                                variant={(unassignedPcSpecs?.length || 0) > 0 ? "success" : "default"}
-                                delay={0.35}
-                            />
-                            {/* No PCs */}
-                            <StatCard
-                                title="Stations Without PCs"
-                                value={noPcs?.total || 0}
-                                icon={AlertCircle}
-                                description="Requires PC assignment"
-                                onClick={() => setActiveDialog('noPcs')}
-                                variant="warning"
-                                delay={0.4}
-                            />
+                    {/* Infrastructure Tab */}
+                    {availableTabs.includes('infrastructure') && (
+                        <TabsContent value="infrastructure" className="space-y-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                                    {/* Total Stations */}
+                                    <StatCard
+                                        title="Total Stations"
+                                        value={totalStations?.total || 0}
+                                        icon={Server}
+                                        description="Click for breakdown by site"
+                                        onClick={() => setActiveDialog('stations')}
+                                    />
 
-                            {/* Vacant Stations */}
-                            <StatCard
-                                title="Vacant Stations"
-                                value={vacantStations?.total || 0}
-                                icon={XCircle}
-                                description="Available for deployment"
-                                onClick={() => setActiveDialog('vacantStations')}
-                                delay={0.45}
-                            />
+                                    {/* Available PC Specs */}
+                                    <StatCard
+                                        title="Available PCs"
+                                        value={unassignedPcSpecs?.length || 0}
+                                        icon={Server}
+                                        description="PC specs not assigned to any station"
+                                        onClick={() => setActiveDialog('availablePcs')}
+                                        variant={(unassignedPcSpecs?.length || 0) > 0 ? "success" : "default"}
+                                    />
 
-                            {/* PCs with SSD & HDD Combined */}
-                            <StatCard
-                                title="PCs with SSD & HDD"
-                                value={
-                                    <div className="flex flex-row gap-2">
-                                        <span>
-                                            <span className="font-semibold">{hddPcs?.total || 0}</span>
-                                            <span className="text-xs text-muted-foreground ml-1">HDD</span>
-                                        </span>
-                                        <span>
-                                            <span className="font-semibold text-green-600 dark:text-green-400">{ssdPcs?.total || 0}</span>
-                                            <span className="text-xs text-muted-foreground ml-1">SSD</span>
-                                        </span>
+                                    {/* No PCs */}
+                                    <StatCard
+                                        title="Stations Without PCs"
+                                        value={noPcs?.total || 0}
+                                        icon={AlertCircle}
+                                        description="Requires PC assignment"
+                                        onClick={() => setActiveDialog('noPcs')}
+                                        variant="warning"
+                                    />
+
+                                    {/* Vacant Stations */}
+                                    <StatCard
+                                        title="Vacant Stations"
+                                        value={vacantStations?.total || 0}
+                                        icon={XCircle}
+                                        description="Available for deployment"
+                                        onClick={() => setActiveDialog('vacantStations')}
+                                    />
+
+                                    {/* PCs with SSD & HDD Combined */}
+                                    <StatCard
+                                        title="PCs with SSD & HDD"
+                                        value={
+                                            <div className="flex flex-row gap-2">
+                                                <span>
+                                                    <span className="font-semibold">{hddPcs?.total || 0}</span>
+                                                    <span className="text-xs text-muted-foreground ml-1">HDD</span>
+                                                </span>
+                                                <span>
+                                                    <span className="font-semibold text-green-600 dark:text-green-400">{ssdPcs?.total || 0}</span>
+                                                    <span className="text-xs text-muted-foreground ml-1">SSD</span>
+                                                </span>
+                                            </div>
+                                        }
+                                        icon={HardDrive}
+                                        description="Solid State & Hard Disk Drives"
+                                        onClick={() => setActiveDialog('diskPcs')}
+                                        variant="success"
+                                    />
+
+                                    {/* Dual Monitor */}
+                                    <StatCard
+                                        title="Dual Monitor Setups"
+                                        value={dualMonitor?.total || 0}
+                                        icon={Monitor}
+                                        description="Stations with 2 monitors"
+                                        onClick={() => setActiveDialog('dualMonitor')}
+                                    />
+
+                                    {/* Maintenance Due */}
+                                    <StatCard
+                                        title="Maintenance Due"
+                                        value={maintenanceDue?.total || 0}
+                                        icon={Wrench}
+                                        description="Requires attention"
+                                        onClick={() => setActiveDialog('maintenanceDue')}
+                                        variant={(maintenanceDue?.total || 0) > 0 ? "danger" : "default"}
+                                    />
+                                </div>
+                            </motion.div>
+                        </TabsContent>
+                    )}
+
+                    {/* IT Concerns Tab */}
+                    {availableTabs.includes('it-concerns') && (
+                        <TabsContent value="it-concerns" className="space-y-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                {/* IT Concerns Summary Cards */}
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-6">
+                                    <StatCard
+                                        title="Total Concerns"
+                                        value={totalConcerns}
+                                        icon={ClipboardList}
+                                        description="Click for per-site breakdown"
+                                        onClick={() => setActiveDialog('itConcernsBySite')}
+                                        variant={totalConcerns > 0 ? 'success' : 'default'}
+                                    />
+                                    <StatCard
+                                        title="Pending"
+                                        value={concernStats.pending}
+                                        icon={Clock}
+                                        description="Awaiting acknowledgement"
+                                        onClick={() => goToItConcerns('pending')}
+                                        variant={concernStats.pending > 0 ? 'warning' : 'default'}
+                                    />
+                                    <StatCard
+                                        title="In Progress"
+                                        value={concernStats.in_progress}
+                                        icon={Loader2}
+                                        description="Currently being handled"
+                                        onClick={() => goToItConcerns('in_progress')}
+                                    />
+                                    <StatCard
+                                        title="Resolved"
+                                        value={concernStats.resolved}
+                                        icon={CheckCircle2}
+                                        description="Closed this period"
+                                        onClick={() => goToItConcerns('resolved')}
+                                        variant="success"
+                                    />
+                                </div>
+
+                                {/* IT Concerns Trend Chart */}
+                                <Card>
+                                    <CardHeader className="pb-0">
+                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                            <div>
+                                                <CardTitle className="text-base">IT Concern Trends</CardTitle>
+                                                <CardDescription className="text-xs">
+                                                    {activeItTrendSlide.description}
+                                                </CardDescription>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-sm font-medium">
+                                                    {activeItTrendSlide.label}
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleTrendPrev}
+                                                        className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                        aria-label="Previous trend"
+                                                    >
+                                                        <ChevronLeft className="h-4 w-4" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleTrendNext}
+                                                        className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                        aria-label="Next trend"
+                                                    >
+                                                        <ChevronRight className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="pt-4">
+                                        {itTrends.length === 0 ? (
+                                            <div className="py-10 text-center text-muted-foreground">
+                                                No IT concern activity recorded for the selected window.
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <ChartContainer
+                                                    config={{
+                                                        [activeItTrendSlide.key]: {
+                                                            label: activeItTrendSlide.label,
+                                                            color: activeItTrendSlide.color,
+                                                        }
+                                                    }}
+                                                    className="h-[320px] w-full"
+                                                >
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>
+                                                            <defs>
+                                                                <linearGradient id={`it-trend-dedicated-${activeItTrendSlide.key}`} x1="0" y1="0" x2="0" y2="1">
+                                                                    <stop offset="5%" stopColor={activeItTrendSlide.color} stopOpacity={0.8} />
+                                                                    <stop offset="95%" stopColor={activeItTrendSlide.color} stopOpacity={0.05} />
+                                                                </linearGradient>
+                                                            </defs>
+                                                            <CartesianGrid strokeDasharray="3 3" />
+                                                            <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval="preserveStartEnd" />
+                                                            <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
+                                                            <ChartTooltip
+                                                                cursor={false}
+                                                                content={<ChartTooltipContent />}
+                                                            />
+                                                            <Area
+                                                                type="monotone"
+                                                                dataKey={activeItTrendSlide.key as 'total' | 'pending' | 'in_progress' | 'resolved'}
+                                                                stroke={activeItTrendSlide.color}
+                                                                fill={`url(#it-trend-dedicated-${activeItTrendSlide.key})`}
+                                                                strokeWidth={2}
+                                                                activeDot={{ r: 5 }}
+                                                            />
+                                                        </AreaChart>
+                                                    </ResponsiveContainer>
+                                                </ChartContainer>
+                                                <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
+                                                    <div>
+                                                        <p className="text-muted-foreground text-xs uppercase">Latest Month</p>
+                                                        <p className="font-semibold">{latestItTrend?.label ?? 'N/A'}</p>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-4">
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">Total</p>
+                                                            <p className="font-semibold">{latestItTrend?.total ?? 0}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">Pending</p>
+                                                            <p className="font-semibold">{latestItTrend?.pending ?? 0}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">In Progress</p>
+                                                            <p className="font-semibold">{latestItTrend?.in_progress ?? 0}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">Resolved</p>
+                                                            <p className="font-semibold">{latestItTrend?.resolved ?? 0}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        </TabsContent>
+                    )}
+
+                    {/* Attendance Tab */}
+                    {availableTabs.includes('attendance') && (
+                        <TabsContent value="attendance" className="space-y-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3 }}
+                                className="space-y-6"
+                            >
+                                {/* Attendance Filters */}
+                                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                                    <div>
+                                        <h3 className="text-lg font-semibold">Attendance Overview</h3>
+                                        <p className="text-sm text-muted-foreground">
+                                            {isRestrictedRole
+                                                ? "Your personal attendance for the selected period"
+                                                : "Overview of attendance for the selected period"
+                                            }
+                                        </p>
                                     </div>
-                                }
-                                icon={HardDrive}
-                                description="Solid State & Hard Disk Drives"
-                                onClick={() => setActiveDialog('diskPcs')}
-                                variant="success"
-                                delay={0.5}
-                            />
-
-                            {/* Dual Monitor */}
-                            <StatCard
-                                title="Dual Monitor Setups"
-                                value={dualMonitor?.total || 0}
-                                icon={Monitor}
-                                description="Stations with 2 monitors"
-                                onClick={() => setActiveDialog('dualMonitor')}
-                                delay={0.55}
-                            />
-
-                            {/* Maintenance Due */}
-                            <StatCard
-                                title="Maintenance Due"
-                                value={maintenanceDue?.total || 0}
-                                icon={Wrench}
-                                description="Requires attention"
-                                onClick={() => setActiveDialog('maintenanceDue')}
-                                variant={(maintenanceDue?.total || 0) > 0 ? "danger" : "default"}
-                                delay={0.6}
-                            />
-
-                            {/* IT Concerns Widget */}
-                            <div className="col-span-1 md:col-span-2 lg:col-span-4">
-                                <div className="flex items-center justify-between mb-4">
-                                    <div className="flex items-center gap-2">
-                                        <h3 className="font-semibold text-lg">
-                                            {itConcernViewMode === 'cards' ? 'IT Concerns Overview' : 'IT Concern Trends'}
-                                        </h3>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs text-muted-foreground mr-2">
-                                            Switch View
-                                        </span>
-                                        <Button
-                                            variant="outline"
-                                            size="icon"
-                                            className="h-8 w-8 rounded-full"
-                                            onClick={() => setItConcernViewMode(prev => prev === 'cards' ? 'chart' : 'cards')}
-                                        >
-                                            {itConcernViewMode === 'cards' ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        {!isRestrictedRole && campaigns && campaigns.length > 0 && (
+                                            <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
+                                                <SelectTrigger className="w-[160px]">
+                                                    <SelectValue placeholder="All Campaigns" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                                    {campaigns.map((campaign) => (
+                                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                                            {campaign.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        )}
+                                        <Select value={verificationFilter} onValueChange={setVerificationFilter}>
+                                            <SelectTrigger className="w-[150px]">
+                                                <SelectValue placeholder="Verification" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Records</SelectItem>
+                                                <SelectItem value="verified">Verified Only</SelectItem>
+                                                <SelectItem value="non_verified">Non-Verified</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <input
+                                            type="date"
+                                            value={dateRange.start}
+                                            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
+                                            className="h-9 px-3 border rounded-md text-sm"
+                                            title="Start date"
+                                        />
+                                        <span className="text-muted-foreground text-sm">to</span>
+                                        <input
+                                            type="date"
+                                            value={dateRange.end}
+                                            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
+                                            className="h-9 px-3 border rounded-md text-sm"
+                                            title="End date"
+                                        />
+                                        <Button onClick={handleDateRangeChange} size="sm">
+                                            Apply
                                         </Button>
                                     </div>
                                 </div>
 
-                                {itConcernViewMode === 'cards' ? (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: -20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: 20 }}
-                                        transition={{ duration: 0.3 }}
-                                        className="grid gap-4 md:grid-cols-2 lg:grid-cols-4"
-                                    >
-                                        <StatCard
-                                            title="IT Concerns (All)"
-                                            value={totalConcerns}
-                                            icon={ClipboardList}
-                                            description="Click for per-site breakdown"
-                                            onClick={() => setActiveDialog('itConcernsBySite')}
-                                            variant={totalConcerns > 0 ? 'success' : 'default'}
-                                            delay={0.63}
-                                        />
-                                        <StatCard
-                                            title="IT Concerns (Pending)"
-                                            value={concernStats.pending}
-                                            icon={Clock}
-                                            description="Awaiting acknowledgement"
-                                            onClick={() => goToItConcerns('pending')}
-                                            variant={concernStats.pending > 0 ? 'warning' : 'default'}
-                                            delay={0.68}
-                                        />
-                                        <StatCard
-                                            title="IT Concerns (In Progress)"
-                                            value={concernStats.in_progress}
-                                            icon={Loader2}
-                                            description="Currently being handled"
-                                            onClick={() => goToItConcerns('in_progress')}
-                                            delay={0.73}
-                                        />
-                                        <StatCard
-                                            title="IT Concerns (Resolved)"
-                                            value={concernStats.resolved}
-                                            icon={CheckCircle2}
-                                            description="Closed this period"
-                                            onClick={() => goToItConcerns('resolved')}
-                                            variant="success"
-                                            delay={0.78}
-                                        />
-                                    </motion.div>
-                                ) : (
-                                    <motion.div
-                                        initial={{ opacity: 0, x: 20 }}
-                                        animate={{ opacity: 1, x: 0 }}
-                                        exit={{ opacity: 0, x: -20 }}
-                                        transition={{ duration: 0.3 }}
-                                    >
-                                        <Card>
-                                            <CardHeader className="pb-0">
-                                                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                                    <div>
-                                                        <CardTitle className="text-base">Trend Analysis</CardTitle>
-                                                        <CardDescription className="text-xs">
-                                                            {activeItTrendSlide.description}
-                                                        </CardDescription>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="text-sm font-medium">
-                                                            {activeItTrendSlide.label}
-                                                        </div>
-                                                        <div className="flex items-center gap-2">
-                                                            <button
-                                                                type="button"
-                                                                onClick={handleTrendPrev}
-                                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
-                                                                aria-label="Previous trend"
-                                                            >
-                                                                <ChevronLeft className="h-4 w-4" />
-                                                            </button>
-                                                            <button
-                                                                type="button"
-                                                                onClick={handleTrendNext}
-                                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
-                                                                aria-label="Next trend"
-                                                            >
-                                                                <ChevronRight className="h-4 w-4" />
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">
-                                                    <div className="flex items-center gap-2">
-                                                        <span className="text-xs font-medium">Filter Date:</span>
-                                                        <input
-                                                            type="date"
-                                                            value={dateRange.start}
-                                                            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                                                            className="h-8 px-2 border rounded-md text-xs"
-                                                            aria-label="Start date"
-                                                        />
-                                                        <span className="text-muted-foreground text-xs">to</span>
-                                                        <input
-                                                            type="date"
-                                                            value={dateRange.end}
-                                                            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                                                            className="h-8 px-2 border rounded-md text-xs"
-                                                            aria-label="End date"
-                                                        />
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={handleDateRangeChange}
-                                                            className="h-8 text-xs"
-                                                        >
-                                                            Apply
-                                                        </Button>
-                                                    </div>
-                                                </div>
-                                            </CardHeader>
-                                            <CardContent className="pt-4">
-                                                {itTrends.length === 0 ? (
-                                                    <div className="py-10 text-center text-muted-foreground">
-                                                        No IT concern activity recorded for the selected window.
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <ChartContainer
-                                                            config={{
-                                                                [activeItTrendSlide.key]: {
-                                                                    label: activeItTrendSlide.label,
-                                                                    color: activeItTrendSlide.color,
-                                                                }
-                                                            }}
-                                                            className="h-[320px] w-full"
-                                                        >
-                                                            <ResponsiveContainer width="100%" height="100%">
-                                                                <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>
-                                                                    <defs>
-                                                                        <linearGradient id={activeTrendGradientId} x1="0" y1="0" x2="0" y2="1">
-                                                                            <stop offset="5%" stopColor={activeItTrendSlide.color} stopOpacity={0.8} />
-                                                                            <stop offset="95%" stopColor={activeItTrendSlide.color} stopOpacity={0.05} />
-                                                                        </linearGradient>
-                                                                    </defs>
-                                                                    <CartesianGrid strokeDasharray="3 3" />
-                                                                    <XAxis dataKey="label" tickLine={false} axisLine={false} fontSize={12} interval="preserveStartEnd" />
-                                                                    <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
-                                                                    <ChartTooltip
-                                                                        cursor={false}
-                                                                        content={<ChartTooltipContent />}
-                                                                    />
-                                                                    <Area
-                                                                        type="monotone"
-                                                                        dataKey={activeItTrendSlide.key as 'total' | 'pending' | 'in_progress' | 'resolved'}
-                                                                        stroke={activeItTrendSlide.color}
-                                                                        fill={`url(#${activeTrendGradientId})`}
-                                                                        strokeWidth={2}
-                                                                        activeDot={{ r: 5 }}
-                                                                    />
-                                                                </AreaChart>
-                                                            </ResponsiveContainer>
-                                                        </ChartContainer>
-                                                        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
-                                                            <div>
-                                                                <p className="text-muted-foreground text-xs uppercase">Latest Month</p>
-                                                                <p className="font-semibold">{latestItTrend?.label ?? 'N/A'}</p>
-                                                            </div>
-                                                            <div className="flex flex-wrap gap-4">
-                                                                <div>
-                                                                    <p className="text-muted-foreground text-xs uppercase">Total</p>
-                                                                    <p className="font-semibold">{latestItTrend?.total ?? 0}</p>
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-muted-foreground text-xs uppercase">Pending</p>
-                                                                    <p className="font-semibold">{latestItTrend?.pending ?? 0}</p>
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-muted-foreground text-xs uppercase">In Progress</p>
-                                                                    <p className="font-semibold">{latestItTrend?.in_progress ?? 0}</p>
-                                                                </div>
-                                                                <div>
-                                                                    <p className="text-muted-foreground text-xs uppercase">Resolved</p>
-                                                                    <p className="font-semibold">{latestItTrend?.resolved ?? 0}</p>
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </CardContent>
-                                        </Card>
-                                    </motion.div>
-                                )}
-                            </div>
+                                {/* Attendance Stats Cards */}
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">Total Records</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold">{filteredStatistics.total}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {selectedMonth !== "all" ? "Filtered" : "All"} attendance entries
+                                            </p>
+                                        </CardContent>
+                                    </Card>
 
-                            {/* Cards removed as requested */}
-                        </>
-                    )}
-                </motion.div>
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">On Time</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-green-600">{filteredStatistics.on_time}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {filteredStatistics.total > 0
+                                                    ? `${((filteredStatistics.on_time / filteredStatistics.total) * 100).toFixed(1)}%`
+                                                    : '0%'} of total
+                                            </p>
+                                        </CardContent>
+                                    </Card>
 
-                {/* Attendance Statistics Section */}
-                <motion.div
-                    className="space-y-4"
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.9 }}
-                >
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h2 className="text-2xl font-bold tracking-tight">Attendance Statistics</h2>
-                            <p className="text-muted-foreground">
-                                {isRestrictedRole
-                                    ? "Your personal attendance for the selected period"
-                                    : "Overview of attendance for the selected period"
-                                }
-                            </p>
-                        </div>
-                        <motion.div
-                            className="flex items-center gap-2"
-                            initial={{ opacity: 0, x: 20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ duration: 0.5, delay: 1.0 }}
-                        >
-                            {!isRestrictedRole && campaigns && campaigns.length > 0 && (
-                                <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
-                                    <SelectTrigger className="w-[180px]">
-                                        <SelectValue placeholder="All Campaigns" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="all">All Campaigns</SelectItem>
-                                        {campaigns.map((campaign) => (
-                                            <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                {campaign.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            )}
-                            <Select value={verificationFilter} onValueChange={setVerificationFilter}>
-                                <SelectTrigger className="w-[180px]">
-                                    <SelectValue placeholder="Verification Status" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Records</SelectItem>
-                                    <SelectItem value="verified">Verified Only</SelectItem>
-                                    <SelectItem value="non_verified">Non-Verified Only</SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <input
-                                type="date"
-                                value={dateRange.start}
-                                onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                                className="px-3 py-2 border rounded-md text-sm"
-                                placeholder="Start date"
-                                title="Start date"
-                            />
-                            <span className="text-muted-foreground">to</span>
-                            <input
-                                type="date"
-                                value={dateRange.end}
-                                onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                                className="px-3 py-2 border rounded-md text-sm"
-                                placeholder="End date"
-                                title="End date"
-                            />
-                            <button
-                                onClick={handleDateRangeChange}
-                                className="px-4 py-2 bg-primary text-primary-foreground rounded-md text-sm hover:bg-primary/90"
-                            >
-                                Apply
-                            </button>
-                        </motion.div>
-                    </div>
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">Time Adjustment</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-purple-600">{filteredStatistics.time_adjustment}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {filteredStatistics.total > 0
+                                                    ? `${((filteredStatistics.time_adjustment / filteredStatistics.total) * 100).toFixed(1)}%`
+                                                    : '0%'} (<span className="text-cyan-600 font-medium">{attendanceStatistics.overtime || 0}</span> OT / <span className="text-purple-500 font-medium">{attendanceStatistics.undertime || 0}</span> UT)
+                                            </p>
+                                        </CardContent>
+                                    </Card>
 
-                    <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.1 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Total Records</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold">{filteredStatistics.total}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {selectedMonth !== "all" ? "Filtered" : "All"} attendance entries
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">Tardy</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-yellow-600">{filteredStatistics.tardy}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {filteredStatistics.total > 0
+                                                    ? `${((filteredStatistics.tardy / filteredStatistics.total) * 100).toFixed(1)}%`
+                                                    : '0%'} of total
+                                            </p>
+                                        </CardContent>
+                                    </Card>
 
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.2 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">On Time</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-green-600">{filteredStatistics.on_time}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {filteredStatistics.total > 0
-                                            ? `${((filteredStatistics.on_time / filteredStatistics.total) * 100).toFixed(1)}%`
-                                            : '0%'} of total
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">Half Day</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-orange-600">{filteredStatistics.half_day}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {filteredStatistics.total > 0
+                                                    ? `${((filteredStatistics.half_day / filteredStatistics.total) * 100).toFixed(1)}%`
+                                                    : '0%'} of total
+                                            </p>
+                                        </CardContent>
+                                    </Card>
 
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.25 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Time Adjustment</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-purple-600">{filteredStatistics.time_adjustment}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {filteredStatistics.total > 0
-                                            ? `${((filteredStatistics.time_adjustment / filteredStatistics.total) * 100).toFixed(1)}%`
-                                            : '0%'} (<span className="text-cyan-600 font-medium">{attendanceStatistics.overtime || 0}</span> OT / <span className="text-purple-500 font-medium">{attendanceStatistics.undertime || 0}</span> UT)
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">NCNS</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-red-600">{filteredStatistics.ncns}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {filteredStatistics.total > 0
+                                                    ? `${((filteredStatistics.ncns / filteredStatistics.total) * 100).toFixed(1)}%`
+                                                    : '0%'} of total
+                                            </p>
+                                        </CardContent>
+                                    </Card>
 
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.3 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Tardy</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-yellow-600">{filteredStatistics.tardy}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {filteredStatistics.total > 0
-                                            ? `${((filteredStatistics.tardy / filteredStatistics.total) * 100).toFixed(1)}%`
-                                            : '0%'} of total
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">Advised Absence</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-blue-600">{filteredStatistics.advised}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {filteredStatistics.total > 0
+                                                    ? `${((filteredStatistics.advised / filteredStatistics.total) * 100).toFixed(1)}%`
+                                                    : '0%'} of total
+                                            </p>
+                                        </CardContent>
+                                    </Card>
 
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.4 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Half Day</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-orange-600">{filteredStatistics.half_day}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {filteredStatistics.total > 0
-                                            ? `${((filteredStatistics.half_day / filteredStatistics.total) * 100).toFixed(1)}%`
-                                            : '0%'} of total
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
+                                    <Card>
+                                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                            <CardTitle className="text-sm font-medium">Needs Verification</CardTitle>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="text-2xl font-bold text-purple-600">{filteredStatistics.needs_verification}</div>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                Requires review
+                                            </p>
+                                        </CardContent>
+                                    </Card>
+                                </div>
 
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.45 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">NCNS</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-red-600">{filteredStatistics.ncns}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {filteredStatistics.total > 0
-                                            ? `${((filteredStatistics.ncns / filteredStatistics.total) * 100).toFixed(1)}%`
-                                            : '0%'} of total
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.5 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Advised Absence</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-blue-600">{filteredStatistics.advised}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {filteredStatistics.total > 0
-                                            ? `${((filteredStatistics.advised / filteredStatistics.total) * 100).toFixed(1)}%`
-                                            : '0%'} of total
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-
-                        <motion.div
-                            layout
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: 1.6 }}
-                        >
-                            <Card>
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium">Needs Verification</CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-purple-600">{filteredStatistics.needs_verification}</div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Requires review
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        </motion.div>
-                    </div>
-
-                    {/* Attendance Charts Section */}
-                    <motion.div
-                        className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mt-8"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 1.9 }}
-                    >
-                        {/* Donut Chart - Status Breakdown */}
-                        <Card className="flex flex-col">
-                            <CardHeader className="pb-0">
-                                <CardTitle className="text-base">Status Distribution</CardTitle>
-                                <CardDescription className="text-xs">Breakdown by attendance status</CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-1 pb-0">
-                                <ChartContainer
-                                    config={{
-                                        on_time: {
-                                            label: "On Time",
-                                            color: "hsl(142, 71%, 45%)",
-                                        },
-                                        time_adjustment: {
-                                            label: "Time Adjustment",
-                                            color: "hsl(280, 65%, 60%)",
-                                        },
-                                        tardy: {
-                                            label: "Tardy",
-                                            color: "hsl(45, 93%, 47%)",
-                                        },
-                                        half_day: {
-                                            label: "Half Day",
-                                            color: "hsl(25, 95%, 53%)",
-                                        },
-                                        ncns: {
-                                            label: "NCNS",
-                                            color: "hsl(0, 84%, 60%)",
-                                        },
-                                        advised: {
-                                            label: "Advised",
-                                            color: "hsl(221, 83%, 53%)",
-                                        },
-                                    }}
-                                    className="mx-auto aspect-square max-h-[250px]"
-                                >
-                                    <PieChart>
-                                        <ChartTooltip
-                                            cursor={false}
-                                            content={<ChartTooltipContent hideLabel />}
-                                        />
-                                        <Pie
-                                            data={[
-                                                { name: "on_time", value: filteredStatistics.on_time, fill: "hsl(142, 71%, 45%)" },
-                                                { name: "time_adjustment", value: filteredStatistics.time_adjustment, fill: "hsl(280, 65%, 60%)" },
-                                                { name: "tardy", value: filteredStatistics.tardy, fill: "hsl(45, 93%, 47%)" },
-                                                { name: "half_day", value: filteredStatistics.half_day, fill: "hsl(25, 95%, 53%)" },
-                                                { name: "ncns", value: filteredStatistics.ncns, fill: "hsl(0, 84%, 60%)" },
-                                                { name: "advised", value: filteredStatistics.advised, fill: "hsl(221, 83%, 53%)" },
-                                            ]}
-                                            dataKey="value"
-                                            nameKey="name"
-                                            innerRadius={70}
-                                            outerRadius={100}
-                                            strokeWidth={2}
-                                        >
-                                            <Label
-                                                content={({ viewBox }) => {
-                                                    if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                                                        return (
-                                                            <text
-                                                                x={viewBox.cx}
-                                                                y={viewBox.cy}
-                                                                textAnchor="middle"
-                                                                dominantBaseline="middle"
-                                                            >
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={viewBox.cy}
-                                                                    className="fill-foreground text-4xl font-bold"
-                                                                >
-                                                                    {filteredStatistics.total}
-                                                                </tspan>
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={(viewBox.cy || 0) + 28}
-                                                                    className="fill-muted-foreground text-sm"
-                                                                >
-                                                                    Total
-                                                                </tspan>
-                                                            </text>
-                                                        )
-                                                    }
+                                {/* Attendance Charts Section */}
+                                <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                                    {/* Donut Chart - Status Breakdown */}
+                                    <Card className="flex flex-col">
+                                        <CardHeader className="pb-0">
+                                            <CardTitle className="text-base">Status Distribution</CardTitle>
+                                            <CardDescription className="text-xs">Breakdown by attendance status</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="flex-1 pb-0">
+                                            <ChartContainer
+                                                config={{
+                                                    on_time: {
+                                                        label: "On Time",
+                                                        color: "hsl(142, 71%, 45%)",
+                                                    },
+                                                    time_adjustment: {
+                                                        label: "Time Adjustment",
+                                                        color: "hsl(280, 65%, 60%)",
+                                                    },
+                                                    tardy: {
+                                                        label: "Tardy",
+                                                        color: "hsl(45, 93%, 47%)",
+                                                    },
+                                                    half_day: {
+                                                        label: "Half Day",
+                                                        color: "hsl(25, 95%, 53%)",
+                                                    },
+                                                    ncns: {
+                                                        label: "NCNS",
+                                                        color: "hsl(0, 84%, 60%)",
+                                                    },
+                                                    advised: {
+                                                        label: "Advised",
+                                                        color: "hsl(221, 83%, 53%)",
+                                                    },
                                                 }}
-                                            />
-                                        </Pie>
-                                    </PieChart>
-                                </ChartContainer>
-                            </CardContent>
-                        </Card>
-
-                        {/* Bar Chart - Count by Status */}
-                        <Card className="flex flex-col">
-                            <CardHeader className="pb-0">
-                                <CardTitle className="text-base">Count by Status</CardTitle>
-                                <CardDescription className="text-xs">Actual number of records per status</CardDescription>
-                            </CardHeader>
-                            <CardContent className="flex-1 pb-0">
-                                <ChartContainer
-                                    config={{
-                                        count: {
-                                            label: "Records",
-                                        },
-                                    }}
-                                    className="aspect-square max-h-[250px]"
-                                >
-                                    <BarChart
-                                        data={[
-                                            { status: "On Time", count: filteredStatistics.on_time, fill: "hsl(142, 71%, 45%)" },
-                                            { status: "Time Adj.", count: filteredStatistics.time_adjustment, fill: "hsl(280, 65%, 60%)" },
-                                            { status: "Tardy", count: filteredStatistics.tardy, fill: "hsl(45, 93%, 47%)" },
-                                            { status: "Half Day", count: filteredStatistics.half_day, fill: "hsl(25, 95%, 53%)" },
-                                            { status: "NCNS", count: filteredStatistics.ncns, fill: "hsl(0, 84%, 60%)" },
-                                            { status: "Advised", count: filteredStatistics.advised, fill: "hsl(221, 83%, 53%)" },
-                                        ]}
-                                        layout="vertical"
-                                        margin={{ left: 10, right: 10 }}
-                                    >
-                                        <CartesianGrid strokeDasharray="3 3" horizontal={false} />
-                                        <YAxis
-                                            dataKey="status"
-                                            type="category"
-                                            tickLine={false}
-                                            tickMargin={10}
-                                            axisLine={false}
-                                            width={70}
-                                            fontSize={12}
-                                        />
-                                        <XAxis type="number" hide />
-                                        <ChartTooltip
-                                            cursor={false}
-                                            content={<ChartTooltipContent indicator="line" />}
-                                        />
-                                        <Bar dataKey="count" radius={[0, 4, 4, 0]} />
-                                    </BarChart>
-                                </ChartContainer>
-                            </CardContent>
-                        </Card>
-
-                        {/* Radial Chart - All Status Rate */}
-                        <Card className="flex flex-col">
-                            <CardHeader className="pb-0">
-                                <div className="flex items-center justify-between">
-                                    <div>
-                                        <CardTitle className="text-base">{currentRadialData.label}</CardTitle>
-                                        <CardDescription className="text-xs">Percentage of {currentRadialData.name.toLowerCase()} attendance</CardDescription>
-                                    </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            onClick={handlePrevStatus}
-                                            className="p-1 rounded hover:bg-muted transition-colors"
-                                            aria-label="Previous status"
-                                        >
-                                            <ChevronLeft className="h-4 w-4" />
-                                        </button>
-                                        <button
-                                            onClick={handleNextStatus}
-                                            className="p-1 rounded hover:bg-muted transition-colors"
-                                            aria-label="Next status"
-                                        >
-                                            <ChevronRight className="h-4 w-4" />
-                                        </button>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="flex-1 pb-0">
-                                <ChartContainer
-                                    config={{
-                                        rate: {
-                                            label: currentRadialData.label,
-                                            color: currentRadialData.fill,
-                                        },
-                                    }}
-                                    className="mx-auto aspect-square max-h-[250px]"
-                                >
-                                    <RadialBarChart
-                                        data={[currentRadialData]}
-                                        startAngle={90}
-                                        endAngle={90 - (currentRadialData.value / 100) * 360}
-                                        innerRadius={80}
-                                        outerRadius={115}
-                                    >
-                                        <PolarGrid
-                                            gridType="circle"
-                                            radialLines={false}
-                                            stroke="none"
-                                            className="first:fill-muted last:fill-background"
-                                            polarRadius={[86, 74]}
-                                        />
-                                        <RadialBar dataKey="value" background cornerRadius={10} />
-                                        <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
-                                            <Label
-                                                content={({ viewBox }) => {
-                                                    if (viewBox && "cx" in viewBox && "cy" in viewBox) {
-                                                        return (
-                                                            <text
-                                                                x={viewBox.cx}
-                                                                y={viewBox.cy}
-                                                                textAnchor="middle"
-                                                                dominantBaseline="middle"
-                                                            >
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={viewBox.cy}
-                                                                    className="fill-foreground text-4xl font-bold"
-                                                                >
-                                                                    {currentRadialData.value.toFixed(1)}%
-                                                                </tspan>
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={(viewBox.cy || 0) + 24}
-                                                                    className="fill-muted-foreground text-xs"
-                                                                >
-                                                                    {currentRadialData.name}
-                                                                </tspan>
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={(viewBox.cy || 0) + 40}
-                                                                    className="fill-muted-foreground text-xs"
-                                                                >
-                                                                    ({currentRadialData.count} of {filteredStatistics.total})
-                                                                </tspan>
-                                                            </text>
-                                                        );
-                                                    }
-                                                }}
-                                            />
-                                        </PolarRadiusAxis>
-                                    </RadialBarChart>
-                                </ChartContainer>
-                            </CardContent>
-                        </Card>
-
-                    </motion.div>
-
-                    {/* Area Chart - Monthly Statistics */}
-                    <motion.div
-                        className="mt-6"
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.5, delay: 2.0 }}
-                    >
-                        <Card>
-                            <CardHeader className="pb-0">
-                                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                                    <div>
-                                        <CardTitle className="text-base">Monthly Attendance Trends</CardTitle>
-                                        <CardDescription className="text-xs">
-                                            {activeAttendanceSlide.description}
-                                        </CardDescription>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="text-sm font-medium">
-                                            {activeAttendanceSlide.label}
-                                        </div>
-                                        <div className="flex items-center gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={handleAttendanceTrendPrev}
-                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
-                                                aria-label="Previous trend"
+                                                className="mx-auto aspect-square max-h-[250px]"
                                             >
-                                                <ChevronLeft className="h-4 w-4" />
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={handleAttendanceTrendNext}
-                                                className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
-                                                aria-label="Next trend"
-                                            >
-                                                <ChevronRight className="h-4 w-4" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-xs font-medium">Filter Month:</span>
-                                        <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                            <SelectTrigger className="h-8 w-[140px] text-xs">
-                                                <SelectValue placeholder="All Months" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="all">All Months</SelectItem>
-                                                {monthOptions.map((month) => (
-                                                    <SelectItem key={month} value={month}>{month}</SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="pt-4">
-                                {attendanceTrendData.length === 0 ? (
-                                    <div className="py-10 text-center text-muted-foreground">
-                                        No attendance data available for the selected period.
-                                    </div>
-                                ) : (
-                                    <>
-                                        <ChartContainer
-                                            config={
-                                                activeAttendanceSlide.key === 'all'
-                                                    ? attendanceTrendSlides.slice(1).reduce((acc, slide) => ({ ...acc, [slide.key]: { label: slide.label, color: slide.color } }), {})
-                                                    : {
-                                                        [activeAttendanceSlide.key]: {
-                                                            label: activeAttendanceSlide.label,
-                                                            color: activeAttendanceSlide.color,
-                                                        }
-                                                    }
-                                            }
-                                            className="h-[320px] w-full"
-                                        >
-                                            <ResponsiveContainer width="100%" height="100%">
-                                                <AreaChart data={attendanceTrendData} margin={{ left: 10, right: 10 }}>
-                                                    <defs>
-                                                        {activeAttendanceSlide.key === 'all' ? (
-                                                            attendanceTrendSlides.slice(1).map(slide => (
-                                                                <linearGradient key={slide.key} id={`attendance-trend-${slide.key}`} x1="0" y1="0" x2="0" y2="1">
-                                                                    <stop offset="5%" stopColor={slide.color} stopOpacity={0.8} />
-                                                                    <stop offset="95%" stopColor={slide.color} stopOpacity={0.05} />
-                                                                </linearGradient>
-                                                            ))
-                                                        ) : (
-                                                            <linearGradient id={activeAttendanceGradientId} x1="0" y1="0" x2="0" y2="1">
-                                                                <stop offset="5%" stopColor={activeAttendanceSlide.color} stopOpacity={0.8} />
-                                                                <stop offset="95%" stopColor={activeAttendanceSlide.color} stopOpacity={0.05} />
-                                                            </linearGradient>
-                                                        )}
-                                                    </defs>
-                                                    <CartesianGrid strokeDasharray="3 3" />
-                                                    <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} interval={selectedMonth !== "all" ? "preserveStartEnd" : 0} />
-                                                    <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
+                                                <PieChart>
                                                     <ChartTooltip
                                                         cursor={false}
-                                                        content={<ChartTooltipContent />}
+                                                        content={<ChartTooltipContent hideLabel />}
                                                     />
-                                                    {activeAttendanceSlide.key === 'all' ? (
-                                                        attendanceTrendSlides.slice(1).map(slide => (
-                                                            <Area
-                                                                key={slide.key}
-                                                                type="monotone"
-                                                                dataKey={slide.key}
-                                                                stroke={slide.color}
-                                                                fill={`url(#attendance-trend-${slide.key})`}
-                                                                strokeWidth={2}
-                                                                activeDot={{ r: 5 }}
-                                                                stackId="1"
-                                                            />
-                                                        ))
-                                                    ) : (
-                                                        <Area
-                                                            type="monotone"
-                                                            dataKey={activeAttendanceSlide.key}
-                                                            stroke={activeAttendanceSlide.color}
-                                                            fill={`url(#${activeAttendanceGradientId})`}
-                                                            strokeWidth={2}
-                                                            activeDot={{ r: 5 }}
+                                                    <Pie
+                                                        data={[
+                                                            { name: "on_time", value: filteredStatistics.on_time, fill: "hsl(142, 71%, 45%)" },
+                                                            { name: "time_adjustment", value: filteredStatistics.time_adjustment, fill: "hsl(280, 65%, 60%)" },
+                                                            { name: "tardy", value: filteredStatistics.tardy, fill: "hsl(45, 93%, 47%)" },
+                                                            { name: "half_day", value: filteredStatistics.half_day, fill: "hsl(25, 95%, 53%)" },
+                                                            { name: "ncns", value: filteredStatistics.ncns, fill: "hsl(0, 84%, 60%)" },
+                                                            { name: "advised", value: filteredStatistics.advised, fill: "hsl(221, 83%, 53%)" },
+                                                        ]}
+                                                        dataKey="value"
+                                                        nameKey="name"
+                                                        innerRadius={70}
+                                                        outerRadius={100}
+                                                        strokeWidth={2}
+                                                    >
+                                                        <Label
+                                                            content={({ viewBox }) => {
+                                                                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                                                                    return (
+                                                                        <text
+                                                                            x={viewBox.cx}
+                                                                            y={viewBox.cy}
+                                                                            textAnchor="middle"
+                                                                            dominantBaseline="middle"
+                                                                        >
+                                                                            <tspan
+                                                                                x={viewBox.cx}
+                                                                                y={viewBox.cy}
+                                                                                className="fill-foreground text-4xl font-bold"
+                                                                            >
+                                                                                {filteredStatistics.total}
+                                                                            </tspan>
+                                                                            <tspan
+                                                                                x={viewBox.cx}
+                                                                                y={(viewBox.cy || 0) + 28}
+                                                                                className="fill-muted-foreground text-sm"
+                                                                            >
+                                                                                Total
+                                                                            </tspan>
+                                                                        </text>
+                                                                    )
+                                                                }
+                                                            }}
                                                         />
-                                                    )}
-                                                </AreaChart>
-                                            </ResponsiveContainer>
-                                        </ChartContainer>
-                                        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
-                                            <div>
-                                                <p className="text-muted-foreground text-xs uppercase">Latest Period</p>
-                                                <p className="font-semibold">{latestAttendanceTrend?.month ?? 'N/A'}</p>
+                                                    </Pie>
+                                                </PieChart>
+                                            </ChartContainer>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Bar Chart - Count by Status */}
+                                    <Card className="flex flex-col">
+                                        <CardHeader className="pb-0">
+                                            <CardTitle className="text-base">Count by Status</CardTitle>
+                                            <CardDescription className="text-xs">Actual number of records per status</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="flex-1 pb-0">
+                                            <ChartContainer
+                                                config={{
+                                                    count: {
+                                                        label: "Records",
+                                                    },
+                                                }}
+                                                className="aspect-square max-h-[250px]"
+                                            >
+                                                <BarChart
+                                                    data={[
+                                                        { status: "On Time", count: filteredStatistics.on_time, fill: "hsl(142, 71%, 45%)" },
+                                                        { status: "Time Adj.", count: filteredStatistics.time_adjustment, fill: "hsl(280, 65%, 60%)" },
+                                                        { status: "Tardy", count: filteredStatistics.tardy, fill: "hsl(45, 93%, 47%)" },
+                                                        { status: "Half Day", count: filteredStatistics.half_day, fill: "hsl(25, 95%, 53%)" },
+                                                        { status: "NCNS", count: filteredStatistics.ncns, fill: "hsl(0, 84%, 60%)" },
+                                                        { status: "Advised", count: filteredStatistics.advised, fill: "hsl(221, 83%, 53%)" },
+                                                    ]}
+                                                    layout="vertical"
+                                                    margin={{ left: 10, right: 10 }}
+                                                >
+                                                    <CartesianGrid strokeDasharray="3 3" horizontal={false} />
+                                                    <YAxis
+                                                        dataKey="status"
+                                                        type="category"
+                                                        tickLine={false}
+                                                        tickMargin={10}
+                                                        axisLine={false}
+                                                        width={70}
+                                                        fontSize={12}
+                                                    />
+                                                    <XAxis type="number" hide />
+                                                    <ChartTooltip
+                                                        cursor={false}
+                                                        content={<ChartTooltipContent indicator="line" />}
+                                                    />
+                                                    <Bar dataKey="count" radius={[0, 4, 4, 0]} />
+                                                </BarChart>
+                                            </ChartContainer>
+                                        </CardContent>
+                                    </Card>
+
+                                    {/* Radial Chart - All Status Rate */}
+                                    <Card className="flex flex-col">
+                                        <CardHeader className="pb-0">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <CardTitle className="text-base">{currentRadialData.label}</CardTitle>
+                                                    <CardDescription className="text-xs">Percentage of {currentRadialData.name.toLowerCase()} attendance</CardDescription>
+                                                </div>
+                                                <div className="flex items-center gap-1">
+                                                    <button
+                                                        onClick={handlePrevStatus}
+                                                        className="p-1 rounded hover:bg-muted transition-colors"
+                                                        aria-label="Previous status"
+                                                    >
+                                                        <ChevronLeft className="h-4 w-4" />
+                                                    </button>
+                                                    <button
+                                                        onClick={handleNextStatus}
+                                                        className="p-1 rounded hover:bg-muted transition-colors"
+                                                        aria-label="Next status"
+                                                    >
+                                                        <ChevronRight className="h-4 w-4" />
+                                                    </button>
+                                                </div>
                                             </div>
-                                            <div className="flex flex-wrap gap-4">
-                                                <div>
-                                                    <p className="text-muted-foreground text-xs uppercase">Total</p>
-                                                    <p className="font-semibold">{latestAttendanceTrend?.total ?? 0}</p>
+                                        </CardHeader>
+                                        <CardContent className="flex-1 pb-0">
+                                            <ChartContainer
+                                                config={{
+                                                    rate: {
+                                                        label: currentRadialData.label,
+                                                        color: currentRadialData.fill,
+                                                    },
+                                                }}
+                                                className="mx-auto aspect-square max-h-[250px]"
+                                            >
+                                                <RadialBarChart
+                                                    data={[currentRadialData]}
+                                                    startAngle={90}
+                                                    endAngle={90 - (currentRadialData.value / 100) * 360}
+                                                    innerRadius={80}
+                                                    outerRadius={115}
+                                                >
+                                                    <PolarGrid
+                                                        gridType="circle"
+                                                        radialLines={false}
+                                                        stroke="none"
+                                                        className="first:fill-muted last:fill-background"
+                                                        polarRadius={[86, 74]}
+                                                    />
+                                                    <RadialBar dataKey="value" background cornerRadius={10} />
+                                                    <PolarRadiusAxis tick={false} tickLine={false} axisLine={false}>
+                                                        <Label
+                                                            content={({ viewBox }) => {
+                                                                if (viewBox && "cx" in viewBox && "cy" in viewBox) {
+                                                                    return (
+                                                                        <text
+                                                                            x={viewBox.cx}
+                                                                            y={viewBox.cy}
+                                                                            textAnchor="middle"
+                                                                            dominantBaseline="middle"
+                                                                        >
+                                                                            <tspan
+                                                                                x={viewBox.cx}
+                                                                                y={viewBox.cy}
+                                                                                className="fill-foreground text-4xl font-bold"
+                                                                            >
+                                                                                {currentRadialData.value.toFixed(1)}%
+                                                                            </tspan>
+                                                                            <tspan
+                                                                                x={viewBox.cx}
+                                                                                y={(viewBox.cy || 0) + 24}
+                                                                                className="fill-muted-foreground text-xs"
+                                                                            >
+                                                                                {currentRadialData.name}
+                                                                            </tspan>
+                                                                            <tspan
+                                                                                x={viewBox.cx}
+                                                                                y={(viewBox.cy || 0) + 40}
+                                                                                className="fill-muted-foreground text-xs"
+                                                                            >
+                                                                                ({currentRadialData.count} of {filteredStatistics.total})
+                                                                            </tspan>
+                                                                        </text>
+                                                                    );
+                                                                }
+                                                            }}
+                                                        />
+                                                    </PolarRadiusAxis>
+                                                </RadialBarChart>
+                                            </ChartContainer>
+                                        </CardContent>
+                                    </Card>
+                                </div>
+
+                                {/* Area Chart - Monthly Statistics */}
+                                <Card>
+                                    <CardHeader className="pb-0">
+                                        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                                            <div>
+                                                <CardTitle className="text-base">Monthly Attendance Trends</CardTitle>
+                                                <CardDescription className="text-xs">
+                                                    {activeAttendanceSlide.description}
+                                                </CardDescription>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <div className="text-sm font-medium">
+                                                    {activeAttendanceSlide.label}
                                                 </div>
-                                                <div>
-                                                    <p className="text-muted-foreground text-xs uppercase">On Time</p>
-                                                    <p className="font-semibold">{latestAttendanceTrend?.on_time ?? 0}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-muted-foreground text-xs uppercase">Tardy</p>
-                                                    <p className="font-semibold">{latestAttendanceTrend?.tardy ?? 0}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-muted-foreground text-xs uppercase">Absences</p>
-                                                    <p className="font-semibold">{(latestAttendanceTrend?.ncns ?? 0) + (latestAttendanceTrend?.advised ?? 0)}</p>
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAttendanceTrendPrev}
+                                                        className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                        aria-label="Previous trend"
+                                                    >
+                                                        <ChevronLeft className="h-4 w-4" />
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={handleAttendanceTrendNext}
+                                                        className="rounded-full border px-2 py-1 text-xs hover:bg-muted"
+                                                        aria-label="Next trend"
+                                                    >
+                                                        <ChevronRight className="h-4 w-4" />
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
-                                    </>
-                                )}
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                </motion.div>
+                                        <div className="flex flex-wrap items-center gap-2 mt-4 pt-4 border-t">
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-xs font-medium">Filter Month:</span>
+                                                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                                                    <SelectTrigger className="h-8 w-[140px] text-xs">
+                                                        <SelectValue placeholder="All Months" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="all">All Months</SelectItem>
+                                                        {monthOptions.map((month) => (
+                                                            <SelectItem key={month} value={month}>{month}</SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent className="pt-4">
+                                        {attendanceTrendData.length === 0 ? (
+                                            <div className="py-10 text-center text-muted-foreground">
+                                                No attendance data available for the selected period.
+                                            </div>
+                                        ) : (
+                                            <>
+                                                <ChartContainer
+                                                    config={
+                                                        activeAttendanceSlide.key === 'all'
+                                                            ? attendanceTrendSlides.slice(1).reduce((acc, slide) => ({ ...acc, [slide.key]: { label: slide.label, color: slide.color } }), {})
+                                                            : {
+                                                                [activeAttendanceSlide.key]: {
+                                                                    label: activeAttendanceSlide.label,
+                                                                    color: activeAttendanceSlide.color,
+                                                                }
+                                                            }
+                                                    }
+                                                    className="h-[320px] w-full"
+                                                >
+                                                    <ResponsiveContainer width="100%" height="100%">
+                                                        <AreaChart data={attendanceTrendData} margin={{ left: 10, right: 10 }}>
+                                                            <defs>
+                                                                {activeAttendanceSlide.key === 'all' ? (
+                                                                    attendanceTrendSlides.slice(1).map(slide => (
+                                                                        <linearGradient key={slide.key} id={`attendance-trend-${slide.key}`} x1="0" y1="0" x2="0" y2="1">
+                                                                            <stop offset="5%" stopColor={slide.color} stopOpacity={0.8} />
+                                                                            <stop offset="95%" stopColor={slide.color} stopOpacity={0.05} />
+                                                                        </linearGradient>
+                                                                    ))
+                                                                ) : (
+                                                                    <linearGradient id={activeAttendanceGradientId} x1="0" y1="0" x2="0" y2="1">
+                                                                        <stop offset="5%" stopColor={activeAttendanceSlide.color} stopOpacity={0.8} />
+                                                                        <stop offset="95%" stopColor={activeAttendanceSlide.color} stopOpacity={0.05} />
+                                                                    </linearGradient>
+                                                                )}
+                                                            </defs>
+                                                            <CartesianGrid strokeDasharray="3 3" />
+                                                            <XAxis dataKey="month" tickLine={false} axisLine={false} fontSize={12} interval={selectedMonth !== "all" ? "preserveStartEnd" : 0} />
+                                                            <YAxis allowDecimals={false} width={40} tickLine={false} axisLine={false} fontSize={12} />
+                                                            <ChartTooltip
+                                                                cursor={false}
+                                                                content={<ChartTooltipContent />}
+                                                            />
+                                                            {activeAttendanceSlide.key === 'all' ? (
+                                                                attendanceTrendSlides.slice(1).map(slide => (
+                                                                    <Area
+                                                                        key={slide.key}
+                                                                        type="monotone"
+                                                                        dataKey={slide.key}
+                                                                        stroke={slide.color}
+                                                                        fill={`url(#attendance-trend-${slide.key})`}
+                                                                        strokeWidth={2}
+                                                                        activeDot={{ r: 5 }}
+                                                                        stackId="1"
+                                                                    />
+                                                                ))
+                                                            ) : (
+                                                                <Area
+                                                                    type="monotone"
+                                                                    dataKey={activeAttendanceSlide.key}
+                                                                    stroke={activeAttendanceSlide.color}
+                                                                    fill={`url(#${activeAttendanceGradientId})`}
+                                                                    strokeWidth={2}
+                                                                    activeDot={{ r: 5 }}
+                                                                />
+                                                            )}
+                                                        </AreaChart>
+                                                    </ResponsiveContainer>
+                                                </ChartContainer>
+                                                <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm">
+                                                    <div>
+                                                        <p className="text-muted-foreground text-xs uppercase">Latest Period</p>
+                                                        <p className="font-semibold">{latestAttendanceTrend?.month ?? 'N/A'}</p>
+                                                    </div>
+                                                    <div className="flex flex-wrap gap-4">
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">Total</p>
+                                                            <p className="font-semibold">{latestAttendanceTrend?.total ?? 0}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">On Time</p>
+                                                            <p className="font-semibold">{latestAttendanceTrend?.on_time ?? 0}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">Tardy</p>
+                                                            <p className="font-semibold">{latestAttendanceTrend?.tardy ?? 0}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-muted-foreground text-xs uppercase">Absences</p>
+                                                            <p className="font-semibold">{(latestAttendanceTrend?.ncns ?? 0) + (latestAttendanceTrend?.advised ?? 0)}</p>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        </TabsContent>
+                    )}
+                </Tabs>
 
                 <DetailDialog
                     open={activeDialog === 'itConcernsBySite'}

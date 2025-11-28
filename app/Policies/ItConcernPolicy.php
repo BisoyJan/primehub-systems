@@ -17,10 +17,13 @@ class ItConcernPolicy
 
     /**
      * Determine whether the user can view any models.
+     * Users with create permission can view the list (they'll see only their own concerns)
+     * Users with view permission can see all concerns
      */
     public function viewAny(User $user): bool
     {
-        return $this->permissionService->userHasPermission($user, 'it_concerns.view');
+        return $this->permissionService->userHasPermission($user, 'it_concerns.view')
+            || $this->permissionService->userHasPermission($user, 'it_concerns.create');
     }
 
     /**
@@ -77,11 +80,6 @@ class ItConcernPolicy
      */
     public function resolve(User $user, ItConcern $itConcern): bool
     {
-        // Assigned users can resolve their assigned concerns
-        if ($itConcern->assigned_to === $user->id) {
-            return true;
-        }
-
         return $this->permissionService->userHasPermission($user, 'it_concerns.resolve');
     }
 

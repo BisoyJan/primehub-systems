@@ -176,7 +176,7 @@ class AttendancePointFactory extends Factory
     /**
      * Indicate that the point has expired via GBRO.
      */
-    public function expiredGbro(string $batchId = null): static
+    public function expiredGbro(?string $batchId = null): static
     {
         return $this->state(function (array $attributes) use ($batchId) {
             return [

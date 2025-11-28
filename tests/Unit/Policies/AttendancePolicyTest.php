@@ -8,6 +8,7 @@ use App\Policies\AttendancePolicy;
 use App\Services\PermissionService;
 use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 
 class AttendancePolicyTest extends TestCase
 {
@@ -23,16 +24,16 @@ class AttendancePolicyTest extends TestCase
         $this->policy = new AttendancePolicy($this->permissionService);
     }
 
-    /** @test */
-    public function super_admin_can_view_any_attendance()
+    #[Test]
+    public function super_admin_can_view_any_attendance(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin']);
 
         $this->assertTrue($this->policy->viewAny($superAdmin));
     }
 
-    /** @test */
-    public function agent_can_view_any_attendance()
+    #[Test]
+    public function agent_can_view_any_attendance(): void
     {
         // Agent has attendance.view permission
         $agent = User::factory()->create(['role' => 'Agent']);
@@ -40,8 +41,8 @@ class AttendancePolicyTest extends TestCase
         $this->assertTrue($this->policy->viewAny($agent));
     }
 
-    /** @test */
-    public function agent_can_view_their_own_attendance()
+    #[Test]
+    public function agent_can_view_their_own_attendance(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
         $attendance = Attendance::factory()->create(['user_id' => $agent->id]);
@@ -49,8 +50,8 @@ class AttendancePolicyTest extends TestCase
         $this->assertTrue($this->policy->view($agent, $attendance));
     }
 
-    /** @test */
-    public function agent_cannot_view_other_users_attendance()
+    #[Test]
+    public function agent_cannot_view_other_users_attendance(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -59,8 +60,8 @@ class AttendancePolicyTest extends TestCase
         $this->assertFalse($this->policy->view($agent, $attendance));
     }
 
-    /** @test */
-    public function it_user_can_view_their_own_attendance()
+    #[Test]
+    public function it_user_can_view_their_own_attendance(): void
     {
         $itUser = User::factory()->create(['role' => 'IT']);
         $attendance = Attendance::factory()->create(['user_id' => $itUser->id]);
@@ -68,8 +69,8 @@ class AttendancePolicyTest extends TestCase
         $this->assertTrue($this->policy->view($itUser, $attendance));
     }
 
-    /** @test */
-    public function it_user_cannot_view_other_users_attendance()
+    #[Test]
+    public function it_user_cannot_view_other_users_attendance(): void
     {
         $itUser = User::factory()->create(['role' => 'IT']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -78,8 +79,8 @@ class AttendancePolicyTest extends TestCase
         $this->assertFalse($this->policy->view($itUser, $attendance));
     }
 
-    /** @test */
-    public function utility_user_can_view_their_own_attendance()
+    #[Test]
+    public function utility_user_can_view_their_own_attendance(): void
     {
         $utilityUser = User::factory()->create(['role' => 'Utility']);
         $attendance = Attendance::factory()->create(['user_id' => $utilityUser->id]);
@@ -87,8 +88,8 @@ class AttendancePolicyTest extends TestCase
         $this->assertTrue($this->policy->view($utilityUser, $attendance));
     }
 
-    /** @test */
-    public function admin_can_view_any_attendance()
+    #[Test]
+    public function admin_can_view_any_attendance(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -97,8 +98,8 @@ class AttendancePolicyTest extends TestCase
         $this->assertTrue($this->policy->view($admin, $attendance));
     }
 
-    /** @test */
-    public function team_lead_can_view_any_attendance()
+    #[Test]
+    public function team_lead_can_view_any_attendance(): void
     {
         $teamLead = User::factory()->create(['role' => 'Team Lead']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -107,40 +108,40 @@ class AttendancePolicyTest extends TestCase
         $this->assertTrue($this->policy->view($teamLead, $attendance));
     }
 
-    /** @test */
-    public function admin_can_approve_attendance()
+    #[Test]
+    public function admin_can_approve_attendance(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
 
         $this->assertTrue($this->policy->approve($admin));
     }
 
-    /** @test */
-    public function team_lead_can_approve_attendance()
+    #[Test]
+    public function team_lead_can_approve_attendance(): void
     {
         $teamLead = User::factory()->create(['role' => 'Team Lead']);
 
         $this->assertTrue($this->policy->approve($teamLead));
     }
 
-    /** @test */
-    public function agent_cannot_approve_attendance()
+    #[Test]
+    public function agent_cannot_approve_attendance(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
 
         $this->assertFalse($this->policy->approve($agent));
     }
 
-    /** @test */
-    public function admin_can_import_attendance()
+    #[Test]
+    public function admin_can_import_attendance(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
 
         $this->assertTrue($this->policy->import($admin));
     }
 
-    /** @test */
-    public function agent_cannot_import_attendance()
+    #[Test]
+    public function agent_cannot_import_attendance(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
 

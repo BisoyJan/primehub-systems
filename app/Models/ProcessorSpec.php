@@ -39,7 +39,6 @@ class ProcessorSpec extends Model
             'thread_count' => 'integer',
             'base_clock_ghz' => 'decimal:2',
             'boost_clock_ghz' => 'decimal:2',
-            'integrated_graphics' => 'boolean',
             'tdp_watts' => 'integer',
         ];
     }

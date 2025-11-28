@@ -8,6 +8,7 @@ use App\Policies\LeaveRequestPolicy;
 use App\Services\PermissionService;
 use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 
 class LeaveRequestPolicyTest extends TestCase
 {
@@ -23,32 +24,32 @@ class LeaveRequestPolicyTest extends TestCase
         $this->policy = new LeaveRequestPolicy($this->permissionService);
     }
 
-    /** @test */
-    public function super_admin_can_view_any_leave_requests()
+    #[Test]
+    public function super_admin_can_view_any_leave_requests(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin']);
 
         $this->assertTrue($this->policy->viewAny($superAdmin));
     }
 
-    /** @test */
-    public function admin_can_view_any_leave_requests()
+    #[Test]
+    public function admin_can_view_any_leave_requests(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
 
         $this->assertTrue($this->policy->viewAny($admin));
     }
 
-    /** @test */
-    public function agent_can_view_any_leave_requests()
+    #[Test]
+    public function agent_can_view_any_leave_requests(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
 
         $this->assertTrue($this->policy->viewAny($agent));
     }
 
-    /** @test */
-    public function user_can_view_their_own_leave_request()
+    #[Test]
+    public function user_can_view_their_own_leave_request(): void
     {
         $user = User::factory()->create(['role' => 'Agent']);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $user->id]);
@@ -56,8 +57,8 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertTrue($this->policy->view($user, $leaveRequest));
     }
 
-    /** @test */
-    public function agent_cannot_view_other_users_leave_request()
+    #[Test]
+    public function agent_cannot_view_other_users_leave_request(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -66,8 +67,8 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertFalse($this->policy->view($agent, $leaveRequest));
     }
 
-    /** @test */
-    public function admin_can_view_all_leave_requests()
+    #[Test]
+    public function admin_can_view_all_leave_requests(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -76,8 +77,8 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertTrue($this->policy->view($admin, $leaveRequest));
     }
 
-    /** @test */
-    public function hr_can_view_all_leave_requests()
+    #[Test]
+    public function hr_can_view_all_leave_requests(): void
     {
         $hr = User::factory()->create(['role' => 'HR']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -86,40 +87,40 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertTrue($this->policy->view($hr, $leaveRequest));
     }
 
-    /** @test */
-    public function agent_can_create_leave_requests()
+    #[Test]
+    public function agent_can_create_leave_requests(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
 
         $this->assertTrue($this->policy->create($agent));
     }
 
-    /** @test */
-    public function admin_can_approve_leave_requests()
+    #[Test]
+    public function admin_can_approve_leave_requests(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
 
         $this->assertTrue($this->policy->approve($admin));
     }
 
-    /** @test */
-    public function agent_cannot_approve_leave_requests()
+    #[Test]
+    public function agent_cannot_approve_leave_requests(): void
     {
         $agent = User::factory()->create(['role' => 'Agent']);
 
         $this->assertFalse($this->policy->approve($agent));
     }
 
-    /** @test */
-    public function admin_can_deny_leave_requests()
+    #[Test]
+    public function admin_can_deny_leave_requests(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
 
         $this->assertTrue($this->policy->deny($admin));
     }
 
-    /** @test */
-    public function user_can_cancel_their_own_pending_leave_request()
+    #[Test]
+    public function user_can_cancel_their_own_pending_leave_request(): void
     {
         $user = User::factory()->create(['role' => 'Agent']);
         $leaveRequest = LeaveRequest::factory()->create([
@@ -130,8 +131,8 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertTrue($this->policy->cancel($user, $leaveRequest));
     }
 
-    /** @test */
-    public function user_cannot_cancel_other_users_leave_request()
+    #[Test]
+    public function user_cannot_cancel_other_users_leave_request(): void
     {
         $user = User::factory()->create(['role' => 'Agent']);
         $otherUser = User::factory()->create(['role' => 'Agent']);
@@ -143,8 +144,8 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertFalse($this->policy->cancel($user, $leaveRequest));
     }
 
-    /** @test */
-    public function user_cannot_cancel_approved_leave_request()
+    #[Test]
+    public function user_cannot_cancel_approved_leave_request(): void
     {
         $user = User::factory()->create(['role' => 'Agent']);
         $leaveRequest = LeaveRequest::factory()->create([
@@ -155,8 +156,8 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertFalse($this->policy->cancel($user, $leaveRequest));
     }
 
-    /** @test */
-    public function user_cannot_cancel_denied_leave_request()
+    #[Test]
+    public function user_cannot_cancel_denied_leave_request(): void
     {
         $user = User::factory()->create(['role' => 'Agent']);
         $leaveRequest = LeaveRequest::factory()->create([
@@ -167,8 +168,8 @@ class LeaveRequestPolicyTest extends TestCase
         $this->assertFalse($this->policy->cancel($user, $leaveRequest));
     }
 
-    /** @test */
-    public function admin_can_cancel_any_pending_leave_request()
+    #[Test]
+    public function admin_can_cancel_any_pending_leave_request(): void
     {
         $admin = User::factory()->create(['role' => 'Admin']);
         $otherUser = User::factory()->create(['role' => 'Agent']);

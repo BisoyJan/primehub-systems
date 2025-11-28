@@ -58,10 +58,15 @@ class ItConcernController extends Controller
             $query->where('priority', $request->priority);
         }
 
-        // Sort by priority (urgent first) and creation date
-        $concerns = $query->orderByRaw("FIELD(priority, 'urgent', 'high', 'medium', 'low')")
+        // Sort by priority (urgent first) only for pending/in_progress, resolved/cancelled items are sorted normally by date
+        $concerns = $query->orderByRaw("CASE
+            WHEN status IN ('pending', 'in_progress') AND priority = 'urgent' THEN 1
+            WHEN status IN ('pending', 'in_progress') AND priority = 'high' THEN 2
+            WHEN status IN ('pending', 'in_progress') AND priority = 'medium' THEN 3
+            WHEN status IN ('pending', 'in_progress') AND priority = 'low' THEN 4
+            ELSE 5 END")
             ->orderBy('created_at', 'desc')
-            ->paginate(25)
+            ->paginate(15)
             ->withQueryString();
 
         $sites = Site::orderBy('name')->get();
@@ -95,7 +100,14 @@ class ItConcernController extends Controller
         $this->authorize('create', ItConcern::class);
 
         $validated = $request->validated();
-        $validated['user_id'] = auth()->id();
+        
+        // If user is Admin/Super Admin/Team Lead, they can assign the concern to another user
+        // Otherwise, it defaults to the authenticated user
+        if (in_array(auth()->user()->role, ['Super Admin', 'Admin', 'Team Lead']) && isset($validated['user_id'])) {
+            // user_id is already in validated
+        } else {
+            $validated['user_id'] = auth()->id();
+        }
 
         $itConcern = ItConcern::create($validated);
 
@@ -209,15 +221,6 @@ class ItConcernController extends Controller
 
         $itConcern->delete();
 
-        // If Agent deletes, notify IT roles
-        if ($user->role === 'Agent' || $user->role === 'Admin') {
-            $this->notificationService->notifyItRolesAboutConcernDeletion(
-                $stationNumber,
-                $siteName,
-                $agentName
-            );
-        }
-
         return redirect()->route('it-concerns.index')
             ->with('flash', ['message' => 'IT concern deleted successfully', 'type' => 'success']);
     }
@@ -252,24 +255,6 @@ class ItConcernController extends Controller
 
         return redirect()->back()
             ->with('flash', ['message' => 'Status updated successfully', 'type' => 'success']);
-    }
-
-    /**
-     * Assign an IT concern to a user.
-     */
-    public function assign(Request $request, ItConcern $itConcern)
-    {
-        $request->validate([
-            'assigned_to' => 'required|exists:users,id',
-        ]);
-
-        $itConcern->update([
-            'assigned_to' => $request->assigned_to,
-            'status' => 'in_progress',
-        ]);
-
-        return redirect()->back()
-            ->with('flash', ['message' => 'IT concern assigned successfully', 'type' => 'success']);
     }
 
     /**
@@ -320,5 +305,37 @@ class ItConcernController extends Controller
 
         return redirect()->back()
             ->with('flash', ['message' => 'IT concern updated successfully', 'type' => 'success']);
+    }
+
+    /**
+     * Cancel an IT concern (for agents to cancel their own requests).
+     */
+    public function cancel(ItConcern $itConcern)
+    {
+        $user = auth()->user();
+
+        // Only allow owner to cancel their own pending/in_progress concerns
+        if ($itConcern->user_id !== $user->id) {
+            abort(403, 'You can only cancel your own IT concerns.');
+        }
+
+        if (!in_array($itConcern->status, ['pending', 'in_progress'])) {
+            return redirect()->back()
+                ->with('flash', ['message' => 'Only pending or in-progress concerns can be cancelled.', 'type' => 'error']);
+        }
+
+        $itConcern->update(['status' => 'cancelled']);
+
+        // Notify IT roles about the cancellation
+        $itConcern->load(['site']);
+        $this->notificationService->notifyItRolesAboutConcernCancellation(
+            $itConcern->station_number,
+            $itConcern->site->name,
+            $user->name,
+            $itConcern->id
+        );
+
+        return redirect()->back()
+            ->with('flash', ['message' => 'IT concern cancelled successfully', 'type' => 'success']);
     }
 }

@@ -23,19 +23,13 @@ class PcSpec extends Model
         'pc_number',
         'manufacturer',
         'model',
-        'chipset',
         'form_factor',
-        'socket_type',
         'memory_type',
         'ram_slots',
         'max_ram_capacity_gb',
         'max_ram_speed',
-        'pcie_slots',
         'm2_slots',
         'sata_ports',
-        'usb_ports',
-        'ethernet_speed',
-        'wifi',
         'issue',
     ];
 
@@ -45,12 +39,8 @@ class PcSpec extends Model
             'ram_slots' => 'integer',
             'max_ram_capacity_gb' => 'integer',
             'max_ram_speed' => 'integer',
-            'pcie_slots' => 'integer',
             'm2_slots' => 'integer',
             'sata_ports' => 'integer',
-            'usb_ports' => 'integer',
-            'ethernet_speed' => 'integer',
-            'wifi' => 'boolean',
         ];
     }
 
@@ -119,8 +109,10 @@ class PcSpec extends Model
             'pc_number' => $this->pc_number,
             'model' => $this->model,
             'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
-            'ram_gb' => $this->ramSpecs->sum('capacity_gb'),
-            'ram_capacities' => $this->ramSpecs->map(fn($ram) => $ram->capacity_gb . ' GB')->implode(' + '),
+            'ram_gb' => $this->ramSpecs->sum(fn($ram) => $ram->capacity_gb * ($ram->pivot->quantity ?? 1)),
+            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) => 
+                array_fill(0, $ram->pivot->quantity ?? 1, $ram->capacity_gb . ' GB')
+            )->implode(' + '),
             'ram_ddr' => $this->ramSpecs->first()?->type ?? 'N/A',
             'disk' => $this->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
             'disk_gb' => $this->diskSpecs->sum('capacity_gb'),
@@ -149,7 +141,9 @@ class PcSpec extends Model
             'model' => $this->model,
             'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
             'ram_gb' => $this->ramSpecs->map(fn($ram) => $ram->capacity_gb)->implode(' + '),
-            'ram_capacities' => $this->ramSpecs->map(fn($ram) => $ram->capacity_gb . ' GB')->implode(' + '),
+            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) => 
+                array_fill(0, $ram->pivot->quantity ?? 1, $ram->capacity_gb . ' GB')
+            )->implode(' + '),
             'ram_ddr' => $this->ramSpecs->first()?->type ?? 'N/A',
             'disk' => $this->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
             'disk_gb' => $this->diskSpecs->map(fn($disk) => $disk->capacity_gb)->implode(' + '),

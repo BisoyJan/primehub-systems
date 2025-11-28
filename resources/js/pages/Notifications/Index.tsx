@@ -10,6 +10,7 @@ import { Bell, Check, Trash2, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { BreadcrumbItem } from '@/types';
+import notificationRoutes from '@/routes/notifications';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Notifications', href: '/notifications' }
@@ -48,7 +49,7 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
 
     const handleMarkAsRead = async (notificationId: number) => {
         try {
-            await fetch(`/notifications/${notificationId}/read`, {
+            await fetch(notificationRoutes.markAsRead.url(notificationId), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -65,7 +66,7 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
 
     const handleMarkAllAsRead = async () => {
         try {
-            await fetch('/notifications/mark-all-read', {
+            await fetch(notificationRoutes.markAllRead.url(), {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -81,31 +82,39 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
     };
 
     const handleDeleteAll = async () => {
-        if (!confirm('Are you sure you want to clear all notifications? This action cannot be undone.')) {
-            return;
-        }
-
-        toast.promise(
-            fetch('/notifications/all', {
-                method: 'DELETE',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+        toast('Are you sure you want to clear all notifications?', {
+            description: 'This action cannot be undone.',
+            action: {
+                label: 'Clear All',
+                onClick: () => {
+                    toast.promise(
+                        fetch(notificationRoutes.deleteAll.url(), {
+                            method: 'DELETE',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                            },
+                        }).then(() => {
+                            router.reload({ only: ['notifications', 'unreadCount'] });
+                        }),
+                        {
+                            loading: 'Clearing all notifications...',
+                            success: 'All notifications cleared',
+                            error: 'Failed to clear notifications',
+                        }
+                    );
                 },
-            }).then(() => {
-                router.reload({ only: ['notifications', 'unreadCount'] });
-            }),
-            {
-                loading: 'Clearing all notifications...',
-                success: 'All notifications cleared',
-                error: 'Failed to clear notifications',
-            }
-        );
+            },
+            cancel: {
+                label: 'Cancel',
+                onClick: () => { },
+            },
+        });
     };
 
     const handleDelete = async (notificationId: number) => {
         toast.promise(
-            fetch(`/notifications/${notificationId}`, {
+            fetch(notificationRoutes.destroy.url(notificationId), {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -253,7 +262,7 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                                 key={page}
                                 variant={page === notifications.current_page ? 'default' : 'outline'}
                                 size="sm"
-                                onClick={() => router.visit(`/notifications?page=${page}`)}
+                                onClick={() => router.visit(notificationRoutes.index.url({ query: { page } }))}
                             >
                                 {page}
                             </Button>

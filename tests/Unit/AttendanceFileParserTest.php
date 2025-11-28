@@ -325,14 +325,14 @@ class AttendanceFileParserTest extends TestCase
     #[Test]
     public function it_ignores_scans_too_late_for_time_out()
     {
-        // Scenario: Employee left on time but has a scan 4 hours later (different shift)
+        // Scenario: Employee left on time but has a scan 7 hours later (different shift)
         $records = collect([
             ['datetime' => Carbon::parse('2025-11-10 08:00:00')], // Time IN
             ['datetime' => Carbon::parse('2025-11-10 17:05:00')], // Time OUT (on time)
-            ['datetime' => Carbon::parse('2025-11-10 21:10:00')], // Too late (>3 hours)
+            ['datetime' => Carbon::parse('2025-11-11 00:10:00')], // Too late (>6 hours)
         ]);
 
-        // Should pick 17:05, ignoring 21:10 as it's >3 hours after scheduled time
+        // Should pick 17:05, ignoring 00:10 as it's >6 hours after scheduled time
         $timeOut = $this->parser->findTimeOutRecord($records, Carbon::parse('2025-11-10'), 17, '17:00:00');
 
         $this->assertNotNull($timeOut);
@@ -347,11 +347,11 @@ class AttendanceFileParserTest extends TestCase
         $records = collect([
             ['datetime' => Carbon::parse('2025-11-10 08:00:00')], // Time IN
             ['datetime' => Carbon::parse('2025-11-10 17:10:25')], // Regular time out (10 min late)
-            ['datetime' => Carbon::parse('2025-11-10 19:00:00')], // Overtime scan (2hr late, within 3hr)
+            ['datetime' => Carbon::parse('2025-11-10 19:00:00')], // Overtime scan (2hr late, within 6hr)
         ]);
 
         // Should pick 17:10:25 (closest to scheduled 17:00), not 19:00
-        // Both are within 3-hour window, but 17:10 is closer
+        // Both are within 6-hour window, but 17:10 is closer
         $timeOut = $this->parser->findTimeOutRecord($records, Carbon::parse('2025-11-10'), 17, '17:00:00');
 
         $this->assertNotNull($timeOut);
@@ -362,13 +362,13 @@ class AttendanceFileParserTest extends TestCase
     public function it_returns_null_when_only_scan_is_too_late_indicating_missing_time_out()
     {
         // Williams missing time out: 08:00-17:00 shift
-        // Only scan after time in is 4+ hours late (21:30)
+        // Only scan after time in is 7+ hours late (way beyond 6-hour window)
         $records = collect([
             ['datetime' => Carbon::parse('2025-11-10 07:58:15')], // Time IN
-            ['datetime' => Carbon::parse('2025-11-10 21:30:00')], // Way too late (270 min = 4.5 hours)
+            ['datetime' => Carbon::parse('2025-11-11 00:30:00')], // Way too late (450 min = 7.5 hours)
         ]);
 
-        // Should return NULL - no valid time out within 3-hour window
+        // Should return NULL - no valid time out within 6-hour window
         // This indicates "Failed Bio Out" scenario
         $timeOut = $this->parser->findTimeOutRecord($records, Carbon::parse('2025-11-10'), 17, '17:00:00');
 
@@ -376,20 +376,20 @@ class AttendanceFileParserTest extends TestCase
     }
 
     #[Test]
-    public function it_accepts_three_hour_overtime_as_valid_time_out()
+    public function it_accepts_six_hour_overtime_as_valid_time_out()
     {
-        // Williams legitimate overtime: 08:00-17:00 shift, worked until 20:00
-        // 3 hours of overtime (exactly at threshold)
+        // Williams legitimate overtime: 08:00-17:00 shift, worked until 23:00
+        // 6 hours of overtime (exactly at threshold)
         $records = collect([
             ['datetime' => Carbon::parse('2025-11-10 07:58:15')], // Time IN
-            ['datetime' => Carbon::parse('2025-11-10 20:00:00')], // Time OUT (exactly 180 min = 3 hours OT)
+            ['datetime' => Carbon::parse('2025-11-10 23:00:00')], // Time OUT (exactly 360 min = 6 hours OT)
         ]);
 
-        // Should accept 20:00 as valid time out (exactly at 3-hour threshold)
+        // Should accept 23:00 as valid time out (exactly at 6-hour threshold)
         $timeOut = $this->parser->findTimeOutRecord($records, Carbon::parse('2025-11-10'), 17, '17:00:00');
 
         $this->assertNotNull($timeOut);
-        $this->assertEquals('2025-11-10 20:00:00', $timeOut['datetime']->format('Y-m-d H:i:s'));
+        $this->assertEquals('2025-11-10 23:00:00', $timeOut['datetime']->format('Y-m-d H:i:s'));
     }
 
     #[Test]

@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Database, Calendar, Filter, Clock, Trash2, Eye, Check, ChevronsUpDown, RefreshCw, Search } from "lucide-react";
+import { Database, Calendar, Clock, Trash2, Eye, Check, ChevronsUpDown, RefreshCw, Search } from "lucide-react";
 import { index as biometricRecordsIndex, show as biometricRecordsShow } from "@/routes/biometric-records";
 
 interface User {

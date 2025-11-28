@@ -25,9 +25,9 @@ class ItConcernFactory extends Factory
             'user_id' => User::factory(),
             'site_id' => Site::factory(),
             'station_number' => $this->faker->numberBetween(1, 100),
-            'category' => $this->faker->randomElement(['hardware', 'software', 'network', 'other']),
+            'category' => $this->faker->randomElement(['Hardware', 'Software', 'Network/Connectivity', 'Other']),
             'description' => $this->faker->paragraph(),
-            'status' => 'open',
+            'status' => 'pending',
             'priority' => $this->faker->randomElement(['low', 'medium', 'high', 'urgent']),
             'resolution_notes' => null,
             'resolved_at' => null,
@@ -41,7 +41,6 @@ class ItConcernFactory extends Factory
     public function assigned(): static
     {
         return $this->state(fn (array $attributes) => [
-            'assigned_to' => User::factory(),
             'status' => 'in_progress',
         ]);
     }

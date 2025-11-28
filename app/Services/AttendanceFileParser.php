@@ -225,8 +225,22 @@ class AttendanceFileParser
             return null;
         }
 
-        // Return the first (earliest) record on the target date
-        // No longer filtering by time - let suspicious pattern detection handle extreme cases
+        // If scheduled time is provided, filter out unreasonably early scans
+        // (more than 2 hours before scheduled time)
+        if ($scheduledTimeIn !== null) {
+            $scheduledDateTime = Carbon::parse($targetDate . ' ' . $scheduledTimeIn);
+            $twoHoursBefore = $scheduledDateTime->copy()->subHours(2);
+
+            $filteredRecords = $filteredRecords->filter(function ($record) use ($twoHoursBefore) {
+                return $record['datetime']->greaterThanOrEqualTo($twoHoursBefore);
+            });
+
+            if ($filteredRecords->isEmpty()) {
+                return null;
+            }
+        }
+
+        // Return the first (earliest) valid record on the target date
         return $filteredRecords->first();
     }
 
@@ -333,8 +347,7 @@ class AttendanceFileParser
 
                 // For morning time outs, accept scans BEFORE or AFTER scheduled time
                 // (employee might leave early or late)
-                // For afternoon/evening time outs, be liberal with acceptance
-                // Let suspicious pattern detection handle extreme cases
+                // For afternoon/evening time outs, liberal acceptance window
                 $isFarAfterScheduled = $diffInMinutes > 360; // 6 hours after
 
                 if ($expectedHour !== null && $expectedHour >= 0 && $expectedHour < 12) {
@@ -345,7 +358,7 @@ class AttendanceFileParser
                     }
                 } else {
                     // Afternoon/evening time out: Accept scans up to 6 hours before and 6 hours after
-                    // Liberal acceptance - let suspicious detection flag extreme cases
+                    // Liberal window to accommodate overtime and unusual scenarios
                     if ($diffInMinutes < -360 || $isFarAfterScheduled) {
                         continue;
                     }

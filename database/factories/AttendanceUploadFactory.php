@@ -21,11 +21,14 @@ class AttendanceUploadFactory extends Factory
      */
     public function definition(): array
     {
+        $date = fake()->dateTimeBetween('-7 days', 'now');
         return [
             'uploaded_by' => User::factory(),
-            'original_filename' => 'attendance_' . fake()->date() . '.txt',
+            'original_filename' => 'attendance_' . $date->format('Y-m-d') . '.txt',
             'stored_filename' => time() . '_' . fake()->uuid() . '.txt',
-            'shift_date' => fake()->dateTimeBetween('-7 days', 'now'),
+            'date_from' => $date,
+            'date_to' => $date,
+            'shift_date' => $date, // Keep for backward compatibility if needed, or remove if column dropped
             'biometric_site_id' => Site::factory(),
             'notes' => fake()->optional()->sentence(),
             'status' => 'pending',

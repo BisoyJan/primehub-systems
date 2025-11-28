@@ -6,18 +6,24 @@ use App\Models\LeaveRequest;
 use App\Models\User;
 use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use PHPUnit\Framework\Attributes\Test;
 
 /**
  * Feature tests for LeaveRequest authorization in real HTTP requests
+ * 
+ * Permissions are role-based via config/permissions.php:
+ * - Agent: leave.view, leave.create, leave.cancel
+ * - Admin: leave.view, leave.create, leave.approve, leave.deny, leave.cancel, leave.view_all
+ * - HR: leave.view, leave.create, leave.approve, leave.deny, leave.view_all
  */
 class LeaveRequestAuthorizationTest extends TestCase
 {
     use RefreshDatabase;
 
-    /** @test */
+    #[Test]
     public function agent_can_access_their_own_leave_request()
     {
-        $agent = User::factory()->create(['role' => 'Agent']);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $agent->id]);
 
         $response = $this->actingAs($agent)->get(route('leave-requests.show', $leaveRequest));
@@ -25,11 +31,11 @@ class LeaveRequestAuthorizationTest extends TestCase
         $response->assertOk();
     }
 
-    /** @test */
+    #[Test]
     public function agent_cannot_access_other_users_leave_request()
     {
-        $agent = User::factory()->create(['role' => 'Agent']);
-        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $otherUser = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $otherUser->id]);
 
         $response = $this->actingAs($agent)->get(route('leave-requests.show', $leaveRequest));
@@ -37,11 +43,11 @@ class LeaveRequestAuthorizationTest extends TestCase
         $response->assertForbidden();
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_access_any_leave_request()
     {
-        $admin = User::factory()->create(['role' => 'Admin']);
-        $agent = User::factory()->create(['role' => 'Agent']);
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $agent->id]);
 
         $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
@@ -49,10 +55,10 @@ class LeaveRequestAuthorizationTest extends TestCase
         $response->assertOk();
     }
 
-    /** @test */
+    #[Test]
     public function agent_can_cancel_their_own_pending_leave_request()
     {
-        $agent = User::factory()->create(['role' => 'Agent']);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
             'status' => 'pending',
@@ -65,11 +71,11 @@ class LeaveRequestAuthorizationTest extends TestCase
         $this->assertEquals('cancelled', $leaveRequest->fresh()->status);
     }
 
-    /** @test */
+    #[Test]
     public function agent_cannot_cancel_other_users_leave_request()
     {
-        $agent = User::factory()->create(['role' => 'Agent']);
-        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $otherUser = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $otherUser->id,
             'status' => 'pending',
@@ -82,10 +88,10 @@ class LeaveRequestAuthorizationTest extends TestCase
         $this->assertEquals('pending', $leaveRequest->fresh()->status);
     }
 
-    /** @test */
+    #[Test]
     public function agent_cannot_cancel_approved_leave_request()
     {
-        $agent = User::factory()->create(['role' => 'Agent']);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
             'status' => 'approved',
@@ -98,10 +104,10 @@ class LeaveRequestAuthorizationTest extends TestCase
         $this->assertEquals('approved', $leaveRequest->fresh()->status);
     }
 
-    /** @test */
+    #[Test]
     public function agent_cannot_approve_leave_requests()
     {
-        $agent = User::factory()->create(['role' => 'Agent']);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
             'status' => 'pending',
@@ -115,11 +121,11 @@ class LeaveRequestAuthorizationTest extends TestCase
         $response->assertForbidden();
     }
 
-    /** @test */
+    #[Test]
     public function admin_can_approve_leave_requests()
     {
-        $admin = User::factory()->create(['role' => 'Admin']);
-        $agent = User::factory()->create(['role' => 'Agent']);
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
             'status' => 'pending',
@@ -133,11 +139,11 @@ class LeaveRequestAuthorizationTest extends TestCase
         $response->assertRedirect();
     }
 
-    /** @test */
+    #[Test]
     public function hr_can_approve_leave_requests()
     {
-        $hr = User::factory()->create(['role' => 'HR']);
-        $agent = User::factory()->create(['role' => 'Agent']);
+        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
             'status' => 'pending',

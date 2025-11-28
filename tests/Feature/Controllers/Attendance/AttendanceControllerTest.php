@@ -1,6 +1,6 @@
 <?php
 
-namespace Tests\Feature;
+namespace Tests\Feature\Controllers\Attendance;
 
 use App\Models\User;
 use App\Models\Attendance;
@@ -24,7 +24,11 @@ class AttendanceControllerTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->admin = User::factory()->create(['role' => 'Admin']);
+        $this->admin = User::factory()->create([
+            'role' => 'Admin',
+            'is_approved' => true,
+            'approved_at' => now(),
+        ]);
     }
 
     #[Test]
@@ -110,7 +114,7 @@ class AttendanceControllerTest extends TestCase
 
         $response = $this->actingAs($this->admin)
             ->post(route('attendance.upload'), [
-                'shift_date' => '2025-11-05',
+                'date_from' => '2025-11-05',
                 'biometric_site_id' => $site->id,
             ]);
 
@@ -118,7 +122,7 @@ class AttendanceControllerTest extends TestCase
     }
 
     #[Test]
-    public function it_validates_shift_date_is_required()
+    public function it_validates_date_from_is_required()
     {
         Storage::fake('local');
         $file = UploadedFile::fake()->create('attendance.txt', 100);
@@ -396,7 +400,7 @@ class AttendanceControllerTest extends TestCase
         $response = $this->actingAs($this->admin)
             ->post(route('attendance.upload'), [
                 'file' => $file,
-                'shift_date' => '2025-11-05',
+                'date_from' => '2025-11-05',
                 'biometric_site_id' => $site->id,
             ]);
 
@@ -407,14 +411,14 @@ class AttendanceControllerTest extends TestCase
     #[Test]
     public function it_paginates_attendance_records()
     {
-        Attendance::factory()->count(60)->create();
+        Attendance::factory()->count(30)->create();
 
         $response = $this->actingAs($this->admin)
             ->get(route('attendance.index'));
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) =>
-            $page->has('attendances.data', 50) // Default pagination is 50
+            $page->has('attendances.data', 25) // Default pagination is 25
         );
     }
 
@@ -428,5 +432,190 @@ class AttendanceControllerTest extends TestCase
             ->get(route('attendance.index', ['needs_verification' => true]));
 
         $response->assertStatus(200);
+    }
+
+    #[Test]
+    public function it_displays_calendar_view()
+    {
+        $user = User::factory()->create();
+        Attendance::factory()->create([
+            'user_id' => $user->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('attendance.calendar', ['user_id' => $user->id]));
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) =>
+            $page->component('Attendance/Main/Calendar')
+                ->has('attendances')
+                ->has('users')
+                ->has('selectedUser')
+        );
+    }
+
+    #[Test]
+    public function it_displays_create_page()
+    {
+        $response = $this->actingAs($this->admin)
+            ->get(route('attendance.create'));
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn ($page) =>
+            $page->component('Attendance/Main/Create')
+                ->has('users')
+                ->has('campaigns')
+        );
+    }
+
+    #[Test]
+    public function it_stores_manually_created_attendance()
+    {
+        $user = User::factory()->create();
+        $shiftDate = now()->format('Y-m-d');
+
+        $response = $this->actingAs($this->admin)
+            ->post(route('attendance.store'), [
+                'user_id' => $user->id,
+                'shift_date' => $shiftDate,
+                'status' => 'on_time',
+                'actual_time_in_date' => $shiftDate,
+                'actual_time_in_time' => '09:00',
+                'actual_time_out_date' => $shiftDate,
+                'actual_time_out_time' => '18:00',
+                'notes' => 'Manual entry',
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $user->id,
+            'shift_date' => $shiftDate,
+            'status' => 'on_time',
+            'admin_verified' => true,
+        ]);
+    }
+
+    #[Test]
+    public function it_bulk_stores_attendance_records()
+    {
+        $user1 = User::factory()->create();
+        $user2 = User::factory()->create();
+        $shiftDate = now()->format('Y-m-d');
+
+        $response = $this->actingAs($this->admin)
+            ->post(route('attendance.bulkStore'), [
+                'user_ids' => [$user1->id, $user2->id],
+                'shift_date' => $shiftDate,
+                'status' => 'on_time',
+                'actual_time_in_date' => $shiftDate,
+                'actual_time_in_time' => '09:00',
+                'actual_time_out_date' => $shiftDate,
+                'actual_time_out_time' => '18:00',
+                'notes' => 'Bulk manual entry',
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $user1->id,
+            'shift_date' => $shiftDate,
+            'status' => 'on_time',
+        ]);
+
+        $this->assertDatabaseHas('attendances', [
+            'user_id' => $user2->id,
+            'shift_date' => $shiftDate,
+            'status' => 'on_time',
+        ]);
+    }
+
+    #[Test]
+    public function it_batch_verifies_attendance_records()
+    {
+        $attendance1 = Attendance::factory()->create(['status' => 'failed_bio_in', 'admin_verified' => false]);
+        $attendance2 = Attendance::factory()->create(['status' => 'failed_bio_in', 'admin_verified' => false]);
+
+        $response = $this->actingAs($this->admin)
+            ->post(route('attendance.batchVerify'), [
+                'record_ids' => [$attendance1->id, $attendance2->id],
+                'status' => 'on_time',
+                'verification_notes' => 'Batch verified',
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $attendance1->refresh();
+        $attendance2->refresh();
+
+        $this->assertTrue($attendance1->admin_verified);
+        $this->assertEquals('on_time', $attendance1->status);
+        $this->assertTrue($attendance2->admin_verified);
+        $this->assertEquals('on_time', $attendance2->status);
+    }
+
+    #[Test]
+    public function it_quick_approves_on_time_attendance()
+    {
+        $attendance = Attendance::factory()->create([
+            'status' => 'on_time',
+            'admin_verified' => false,
+            'overtime_minutes' => null,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->post(route('attendance.quickApprove', $attendance));
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $attendance->refresh();
+        $this->assertTrue($attendance->admin_verified);
+    }
+
+    #[Test]
+    public function it_fails_quick_approve_for_non_on_time_status()
+    {
+        $attendance = Attendance::factory()->create([
+            'status' => 'tardy',
+            'admin_verified' => false,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->post(route('attendance.quickApprove', $attendance));
+
+        $response->assertRedirect();
+        $response->assertSessionHas('error');
+
+        $attendance->refresh();
+        $this->assertFalse($attendance->admin_verified);
+    }
+
+    #[Test]
+    public function it_bulk_quick_approves_eligible_records()
+    {
+        $attendance1 = Attendance::factory()->create(['status' => 'on_time', 'admin_verified' => false]);
+        $attendance2 = Attendance::factory()->create(['status' => 'on_time', 'admin_verified' => false]);
+        $attendance3 = Attendance::factory()->create(['status' => 'tardy', 'admin_verified' => false]); // Ineligible
+
+        $response = $this->actingAs($this->admin)
+            ->post(route('attendance.bulkQuickApprove'), [
+                'ids' => [$attendance1->id, $attendance2->id, $attendance3->id],
+            ]);
+
+        $response->assertRedirect();
+        $response->assertSessionHas('success');
+
+        $attendance1->refresh();
+        $attendance2->refresh();
+        $attendance3->refresh();
+
+        $this->assertTrue($attendance1->admin_verified);
+        $this->assertTrue($attendance2->admin_verified);
+        $this->assertFalse($attendance3->admin_verified);
     }
 }

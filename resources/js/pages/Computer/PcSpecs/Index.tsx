@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef } from 'react';
-import type { ChangeEvent } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import { toast } from 'sonner';
@@ -7,7 +6,7 @@ import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Table,
     TableBody,
@@ -287,15 +286,6 @@ export default function Index() {
             setSelectedPcIds(prev => prev.filter(pcId => pcId !== id));
         }
     };
-
-    const handleSelectAllChange = (event: ChangeEvent<HTMLInputElement>) => {
-        handleSelectAll(event.target.checked);
-    };
-
-    const handleSelectPcChange = (id: number) => (event: ChangeEvent<HTMLInputElement>) => {
-        handleSelectPc(id, event.target.checked);
-    };
-
 
     const handleBulkDownloadAllQRCodes = () => {
         // Get CSRF token
@@ -625,11 +615,9 @@ export default function Index() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-12">
-                                        <Input
-                                            type="checkbox"
+                                        <Checkbox
                                             checked={selectedPcIds.length === pcspecs.data.length && pcspecs.data.length > 0}
-                                            onChange={handleSelectAllChange}
-                                            className="cursor-pointer"
+                                            onCheckedChange={(checked) => handleSelectAll(checked === true)}
                                             aria-label="Select all PC specs"
                                         />
                                     </TableHead>
@@ -666,11 +654,9 @@ export default function Index() {
                                     return (
                                         <TableRow key={pc.id}>
                                             <TableCell>
-                                                <input
-                                                    type="checkbox"
+                                                <Checkbox
                                                     checked={selectedPcIds.includes(pc.id)}
-                                                    onChange={handleSelectPcChange(pc.id)}
-                                                    className="cursor-pointer"
+                                                    onCheckedChange={(checked) => handleSelectPc(pc.id, checked === true)}
                                                     aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                                 />
                                             </TableCell>
@@ -914,11 +900,10 @@ export default function Index() {
                             <div key={pc.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div className="flex items-start gap-3 flex-1">
-                                        <Input
-                                            type="checkbox"
+                                        <Checkbox
                                             checked={selectedPcIds.includes(pc.id)}
-                                            onChange={handleSelectPcChange(pc.id)}
-                                            className="cursor-pointer mt-1"
+                                            onCheckedChange={(checked) => handleSelectPc(pc.id, checked === true)}
+                                            className="mt-1"
                                             aria-label={`Select PC ${pc.pc_number || pc.id}`}
                                         />
                                         <div>

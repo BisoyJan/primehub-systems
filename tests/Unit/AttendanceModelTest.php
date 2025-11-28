@@ -22,6 +22,7 @@ class AttendanceModelTest extends TestCase
         $fillable = [
             'user_id',
             'employee_schedule_id',
+            'leave_request_id',
             'shift_date',
             'scheduled_time_in',
             'scheduled_time_out',
@@ -42,6 +43,7 @@ class AttendanceModelTest extends TestCase
             'is_cross_site_bio',
             'verification_notes',
             'notes',
+            'warnings',
         ];
 
         $attendance = new Attendance();

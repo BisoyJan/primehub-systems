@@ -721,6 +721,7 @@ class AttendanceProcessor
         $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
 
         // Time in is always on the shift date itself
+        // E.g., Nov 5 shift -> time in on Nov 5
         $expectedTimeInDate = $shiftDate->copy();
 
         // Determine if time out is next day using the SAME logic as isNextDayShift()
@@ -967,12 +968,7 @@ class AttendanceProcessor
         // Only override status to 'needs_manual_review' if there's no clear status to assign
         if ($scanAnalysis['needs_review']) {
             $attendance->warnings = $scanAnalysis['warnings'];
-
-            // Only set needs_manual_review if status is ambiguous (NCNS or failed bio)
-            // Keep specific statuses like tardy, undertime, on_time, half_day_absence
-            if (in_array($attendance->status, ['ncns', 'failed_bio_in', 'failed_bio_out'])) {
-                $attendance->status = 'needs_manual_review';
-            }
+            $attendance->status = 'needs_manual_review';
 
             \Log::warning('Attendance flagged for manual review', [
                 'user_id' => $user->id,

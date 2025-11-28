@@ -682,10 +682,12 @@ class AttendanceProcessorTest extends TestCase
             ->first();
 
         $this->assertNotNull($attendance);
-        // Very late, so half_day_absence
-        $this->assertEquals('half_day_absence', $attendance->status);
+        // Very late scan (20 hours) triggers extreme pattern detection
+        // and is flagged for manual review instead of half_day_absence
+        $this->assertEquals('needs_manual_review', $attendance->status);
         $this->assertNotNull($attendance->actual_time_in);
         $this->assertNull($attendance->actual_time_out);
+        $this->assertNotEmpty($attendance->warnings); // Should have warnings
     }
 
     #[Test]

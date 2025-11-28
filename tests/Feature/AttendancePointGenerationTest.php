@@ -40,6 +40,7 @@ class AttendancePointGenerationTest extends TestCase
             'shift_date' => $shiftDate,
             'status' => 'ncns',
             'is_advised' => false,
+            'admin_verified' => true,
         ]);
 
         // Simulate upload processing
@@ -84,6 +85,7 @@ class AttendancePointGenerationTest extends TestCase
             'shift_date' => $shiftDate,
             'status' => 'half_day_absence',
             'tardy_minutes' => 45,
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -115,6 +117,7 @@ class AttendancePointGenerationTest extends TestCase
             'shift_date' => $shiftDate,
             'status' => 'tardy',
             'tardy_minutes' => 12,
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -146,6 +149,7 @@ class AttendancePointGenerationTest extends TestCase
             'shift_date' => $shiftDate,
             'status' => 'undertime',
             'undertime_minutes' => 90,
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -177,6 +181,7 @@ class AttendancePointGenerationTest extends TestCase
             'shift_date' => $shiftDate,
             'status' => 'tardy',
             'tardy_minutes' => 10,
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -209,6 +214,7 @@ class AttendancePointGenerationTest extends TestCase
             'user_id' => $user->id,
             'shift_date' => $shiftDate,
             'status' => 'on_time',
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -238,6 +244,7 @@ class AttendancePointGenerationTest extends TestCase
             'tardy_minutes' => 12,
             'scheduled_time_in' => '07:00:00',
             'actual_time_in' => $shiftDate->copy()->setTime(7, 12, 0),
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -265,12 +272,14 @@ class AttendancePointGenerationTest extends TestCase
             'user_id' => $user1->id,
             'shift_date' => $shiftDate,
             'status' => 'tardy',
+            'admin_verified' => true,
         ]);
 
         Attendance::factory()->create([
             'user_id' => $user2->id,
             'shift_date' => $shiftDate,
             'status' => 'undertime',
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -300,6 +309,7 @@ class AttendancePointGenerationTest extends TestCase
             'shift_date' => $shiftDate,
             'status' => 'ncns',
             'is_advised' => false,
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -323,6 +333,7 @@ class AttendancePointGenerationTest extends TestCase
             'user_id' => $user->id,
             'shift_date' => $shiftDate,
             'status' => 'tardy',
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -347,6 +358,7 @@ class AttendancePointGenerationTest extends TestCase
             'user_id' => $user->id,
             'shift_date' => $shiftDate,
             'status' => 'tardy',
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);
@@ -371,6 +383,7 @@ class AttendancePointGenerationTest extends TestCase
             'shift_date' => $shiftDate,
             'status' => 'ncns',
             'is_advised' => true, // Employee notified admin - advised absence
+            'admin_verified' => true,
         ]);
 
         $reflection = new \ReflectionClass($this->processor);

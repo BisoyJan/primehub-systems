@@ -363,7 +363,7 @@ class PcTransferController extends Controller
     /**
      * Show dedicated transfer page for bulk transfers
      */
-    public function transferPage(Request $request, Station $station = null)
+    public function transferPage(Request $request, ?Station $station = null)
     {
         // Get all PC specs with their station assignments
         $pcSpecs = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs', 'stations'])

@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\LeaveRequestRequest;
+use App\Models\AttendancePoint;
+use App\Models\Campaign;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\LeaveCreditService;
@@ -94,7 +96,7 @@ class LeaveRequestController extends Controller
         // For admins creating leave for employees, check if employee_id is provided
         $targetUser = $user;
         if ($isAdmin && $request->filled('employee_id')) {
-            $targetUser = \App\Models\User::findOrFail($request->employee_id);
+            $targetUser = User::findOrFail($request->employee_id);
         }
 
         // Check if user has pending leave requests
@@ -112,7 +114,7 @@ class LeaveRequestController extends Controller
         $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
 
         // Get detailed attendance violations
-        $attendanceViolations = \App\Models\AttendancePoint::where('user_id', $targetUser->id)
+        $attendanceViolations = AttendancePoint::where('user_id', $targetUser->id)
             ->where('is_expired', false)
             ->where('is_excused', false)
             ->orderBy('shift_date', 'desc')
@@ -135,7 +137,7 @@ class LeaveRequestController extends Controller
             : null;
 
         // Campaign/Department options - fetch from database + add Management
-        $campaignsFromDb = \App\Models\Campaign::orderBy('name')->pluck('name')->toArray();
+        $campaignsFromDb = Campaign::orderBy('name')->pluck('name')->toArray();
         $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
 
         // Get employee's campaign from active schedule
@@ -442,8 +444,8 @@ class LeaveRequestController extends Controller
             $this->notificationService->notifyHrRolesAboutLeaveCancellation(
                 $user->name,
                 $leaveRequest->leave_type,
-                \Carbon\Carbon::parse($leaveRequest->start_date)->format('Y-m-d'),
-                \Carbon\Carbon::parse($leaveRequest->end_date)->format('Y-m-d')
+                Carbon::parse($leaveRequest->start_date)->format('Y-m-d'),
+                Carbon::parse($leaveRequest->end_date)->format('Y-m-d')
             );
 
             DB::commit();

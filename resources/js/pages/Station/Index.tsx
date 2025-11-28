@@ -626,11 +626,9 @@ export default function StationIndex() {
                             <TableHeader>
                                 <TableRow>
                                     <TableHead className="w-12">
-                                        <Input
-                                            type="checkbox"
+                                        <Checkbox
                                             checked={selectedStationIds.length === stations.data.length && stations.data.length > 0}
-                                            onChange={e => handleSelectAllStations(e.target.checked)}
-                                            className="cursor-pointer"
+                                            onCheckedChange={(checked) => handleSelectAllStations(checked === true)}
                                         />
                                     </TableHead>
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
@@ -655,11 +653,9 @@ export default function StationIndex() {
                                             className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
                                         >
                                             <TableCell>
-                                                <Input
-                                                    type="checkbox"
+                                                <Checkbox
                                                     checked={selectedStationIds.includes(station.id)}
-                                                    onChange={e => handleSelectStation(station.id, e.target.checked)}
-                                                    className="cursor-pointer"
+                                                    onCheckedChange={(checked) => handleSelectStation(station.id, checked === true)}
                                                 />
                                             </TableCell>
 

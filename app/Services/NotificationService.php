@@ -255,17 +255,19 @@ class NotificationService
     }
 
     /**
-     * Notify IT roles about an IT concern deletion by agent.
+     * Notify IT roles about an IT concern cancellation by agent.
      */
-    public function notifyItRolesAboutConcernDeletion(string $stationNumber, string $siteName, string $agentName): void
+    public function notifyItRolesAboutConcernCancellation(string $stationNumber, string $siteName, string $agentName, int $concernId): void
     {
-        $title = 'IT Concern Deleted';
-        $message = "{$agentName} deleted the IT concern for Station {$stationNumber} at {$siteName}.";
+        $title = 'IT Concern Cancelled';
+        $message = "{$agentName} cancelled their IT concern for Station {$stationNumber} at {$siteName}.";
 
         $data = [
             'station_number' => $stationNumber,
             'site_name' => $siteName,
             'agent_name' => $agentName,
+            'concern_id' => $concernId,
+            'link' => route('it-concerns.show', $concernId)
         ];
 
         $this->notifyUsersByRole('IT', 'it_concern', $title, $message, $data);

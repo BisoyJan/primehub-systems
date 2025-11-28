@@ -26,7 +26,7 @@ class EmployeeScheduleFactory extends Factory
             'user_id' => User::factory(),
             'campaign_id' => Campaign::factory(),
             'site_id' => Site::factory(),
-            'shift_type' => fake()->randomElement(['morning_shift', 'afternoon_shift', 'night_shift', 'utility_24h']),
+            'shift_type' => fake()->randomElement(['morning_shift', 'afternoon_shift', 'night_shift', 'graveyard_shift', 'utility_24h']),
             'scheduled_time_in' => '09:00:00',
             'scheduled_time_out' => '18:00:00',
             'work_days' => ['monday', 'tuesday', 'wednesday', 'thursday', 'friday'],
@@ -79,7 +79,7 @@ class EmployeeScheduleFactory extends Factory
     public function graveyardShift(): static
     {
         return $this->state([
-            'shift_type' => 'night_shift', // Use night_shift as the closest match
+            'shift_type' => 'graveyard_shift',
             'scheduled_time_in' => '00:00:00',
             'scheduled_time_out' => '09:00:00',
         ]);

@@ -36,6 +36,18 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->onOneServer();
 
+        // Check retention policy expiry and notify admins - runs daily at 4:00 AM
+        $schedule->command('retention:check-expiry --days=7')
+            ->dailyAt('04:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // Check activity log expiry and notify admins - runs daily at 4:30 AM
+        $schedule->command('activitylog:check-expiry --days=7 --retention=90')
+            ->dailyAt('04:30')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Clean old activity logs (older than 90 days) - runs daily at 1:00 AM
         $schedule->command('activitylog:clean')->dailyAt('01:00');
     }

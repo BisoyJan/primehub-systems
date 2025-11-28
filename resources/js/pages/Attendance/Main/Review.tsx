@@ -31,7 +31,16 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, CheckCircle, Edit, Search, X } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from "@/components/ui/command";
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Edit, Search, X } from "lucide-react";
 
 interface User {
     id: number;
@@ -93,8 +102,10 @@ interface AttendancePayload {
 
 interface PageProps extends SharedData {
     attendances?: AttendancePayload;
+    employees?: User[];
     filters?: {
         search?: string;
+        user_id?: string;
         status?: string;
         date_from?: string;
         date_to?: string;
@@ -173,7 +184,7 @@ const getStatusBadges = (record: AttendanceRecord) => {
 };
 
 export default function AttendanceReview() {
-    const { attendances, filters, auth } = usePage<PageProps>().props;
+    const { attendances, employees, filters, auth } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
@@ -181,6 +192,11 @@ export default function AttendanceReview() {
     };
 
     const timeFormat = auth.user.time_format || '24';
+
+    // Employee search popover state
+    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
+    const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Review Flagged Records",
@@ -205,11 +221,20 @@ export default function AttendanceReview() {
     const highlightedRowRef = React.useRef<HTMLTableRowElement | HTMLDivElement>(null);
 
     // Search state
-    const [searchQuery, setSearchQuery] = useState(filters?.search || "");
     const [statusFilter, setStatusFilter] = useState(filters?.status || "all");
     const [verifiedFilter, setVerifiedFilter] = useState(filters?.verified || "all");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
+
+    // Filter employees based on search query
+    const filteredEmployees = (employees ?? []).filter((user) =>
+        user.name.toLowerCase().includes(employeeSearchQuery.toLowerCase())
+    );
+
+    // Get selected employee name for display
+    const selectedEmployeeName = selectedUserId
+        ? employees?.find((u) => String(u.id) === selectedUserId)?.name || "Unknown"
+        : "All Employees";
 
     const { data, setData, post, processing, errors, reset } = useForm({
         status: "",
@@ -230,9 +255,9 @@ export default function AttendanceReview() {
         router.get(
             "/attendance/review",
             {
-                search: searchQuery,
+                user_id: selectedUserId,
                 status: statusFilter === "all" ? "" : statusFilter,
-                verified: verifiedFilter === "all" ? "" : verifiedFilter,
+                verified: verifiedFilter,
                 date_from: dateFrom,
                 date_to: dateTo,
             },
@@ -244,7 +269,8 @@ export default function AttendanceReview() {
     };
 
     const handleClearFilters = () => {
-        setSearchQuery("");
+        setSelectedUserId("");
+        setEmployeeSearchQuery("");
         setStatusFilter("all");
         setVerifiedFilter("all");
         setDateFrom("");
@@ -448,16 +474,69 @@ export default function AttendanceReview() {
                     <CardContent className="pt-6">
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                                {/* Search by Name */}
+                                {/* Employee Search */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="search">Search Employee</Label>
-                                    <Input
-                                        id="search"
-                                        placeholder="Search by name..."
-                                        value={searchQuery}
-                                        onChange={(e) => setSearchQuery(e.target.value)}
-                                        onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                                    />
+                                    <Label>Employee</Label>
+                                    <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={isEmployeePopoverOpen}
+                                                className="w-full justify-between font-normal"
+                                            >
+                                                <span className="truncate">
+                                                    {selectedUserId ? selectedEmployeeName : "All Employees"}
+                                                </span>
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-full p-0" align="start">
+                                            <Command shouldFilter={false}>
+                                                <CommandInput
+                                                    placeholder="Search employee..."
+                                                    value={employeeSearchQuery}
+                                                    onValueChange={setEmployeeSearchQuery}
+                                                />
+                                                <CommandList>
+                                                    <CommandEmpty>No employee found.</CommandEmpty>
+                                                    <CommandGroup>
+                                                        <CommandItem
+                                                            value="all"
+                                                            onSelect={() => {
+                                                                setSelectedUserId("");
+                                                                setIsEmployeePopoverOpen(false);
+                                                                setEmployeeSearchQuery("");
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"}`}
+                                                            />
+                                                            All Employees
+                                                        </CommandItem>
+                                                        {filteredEmployees.map((user) => (
+                                                            <CommandItem
+                                                                key={user.id}
+                                                                value={user.name}
+                                                                onSelect={() => {
+                                                                    setSelectedUserId(String(user.id));
+                                                                    setIsEmployeePopoverOpen(false);
+                                                                    setEmployeeSearchQuery("");
+                                                                }}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={`mr-2 h-4 w-4 ${selectedUserId === String(user.id) ? "opacity-100" : "opacity-0"}`}
+                                                                />
+                                                                {user.name}
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
                                 </div>
 
                                 {/* Status Filter */}
@@ -484,7 +563,7 @@ export default function AttendanceReview() {
                                     <Label htmlFor="verified-filter">Verification Status</Label>
                                     <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
                                         <SelectTrigger id="verified-filter">
-                                            <SelectValue placeholder="All records" />
+                                            <SelectValue placeholder="All Records" />
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Records</SelectItem>
