@@ -11,6 +11,12 @@ if [ -f .env ]; then
     rm .env
 fi
 
+# Ensure no stale cached config is pointing to sqlite
+php artisan config:clear >/dev/null 2>&1 || true
+php artisan route:clear >/dev/null 2>&1 || true
+php artisan view:clear >/dev/null 2>&1 || true
+php artisan event:clear >/dev/null 2>&1 || true
+
 # Create storage symlink
 echo "[1/5] Creating storage link..."
 php artisan storage:link 2>/dev/null || true
