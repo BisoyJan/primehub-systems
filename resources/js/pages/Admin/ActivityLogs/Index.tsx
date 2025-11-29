@@ -23,12 +23,7 @@ import { useDebounce } from '@/hooks/use-debounce';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import activityLogs from '@/routes/activity-logs';
-
-interface Link {
-    url: string | null;
-    label: string;
-    active: boolean;
-}
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
 interface Activity {
     id: number;
@@ -45,7 +40,7 @@ interface Activity {
 interface Props {
     activities: {
         data: Activity[];
-        links: Link[];
+        links: PaginationLink[];
         current_page: number;
         last_page: number;
         total: number;
@@ -192,25 +187,11 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
                                 </TableBody>
                             </Table>
                         </div>
-                        <div className="mt-4">
-                            {/* Simple Pagination Implementation */}
-                            <div className="flex items-center justify-between">
-                                <div className="text-sm text-muted-foreground">
-                                    Showing {activities.data.length} of {activities.total} results
-                                </div>
-                                <div className="flex gap-2">
-                                    {activities.links.map((link: Link, i: number) => (
-                                        <Button
-                                            key={i}
-                                            variant={link.active ? "default" : "outline"}
-                                            size="sm"
-                                            disabled={!link.url}
-                                            onClick={() => link.url && router.get(link.url)}
-                                            dangerouslySetInnerHTML={{ __html: link.label }}
-                                        />
-                                    ))}
-                                </div>
+                        <div className="mt-4 flex items-center justify-between">
+                            <div className="text-sm text-muted-foreground">
+                                Showing {activities.data.length} of {activities.total} results
                             </div>
+                            <PaginationNav links={activities.links} />
                         </div>
                     </CardContent>
                 </Card>

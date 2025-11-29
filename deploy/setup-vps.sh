@@ -364,6 +364,10 @@ configure_laravel() {
     print_info "Generating Wayfinder routes..."
     sudo -u $APP_USER php artisan wayfinder:generate
 
+    # Note: HTTPS is automatically forced in production via AppServiceProvider
+    # This prevents mixed content errors when serving over SSL
+    print_info "HTTPS scheme will be forced automatically (configured in AppServiceProvider)"
+
     # Clear and cache
     sudo -u $APP_USER php artisan config:clear
     sudo -u $APP_USER php artisan route:clear
