@@ -7,7 +7,7 @@ set -euo pipefail
 APP_USER="primehub"
 APP_DIR="/var/www/primehub-systems"
 DOMAIN="example.com" # TODO: set your domain
-PHP_VERSION="8.2"
+PHP_VERSION="8.4"
 
 echo "[Provision] Updating packages"
 sudo apt-get update -y && sudo apt-get upgrade -y
