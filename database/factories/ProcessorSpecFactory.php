@@ -10,17 +10,10 @@ use Illuminate\Database\Eloquent\Factories\Factory;
  */
 class ProcessorSpecFactory extends Factory
 {
-    /**
-     * Define the model's default state.
-     *
-     * @return array<string, mixed>
-     */
     protected $model = ProcessorSpec::class;
 
     public function definition(): array
     {
-        $faker = fake();
-
         $manufacturers = ['Intel', 'AMD'];
 
         $intelmodel = [
@@ -52,18 +45,22 @@ class ProcessorSpecFactory extends Factory
             'Athlon 320GE'    => 'AM4',
         ];
 
-        $manufacturer = $faker->randomElement($manufacturers);
+        $manufacturer = $manufacturers[array_rand($manufacturers)];
 
         if ($manufacturer === 'Intel') {
-            $model = $faker->randomElement(array_keys($intelmodel));
+            $model = array_rand($intelmodel);
             $socket = $intelmodel[$model];
         } else {
-            $model = $faker->randomElement(array_keys($amdmodel));
+            $model = array_rand($amdmodel);
             $socket = $amdmodel[$model];
         }
 
-        $coreCount   = $faker->numberBetween(2, 16);
-        $threadCount = $coreCount * $faker->numberBetween(1, 2);
+        $coreCount   = rand(2, 16);
+        $threadCount = $coreCount * rand(1, 2);
+
+        $intelGraphics = ['Intel UHD 610', 'Intel UHD 730', 'Intel UHD 770'];
+        $amdGraphics = ['Radeon Vega 3', 'Radeon Vega 7', 'Radeon Vega 8'];
+        $tdpOptions = [35, 65, 95, 105, 125];
 
         return [
             'manufacturer'        => $manufacturer,
@@ -71,12 +68,12 @@ class ProcessorSpecFactory extends Factory
             'socket_type'         => $socket,
             'core_count'          => $coreCount,
             'thread_count'        => $threadCount,
-            'base_clock_ghz'      => round($faker->randomFloat(2, 2.0, 3.8), 2),
-            'boost_clock_ghz'     => round($faker->randomFloat(2, 3.5, 5.2), 2),
+            'base_clock_ghz'      => round(mt_rand(200, 380) / 100, 2),
+            'boost_clock_ghz'     => round(mt_rand(350, 520) / 100, 2),
             'integrated_graphics' => $manufacturer === 'Intel'
-                ? $faker->randomElement(['Intel UHD 610', 'Intel UHD 730', 'Intel UHD 770'])
-                : $faker->randomElement(['Radeon Vega 3', 'Radeon Vega 7', 'Radeon Vega 8']),
-            'tdp_watts'           => $faker->randomElement([35, 65, 95, 105, 125]),
+                ? $intelGraphics[array_rand($intelGraphics)]
+                : $amdGraphics[array_rand($amdGraphics)],
+            'tdp_watts'           => $tdpOptions[array_rand($tdpOptions)],
         ];
     }
 }
