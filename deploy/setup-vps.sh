@@ -384,6 +384,12 @@ configure_laravel() {
     chmod -R 775 $APP_DIR/storage
     chmod -R 775 $APP_DIR/bootstrap/cache
 
+    # Ensure log file exists with correct permissions (prevents permission denied errors)
+    mkdir -p $APP_DIR/storage/logs
+    touch $APP_DIR/storage/logs/laravel.log
+    chown $APP_USER:www-data $APP_DIR/storage/logs/laravel.log
+    chmod 664 $APP_DIR/storage/logs/laravel.log
+
     print_success "Laravel configured"
 }
 
