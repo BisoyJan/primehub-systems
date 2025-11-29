@@ -331,9 +331,9 @@ install_dependencies() {
 
     cd $APP_DIR
 
-    # PHP dependencies
+    # PHP dependencies (use update to regenerate lock file if needed)
     print_info "Installing PHP dependencies..."
-    sudo -u $APP_USER composer install --no-dev --optimize-autoloader
+    sudo -u $APP_USER composer update --no-dev --optimize-autoloader
 
     # Node dependencies
     print_info "Installing Node.js dependencies..."
@@ -359,6 +359,10 @@ configure_laravel() {
     print_header "Configuring Laravel"
 
     cd $APP_DIR
+
+    # Generate Wayfinder routes (required for frontend routing)
+    print_info "Generating Wayfinder routes..."
+    sudo -u $APP_USER php artisan wayfinder:generate
 
     # Clear and cache
     sudo -u $APP_USER php artisan config:clear
@@ -437,6 +441,10 @@ EOF
 setup_ssl() {
     print_header "Setting up SSL with Let's Encrypt"
 
+    # Install certbot first
+    print_info "Installing Certbot..."
+    apt install -y certbot python3-certbot-nginx
+
     # Check if domain resolves to this server
     SERVER_IP=$(curl -s ifconfig.me)
     DOMAIN_IP=$(dig +short $DOMAIN | head -1)
@@ -450,12 +458,6 @@ setup_ssl() {
         echo ""
         return
     fi
-
-    # Install certbot
-    snap install core 2>/dev/null || true
-    snap refresh core 2>/dev/null || true
-    snap install --classic certbot
-    ln -sf /snap/bin/certbot /usr/bin/certbot
 
     # Get certificate
     certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m $SSL_EMAIL
