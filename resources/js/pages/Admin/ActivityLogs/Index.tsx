@@ -18,7 +18,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Search, X } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
@@ -56,16 +56,32 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [event, setEvent] = useState(filters.event || 'all');
     const debouncedSearch = useDebounce(search, 300);
+    const isUserTyping = useRef(false);
+
+    // Update local state when filters prop changes (e.g., from pagination)
+    useEffect(() => {
+        if (!isUserTyping.current) {
+            setSearch(filters.search || '');
+            setEvent(filters.event || 'all');
+        }
+    }, [filters.search, filters.event]);
 
     useEffect(() => {
-        if (debouncedSearch !== filters.search) {
+        // Only trigger search if user is actively typing (not from pagination or initial load)
+        if (isUserTyping.current && debouncedSearch !== filters.search) {
             router.get(
                 activityLogs.index().url,
                 { search: debouncedSearch, event: event === 'all' ? '' : event },
                 { preserveState: true, replace: true }
             );
+            isUserTyping.current = false;
         }
     }, [debouncedSearch, filters.search, event]);
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        isUserTyping.current = true;
+        setSearch(e.target.value);
+    };
 
     const handleEventChange = (value: string) => {
         setEvent(value);
@@ -117,7 +133,7 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
                                         placeholder="Search logs..."
                                         className="pl-8"
                                         value={search}
-                                        onChange={(e) => setSearch(e.target.value)}
+                                        onChange={handleSearchChange}
                                     />
                                 </div>
                                 <Select value={event} onValueChange={handleEventChange}>
