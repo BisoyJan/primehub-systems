@@ -11,7 +11,7 @@ DOMAIN=${4:-"example.com"}
 
 APP_USER="primehub"
 APP_DIR="/var/www/primehub-systems"
-PHP_VERSION="8.2"
+PHP_VERSION="8.4"
 
 if [[ -z "$REPO_URL" || -z "$ENV_SRC" ]]; then
   echo "Usage: $0 <git_repo_url> <branch> <env_file_path> <domain>"

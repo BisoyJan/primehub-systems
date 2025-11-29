@@ -6,7 +6,7 @@ set -euo pipefail
 
 APP_USER="primehub"
 APP_DIR="/var/www/primehub-systems"
-DOMAIN="example.com" # TODO: set your domain
+DOMAIN="primehubmanagement-system.com"
 PHP_VERSION="8.4"
 
 echo "[Provision] Updating packages"
@@ -72,7 +72,7 @@ NGINX_CONF="/etc/nginx/sites-available/primehub-systems.conf"
 sudo tee ${NGINX_CONF} >/dev/null <<'EOF'
 server {
     listen 80;
-    server_name example.com www.example.com; # TODO: set domain
+    server_name primehubmanagement-system.com www.primehubmanagement-system.com;
 
     root /var/www/primehub-systems/public;
     index index.php index.html;
@@ -92,7 +92,7 @@ server {
 
     location ~ \.(php)$ {
         include snippets/fastcgi-php.conf;
-        fastcgi_pass unix:/run/php/php8.2-fpm.sock;
+        fastcgi_pass unix:/run/php/php8.4-fpm.sock;
     }
 
     location ~ /\.ht { deny all; }
