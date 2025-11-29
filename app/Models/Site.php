@@ -37,4 +37,10 @@ class Site extends Model
     {
         return $this->hasMany(Station::class);
     }
+
+    // Relationship to employee schedules
+    public function employeeSchedules()
+    {
+        return $this->hasMany(EmployeeSchedule::class);
+    }
 }

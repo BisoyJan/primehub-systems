@@ -358,11 +358,11 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
                         {/* same vs different toggle */}
                         <div className="mt-4 flex items-center gap-6">
                             <div className="flex items-center gap-2">
-                                <Input id="ram_mode_same" name="ram_mode" type="radio" className="cursor-pointer" checked={data.ram_mode === 'same'} onChange={() => setData('ram_mode', 'same')} />
+                                <input id="ram_mode_same" name="ram_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.ram_mode === 'same'} onChange={() => setData('ram_mode', 'same')} aria-label="Use same module for all slots" />
                                 <Label htmlFor="ram_mode_same">Use same module for all slots</Label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <Input id="ram_mode_diff" name="ram_mode" type="radio" className="cursor-pointer" checked={data.ram_mode === 'different'} onChange={() => setData('ram_mode', 'different')} />
+                                <input id="ram_mode_diff" name="ram_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.ram_mode === 'different'} onChange={() => setData('ram_mode', 'different')} aria-label="Use different modules" />
                                 <Label htmlFor="ram_mode_diff">Use different modules</Label>
                             </div>
                             <div className="ml-auto text-sm text-gray-600">
@@ -474,11 +474,11 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
                         {/* disk same/different toggle */}
                         <div className="mt-4 flex items-center gap-6">
                             <div className="flex items-center gap-2">
-                                <Input id="disk_mode_same" name="disk_mode" type="radio" checked={data.disk_mode === 'same'} onChange={() => setData('disk_mode', 'same')} />
+                                <input id="disk_mode_same" name="disk_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.disk_mode === 'same'} onChange={() => setData('disk_mode', 'same')} aria-label="Use same drive for all slots" />
                                 <Label htmlFor="disk_mode_same">Use same drive for all slots</Label>
                             </div>
                             <div className="flex items-center gap-2">
-                                <Input id="disk_mode_diff" name="disk_mode" type="radio" checked={data.disk_mode === 'different'} onChange={() => setData('disk_mode', 'different')} />
+                                <input id="disk_mode_diff" name="disk_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.disk_mode === 'different'} onChange={() => setData('disk_mode', 'different')} aria-label="Use different drives" />
                                 <Label htmlFor="disk_mode_diff">Use different drives</Label>
                             </div>
                         </div>
