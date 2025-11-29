@@ -2,7 +2,7 @@
 
 #######################################################################
 # PrimeHub Systems - Automated VPS Setup Script
-# 
+#
 # This script automates the complete server setup for a Laravel + React
 # application on Ubuntu 24.04 LTS (Hostinger VPS or similar).
 #
@@ -135,20 +135,20 @@ install_mysql() {
     apt install -y mysql-server
     systemctl enable mysql
     systemctl start mysql
-    
+
     # Create database and user
     print_info "Creating database and user..."
-    
+
     # Escape single quotes in password for MySQL
     ESCAPED_PASS=$(echo "$DB_PASS" | sed "s/'/''/g")
-    
+
     mysql -u root <<EOF
 CREATE DATABASE IF NOT EXISTS ${DB_NAME} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 CREATE USER IF NOT EXISTS '${DB_USER}'@'localhost' IDENTIFIED BY '${ESCAPED_PASS}';
 GRANT ALL PRIVILEGES ON ${DB_NAME}.* TO '${DB_USER}'@'localhost';
 FLUSH PRIVILEGES;
 EOF
-    
+
     print_success "MySQL installed and database created"
 }
 
@@ -186,7 +186,7 @@ install_supervisor() {
 
 create_app_user() {
     print_header "Creating Application User"
-    
+
     if id "$APP_USER" &>/dev/null; then
         print_warning "User $APP_USER already exists, skipping..."
     else
@@ -194,7 +194,7 @@ create_app_user() {
         usermod -a -G www-data $APP_USER
         print_success "User $APP_USER created"
     fi
-    
+
     # Create app directory
     mkdir -p $APP_DIR
     chown -R $APP_USER:www-data $APP_DIR
@@ -204,9 +204,9 @@ create_app_user() {
 
 setup_github_ssh() {
     print_header "Setting up GitHub SSH Key"
-    
+
     SSH_DIR="/home/$APP_USER/.ssh"
-    
+
     if [ -f "$SSH_DIR/id_ed25519" ]; then
         print_warning "SSH key already exists"
     else
@@ -216,7 +216,7 @@ setup_github_ssh() {
         chmod 600 "$SSH_DIR/id_ed25519"
         chmod 644 "$SSH_DIR/id_ed25519.pub"
     fi
-    
+
     echo ""
     print_warning "Add this SSH key to your GitHub account:"
     echo ""
@@ -225,16 +225,16 @@ setup_github_ssh() {
     print_info "Go to: GitHub → Settings → SSH and GPG keys → New SSH key"
     echo ""
     read -p "Press Enter after you've added the key to GitHub..."
-    
+
     # Add GitHub to known hosts
     sudo -u $APP_USER ssh-keyscan -t ed25519 github.com >> "$SSH_DIR/known_hosts" 2>/dev/null
-    
+
     print_success "GitHub SSH key configured"
 }
 
 clone_repository() {
     print_header "Cloning Repository"
-    
+
     if [ -d "$APP_DIR/.git" ]; then
         print_warning "Repository already exists, pulling latest..."
         cd $APP_DIR
@@ -243,24 +243,24 @@ clone_repository() {
         cd $APP_DIR
         sudo -u $APP_USER git clone $GITHUB_REPO .
     fi
-    
+
     # Add safe directory for git
     git config --global --add safe.directory $APP_DIR
-    
+
     print_success "Repository cloned"
 }
 
 create_env_file() {
     print_header "Creating Environment File"
-    
+
     if [ -f "$APP_DIR/.env" ]; then
         print_warning ".env file already exists, skipping..."
         return
     fi
-    
+
     # Generate a new APP_KEY
     APP_KEY=$(openssl rand -base64 32)
-    
+
     cat > "$APP_DIR/.env" <<EOF
 APP_NAME=PrimeHub
 APP_ENV=production
@@ -318,72 +318,72 @@ MAIL_FROM_NAME="\${APP_NAME}"
 
 VITE_APP_NAME="\${APP_NAME}"
 EOF
-    
+
     chown $APP_USER:www-data "$APP_DIR/.env"
     chmod 640 "$APP_DIR/.env"
-    
+
     print_success "Environment file created"
     print_warning "Remember to update mail settings in .env!"
 }
 
 install_dependencies() {
     print_header "Installing Dependencies"
-    
+
     cd $APP_DIR
-    
+
     # PHP dependencies
     print_info "Installing PHP dependencies..."
     sudo -u $APP_USER composer install --no-dev --optimize-autoloader
-    
+
     # Node dependencies
     print_info "Installing Node.js dependencies..."
     sudo -u $APP_USER pnpm install
-    
+
     # Build frontend
     print_info "Building frontend..."
     sudo -u $APP_USER pnpm run build
-    
+
     print_success "Dependencies installed and frontend built"
 }
 
 run_migrations() {
     print_header "Running Database Migrations"
-    
+
     cd $APP_DIR
     sudo -u $APP_USER php artisan migrate --force
-    
+
     print_success "Migrations completed"
 }
 
 configure_laravel() {
     print_header "Configuring Laravel"
-    
+
     cd $APP_DIR
-    
+
     # Clear and cache
     sudo -u $APP_USER php artisan config:clear
     sudo -u $APP_USER php artisan route:clear
     sudo -u $APP_USER php artisan view:clear
     sudo -u $APP_USER php artisan config:cache
     sudo -u $APP_USER php artisan route:cache
-    
+
     # Storage link
     sudo -u $APP_USER php artisan storage:link 2>/dev/null || true
-    
+
     # Set permissions
     chown -R $APP_USER:www-data $APP_DIR/storage
     chown -R $APP_USER:www-data $APP_DIR/bootstrap/cache
     chmod -R 775 $APP_DIR/storage
     chmod -R 775 $APP_DIR/bootstrap/cache
-    
+
     print_success "Laravel configured"
 }
 
 configure_nginx() {
     print_header "Configuring Nginx"
-    
+
     NGINX_CONF="/etc/nginx/sites-available/primehub-systems.conf"
-    
+
     cat > $NGINX_CONF <<EOF
 server {
     listen 80;
@@ -422,25 +422,25 @@ server {
     }
 }
 EOF
-    
+
     # Enable site
     ln -sf $NGINX_CONF /etc/nginx/sites-enabled/
     rm -f /etc/nginx/sites-enabled/default
-    
+
     # Test and restart
     nginx -t
     systemctl restart nginx
-    
+
     print_success "Nginx configured"
 }
 
 setup_ssl() {
     print_header "Setting up SSL with Let's Encrypt"
-    
+
     # Check if domain resolves to this server
     SERVER_IP=$(curl -s ifconfig.me)
     DOMAIN_IP=$(dig +short $DOMAIN | head -1)
-    
+
     if [ "$SERVER_IP" != "$DOMAIN_IP" ]; then
         print_warning "Domain $DOMAIN does not point to this server ($SERVER_IP)"
         print_warning "Domain resolves to: $DOMAIN_IP"
@@ -450,22 +450,22 @@ setup_ssl() {
         echo ""
         return
     fi
-    
+
     # Install certbot
     snap install core 2>/dev/null || true
     snap refresh core 2>/dev/null || true
     snap install --classic certbot
     ln -sf /snap/bin/certbot /usr/bin/certbot
-    
+
     # Get certificate
     certbot --nginx -d $DOMAIN -d www.$DOMAIN --non-interactive --agree-tos -m $SSL_EMAIL
-    
+
     print_success "SSL certificate installed"
 }
 
 configure_supervisor() {
     print_header "Configuring Supervisor for Queue Workers"
-    
+
     cat > /etc/supervisor/conf.d/primehub-queue.conf <<EOF
 [program:primehub-queue]
 command=/usr/bin/php ${APP_DIR}/artisan queue:work --sleep=3 --tries=3 --timeout=90
@@ -477,39 +477,39 @@ redirect_stderr=true
 stdout_logfile=/var/log/supervisor/primehub-queue.log
 stopwaitsecs=3600
 EOF
-    
+
     supervisorctl reread
     supervisorctl update
     supervisorctl start primehub-queue 2>/dev/null || true
-    
+
     print_success "Supervisor configured"
 }
 
 configure_cron() {
     print_header "Configuring Laravel Scheduler (Cron)"
-    
+
     CRON_JOB="* * * * * cd ${APP_DIR} && php artisan schedule:run >> /dev/null 2>&1"
-    
+
     # Add cron job if it doesn't exist
     (crontab -u $APP_USER -l 2>/dev/null | grep -v "schedule:run"; echo "$CRON_JOB") | crontab -u $APP_USER -
-    
+
     print_success "Cron job configured"
 }
 
 restart_services() {
     print_header "Restarting All Services"
-    
+
     systemctl restart php8.4-fpm
     systemctl restart nginx
     systemctl restart supervisor
     systemctl restart redis-server
-    
+
     print_success "All services restarted"
 }
 
 print_summary() {
     print_header "🎉 Setup Complete!"
-    
+
     echo ""
     echo -e "${GREEN}Your PrimeHub Systems application is now deployed!${NC}"
     echo ""
@@ -547,9 +547,9 @@ main() {
     echo -e "${BLUE}║                                                           ║${NC}"
     echo -e "${BLUE}╚═══════════════════════════════════════════════════════════╝${NC}"
     echo ""
-    
+
     check_root
-    
+
     echo -e "${YELLOW}This script will set up your VPS with:${NC}"
     echo "  • Nginx, PHP 8.4, MySQL, Redis, Supervisor"
     echo "  • Node.js, pnpm, Composer"
@@ -561,15 +561,15 @@ main() {
     echo "  • GitHub: ${GITHUB_REPO}"
     echo "  • Database: ${DB_NAME}"
     echo ""
-    
+
     read -p "Continue with setup? (y/n): " -n 1 -r
     echo ""
-    
+
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         echo "Setup cancelled."
         exit 0
     fi
-    
+
     # Run all setup steps
     update_system
     install_essentials
@@ -593,7 +593,7 @@ main() {
     configure_supervisor
     configure_cron
     restart_services
-    
+
     print_summary
 }
 
