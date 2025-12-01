@@ -46,6 +46,7 @@ export function DataTable<T extends { id: number }>({ columns, data, rowDisabled
                                         checked={selected}
                                         onChange={() => !disabled && onRowSelect?.(row)}
                                         disabled={disabled}
+                                        aria-label={`Select row ${row.id}`}
                                     />
                                 </TableCell>
                             )}
