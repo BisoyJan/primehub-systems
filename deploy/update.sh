@@ -25,7 +25,7 @@ echo ""
 echo "2. Pulling latest code from GitHub..."
 cd $APP_DIR
 sudo -u $APP_USER git fetch --all
-sudo -u $APP_USER git reset --hard origin/$BRANCH
+sudo -u $APP_USER git pull origin $BRANCH
 echo "   ✓ Code updated"
 echo ""
 
