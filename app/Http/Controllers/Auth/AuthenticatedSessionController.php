@@ -32,6 +32,19 @@ class AuthenticatedSessionController extends Controller
     {
         $user = $request->validateCredentials();
 
+        // Check if the user's account is soft deleted
+        if ($user->isSoftDeleted()) {
+            // If deletion is pending confirmation, allow reactivation
+            if ($user->isDeletionPending()) {
+                return redirect()->route('account.reactivate.show', ['email' => $user->email]);
+            }
+
+            // If deletion is confirmed, don't allow login
+            return back()->withErrors([
+                'email' => 'This account has been permanently deleted. Please contact an administrator.',
+            ]);
+        }
+
         if (Features::enabled(Features::twoFactorAuthentication()) && $user->hasEnabledTwoFactorAuthentication()) {
             $request->session()->put([
                 'login.id' => $user->getKey(),

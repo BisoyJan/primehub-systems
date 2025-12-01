@@ -261,22 +261,21 @@ export default function AccountManagement({
                                 Delete Account
                             </CardTitle>
                             <CardDescription>
-                                Permanently delete your account and all associated data
+                                Request deletion of your account
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-4">
-                                <div className="rounded-lg border border-red-200 bg-red-50 p-4 dark:border-red-200/10 dark:bg-red-700/10">
+                                <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 dark:border-amber-200/10 dark:bg-amber-700/10">
                                     <div className="flex gap-3">
-                                        <AlertTriangle className="h-5 w-5 flex-shrink-0 text-red-600 dark:text-red-100" />
+                                        <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-100" />
                                         <div className="space-y-1">
-                                            <p className="font-medium text-red-600 dark:text-red-100">
-                                                Warning: This action cannot be undone
+                                            <p className="font-medium text-amber-600 dark:text-amber-100">
+                                                Account deletion requires admin confirmation
                                             </p>
-                                            <p className="text-sm text-red-700 dark:text-red-200">
-                                                Once your account is deleted, all of its
-                                                resources and data will be permanently
-                                                removed. Please proceed with caution.
+                                            <p className="text-sm text-amber-700 dark:text-amber-200">
+                                                When you delete your account, it will be marked for deletion and require confirmation from an administrator (Admin, or IT).
+                                                Until confirmed, you can still reactivate your account by logging in and setting a new password.
                                             </p>
                                         </div>
                                     </div>
@@ -297,11 +296,9 @@ export default function AccountManagement({
                                             account?
                                         </DialogTitle>
                                         <DialogDescription>
-                                            Once your account is deleted, all of its
-                                            resources and data will be permanently
-                                            deleted. Please enter your password to
-                                            confirm you would like to permanently delete
-                                            your account.
+                                            Your account will be marked for deletion and will require confirmation from an administrator.
+                                            Until confirmed, you can reactivate your account by logging in with a new password.
+                                            Please enter your password to confirm this action.
                                         </DialogDescription>
 
                                         <Form

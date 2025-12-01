@@ -373,4 +373,57 @@ class NotificationService
         $this->notifyUsersByRole('Admin', 'medication_request', $title, $message, $data);
         $this->notifyUsersByRole('Super Admin', 'medication_request', $title, $message, $data);
     }
+
+    /**
+     * Notify admin roles about an account deletion request.
+     */
+    public function notifyAccountDeletionRequest(string $accountName, string $deletedByName, int $accountId): void
+    {
+        $title = 'Account Deletion Request';
+        $message = "{$deletedByName} has marked the account '{$accountName}' for deletion. Please review and confirm.";
+
+        $data = [
+            'account_name' => $accountName,
+            'deleted_by' => $deletedByName,
+            'account_id' => $accountId,
+            'link' => route('accounts.index', ['status' => 'pending_deletion'])
+        ];
+
+        $this->notifyUsersByRole('Super Admin', 'account_deletion', $title, $message, $data);
+        $this->notifyUsersByRole('Admin', 'account_deletion', $title, $message, $data);
+        $this->notifyUsersByRole('IT', 'account_deletion', $title, $message, $data);
+    }
+
+    /**
+     * Notify admin roles about an account reactivation.
+     */
+    public function notifyAccountReactivated(string $accountName, int $accountId): void
+    {
+        $title = 'Account Reactivated';
+        $message = "The account '{$accountName}' has been reactivated by the user.";
+
+        $data = [
+            'account_name' => $accountName,
+            'account_id' => $accountId,
+            'link' => route('accounts.index')
+        ];
+
+        $this->notifyUsersByRole('Super Admin', 'account_reactivation', $title, $message, $data);
+        $this->notifyUsersByRole('Admin', 'account_reactivation', $title, $message, $data);
+        $this->notifyUsersByRole('IT', 'account_reactivation', $title, $message, $data);
+    }
+
+    /**
+     * Notify a user that their account has been restored by an admin.
+     */
+    public function notifyAccountRestored(User|int $user): Notification
+    {
+        return $this->create(
+            $user,
+            'account_restored',
+            'Account Restored',
+            'Your account has been restored by an administrator. You can now continue using the system.',
+            null
+        );
+    }
 }

@@ -459,6 +459,38 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Delete a leave request (Admin/HR only).
+     */
+    public function destroy(LeaveRequest $leaveRequest)
+    {
+        $this->authorize('delete', $leaveRequest);
+
+        $leaveCreditService = $this->leaveCreditService;
+
+        DB::beginTransaction();
+        try {
+            // Restore credits if it was approved and credits were deducted
+            if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
+                $leaveCreditService->restoreCredits($leaveRequest);
+            }
+
+            $leaveRequest->delete();
+
+            DB::commit();
+
+            return redirect()->route('leave-requests.index')
+                ->with('success', 'Leave request deleted successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Leave request deletion failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+            return back()->withErrors(['error' => 'Failed to delete leave request. Please try again.']);
+        }
+    }
+
+    /**
      * Get leave credits balance (API endpoint for real-time display).
      */
     public function getCreditsBalance(Request $request)

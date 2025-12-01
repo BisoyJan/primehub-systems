@@ -16,9 +16,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute } from '@/routes/leave-requests';
+import { usePermission } from '@/hooks/use-permission';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -55,6 +56,8 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const { can } = usePermission();
 
     const approveForm = useForm({ review_notes: '' });
     const denyForm = useForm({ review_notes: '' });
@@ -85,6 +88,18 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                 onSuccess: () => {
                     setShowCancelDialog(false);
                     toast.success('Leave request cancelled');
+                },
+            }
+        );
+    };
+
+    const handleDelete = () => {
+        router.delete(
+            leaveDestroyRoute(leaveRequest.id).url,
+            {
+                onSuccess: () => {
+                    setShowDeleteDialog(false);
+                    toast.success('Leave request deleted');
                 },
             }
         );
@@ -141,6 +156,12 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                                     Cancel Request
                                 </Button>
                             </Can>
+                        )}
+                        {can('leave.delete') && (
+                            <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
+                                <Trash2 className="mr-2 h-4 w-4" />
+                                Delete
+                            </Button>
                         )}
                     </div>
                 </div>
@@ -362,6 +383,26 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                         </Button>
                         <Button variant="destructive" onClick={handleCancel}>
                             Yes, Cancel Request
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Dialog */}
+            <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Delete Leave Request</DialogTitle>
+                        <DialogDescription>
+                            Are you sure you want to permanently delete this leave request? This action cannot be undone and will remove all associated data.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button variant="destructive" onClick={handleDelete}>
+                            Delete
                         </Button>
                     </DialogFooter>
                 </DialogContent>

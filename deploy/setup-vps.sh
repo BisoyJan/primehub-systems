@@ -312,8 +312,13 @@ REDIS_HOST=127.0.0.1
 REDIS_PASSWORD=null
 REDIS_PORT=6379
 
-MAIL_MAILER=log
-MAIL_FROM_ADDRESS=noreply@${DOMAIN}
+MAIL_MAILER=smtp
+MAIL_HOST=smtp.dreamhost.com
+MAIL_PORT=465
+MAIL_USERNAME=admin@primehubmail.com
+MAIL_PASSWORD=prm.nimda@1
+MAIL_ENCRYPTION=ssl
+MAIL_FROM_ADDRESS=admin@primehubmail.com
 MAIL_FROM_NAME="\${APP_NAME}"
 
 VITE_APP_NAME="\${APP_NAME}"
@@ -322,8 +327,7 @@ EOF
     chown $APP_USER:www-data "$APP_DIR/.env"
     chmod 640 "$APP_DIR/.env"
 
-    print_success "Environment file created"
-    print_warning "Remember to update mail settings in .env!"
+    print_success "Environment file created with production SMTP credentials"
 }
 
 install_dependencies() {

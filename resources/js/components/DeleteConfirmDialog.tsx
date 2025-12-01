@@ -20,6 +20,7 @@ interface DeleteConfirmDialogProps {
     triggerLabel?: string;
     triggerClassName?: string;
     disabled?: boolean;
+    trigger?: React.ReactNode;
 }
 
 /**
@@ -33,6 +34,12 @@ interface DeleteConfirmDialogProps {
  *   title="Delete RAM Specification"
  *   description="Are you sure you want to delete this RAM specification? This action cannot be undone."
  * />
+ *
+ * // With custom trigger
+ * <DeleteConfirmDialog
+ *   onConfirm={() => handleDelete(item.id)}
+ *   trigger={<Button variant="destructive">Custom Delete</Button>}
+ * />
  * ```
  */
 export function DeleteConfirmDialog({
@@ -41,20 +48,25 @@ export function DeleteConfirmDialog({
     description = "This action cannot be undone. This will permanently delete this item from the database.",
     triggerLabel = "Delete",
     triggerClassName = "",
-    disabled = false
+    disabled = false,
+    trigger
 }: DeleteConfirmDialogProps) {
     return (
         <AlertDialog>
             <AlertDialogTrigger asChild>
-                <Button
-                    variant="destructive"
-                    size="sm"
-                    className={triggerClassName}
-                    disabled={disabled}
-                >
-                    <Trash className="w-4 h-4 mr-1" />
-                    {triggerLabel}
-                </Button>
+                {trigger ? (
+                    trigger
+                ) : (
+                    <Button
+                        variant="destructive"
+                        size="sm"
+                        className={triggerClassName}
+                        disabled={disabled}
+                    >
+                        <Trash className="w-4 h-4 mr-1" />
+                        {triggerLabel}
+                    </Button>
+                )}
             </AlertDialogTrigger>
             <AlertDialogContent>
                 <AlertDialogHeader>

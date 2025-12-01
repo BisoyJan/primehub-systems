@@ -39,6 +39,10 @@ class User extends Authenticatable
         'hired_date',
         'is_approved',
         'approved_at',
+        'deleted_at',
+        'deleted_by',
+        'deletion_confirmed_at',
+        'deletion_confirmed_by',
     ];
 
     /**
@@ -71,6 +75,8 @@ class User extends Authenticatable
             'hired_date' => 'date',
             'is_approved' => 'boolean',
             'approved_at' => 'datetime',
+            'deleted_at' => 'datetime',
+            'deletion_confirmed_at' => 'datetime',
         ];
     }
 
@@ -219,5 +225,83 @@ class User extends Authenticatable
     public function getPermissions(): array
     {
         return app(\App\Services\PermissionService::class)->getPermissionsForRole($this->role);
+    }
+
+    /**
+     * Check if the user is soft deleted (marked for deletion).
+     *
+     * @return bool
+     */
+    public function isSoftDeleted(): bool
+    {
+        return $this->deleted_at !== null;
+    }
+
+    /**
+     * Check if the deletion is pending confirmation.
+     *
+     * @return bool
+     */
+    public function isDeletionPending(): bool
+    {
+        return $this->deleted_at !== null && $this->deletion_confirmed_at === null;
+    }
+
+    /**
+     * Check if the deletion has been confirmed.
+     *
+     * @return bool
+     */
+    public function isDeletionConfirmed(): bool
+    {
+        return $this->deleted_at !== null && $this->deletion_confirmed_at !== null;
+    }
+
+    /**
+     * Get the user who deleted this account.
+     */
+    public function deletedBy()
+    {
+        return $this->belongsTo(User::class, 'deleted_by');
+    }
+
+    /**
+     * Get the user who confirmed the deletion.
+     */
+    public function deletionConfirmedBy()
+    {
+        return $this->belongsTo(User::class, 'deletion_confirmed_by');
+    }
+
+    /**
+     * Scope to include soft deleted users.
+     */
+    public function scopeWithSoftDeleted($query)
+    {
+        return $query;
+    }
+
+    /**
+     * Scope to only get active (non-deleted) users.
+     */
+    public function scopeActive($query)
+    {
+        return $query->whereNull('deleted_at');
+    }
+
+    /**
+     * Scope to only get soft deleted users.
+     */
+    public function scopeOnlyDeleted($query)
+    {
+        return $query->whereNotNull('deleted_at');
+    }
+
+    /**
+     * Scope to only get users pending deletion confirmation.
+     */
+    public function scopePendingDeletion($query)
+    {
+        return $query->whereNotNull('deleted_at')->whereNull('deletion_confirmed_at');
     }
 }

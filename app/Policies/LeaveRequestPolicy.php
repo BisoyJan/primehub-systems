@@ -92,4 +92,18 @@ class LeaveRequestPolicy
 
         return false;
     }
+
+    /**
+     * Determine whether the user can delete the leave request.
+     */
+    public function delete(User $user, LeaveRequest $leaveRequest): bool
+    {
+        // Only admins/HR with delete permission can delete leave requests
+        if (!$this->permissionService->userHasPermission($user, 'leave.delete')) {
+            return false;
+        }
+
+        // Only Super Admin, Admin, and HR can delete
+        return in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+    }
 }

@@ -131,6 +131,15 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::post('accounts/{account}/unapprove', [AccountController::class, 'unapprove'])
         ->middleware('permission:accounts.edit')
         ->name('accounts.unapprove');
+    Route::post('accounts/{account}/confirm-delete', [AccountController::class, 'confirmDelete'])
+        ->middleware('permission:accounts.delete')
+        ->name('accounts.confirmDelete');
+    Route::post('accounts/{account}/restore', [AccountController::class, 'restore'])
+        ->middleware('permission:accounts.edit')
+        ->name('accounts.restore');
+    Route::delete('accounts/{account}/force-delete', [AccountController::class, 'forceDelete'])
+        ->middleware('permission:accounts.delete')
+        ->name('accounts.forceDelete');
 
     // Activity Logs
     Route::get('activity-logs', [ActivityLogController::class, 'index'])
@@ -258,7 +267,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
 
     // Form Requests - Leave Requests
     Route::prefix('form-requests/leave-requests')->name('leave-requests.')
-        ->middleware('permission:leave.view,leave.create,leave.approve,leave.deny,leave.cancel')
+        ->middleware('permission:leave.view,leave.create,leave.approve,leave.deny,leave.cancel,leave.delete')
         ->group(function () {
             Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
             Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
@@ -267,6 +276,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
         Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
         Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
+        Route::delete('/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->name('destroy');
         Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
         Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
     });

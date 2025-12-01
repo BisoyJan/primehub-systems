@@ -30,13 +30,14 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Eye, Ban, RefreshCw, Search, Filter } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Search, Filter, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { usePermission } from '@/hooks/use-permission';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import PaginationNav from '@/components/pagination-nav';
-import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -100,10 +101,12 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { can } = usePermission();
 
     const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
     const [filterType, setFilterType] = useState(filters.type || 'all');
     const [showCancelDialog, setShowCancelDialog] = useState(false);
+    const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
@@ -156,6 +159,11 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
         setShowCancelDialog(true);
     };
 
+    const handleDeleteRequest = (id: number) => {
+        setSelectedLeaveId(id);
+        setShowDeleteDialog(true);
+    };
+
     const confirmCancel = () => {
         if (!selectedLeaveId) return;
 
@@ -170,6 +178,24 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                 },
                 onError: () => {
                     toast.error('Failed to cancel leave request');
+                }
+            }
+        );
+    };
+
+    const confirmDelete = () => {
+        if (!selectedLeaveId) return;
+
+        router.delete(
+            leaveDestroyRoute(selectedLeaveId).url,
+            {
+                onSuccess: () => {
+                    toast.success('Leave request deleted successfully');
+                    setShowDeleteDialog(false);
+                    setSelectedLeaveId(null);
+                },
+                onError: () => {
+                    toast.error('Failed to delete leave request');
                 }
             }
         );
@@ -347,6 +373,15 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                                             <Ban className="h-4 w-4 text-red-500" />
                                                         </Button>
                                                     )}
+                                                    {can('leave.delete') && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => handleDeleteRequest(request.id)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             </TableCell>
                                         </TableRow>
@@ -420,6 +455,17 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                             Cancel
                                         </Button>
                                     )}
+                                    {can('leave.delete') && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleDeleteRequest(request.id)}
+                                            className="flex-1"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                                            Delete
+                                        </Button>
+                                    )}
                                 </div>
                             </div>
                         ))
@@ -446,6 +492,24 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                         <AlertDialogCancel onClick={() => setSelectedLeaveId(null)}>No, Keep It</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmCancel} className="bg-red-600 hover:bg-red-700">
                             Yes, Cancel Request
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Leave Request</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to permanently delete this leave request? This action cannot be undone and will remove all associated data.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setSelectedLeaveId(null)}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">
+                            Delete
                         </AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>

@@ -36,9 +36,15 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->onOneServer();
 
-        // Check retention policy expiry and notify admins - runs daily at 4:00 AM
+        // Check biometric retention policy expiry and notify admins - runs daily at 4:00 AM
         $schedule->command('retention:check-expiry --days=7')
             ->dailyAt('04:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
+        // Check form request retention policy expiry and notify admins - runs daily at 4:15 AM
+        $schedule->command('form-request:check-expiry --days=7')
+            ->dailyAt('04:15')
             ->withoutOverlapping()
             ->onOneServer();
 
