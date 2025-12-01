@@ -285,7 +285,8 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                     </div>
                 </div>
 
-                <div className="shadow rounded-md overflow-hidden bg-card">
+                {/* Desktop Table View */}
+                <div className="hidden md:block shadow rounded-md overflow-hidden bg-card">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
@@ -357,6 +358,75 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
 
                     {paginationLinks.length > 0 && (
                         <div className="border-t px-4 py-3 flex justify-center">
+                            <PaginationNav links={paginationLinks} />
+                        </div>
+                    )}
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                    {leaveRequests.data.length === 0 ? (
+                        <div className="py-12 text-center text-muted-foreground border rounded-lg bg-card">
+                            No leave requests found
+                        </div>
+                    ) : (
+                        leaveRequests.data.map((request) => (
+                            <div key={request.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        {isAdmin && (
+                                            <div className="text-lg font-semibold">{request.user.name}</div>
+                                        )}
+                                        <div className="flex items-center gap-2 mt-1">
+                                            {getLeaveTypeBadge(request.leave_type)}
+                                        </div>
+                                    </div>
+                                    {getStatusBadge(request.status)}
+                                </div>
+
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Start Date:</span>
+                                        <span className="font-medium">{format(parseISO(request.start_date), 'MMM d, yyyy')}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">End Date:</span>
+                                        <span className="font-medium">{format(parseISO(request.end_date), 'MMM d, yyyy')}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Days Requested:</span>
+                                        <span className="font-medium">{request.days_requested}</span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground pt-1">
+                                        Submitted: {format(parseISO(request.created_at), 'MMM d, yyyy')}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2 border-t">
+                                    <Link href={leaveShowRoute(request.id).url} className="flex-1">
+                                        <Button size="sm" variant="outline" className="w-full">
+                                            <Eye className="mr-2 h-4 w-4" />
+                                            View
+                                        </Button>
+                                    </Link>
+                                    {request.status === 'pending' && auth.user.id === request.user.id && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleCancelRequest(request.id)}
+                                            className="flex-1"
+                                        >
+                                            <Ban className="mr-2 h-4 w-4 text-red-500" />
+                                            Cancel
+                                        </Button>
+                                    )}
+                                </div>
+                            </div>
+                        ))
+                    )}
+
+                    {paginationLinks.length > 0 && (
+                        <div className="flex justify-center pt-4">
                             <PaginationNav links={paginationLinks} />
                         </div>
                     )}

@@ -153,7 +153,7 @@ export default function RamSpecsIndexRefactored() {
                     </div>
                 </div>
 
-                {/* Table section - kept as is, but can be further componentized */}
+                {/* Desktop Table View */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
                     <div className="overflow-x-auto">
                         <Table>
@@ -207,9 +207,78 @@ export default function RamSpecsIndexRefactored() {
                                         </TableCell>
                                     </TableRow>
                                 ))}
+                                {ramspecs.data.length === 0 && (
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                            No RAM specifications found
+                                        </TableCell>
+                                    </TableRow>
+                                )}
                             </TableBody>
                         </Table>
                     </div>
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                    {ramspecs.data.map((ram) => (
+                        <div key={ram.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                            <div className="flex justify-between items-start">
+                                <div>
+                                    <div className="text-lg font-semibold">{ram.manufacturer}</div>
+                                    <div className="text-sm text-muted-foreground">{ram.model}</div>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    {(!ram.stock || ram.stock.quantity < 10) && (
+                                        <span className="px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                                            Low Stock
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 text-sm">
+                                <div>
+                                    <span className="text-muted-foreground">Type:</span>{' '}
+                                    <span className="font-medium">{ram.type}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Capacity:</span>{' '}
+                                    <span className="font-medium">{ram.capacity_gb} GB</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Speed:</span>{' '}
+                                    <span className="font-medium">{ram.speed}</span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">Stock:</span>{' '}
+                                    <span className="font-medium">{ram.stock ? ram.stock.quantity : 0}</span>
+                                </div>
+                            </div>
+
+                            <div className="flex gap-2 pt-2 border-t">
+                                <Can permission="hardware.edit">
+                                    <Link href={edit({ ramspec: ram.id }).url} className="flex-1">
+                                        <Button variant="outline" size="sm" className="w-full">Edit</Button>
+                                    </Link>
+                                </Can>
+                                <Can permission="hardware.delete">
+                                    <div className="flex-1">
+                                        <DeleteConfirmDialog
+                                            onConfirm={() => handleDelete(ram.id)}
+                                            title="Delete RAM Specification"
+                                            description={`Are you sure you want to delete ${ram.manufacturer} ${ram.model}?`}
+                                        />
+                                    </div>
+                                </Can>
+                            </div>
+                        </div>
+                    ))}
+                    {ramspecs.data.length === 0 && (
+                        <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
+                            No RAM specifications found
+                        </div>
+                    )}
                 </div>
 
                 {/* Pagination */}

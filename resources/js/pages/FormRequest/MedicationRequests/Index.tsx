@@ -56,7 +56,7 @@ interface Props {
     medicationTypes: string[];
 }
 
-export default function Index({ medicationRequests, filters, medicationTypes }: Props) {
+export default function Index({ medicationRequests, filters, medicationTypes = [] }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Medication Requests',
         breadcrumbs: [
@@ -248,7 +248,8 @@ export default function Index({ medicationRequests, filters, medicationTypes }: 
                     </div>
                 </div>
 
-                <div className="overflow-hidden rounded-md border bg-card">
+                {/* Desktop Table View */}
+                <div className="hidden md:block overflow-hidden rounded-md border bg-card">
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
@@ -305,6 +306,67 @@ export default function Index({ medicationRequests, filters, medicationTypes }: 
 
                     {paginationLinks.length > 0 && (
                         <div className="border-t px-4 py-3 flex justify-center">
+                            <PaginationNav links={paginationLinks} />
+                        </div>
+                    )}
+                </div>
+
+                {/* Mobile Card View */}
+                <div className="md:hidden space-y-4">
+                    {medicationRequests.data.length === 0 ? (
+                        <div className="py-12 text-center text-muted-foreground border rounded-lg bg-card">
+                            No medication requests found
+                        </div>
+                    ) : (
+                        medicationRequests.data.map((request) => (
+                            <div key={request.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="text-lg font-semibold">{request.name}</div>
+                                        <div className="text-sm text-muted-foreground">{request.work_email}</div>
+                                    </div>
+                                    {getStatusBadge(request.status)}
+                                </div>
+
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Medication Type:</span>
+                                        <span className="font-medium">{request.medication_type}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Onset of Symptoms:</span>
+                                        <span className="font-medium capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground pt-1">
+                                        Requested: {new Date(request.created_at).toLocaleDateString()}
+                                    </div>
+                                </div>
+
+                                <div className="flex gap-2 pt-2 border-t">
+                                    <Link href={medicationShowRoute(request.id).url} className="flex-1">
+                                        <Button variant="outline" size="sm" className="w-full">
+                                            <Eye className="mr-2 h-4 w-4" />
+                                            View
+                                        </Button>
+                                    </Link>
+                                    <Can permission="medication_requests.delete">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleDelete(request.id)}
+                                            className="flex-1"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4 text-red-600" />
+                                            Delete
+                                        </Button>
+                                    </Can>
+                                </div>
+                            </div>
+                        ))
+                    )}
+
+                    {paginationLinks.length > 0 && (
+                        <div className="flex justify-center pt-4">
                             <PaginationNav links={paginationLinks} />
                         </div>
                     )}

@@ -158,7 +158,8 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
                         </div>
                     </CardHeader>
                     <CardContent>
-                        <div className="rounded-md border">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block rounded-md border">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -203,7 +204,41 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
                                 </TableBody>
                             </Table>
                         </div>
-                        <div className="mt-4 flex items-center justify-between">
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-4">
+                            {activities.data.length === 0 ? (
+                                <div className="py-12 text-center text-muted-foreground border rounded-lg">
+                                    No logs found.
+                                </div>
+                            ) : (
+                                activities.data.map((activity) => (
+                                    <div key={activity.id} className="border rounded-lg p-4 space-y-3">
+                                        <div className="flex justify-between items-start">
+                                            <div>
+                                                <div className="font-semibold">{activity.causer}</div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {activity.subject_type} #{activity.subject_id}
+                                                </div>
+                                            </div>
+                                            <Badge variant="outline" className={getEventColor(activity.event)}>
+                                                {activity.event}
+                                            </Badge>
+                                        </div>
+                                        <div className="text-sm">
+                                            <span className="font-medium">Description:</span>{' '}
+                                            <span className="text-muted-foreground">{activity.description}</span>
+                                        </div>
+                                        <div className="text-xs text-muted-foreground pt-2 border-t">
+                                            <div>{activity.created_at}</div>
+                                            <div>{activity.created_at_human}</div>
+                                        </div>
+                                    </div>
+                                ))
+                            )}
+                        </div>
+
+                        <div className="mt-4 flex flex-col sm:flex-row items-center justify-between gap-2">
                             <div className="text-sm text-muted-foreground">
                                 Showing {activities.data.length} of {activities.total} results
                             </div>

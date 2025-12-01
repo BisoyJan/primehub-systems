@@ -115,7 +115,7 @@ interface Props extends InertiaPageProps {
 
 
 export default function Index() {
-    const { pcspecs, search: initialSearch } = usePage<Props>().props;
+    const { pcspecs = { data: [], links: [] }, search: initialSearch } = usePage<Props>().props;
     const form = useForm({}); // Keep useForm for delete but empty for search
     const [issueDialogOpen, setIssueDialogOpen] = useState(false);
     const [selectedPcSpec, setSelectedPcSpec] = useState<PcSpec | null>(null);
