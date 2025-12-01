@@ -415,6 +415,13 @@ server {
 
     client_max_body_size 50M;
 
+    # Fix for "upstream sent too big header" error
+    fastcgi_buffers 16 16k;
+    fastcgi_buffer_size 32k;
+    proxy_buffer_size 128k;
+    proxy_buffers 4 256k;
+    proxy_busy_buffers_size 256k;
+
     location / {
         try_files \$uri \$uri/ /index.php?\$query_string;
     }
