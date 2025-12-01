@@ -111,13 +111,7 @@ export default function AuthSplitAnimatedLayout({
             >
                 {/* Animated Background Pattern */}
                 <div className="absolute inset-0 opacity-10">
-                    <div className="absolute inset-0" style={{
-                        backgroundImage: `
-                            linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
-                            linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px)
-                        `,
-                        backgroundSize: '50px 50px'
-                    }} />
+                    <div className="absolute inset-0 auth-grid-pattern" />
                 </div>
 
                 {/* Gradient Overlay */}
@@ -163,16 +157,11 @@ export default function AuthSplitAnimatedLayout({
                                     key={i}
                                     className="relative"
                                 >
-                                    <div className="w-3 h-3 rounded-full bg-white/70 shadow-lg"
-                                        style={{
-                                            animation: `modernPulse 3s ease-in-out infinite ${i * 0.4}s`
-                                        }}
+                                    <div
+                                        className={`w-3 h-3 rounded-full bg-white/70 shadow-lg animate-modern-pulse animate-modern-pulse-delay-${i}`}
                                     />
-                                    <div className="absolute inset-0 w-3 h-3 rounded-full bg-white/30 animate-ping"
-                                        style={{
-                                            animationDelay: `${i * 0.4}s`,
-                                            animationDuration: '3s'
-                                        }}
+                                    <div
+                                        className={`absolute inset-0 w-3 h-3 rounded-full bg-white/30 animate-ping-slow animate-ping-delay-${i}`}
                                     />
                                 </div>
                             ))}
@@ -189,10 +178,7 @@ export default function AuthSplitAnimatedLayout({
             {/* Subtle Vertical Divider - Blended */}
             <div
                 ref={dividerRef}
-                className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px origin-top"
-                style={{
-                    background: 'linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.05) 20%, rgba(255, 255, 255, 0.05) 80%, transparent 100%)'
-                }}
+                className="hidden lg:block absolute left-1/2 top-0 bottom-0 w-px origin-top auth-divider"
             />
 
             {/* Right Side - Login Form */}
@@ -238,6 +224,17 @@ export default function AuthSplitAnimatedLayout({
             </div>
 
             <style>{`
+                .auth-grid-pattern {
+                    background-image:
+                        linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px),
+                        linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px);
+                    background-size: 50px 50px;
+                }
+
+                .auth-divider {
+                    background: linear-gradient(to bottom, transparent 0%, rgba(255, 255, 255, 0.05) 20%, rgba(255, 255, 255, 0.05) 80%, transparent 100%);
+                }
+
                 @keyframes pulse {
                     0%, 100% {
                         opacity: 0.5;
@@ -257,6 +254,45 @@ export default function AuthSplitAnimatedLayout({
                     50% {
                         opacity: 1;
                         transform: scale(1.3);
+                    }
+                }
+
+                .animate-modern-pulse {
+                    animation: modernPulse 3s ease-in-out infinite;
+                }
+
+                .animate-modern-pulse-delay-0 {
+                    animation-delay: 0s;
+                }
+
+                .animate-modern-pulse-delay-1 {
+                    animation-delay: 0.4s;
+                }
+
+                .animate-modern-pulse-delay-2 {
+                    animation-delay: 0.8s;
+                }
+
+                .animate-ping-slow {
+                    animation: ping 3s cubic-bezier(0, 0, 0.2, 1) infinite;
+                }
+
+                .animate-ping-delay-0 {
+                    animation-delay: 0s;
+                }
+
+                .animate-ping-delay-1 {
+                    animation-delay: 0.4s;
+                }
+
+                .animate-ping-delay-2 {
+                    animation-delay: 0.8s;
+                }
+
+                @keyframes ping {
+                    75%, 100% {
+                        transform: scale(2);
+                        opacity: 0;
                     }
                 }
 

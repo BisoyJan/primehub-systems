@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -78,6 +79,53 @@ class User extends Authenticatable
             'deleted_at' => 'datetime',
             'deletion_confirmed_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Capitalize a name string properly (first letter uppercase, rest lowercase for each word).
+     *
+     * @param string|null $value
+     * @return string|null
+     */
+    protected function capitalizeName(?string $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return $value;
+        }
+
+        // Convert to lowercase first, then capitalize first letter of each word
+        // This handles ALL CAPS, snake_case, and mixed cases
+        return mb_convert_case(mb_strtolower($value), MB_CASE_TITLE, 'UTF-8');
+    }
+
+    /**
+     * Interact with the user's first name.
+     */
+    protected function firstName(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value) => $this->capitalizeName($value),
+        );
+    }
+
+    /**
+     * Interact with the user's middle name.
+     */
+    protected function middleName(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value) => $value ? mb_strtoupper($value) : $value,
+        );
+    }
+
+    /**
+     * Interact with the user's last name.
+     */
+    protected function lastName(): Attribute
+    {
+        return Attribute::make(
+            set: fn (?string $value) => $this->capitalizeName($value),
+        );
     }
 
     /**
