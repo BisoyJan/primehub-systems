@@ -103,7 +103,7 @@ export default function AuthSplitAnimatedLayout({
     }, []);
 
     return (
-        <div className="flex min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black relative">
+        <div className="dark flex min-h-screen bg-gradient-to-br from-gray-900 via-slate-900 to-black relative">
             {/* Left Side - Logo and Branding */}
             <div
                 ref={logoContainerRef}

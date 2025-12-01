@@ -22,22 +22,22 @@ export default function PendingApproval() {
                 </div>
 
                 <div className="space-y-3">
-                    <h2 className="text-2xl font-semibold">
+                    <h2 className="text-2xl font-semibold text-white">
                         Account Created Successfully!
                     </h2>
-                    <p className="text-muted-foreground">
+                    <p className="text-gray-300">
                         Thank you for registering. Your account has been
                         created but requires administrator approval before you
                         can access the system.
                     </p>
                 </div>
 
-                <div className="w-full space-y-4 rounded-lg border border-border bg-muted/50 p-6">
+                <div className="w-full space-y-4 rounded-lg border border-white/10 bg-white/5 p-6">
                     <div className="flex items-start gap-3 text-left">
                         <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                         <div className="space-y-1">
-                            <p className="font-medium">What's Next?</p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="font-medium text-white">What's Next?</p>
+                            <p className="text-sm text-gray-300">
                                 An administrator will review your account and
                                 approve it shortly. You'll receive an email
                                 notification once your account is approved.
@@ -48,8 +48,8 @@ export default function PendingApproval() {
                     <div className="flex items-start gap-3 text-left">
                         <CheckCircle className="mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                         <div className="space-y-1">
-                            <p className="font-medium">Need Help?</p>
-                            <p className="text-sm text-muted-foreground">
+                            <p className="font-medium text-white">Need Help?</p>
+                            <p className="text-sm text-gray-300">
                                 If you believe this is taking too long or need
                                 immediate access, please contact your system
                                 administrator.
@@ -69,7 +69,7 @@ export default function PendingApproval() {
                     </Button>
                 </div>
 
-                <p className="text-xs text-muted-foreground">
+                <p className="text-xs text-gray-400">
                     You can close this window and come back later, or{' '}
                     <span
                         onClick={() => router.get(login())}
