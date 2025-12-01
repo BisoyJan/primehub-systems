@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState } from "react";
 import { router, usePage, Link, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -18,7 +18,7 @@ import {
     forceDelete as accountsForceDelete,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, Trash2, RotateCcw, CheckCircle, XCircle } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
