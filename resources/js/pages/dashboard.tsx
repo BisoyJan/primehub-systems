@@ -307,46 +307,60 @@ export default function Dashboard({
         setAttendanceTrendSlideIndex((prev) => (prev === attendanceTrendSlides.length - 1 ? 0 : prev + 1));
     };
 
-    // Generate month options from date range
+    // Generate month options from the actual data returned by backend (monthlyAttendanceData keys)
+    // This ensures we only show months that have data in the selected date range
     const monthOptions = (() => {
-        const months = [];
-        const start = new Date(dateRange.start);
-        const end = new Date(dateRange.end);
-        const current = new Date(start.getFullYear(), start.getMonth(), 1);
-
-        while (current <= end) {
-            const monthKey = current.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-            months.push(monthKey);
-            current.setMonth(current.getMonth() + 1);
-        }
-
-        return months;
+        const monthKeys = Object.keys(monthlyAttendanceData).sort();
+        return monthKeys.map(key => {
+            // Convert YYYY-MM to "Mon YYYY" format (e.g., "2025-11" -> "Nov 2025")
+            const [year, month] = key.split('-');
+            const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        });
     })();
 
-    // Calculate filtered statistics based on selected month and status
+    // Calculate filtered statistics based on selected month
     const filteredStatistics = (() => {
-        // If no filters applied, return original statistics
+        // If no month filter applied, return original statistics
         if (selectedMonth === "all") {
             return attendanceStatistics;
         }
 
-        // Calculate what fraction of data to show based on month filter
-        const totalMonths = monthOptions.length || 1;
-        const monthFraction = selectedMonth === "all" ? 1 : (1 / totalMonths);
+        // Parse the selected month to get the month key (e.g., "Nov 2025" -> "2025-11")
+        const [monthStr, yearStr] = selectedMonth.split(' ');
+        const monthDate = new Date(`${monthStr} 1, ${yearStr}`);
+        const selectedYear = monthDate.getFullYear();
+        const selectedMonthNum = monthDate.getMonth() + 1;
+        const monthKey = `${selectedYear}-${String(selectedMonthNum).padStart(2, '0')}`;
 
-        // Apply month filter
-        const stats = {
-            total: selectedMonth === "all" ? attendanceStatistics.total : Math.floor(attendanceStatistics.total * monthFraction),
-            on_time: selectedMonth === "all" ? attendanceStatistics.on_time : Math.floor(attendanceStatistics.on_time * monthFraction),
-            time_adjustment: selectedMonth === "all" ? attendanceStatistics.time_adjustment : Math.floor(attendanceStatistics.time_adjustment * monthFraction),
-            tardy: selectedMonth === "all" ? attendanceStatistics.tardy : Math.floor(attendanceStatistics.tardy * monthFraction),
-            half_day: selectedMonth === "all" ? attendanceStatistics.half_day : Math.floor(attendanceStatistics.half_day * monthFraction),
-            ncns: selectedMonth === "all" ? attendanceStatistics.ncns : Math.floor(attendanceStatistics.ncns * monthFraction),
-            advised: selectedMonth === "all" ? attendanceStatistics.advised : Math.floor(attendanceStatistics.advised * monthFraction),
-            needs_verification: selectedMonth === "all" ? attendanceStatistics.needs_verification : Math.floor(attendanceStatistics.needs_verification * monthFraction),
+        // Get the actual monthly data from backend
+        const monthRecord = monthlyAttendanceData[monthKey];
+
+        if (!monthRecord) {
+            // No data for selected month
+            return {
+                total: 0,
+                on_time: 0,
+                time_adjustment: 0,
+                tardy: 0,
+                half_day: 0,
+                ncns: 0,
+                advised: 0,
+                needs_verification: 0,
+            };
+        }
+
+        // Return actual data for the selected month
+        return {
+            total: Number(monthRecord.total || 0),
+            on_time: Number(monthRecord.on_time || 0),
+            time_adjustment: Number(monthRecord.time_adjustment || 0),
+            tardy: Number(monthRecord.tardy || 0),
+            half_day: Number(monthRecord.half_day || 0),
+            ncns: Number(monthRecord.ncns || 0),
+            advised: Number(monthRecord.advised || 0),
+            needs_verification: 0, // This field is only available in the overall statistics
         };
-
-        return stats;
     })();
 
     const radialChartData = [
@@ -460,9 +474,6 @@ export default function Dashboard({
 
     // Calculate attendance trend data
     const attendanceTrendData = (() => {
-        const start = new Date(dateRange.start);
-        const end = new Date(dateRange.end);
-
         // If a specific month is selected, show daily data for that month
         if (selectedMonth !== "all") {
             // Parse the selected month (e.g., "Nov 2025")
@@ -498,23 +509,18 @@ export default function Dashboard({
 
             return data;
         } else {
-
             // Show monthly data when "All Months" is selected
-            const current = new Date(start);
-            current.setDate(1); // Set to first day of month
-            const data = [];
+            // Use the actual data from backend (monthlyAttendanceData) instead of generating from date range
+            const monthKeys = Object.keys(monthlyAttendanceData).sort();
 
-            while (current <= end) {
-                // Format as YYYY-MM using local date components, not UTC
-                const year = current.getFullYear();
-                const month = String(current.getMonth() + 1).padStart(2, '0');
-                const monthKey = `${year}-${month}`;
-                const monthName = current.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-
-                // Get monthly data from backend
+            return monthKeys.map(monthKey => {
                 const monthRecord = monthlyAttendanceData[monthKey];
+                // Convert YYYY-MM to "Mon YYYY" format for display
+                const [year, month] = monthKey.split('-');
+                const date = new Date(parseInt(year), parseInt(month) - 1, 1);
+                const monthName = date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
 
-                data.push({
+                return {
                     month: monthName,
                     total: Number(monthRecord?.total || 0),
                     on_time: Number(monthRecord?.on_time || 0),
@@ -523,12 +529,8 @@ export default function Dashboard({
                     half_day: Number(monthRecord?.half_day || 0),
                     ncns: Number(monthRecord?.ncns || 0),
                     advised: Number(monthRecord?.advised || 0),
-                });
-
-                current.setMonth(current.getMonth() + 1);
-            }
-
-            return data;
+                };
+            });
         }
     })();
 
