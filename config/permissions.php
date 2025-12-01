@@ -186,7 +186,7 @@ return [
 
         'team_lead' => [
             'dashboard.view',
-            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.verify', 'attendance.approve', 'attendance.statistics', 'attendance.delete',
+            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.approve', 'attendance.statistics', 'attendance.delete',
             'schedules.view', 'schedules.create', 'schedules.edit', 'schedules.delete', 'schedules.toggle',
             'biometric.view', 'biometric.reprocess',
             'attendance_points.view', 'attendance_points.export',

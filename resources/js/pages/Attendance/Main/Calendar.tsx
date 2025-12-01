@@ -2,7 +2,7 @@ import React, { useState, useMemo } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
-import { useFlashMessage, usePageMeta } from "@/hooks";
+import { useFlashMessage, usePageMeta, usePermission } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -137,6 +137,7 @@ export default function AttendanceCalendar() {
     const timeFormat = auth.user.time_format || '24';
 
     useFlashMessage();
+    const { can } = usePermission();
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Attendance Calendar',
@@ -641,6 +642,7 @@ export default function AttendanceCalendar() {
                         )}
                         <DialogFooter className="flex gap-2">
                             {selectedAttendance &&
+                                can('attendance.approve') &&
                                 selectedAttendance.status === 'on_time' &&
                                 !selectedAttendance.secondary_status &&
                                 !selectedAttendance.overtime_minutes &&
@@ -654,6 +656,7 @@ export default function AttendanceCalendar() {
                                     </Button>
                                 )}
                             {selectedAttendance &&
+                                can('attendance.verify') &&
                                 (selectedAttendance.status !== 'on_time' ||
                                     selectedAttendance.secondary_status ||
                                     selectedAttendance.overtime_minutes) &&
