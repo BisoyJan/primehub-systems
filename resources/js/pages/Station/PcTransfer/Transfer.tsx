@@ -142,20 +142,25 @@ interface Transfer {
     replacedPcId?: number; // ID of PC being replaced/made floating
 }
 
+// Helper to read query params synchronously for initial state
+function getInitialQueryParams() {
+    if (typeof window === 'undefined') return { pcId: null, filter: 'all' as const };
+    const params = new URLSearchParams(window.location.search);
+    const pcIdParam = params.get('pc');
+    const filterParam = params.get('filter');
+    return {
+        pcId: pcIdParam ? parseInt(pcIdParam, 10) : null,
+        filter: (filterParam === 'available' || filterParam === 'assigned' ? filterParam : 'all') as 'all' | 'available' | 'assigned'
+    };
+}
+
 export default function Transfer({ stations, pcSpecs, filters, preselectedStationId }: Props) {
 
-    // Read 'pc' query param from URL
-    const [autoSelectedPcId, setAutoSelectedPcId] = useState<number | null>(null);
-    useEffect(() => {
-        const params = new URLSearchParams(window.location.search);
-        const pcIdParam = params.get('pc');
-        if (pcIdParam) {
-            const pcId = parseInt(pcIdParam, 10);
-            if (!isNaN(pcId)) {
-                setAutoSelectedPcId(pcId);
-            }
-        }
-    }, []);
+    // Read 'pc' and 'filter' query params from URL (synchronous for initial state)
+    const initialParams = getInitialQueryParams();
+    const [autoSelectedPcId] = useState<number | null>(
+        initialParams.pcId && !isNaN(initialParams.pcId) ? initialParams.pcId : null
+    );
 
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
@@ -182,8 +187,10 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
     const [stationSearch, setStationSearch] = useState('');
     const [pcSiteFilter, setPcSiteFilter] = useState('all');
     const [pcCampaignFilter, setPcCampaignFilter] = useState('all');
+    const [pcAssignmentFilter, setPcAssignmentFilter] = useState<'all' | 'available' | 'assigned'>(initialParams.filter);
     const [stationSiteFilter, setStationSiteFilter] = useState('all');
     const [stationCampaignFilter, setStationCampaignFilter] = useState('all');
+    const [stationAssignmentFilter, setStationAssignmentFilter] = useState<'all' | 'empty' | 'has-pc'>('all');
     const [transfers, setTransfers] = useState<Transfer[]>([]);
     const [errors, setErrors] = useState<string[]>([]);
     const [processing, setProcessing] = useState(false);
@@ -252,7 +259,12 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         const matchesSite = pcSiteFilter === 'all' || (pc.station && String(pc.station.site_id) === pcSiteFilter);
         const matchesCampaign = pcCampaignFilter === 'all' || (pc.station && String(pc.station.campaign_id) === pcCampaignFilter);
 
-        return matchesSearch && matchesSite && matchesCampaign;
+        // Filter by assignment status (Available = no station, Assigned = has station)
+        const matchesAssignment = pcAssignmentFilter === 'all' ||
+            (pcAssignmentFilter === 'available' && !pc.station) ||
+            (pcAssignmentFilter === 'assigned' && !!pc.station);
+
+        return matchesSearch && matchesSite && matchesCampaign && matchesAssignment;
     });
 
     const filteredStations = stations.filter(station => {
@@ -266,7 +278,12 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
         const matchesSite = stationSiteFilter === 'all' || String(station.site_id) === stationSiteFilter;
         const matchesCampaign = stationCampaignFilter === 'all' || String(station.campaign_id) === stationCampaignFilter;
 
-        return matchesSearch && matchesSite && matchesCampaign;
+        // Filter by assignment status (Empty = no PC, Has PC = has pc_spec_id)
+        const matchesAssignment = stationAssignmentFilter === 'all' ||
+            (stationAssignmentFilter === 'empty' && !station.pc_spec_id) ||
+            (stationAssignmentFilter === 'has-pc' && !!station.pc_spec_id);
+
+        return matchesSearch && matchesSite && matchesCampaign && matchesAssignment;
     });
 
     function getTransferByPc(pcId: number): Transfer | undefined {
@@ -704,7 +721,21 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">Assignment Status</Label>
+                                        <Select value={pcAssignmentFilter} onValueChange={(value) => setPcAssignmentFilter(value as 'all' | 'available' | 'assigned')}>
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All PCs</SelectItem>
+                                                <SelectItem value="available">Available (Unassigned)</SelectItem>
+                                                <SelectItem value="assigned">Assigned to Station</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
                                     <div>
                                         <Label className="text-xs text-muted-foreground">Site Filter</Label>
                                         <Select value={pcSiteFilter} onValueChange={setPcSiteFilter}>
@@ -890,7 +921,21 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                                     />
                                 </div>
 
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div>
+                                        <Label className="text-xs text-muted-foreground">PC Status</Label>
+                                        <Select value={stationAssignmentFilter} onValueChange={(value) => setStationAssignmentFilter(value as 'all' | 'empty' | 'has-pc')}>
+                                            <SelectTrigger className="h-9">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Stations</SelectItem>
+                                                <SelectItem value="empty">Empty (No PC)</SelectItem>
+                                                <SelectItem value="has-pc">Has PC Assigned</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+
                                     <div>
                                         <Label className="text-xs text-muted-foreground">Site Filter</Label>
                                         <Select value={stationSiteFilter} onValueChange={setStationSiteFilter}>

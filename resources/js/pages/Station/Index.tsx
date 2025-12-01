@@ -18,7 +18,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
-import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Search } from "lucide-react";
+import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Search, Download } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { transferPage } from '@/routes/pc-transfers';
 import {
     index as stationsIndexRoute,
@@ -118,12 +120,12 @@ export default function StationIndex() {
             return [];
         }
     });
+
+    // QR Code download state - job-based polling
     const [bulkProgress, setBulkProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
     const [selectedZipProgress, setSelectedZipProgress] = useState<{ running: boolean; percent: number; status: string; downloadUrl?: string; jobId?: string }>({ running: false, percent: 0, status: '' });
     const bulkIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const selectedZipIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
-    const bulkProgressRef = React.useRef<HTMLDivElement>(null);
-    const selectedZipProgressRef = React.useRef<HTMLDivElement>(null);
 
     // Selection logic
     // Save selectedStationIds to localStorage on change
@@ -161,7 +163,7 @@ export default function StationIndex() {
         setSelectedStationIds(prev => checked ? [...prev, id] : prev.filter(sid => sid !== id));
     };
 
-    // Bulk QR ZIP
+    // Bulk QR ZIP - job-based polling
     const handleBulkDownloadAllQRCodes = () => {
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
         if (!csrfToken) return toast.error('CSRF token not found');
@@ -185,7 +187,6 @@ export default function StationIndex() {
                 bulkIntervalRef.current = null;
             }
 
-            // Poll immediately first, then every 500ms
             const pollProgress = () => {
                 fetch(`/stations/qrcode/bulk-progress/${bulkProgress.jobId}`)
                     .then(res => {
@@ -217,10 +218,7 @@ export default function StationIndex() {
                     });
             };
 
-            // Poll immediately
             pollProgress();
-
-            // Then poll every 500ms for faster updates
             bulkIntervalRef.current = setInterval(pollProgress, 500);
         }
         return () => {
@@ -231,7 +229,7 @@ export default function StationIndex() {
         };
     }, [bulkProgress.running, bulkProgress.jobId]);
 
-    // Selected QR ZIP
+    // Selected QR ZIP - job-based polling
     const handleDownloadSelectedQRCodes = () => {
         if (selectedStationIds.length === 0) return toast.error('No stations selected');
         const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -256,7 +254,6 @@ export default function StationIndex() {
                 selectedZipIntervalRef.current = null;
             }
 
-            // Poll immediately first, then every 500ms
             const pollProgress = () => {
                 fetch(`/stations/qrcode/selected-progress/${selectedZipProgress.jobId}`)
                     .then(res => {
@@ -279,6 +276,7 @@ export default function StationIndex() {
                             if (data.downloadUrl) {
                                 window.location.href = data.downloadUrl;
                                 toast.success('Download started');
+                                setSelectedStationIds([]); // Clear selection after successful download
                             }
                         }
                     })
@@ -288,10 +286,7 @@ export default function StationIndex() {
                     });
             };
 
-            // Poll immediately
             pollProgress();
-
-            // Then poll every 500ms for faster updates
             selectedZipIntervalRef.current = setInterval(pollProgress, 500);
         }
         return () => {
@@ -586,7 +581,7 @@ export default function StationIndex() {
                                             disabled={selectedZipProgress.running}
                                             size="sm"
                                         >
-                                            Download QR ZIP
+                                            {selectedZipProgress.running ? 'Processing...' : 'Download Selected QR'}
                                         </Button>
                                         <Button
                                             onClick={handleBulkDownloadAllQRCodes}
@@ -594,7 +589,7 @@ export default function StationIndex() {
                                             disabled={bulkProgress.running}
                                             size="sm"
                                         >
-                                            Download All QR ZIP
+                                            {bulkProgress.running ? 'Processing...' : 'Download All QR'}
                                         </Button>
                                     </div>
                                 </div>
@@ -714,7 +709,16 @@ export default function StationIndex() {
                                                             </Button>
                                                         </>
                                                     ) : (
-                                                        <span className="text-xs text-gray-400">No monitors</span>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => router.get(stationsEditRoute(station.id).url)}
+                                                            className="gap-2"
+                                                            title="Assign Monitor to this station"
+                                                        >
+                                                            <Plus className="h-4 w-4" />
+                                                            Assign Monitor
+                                                        </Button>
                                                     )}
                                                 </div>
                                             </TableCell>
@@ -747,7 +751,7 @@ export default function StationIndex() {
                                                         <Button
                                                             variant="outline"
                                                             size="sm"
-                                                            onClick={() => router.visit(transferPage(station.id).url)}
+                                                            onClick={() => router.visit(transferPage(station.id, { query: { filter: 'available' } }).url)}
                                                             className="gap-2"
                                                             title="Assign PC to this station"
                                                         >
@@ -909,7 +913,16 @@ export default function StationIndex() {
                                                     </Button>
                                                 </>
                                             ) : (
-                                                <span className="text-xs text-gray-400">No monitors</span>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => router.get(stationsEditRoute(station.id).url)}
+                                                    className="gap-2"
+                                                    title="Assign Monitor to this station"
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                    Assign Monitor
+                                                </Button>
                                             )}
                                         </div>
                                     </div>
@@ -943,7 +956,7 @@ export default function StationIndex() {
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    onClick={() => router.visit(transferPage(station.id).url)}
+                                                    onClick={() => router.visit(transferPage(station.id, { query: { filter: 'available' } }).url)}
                                                     className="gap-2"
                                                     title="Assign PC to this station"
                                                 >
@@ -1031,46 +1044,47 @@ export default function StationIndex() {
                         <DialogHeader>
                             <DialogTitle>PC Specification Details</DialogTitle>
                             <DialogDescription>
-                                {selectedPcSpec ? (
-                                    <div className="space-y-4 text-left mt-4">
-                                        <div className="space-y-3">
-                                            {selectedPcSpec.pc_number && (
-                                                <div>
-                                                    <div className="font-semibold text-foreground mb-1">PC Number:</div>
-                                                    <div className="text-blue-600 font-medium pl-2 break-words">{selectedPcSpec.pc_number}</div>
-                                                </div>
-                                            )}
-
-                                            <div>
-                                                <div className="font-semibold text-foreground mb-1">Model:</div>
-                                                <div className="text-foreground pl-2 break-words">{selectedPcSpec.model}</div>
-                                            </div>
-
-                                            <div>
-                                                <div className="font-semibold text-foreground mb-1">Processor:</div>
-                                                <div className="text-foreground pl-2 break-words">{selectedPcSpec.processor}</div>
-                                            </div>
-
-                                            <div>
-                                                <div className="font-semibold text-foreground mb-1">RAM ({selectedPcSpec.ram_ddr}):</div>
-                                                <div className="text-foreground pl-2 break-words">
-                                                    {selectedPcSpec.ram} ({selectedPcSpec.ram_capacities})
-                                                </div>
-                                            </div>
-
-                                            <div>
-                                                <div className="font-semibold text-foreground mb-1">Disk ({selectedPcSpec.disk_type}):</div>
-                                                <div className="text-foreground pl-2 break-words">
-                                                    {selectedPcSpec.disk} ({selectedPcSpec.disk_capacities})
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <p className="text-muted-foreground">No PC spec details available.</p>
-                                )}
+                                View detailed specifications for this PC.
                             </DialogDescription>
                         </DialogHeader>
+                        {selectedPcSpec ? (
+                            <div className="space-y-4 text-left">
+                                <div className="space-y-3">
+                                    {selectedPcSpec.pc_number && (
+                                        <div>
+                                            <div className="font-semibold text-foreground mb-1">PC Number:</div>
+                                            <div className="text-blue-600 font-medium pl-2 break-words">{selectedPcSpec.pc_number}</div>
+                                        </div>
+                                    )}
+
+                                    <div>
+                                        <div className="font-semibold text-foreground mb-1">Model:</div>
+                                        <div className="text-foreground pl-2 break-words">{selectedPcSpec.model}</div>
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-foreground mb-1">Processor:</div>
+                                        <div className="text-foreground pl-2 break-words">{selectedPcSpec.processor}</div>
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-foreground mb-1">RAM ({selectedPcSpec.ram_ddr}):</div>
+                                        <div className="text-foreground pl-2 break-words">
+                                            {selectedPcSpec.ram} ({selectedPcSpec.ram_capacities})
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <div className="font-semibold text-foreground mb-1">Disk ({selectedPcSpec.disk_type}):</div>
+                                        <div className="text-foreground pl-2 break-words">
+                                            {selectedPcSpec.disk} ({selectedPcSpec.disk_capacities})
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-muted-foreground">No PC spec details available.</p>
+                        )}
                     </DialogContent>
                 </Dialog>
 
@@ -1080,50 +1094,51 @@ export default function StationIndex() {
                         <DialogHeader>
                             <DialogTitle>Monitor Details</DialogTitle>
                             <DialogDescription>
-                                {selectedMonitors && selectedMonitors.length > 0 ? (
-                                    <div className="space-y-3 text-left mt-4">
-                                        {selectedMonitors.map((monitor, idx) => (
-                                            <div key={monitor.id} className="border-b pb-3 last:border-b-0 last:pb-0">
-                                                <div className="flex items-center justify-between mb-2">
-                                                    <h3 className="font-semibold text-foreground text-base">
-                                                        Monitor {idx + 1}
-                                                        {monitor.quantity > 1 && (
-                                                            <span className="ml-2 text-sm text-blue-600 font-medium">
-                                                                (Qty: {monitor.quantity})
-                                                            </span>
-                                                        )}
-                                                    </h3>
-                                                </div>
-                                                <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="font-semibold text-foreground">Brand:</span>
-                                                        <span className="text-foreground">{monitor.brand}</span>
-                                                    </div>
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="font-semibold text-foreground">Model:</span>
-                                                        <span className="text-foreground">{monitor.model}</span>
-                                                    </div>
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="font-semibold text-foreground">Size:</span>
-                                                        <span className="text-foreground">{monitor.screen_size}"</span>
-                                                    </div>
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="font-semibold text-foreground">Res:</span>
-                                                        <span className="text-foreground">{monitor.resolution}</span>
-                                                    </div>
-                                                    <div className="flex gap-1 items-center">
-                                                        <span className="font-semibold text-foreground">Panel:</span>
-                                                        <span className="text-foreground">{monitor.panel_type}</span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <p className="text-muted-foreground">No monitor details available.</p>
-                                )}
+                                View detailed specifications for attached monitors.
                             </DialogDescription>
                         </DialogHeader>
+                        {selectedMonitors && selectedMonitors.length > 0 ? (
+                            <div className="space-y-3 text-left">
+                                {selectedMonitors.map((monitor, idx) => (
+                                    <div key={monitor.id} className="border-b pb-3 last:border-b-0 last:pb-0">
+                                        <div className="flex items-center justify-between mb-2">
+                                            <h3 className="font-semibold text-foreground text-base">
+                                                Monitor {idx + 1}
+                                                {monitor.quantity > 1 && (
+                                                    <span className="ml-2 text-sm text-blue-600 font-medium">
+                                                        (Qty: {monitor.quantity})
+                                                    </span>
+                                                )}
+                                            </h3>
+                                        </div>
+                                        <div className="flex flex-wrap gap-x-6 gap-y-2 text-sm">
+                                            <div className="flex gap-1 items-center">
+                                                <span className="font-semibold text-foreground">Brand:</span>
+                                                <span className="text-foreground">{monitor.brand}</span>
+                                            </div>
+                                            <div className="flex gap-1 items-center">
+                                                <span className="font-semibold text-foreground">Model:</span>
+                                                <span className="text-foreground">{monitor.model}</span>
+                                            </div>
+                                            <div className="flex gap-1 items-center">
+                                                <span className="font-semibold text-foreground">Size:</span>
+                                                <span className="text-foreground">{monitor.screen_size}"</span>
+                                            </div>
+                                            <div className="flex gap-1 items-center">
+                                                <span className="font-semibold text-foreground">Res:</span>
+                                                <span className="text-foreground">{monitor.resolution}</span>
+                                            </div>
+                                            <div className="flex gap-1 items-center">
+                                                <span className="font-semibold text-foreground">Panel:</span>
+                                                <span className="text-foreground">{monitor.panel_type}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <p className="text-muted-foreground">No monitor details available.</p>
+                        )}
                     </DialogContent>
                 </Dialog>
 
@@ -1169,30 +1184,38 @@ export default function StationIndex() {
 
                 {/* Floating progress indicators for QR ZIP */}
                 {bulkProgress.running && (
-                    <div className="fixed bottom-6 right-6 z-50 bg-white dark:bg-gray-900 border border-blue-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
-                        <div className="font-semibold text-blue-700 dark:text-blue-200">
-                            Bulk QR Code ZIP Progress
-                        </div>
-                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
-                            <div ref={bulkProgressRef} className="bg-blue-600 h-3 rounded" />
-                        </div>
-                        <div className="text-xs text-gray-700 dark:text-gray-300">
-                            {bulkProgress.status} ({bulkProgress.percent}%)
-                        </div>
-                    </div>
+                    <Card className="fixed bottom-6 right-6 z-50 w-80 shadow-lg border-blue-400">
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                                <Download className="h-4 w-4" />
+                                Generating All QR Codes
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">{bulkProgress.status}</span>
+                                <span className="font-medium">{bulkProgress.percent}%</span>
+                            </div>
+                            <Progress value={bulkProgress.percent} className="h-2" />
+                        </CardContent>
+                    </Card>
                 )}
                 {selectedZipProgress.running && (
-                    <div className="fixed bottom-24 right-6 z-50 bg-white dark:bg-gray-900 border border-green-400 shadow-lg rounded-lg px-6 py-4 flex flex-col gap-2 items-center">
-                        <div className="font-semibold text-green-700 dark:text-green-200">
-                            Selected QR Code ZIP Progress
-                        </div>
-                        <div className="w-full bg-gray-200 rounded h-3 mb-2">
-                            <div ref={selectedZipProgressRef} className="bg-green-600 h-3 rounded" />
-                        </div>
-                        <div className="text-xs text-gray-700 dark:text-gray-300">
-                            {selectedZipProgress.status} ({selectedZipProgress.percent}%)
-                        </div>
-                    </div>
+                    <Card className={`fixed z-50 w-80 shadow-lg border-green-400 ${bulkProgress.running ? 'bottom-40' : 'bottom-6'} right-6`}>
+                        <CardHeader className="pb-2">
+                            <CardTitle className="text-sm flex items-center gap-2">
+                                <Download className="h-4 w-4" />
+                                Generating Selected QR Codes
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">{selectedZipProgress.status}</span>
+                                <span className="font-medium">{selectedZipProgress.percent}%</span>
+                            </div>
+                            <Progress value={selectedZipProgress.percent} className="h-2" />
+                        </CardContent>
+                    </Card>
                 )}
             </div>
         </AppLayout>

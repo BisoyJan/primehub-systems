@@ -52,6 +52,7 @@ export default function MonitorSpecTable({
     const [filterBrand, setFilterBrand] = React.useState("");
     const [filterPanelType, setFilterPanelType] = React.useState("");
     const [page, setPage] = React.useState(1);
+    const [hasAutoNavigated, setHasAutoNavigated] = React.useState(false);
     const pageSize = 7;
 
     const maxQty = monitorType === 'dual' ? 2 : 1;
@@ -68,6 +69,22 @@ export default function MonitorSpecTable({
 
         return matchesSearch && matchesBrand && matchesPanelType;
     });
+
+    // Auto-navigate to the page containing the first selected monitor on initial load
+    React.useEffect(() => {
+        if (hasAutoNavigated) return;
+        if (selectedMonitors.length === 0) return;
+
+        const firstSelectedId = selectedMonitors[0].id;
+        const selectedIndex = filteredSpecs.findIndex(spec => spec.id === firstSelectedId);
+        if (selectedIndex !== -1) {
+            const targetPage = Math.floor(selectedIndex / pageSize) + 1;
+            if (targetPage !== page) {
+                setPage(targetPage);
+            }
+            setHasAutoNavigated(true);
+        }
+    }, [filteredSpecs, selectedMonitors, hasAutoNavigated, page, pageSize]);
 
     const paginatedSpecs = filteredSpecs.slice((page - 1) * pageSize, page * pageSize);
     const totalPages = Math.ceil(filteredSpecs.length / pageSize);
@@ -103,7 +120,7 @@ export default function MonitorSpecTable({
     // Add quantity column for dual monitors
     if (monitorType === 'dual') {
         columns.splice(5, 0, {
-            accessor: "model" as keyof MonitorSpec,
+            accessor: "qty" as keyof MonitorSpec,
             header: "Qty",
             cell: (value, row) => {
                 const selected = selectedMonitors.find(m => m.id === row.id);
@@ -125,6 +142,7 @@ export default function MonitorSpecTable({
                         }}
                         onClick={(e) => e.stopPropagation()}
                         className="border border-gray-300 rounded px-2 py-1 text-sm"
+                        aria-label={`Quantity for ${row.brand} ${row.model}`}
                     >
                         <option value="1">1</option>
                         <option value="2" disabled={otherMonitorsQty + 2 > maxQty}>2</option>
@@ -217,10 +235,10 @@ export default function MonitorSpecTable({
                                     }
                                 }}
                                 className={`border rounded-lg p-4 shadow-sm space-y-3 transition-all ${isDisabled
-                                        ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
-                                        : isSelected
-                                            ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-600 ring-2 ring-blue-200 dark:ring-blue-700 cursor-pointer'
-                                            : 'bg-card hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer'
+                                    ? 'opacity-50 cursor-not-allowed bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'
+                                    : isSelected
+                                        ? 'bg-blue-50 dark:bg-blue-900/30 border-blue-500 dark:border-blue-600 ring-2 ring-blue-200 dark:ring-blue-700 cursor-pointer'
+                                        : 'bg-card hover:bg-gray-50 dark:hover:bg-gray-800 cursor-pointer'
                                     }`}
                             >
                                 <div className="flex items-start gap-3">
@@ -237,6 +255,7 @@ export default function MonitorSpecTable({
                                         }}
                                         className="mt-1 h-4 w-4 rounded border-gray-300"
                                         onClick={(e) => e.stopPropagation()}
+                                        aria-label={`Select ${monitor.brand} ${monitor.model}`}
                                     />
                                     <div className="flex-1">
                                         <div className={`font-semibold text-base mb-2 ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
@@ -279,6 +298,7 @@ export default function MonitorSpecTable({
                                                         }}
                                                         onClick={(e) => e.stopPropagation()}
                                                         className="border border-gray-300 rounded px-2 py-1 text-sm"
+                                                        aria-label={`Quantity for ${monitor.brand} ${monitor.model}`}
                                                     >
                                                         <option value="1">1</option>
                                                         <option value="2">2</option>

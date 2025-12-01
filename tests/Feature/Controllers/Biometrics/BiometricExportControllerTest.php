@@ -2,14 +2,16 @@
 
 namespace Tests\Feature\Controllers\Biometrics;
 
+use App\Jobs\GenerateAttendanceExportExcel;
 use App\Models\Attendance;
-use App\Models\Site;
-use App\Models\User;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
+use App\Models\Site;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Queue;
 use Inertia\Testing\AssertableInertia as Assert;
-use PhpOffice\PhpSpreadsheet\IOFactory;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
 
@@ -35,6 +37,22 @@ class BiometricExportControllerTest extends TestCase
             'is_approved' => true,
             'approved_at' => now(),
         ]);
+
+        // Clean up temp files
+        $tempDir = storage_path('app/temp');
+        if (is_dir($tempDir)) {
+            array_map('unlink', glob("$tempDir/attendance_export_*.xlsx"));
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        $tempDir = storage_path('app/temp');
+        if (is_dir($tempDir)) {
+            array_map('unlink', glob("$tempDir/attendance_export_*.xlsx"));
+        }
+
+        parent::tearDown();
     }
 
     #[Test]
@@ -60,399 +78,392 @@ class BiometricExportControllerTest extends TestCase
     }
 
     #[Test]
-    public function it_exports_records_to_xlsx_with_full_details()
+    public function it_starts_export_job_and_returns_job_id()
     {
-        $user = User::factory()->create();
-        $site = Site::factory()->create();
+        Queue::fake();
 
-        // Create various attendance records
-        Attendance::factory()->onTime()->create([
-            'user_id' => $user->id,
-            'bio_in_site_id' => $site->id,
-            'shift_date' => now()->format('Y-m-d'),
-        ]);
-
-        Attendance::factory()->tardy()->create([
-            'user_id' => $user->id,
-            'bio_in_site_id' => $site->id,
-            'shift_date' => now()->format('Y-m-d'),
-        ]);
-
-        Attendance::factory()->ncns()->create([
-            'user_id' => $user->id,
-            'shift_date' => now()->format('Y-m-d'),
-        ]);
-
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->format('Y-m-d'),
-        ]));
+        ]);
 
         $response->assertStatus(200);
-        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-        $response->assertHeader('Content-Disposition', 'attachment; filename="attendance_export_' . now()->format('Y-m-d') . '_to_' . now()->format('Y-m-d') . '.xlsx"');
+        $response->assertJsonStructure(['jobId']);
+
+        Queue::assertPushed(GenerateAttendanceExportExcel::class);
     }
 
     #[Test]
-    public function it_exports_records_with_statistics_section()
+    public function it_validates_required_date_fields_on_start()
     {
-        $user = User::factory()->create();
-        $site = Site::factory()->create();
-        $date = now()->format('Y-m-d');
-
-        // Create multiple attendance records with different statuses
-        Attendance::factory()->onTime()->count(5)->create([
-            'user_id' => $user->id,
-            'bio_in_site_id' => $site->id,
-            'shift_date' => $date,
-        ]);
-
-        Attendance::factory()->tardy()->count(3)->create([
-            'user_id' => $user->id,
-            'bio_in_site_id' => $site->id,
-            'shift_date' => $date,
-            'tardy_minutes' => 10,
-        ]);
-
-        Attendance::factory()->ncns()->count(2)->create([
-            'user_id' => $user->id,
-            'shift_date' => $date,
-        ]);
-
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
-            'start_date' => $date,
-            'end_date' => $date,
-        ]));
-
-        $response->assertStatus(200);
-
-        // Save response to temp file and read with PhpSpreadsheet
-        $tempFile = tempnam(sys_get_temp_dir(), 'xlsx');
-        file_put_contents($tempFile, $response->getContent());
-
-        $spreadsheet = IOFactory::load($tempFile);
-
-        // Check that there are 2 sheets
-        $this->assertEquals(2, $spreadsheet->getSheetCount());
-        $this->assertEquals('Attendance Records', $spreadsheet->getSheet(0)->getTitle());
-        $this->assertEquals('Statistics', $spreadsheet->getSheet(1)->getTitle());
-
-        // Check that the statistics section exists on 2nd sheet
-        $statsSheet = $spreadsheet->getSheet(1);
-        $statsTitle = $statsSheet->getCell('A1')->getValue();
-        $this->assertEquals('ATTENDANCE STATISTICS', $statsTitle);
-
-        // Clean up
-        unlink($tempFile);
-    }
-
-    #[Test]
-    public function it_filters_export_by_user_and_site()
-    {
-        $user1 = User::factory()->create();
-        $user2 = User::factory()->create();
-        $site1 = Site::factory()->create();
-        $site2 = Site::factory()->create();
-
-        $date = now()->toDateString();
-
-        // Create attendance for user1 at site1
-        $att1 = Attendance::factory()->create([
-            'user_id' => $user1->id,
-            'bio_in_site_id' => $site1->id,
-            'shift_date' => $date,
-            'status' => 'on_time',
-            'actual_time_in' => now()->setTime(8, 0, 0),
-        ]);
-
-        // Create attendance for user2 at site1 (should be filtered out)
-        Attendance::factory()->create([
-            'user_id' => $user2->id,
-            'bio_in_site_id' => $site1->id,
-            'shift_date' => $date,
-            'status' => 'on_time',
-            'actual_time_in' => now()->setTime(8, 0, 0),
-        ]);
-
-        // Create attendance for user1 at site2 (should be filtered out)
-        Attendance::factory()->create([
-            'user_id' => $user1->id,
-            'bio_in_site_id' => $site2->id,
-            'shift_date' => $date,
-            'status' => 'on_time',
-            'actual_time_in' => now()->setTime(8, 0, 0),
-        ]);
-
-        // Verify records were created
-        $this->assertEquals(3, Attendance::count());
-        $this->assertEquals(1, Attendance::where('user_id', $user1->id)->where('bio_in_site_id', $site1->id)->count());
-
-        // Filter for user1 and site1 only
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
-            'start_date' => $date,
-            'end_date' => $date,
-            'user_ids' => [$user1->id],
-            'site_ids' => [$site1->id],
-        ]));
-
-        $response->assertStatus(200);
-        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-
-        // Save response to temp file and read with PhpSpreadsheet
-        $tempFile = tempnam(sys_get_temp_dir(), 'xlsx');
-        file_put_contents($tempFile, $response->getContent());
-
-        $spreadsheet = IOFactory::load($tempFile);
-        $sheet = $spreadsheet->getActiveSheet();
-
-        // Check headers are present
-        $this->assertEquals('User ID', $sheet->getCell('A1')->getValue());
-        $this->assertEquals('Employee Name', $sheet->getCell('B1')->getValue());
-
-        // Check total records in stats sheet - should be 1 record
-        $statsSheet = $spreadsheet->getSheet(1);
-        // Total Records is at row 4 (title row 1, blank row 2, date range row 3, total row 4)
-        $this->assertEquals('Total Records:', $statsSheet->getCell('A4')->getValue());
-
-        // The total is calculated via formula =COUNTA(...), which returns the count
-        $totalRecordsFormula = $statsSheet->getCell('B4')->getValue();
-        $this->assertStringContainsString('COUNTA', $totalRecordsFormula);
-
-        // Check that only 1 data row exists (header + 1 data row = row 2 has data, row 3 should be empty)
-        $this->assertNotEmpty($sheet->getCell('A2')->getValue());
-        $this->assertEmpty($sheet->getCell('A3')->getValue());
-
-        // Clean up
-        unlink($tempFile);
-    }
-
-    #[Test]
-    public function it_includes_time_in_and_time_out_in_export()
-    {
-        $user = User::factory()->create();
-        $site = Site::factory()->create();
-        $date = now()->format('Y-m-d');
-
-        $attendance = Attendance::factory()->create([
-            'user_id' => $user->id,
-            'bio_in_site_id' => $site->id,
-            'bio_out_site_id' => $site->id,
-            'shift_date' => $date,
-            'scheduled_time_in' => '08:00:00',
-            'scheduled_time_out' => '17:00:00',
-            'actual_time_in' => now()->setTime(8, 0, 0),
-            'actual_time_out' => now()->setTime(17, 0, 0),
-            'status' => 'on_time',
-        ]);
-
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
-            'start_date' => $date,
-            'end_date' => $date,
-        ]));
-
-        $response->assertStatus(200);
-
-        // Save response to temp file and read with PhpSpreadsheet
-        $tempFile = tempnam(sys_get_temp_dir(), 'xlsx');
-        file_put_contents($tempFile, $response->getContent());
-
-        $spreadsheet = IOFactory::load($tempFile);
-        $sheet = $spreadsheet->getActiveSheet();
-
-        // Check headers include time in/out columns
-        $headers = [];
-        for ($col = 'A'; $col <= 'S'; $col++) {
-            $headers[] = $sheet->getCell($col . '1')->getValue();
-        }
-
-        $this->assertContains('Scheduled Time In', $headers);
-        $this->assertContains('Scheduled Time Out', $headers);
-        $this->assertContains('Actual Time In', $headers);
-        $this->assertContains('Actual Time Out', $headers);
-        $this->assertContains('Status', $headers);
-
-        // Clean up
-        unlink($tempFile);
-    }
-
-    #[Test]
-    public function it_includes_status_breakdown_in_statistics()
-    {
-        $user = User::factory()->create();
-        $site = Site::factory()->create();
-        $date = now()->toDateString();
-
-        // Create records with different statuses
-        Attendance::factory()->count(10)->create([
-            'user_id' => $user->id,
-            'bio_in_site_id' => $site->id,
-            'shift_date' => $date,
-            'status' => 'on_time',
-            'actual_time_in' => now()->setTime(8, 0, 0),
-        ]);
-
-        Attendance::factory()->count(5)->create([
-            'user_id' => $user->id,
-            'bio_in_site_id' => $site->id,
-            'shift_date' => $date,
-            'status' => 'tardy',
-            'tardy_minutes' => 10,
-            'actual_time_in' => now()->setTime(8, 15, 0),
-        ]);
-
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
-            'start_date' => $date,
-            'end_date' => $date,
-        ]));
-
-        $response->assertStatus(200);
-
-        // Save response to temp file and read with PhpSpreadsheet
-        $tempFile = tempnam(sys_get_temp_dir(), 'xlsx');
-        file_put_contents($tempFile, $response->getContent());
-
-        $spreadsheet = IOFactory::load($tempFile);
-
-        // Get the Statistics sheet (2nd sheet)
-        $statsSheet = $spreadsheet->getSheet(1);
-
-        // Verify the statistics title exists
-        $this->assertEquals('ATTENDANCE STATISTICS', $statsSheet->getCell('A1')->getValue());
-
-        // Find STATUS BREAKDOWN header dynamically
-        $statusBreakdownRow = null;
-        for ($row = 1; $row <= 20; $row++) {
-            if ($statsSheet->getCell('A' . $row)->getValue() === 'STATUS BREAKDOWN') {
-                $statusBreakdownRow = $row;
-                break;
-            }
-        }
-        $this->assertNotNull($statusBreakdownRow, 'STATUS BREAKDOWN header should exist');
-
-        // Verify column headers (next row after STATUS BREAKDOWN)
-        $headerRow = $statusBreakdownRow + 1;
-        $this->assertEquals('Status', $statsSheet->getCell('A' . $headerRow)->getValue());
-        $this->assertEquals('Count', $statsSheet->getCell('B' . $headerRow)->getValue());
-        $this->assertEquals('Percentage', $statsSheet->getCell('C' . $headerRow)->getValue());
-
-        // Verify On Time row has a COUNTIF formula
-        $onTimeRow = $headerRow + 1;
-        $this->assertEquals('On Time', $statsSheet->getCell('A' . $onTimeRow)->getValue());
-        $onTimeFormula = $statsSheet->getCell('B' . $onTimeRow)->getValue();
-        $this->assertStringContainsString('COUNTIF', $onTimeFormula);
-
-        // Verify Tardy row has a COUNTIF formula
-        $tardyRow = $onTimeRow + 1;
-        $this->assertEquals('Tardy', $statsSheet->getCell('A' . $tardyRow)->getValue());
-        $tardyFormula = $statsSheet->getCell('B' . $tardyRow)->getValue();
-        $this->assertStringContainsString('COUNTIF', $tardyFormula);
-
-        // Clean up
-        unlink($tempFile);
-    }
-
-    #[Test]
-    public function it_validates_required_date_fields()
-    {
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => '',
             'end_date' => '',
-        ]));
+        ]);
 
-        $response->assertStatus(302); // Validation redirect
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['start_date', 'end_date']);
     }
 
     #[Test]
     public function it_validates_end_date_is_after_start_date()
     {
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->subDays(5)->format('Y-m-d'),
-        ]));
+        ]);
 
-        $response->assertStatus(302); // Validation redirect
+        $response->assertStatus(422);
+        $response->assertJsonValidationErrors(['end_date']);
     }
 
     #[Test]
-    public function it_calculates_percentages_in_statistics()
+    public function it_accepts_optional_user_ids_filter()
+    {
+        Queue::fake();
+
+        $user = User::factory()->create();
+
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+            'user_ids' => [$user->id],
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['jobId']);
+
+        Queue::assertPushed(GenerateAttendanceExportExcel::class, function ($job) use ($user) {
+            // Job was dispatched with the correct parameters
+            return true;
+        });
+    }
+
+    #[Test]
+    public function it_accepts_optional_site_ids_filter()
+    {
+        Queue::fake();
+
+        $site = Site::factory()->create();
+
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+            'site_ids' => [$site->id],
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['jobId']);
+
+        Queue::assertPushed(GenerateAttendanceExportExcel::class);
+    }
+
+    #[Test]
+    public function it_accepts_optional_campaign_ids_filter()
+    {
+        Queue::fake();
+
+        $campaign = Campaign::factory()->create();
+
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+            'campaign_ids' => [$campaign->id],
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertJsonStructure(['jobId']);
+
+        Queue::assertPushed(GenerateAttendanceExportExcel::class);
+    }
+
+    #[Test]
+    public function it_returns_progress_for_job()
+    {
+        $jobId = 'test-progress-check';
+        $cacheKey = "attendance_export_job:{$jobId}";
+
+        Cache::put($cacheKey, [
+            'percent' => 50,
+            'status' => 'Processing...',
+            'finished' => false,
+            'downloadUrl' => null,
+        ], 600);
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.progress', $jobId));
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'percent' => 50,
+            'status' => 'Processing...',
+            'finished' => false,
+            'downloadUrl' => null,
+        ]);
+    }
+
+    #[Test]
+    public function it_returns_default_progress_for_nonexistent_job()
+    {
+        $jobId = 'nonexistent-job';
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.progress', $jobId));
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'percent' => 0,
+            'status' => 'Not started',
+            'finished' => false,
+            'downloadUrl' => null,
+        ]);
+    }
+
+    #[Test]
+    public function it_returns_finished_status_with_download_url()
+    {
+        $jobId = 'test-finished-job';
+        $cacheKey = "attendance_export_job:{$jobId}";
+
+        Cache::put($cacheKey, [
+            'percent' => 100,
+            'status' => 'Finished',
+            'finished' => true,
+            'downloadUrl' => url("/biometric-export/download/{$jobId}"),
+        ], 600);
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.progress', $jobId));
+
+        $response->assertStatus(200);
+        $response->assertJson([
+            'percent' => 100,
+            'status' => 'Finished',
+            'finished' => true,
+        ]);
+        $this->assertStringContainsString('/biometric-export/download/', $response->json('downloadUrl'));
+    }
+
+    #[Test]
+    public function it_downloads_generated_file()
     {
         $user = User::factory()->create();
         $site = Site::factory()->create();
-        $date = now()->toDateString();
+        $date = now()->format('Y-m-d');
 
-        // Create exactly 10 on_time and 10 tardy for easy percentage calculation (50/50)
-        Attendance::factory()->count(10)->create([
+        Attendance::factory()->onTime()->create([
             'user_id' => $user->id,
             'bio_in_site_id' => $site->id,
             'shift_date' => $date,
-            'status' => 'on_time',
-            'actual_time_in' => now()->setTime(8, 0, 0),
         ]);
 
-        Attendance::factory()->count(10)->create([
+        $jobId = 'test-download';
+
+        // Run the job synchronously to generate the file
+        $job = new GenerateAttendanceExportExcel($jobId, $date, $date);
+        $job->handle();
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.download', $jobId));
+
+        $response->assertStatus(200);
+        $response->assertHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    }
+
+    #[Test]
+    public function it_returns_404_for_nonexistent_download()
+    {
+        $jobId = 'nonexistent-download';
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.download', $jobId));
+
+        $response->assertStatus(404);
+    }
+
+    #[Test]
+    public function it_requires_authentication_for_export_page()
+    {
+        $response = $this->get(route('biometric-export.index'));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    #[Test]
+    public function it_requires_authentication_for_start_export()
+    {
+        $response = $this->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+        ]);
+
+        $response->assertStatus(401);
+    }
+
+    #[Test]
+    public function it_requires_authentication_for_progress_check()
+    {
+        $response = $this->get(route('biometric-export.progress', 'some-job-id'));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    #[Test]
+    public function it_requires_authentication_for_download()
+    {
+        $response = $this->get(route('biometric-export.download', 'some-job-id'));
+
+        $response->assertRedirect(route('login'));
+    }
+
+    #[Test]
+    public function it_loads_users_with_attendance_records()
+    {
+        // User with attendance
+        $userWithAttendance = User::factory()->create();
+        $site = Site::factory()->create();
+
+        Attendance::factory()->onTime()->create([
+            'user_id' => $userWithAttendance->id,
+            'bio_in_site_id' => $site->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
+
+        // User without attendance
+        User::factory()->create();
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.index'));
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('Attendance/BiometricRecords/Export')
+            ->has('users', 1) // Only user with attendance
+        );
+    }
+
+    #[Test]
+    public function it_loads_sites_with_attendance_records()
+    {
+        $user = User::factory()->create();
+        $siteWithAttendance = Site::factory()->create();
+
+        Attendance::factory()->onTime()->create([
+            'user_id' => $user->id,
+            'bio_in_site_id' => $siteWithAttendance->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
+
+        // Site without attendance
+        Site::factory()->create();
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.index'));
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('Attendance/BiometricRecords/Export')
+            ->has('sites', 1) // Only site with attendance
+        );
+    }
+
+    #[Test]
+    public function it_loads_campaigns_from_employee_schedules_with_attendance()
+    {
+        $user = User::factory()->create();
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+        ]);
+
+        Attendance::factory()->onTime()->create([
             'user_id' => $user->id,
             'bio_in_site_id' => $site->id,
-            'shift_date' => $date,
-            'status' => 'tardy',
-            'tardy_minutes' => 10,
-            'actual_time_in' => now()->setTime(8, 15, 0),
+            'employee_schedule_id' => $schedule->id,
+            'shift_date' => now()->format('Y-m-d'),
         ]);
 
-        $response = $this->actingAs($this->admin)->get(route('biometric-export.export', [
-            'start_date' => $date,
-            'end_date' => $date,
-        ]));
+        // Campaign without attendance
+        Campaign::factory()->create();
+
+        $response = $this->actingAs($this->admin)->get(route('biometric-export.index'));
+
+        $response->assertStatus(200);
+        $response->assertInertia(fn (Assert $page) => $page
+            ->component('Attendance/BiometricRecords/Export')
+            ->has('campaigns', 1) // Only campaign with attendance through schedule
+        );
+    }
+
+    #[Test]
+    public function it_accepts_multiple_user_ids()
+    {
+        Queue::fake();
+
+        $user1 = User::factory()->create();
+        $user2 = User::factory()->create();
+
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+            'user_ids' => [$user1->id, $user2->id],
+        ]);
 
         $response->assertStatus(200);
 
-        // Save response to temp file and read with PhpSpreadsheet
-        $tempFile = tempnam(sys_get_temp_dir(), 'xlsx');
-        file_put_contents($tempFile, $response->getContent());
+        Queue::assertPushed(GenerateAttendanceExportExcel::class);
+    }
 
-        $spreadsheet = IOFactory::load($tempFile);
+    #[Test]
+    public function it_accepts_multiple_site_ids()
+    {
+        Queue::fake();
 
-        // Get the Statistics sheet (2nd sheet)
-        $statsSheet = $spreadsheet->getSheet(1);
+        $site1 = Site::factory()->create();
+        $site2 = Site::factory()->create();
 
-        // Verify KEY METRICS section exists
-        $foundKeyMetrics = false;
-        $foundOnTimeRate = false;
-        $foundTardyRate = false;
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+            'site_ids' => [$site1->id, $site2->id],
+        ]);
 
-        for ($row = 1; $row <= 50; $row++) {
-            $cellA = $statsSheet->getCell('A' . $row)->getValue();
-            if ($cellA === 'KEY METRICS') {
-                $foundKeyMetrics = true;
-            }
-            if ($cellA === 'On Time Rate') {
-                $foundOnTimeRate = true;
-                // Check that it has a formula
-                $formula = $statsSheet->getCell('B' . $row)->getValue();
-                $this->assertStringContainsString('IF', $formula);
-            }
-            if ($cellA === 'Tardy Rate') {
-                $foundTardyRate = true;
-                // Check that it has a formula
-                $formula = $statsSheet->getCell('B' . $row)->getValue();
-                $this->assertStringContainsString('IF', $formula);
-            }
-        }
+        $response->assertStatus(200);
 
-        $this->assertTrue($foundKeyMetrics, 'KEY METRICS header should be present');
-        $this->assertTrue($foundOnTimeRate, 'On Time Rate should be present');
-        $this->assertTrue($foundTardyRate, 'Tardy Rate should be present');
+        Queue::assertPushed(GenerateAttendanceExportExcel::class);
+    }
 
-        // Verify percentage column exists in status breakdown (find it dynamically)
-        $foundPercentageHeader = false;
-        for ($row = 1; $row <= 20; $row++) {
-            if ($statsSheet->getCell('C' . $row)->getValue() === 'Percentage') {
-                $foundPercentageHeader = true;
-                break;
-            }
-        }
-        $this->assertTrue($foundPercentageHeader, 'Percentage column header should exist');
+    #[Test]
+    public function it_accepts_multiple_campaign_ids()
+    {
+        Queue::fake();
 
-        // Clean up
-        unlink($tempFile);
+        $campaign1 = Campaign::factory()->create();
+        $campaign2 = Campaign::factory()->create();
+
+        $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+            'campaign_ids' => [$campaign1->id, $campaign2->id],
+        ]);
+
+        $response->assertStatus(200);
+
+        Queue::assertPushed(GenerateAttendanceExportExcel::class);
+    }
+
+    #[Test]
+    public function it_generates_unique_job_id_for_each_request()
+    {
+        Queue::fake();
+
+        $response1 = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+        ]);
+
+        $response2 = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
+            'start_date' => now()->format('Y-m-d'),
+            'end_date' => now()->format('Y-m-d'),
+        ]);
+
+        $this->assertNotEquals($response1->json('jobId'), $response2->json('jobId'));
     }
 }

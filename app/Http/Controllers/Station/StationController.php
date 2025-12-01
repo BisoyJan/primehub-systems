@@ -18,6 +18,12 @@ use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Str;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Response;
+use ZipArchive;
+use Endroid\QrCode\Builder\Builder;
+use Endroid\QrCode\Encoding\Encoding;
+use Endroid\QrCode\ErrorCorrectionLevel;
+use Endroid\QrCode\Writer\PngWriter;
+use Endroid\QrCode\Writer\SvgWriter;
 
 class StationController extends Controller
 {
@@ -58,7 +64,7 @@ class StationController extends Controller
         if (!file_exists($zipPath)) {
             abort(404, 'ZIP file not found');
         }
-        return Response::download($zipPath, $zipFileName);
+        return Response::download($zipPath, 'all-station-qrcodes.zip');
     }
 
     public function zipSelected(Request $request)
@@ -100,7 +106,138 @@ class StationController extends Controller
         if (!file_exists($zipPath)) {
             abort(404, 'ZIP file not found');
         }
-        return Response::download($zipPath, $zipFileName);
+        return Response::download($zipPath, 'selected-station-qrcodes.zip');
+    }
+
+    /**
+     * Stream all stations QR codes as a ZIP file directly
+     * Similar to Excel export - generates and streams in one request
+     */
+    public function bulkAllQRCodesStream(Request $request)
+    {
+        $request->validate([
+            'format' => 'required|string|in:png,svg',
+            'size' => 'required|integer|min:64|max:1024',
+            'metadata' => 'required|integer|in:0,1',
+        ]);
+
+        $format = $request->input('format');
+        $size = $request->input('size');
+
+        $stations = Station::all();
+
+        // Generate ZIP file
+        $zipFileName = 'stations_qr_codes_all_' . date('Y-m-d_His') . '.zip';
+        $zipPath = storage_path("app/temp/{$zipFileName}");
+
+        if (!is_dir(storage_path('app/temp'))) {
+            mkdir(storage_path('app/temp'), 0777, true);
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            return response()->json(['error' => 'Failed to create ZIP file'], 500);
+        }
+
+        foreach ($stations as $station) {
+            $qrData = url("/stations/scan/{$station->id}");
+            $writer = $format === 'svg' ? new SvgWriter() : new PngWriter();
+            $stationNumber = $station->station_number;
+
+            $builder = new Builder(
+                writer: $writer,
+                data: $qrData,
+                encoding: new Encoding('UTF-8'),
+                errorCorrectionLevel: ErrorCorrectionLevel::High,
+                size: $size,
+                margin: 10,
+                labelText: $stationNumber
+            );
+
+            $result = $builder->build();
+            $fileName = "station-{$stationNumber}.{$format}";
+            $zip->addFromString($fileName, $result->getString());
+        }
+
+        $zip->close();
+
+        // If no stations, create an empty ZIP
+        if ($stations->count() === 0 && !file_exists($zipPath)) {
+            file_put_contents($zipPath, hex2bin('504b0506' . str_repeat('00', 18)));
+        }
+
+        // Stream the file and delete after sending
+        return response()->download($zipPath, $zipFileName, [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename="' . $zipFileName . '"',
+        ])->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Stream selected stations QR codes as a ZIP file directly
+     * Similar to Excel export - generates and streams in one request
+     */
+    public function zipSelectedStream(Request $request)
+    {
+        $request->validate([
+            'station_ids' => 'required|array',
+            'station_ids.*' => 'integer|exists:stations,id',
+            'format' => 'required|string|in:png,svg',
+            'size' => 'required|integer|min:64|max:1024',
+            'metadata' => 'required|integer|in:0,1',
+        ]);
+
+        $format = $request->input('format');
+        $size = $request->input('size');
+        $stationIds = $request->input('station_ids');
+
+        $stations = Station::whereIn('id', $stationIds)->get();
+
+        // Generate ZIP file
+        $zipFileName = 'stations_qr_codes_selected_' . date('Y-m-d_His') . '.zip';
+        $zipPath = storage_path("app/temp/{$zipFileName}");
+
+        if (!is_dir(storage_path('app/temp'))) {
+            mkdir(storage_path('app/temp'), 0777, true);
+        }
+
+        $zip = new ZipArchive();
+        if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
+            return response()->json(['error' => 'Failed to create ZIP file'], 500);
+        }
+
+        foreach ($stations as $station) {
+            $qrData = url("/stations/scan/{$station->id}");
+            $writer = $format === 'svg' ? new SvgWriter() : new PngWriter();
+            $stationNumber = $station->station_number;
+
+            $builder = new Builder(
+                writer: $writer,
+                data: $qrData,
+                encoding: new Encoding('UTF-8'),
+                errorCorrectionLevel: ErrorCorrectionLevel::High,
+                size: $size,
+                margin: 10,
+                labelText: $stationNumber
+            );
+
+            $result = $builder->build();
+            $fileName = "station-{$stationNumber}.{$format}";
+            $zip->addFromString($fileName, $result->getString());
+        }
+
+        $zip->close();
+
+        // If no stations, create an empty ZIP
+        if ($stations->count() === 0 && !file_exists($zipPath)) {
+            file_put_contents($zipPath, hex2bin('504b0506' . str_repeat('00', 18)));
+        }
+
+        // Stream the file and delete after sending
+        return response()->download($zipPath, $zipFileName, [
+            'Content-Type' => 'application/zip',
+            'Content-Disposition' => 'attachment; filename="' . $zipFileName . '"',
+        ])->deleteFileAfterSend(true);
     }
 
     public function json(Station $station)

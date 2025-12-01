@@ -1,5 +1,5 @@
 import { Head, usePage } from '@inertiajs/react';
-import React, { useState, useMemo, useRef } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Download, Loader2, FileSpreadsheet, Check, ChevronsUpDown } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
@@ -15,8 +15,9 @@ import { Can } from '@/components/authorization';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Progress } from '@/components/ui/progress';
+import { toast } from 'sonner';
 import { index as attendanceIndex } from '@/routes/attendance';
-import biometricExportRoutes, { index as biometricExportIndex } from '@/routes/biometric-export';
+import { index as biometricExportIndex } from '@/routes/biometric-export';
 
 interface User {
     id: number;
@@ -66,7 +67,8 @@ export default function Export() {
     const [isExporting, setIsExporting] = useState(false);
     const [exportProgress, setExportProgress] = useState(0);
     const [exportStatus, setExportStatus] = useState<string>('');
-    const abortControllerRef = useRef<AbortController | null>(null);
+    const [exportJobId, setExportJobId] = useState<string | null>(null);
+    const exportIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [isSitePopoverOpen, setIsSitePopoverOpen] = useState(false);
     const [isCampaignPopoverOpen, setIsCampaignPopoverOpen] = useState(false);
@@ -128,155 +130,115 @@ export default function Export() {
         );
     }, [campaigns, campaignSearchQuery]);
 
-    const handleExport = async () => {
+    const handleExport = () => {
         if (!startDate || !endDate) {
-            alert('Please select both start and end dates');
+            toast.error('Please select both start and end dates');
+            return;
+        }
+
+        const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+        if (!csrfToken) {
+            toast.error('CSRF token not found');
             return;
         }
 
         setIsExporting(true);
         setExportProgress(0);
-        setExportStatus('Preparing export...');
+        setExportStatus('Starting export...');
 
-        // Build query string
-        const params = new URLSearchParams({
+        // Build request body
+        const body = {
             start_date: startDate,
             end_date: endDate,
-        });
+            user_ids: selectedUsers,
+            site_ids: selectedSites,
+            campaign_ids: selectedCampaigns,
+        };
 
-        // Add array parameters
-        selectedUsers.forEach(id => params.append('user_ids[]', id.toString()));
-        selectedSites.forEach(id => params.append('site_ids[]', id.toString()));
-        selectedCampaigns.forEach(id => params.append('campaign_ids[]', id.toString()));
-
-        const url = `${biometricExportRoutes.export.url()}?${params.toString()}`;
-
-        try {
-            // Create abort controller for potential cancellation
-            abortControllerRef.current = new AbortController();
-
-            setExportProgress(10);
-            setExportStatus('Fetching attendance records...');
-
-            const response = await fetch(url, {
-                signal: abortControllerRef.current.signal,
-            });
-
-            if (!response.ok) {
-                throw new Error(`Export failed: ${response.statusText}`);
-            }
-
-            setExportProgress(50);
-            setExportStatus('Generating Excel file...');
-
-            // Get total size if available
-            const contentLength = response.headers.get('content-length');
-            const total = contentLength ? parseInt(contentLength, 10) : 0;
-
-            // Read the response as a stream to track progress
-            const reader = response.body?.getReader();
-            const chunks: Uint8Array[] = [];
-            let receivedLength = 0;
-
-            if (reader) {
-                while (true) {
-                    const { done, value } = await reader.read();
-
-                    if (done) break;
-
-                    chunks.push(value);
-                    receivedLength += value.length;
-
-                    // Update progress based on download
-                    if (total > 0) {
-                        const downloadProgress = 50 + Math.round((receivedLength / total) * 40);
-                        setExportProgress(downloadProgress);
-                        setExportStatus(`Downloading... ${formatBytes(receivedLength)} / ${formatBytes(total)}`);
-                    } else {
-                        setExportStatus(`Downloading... ${formatBytes(receivedLength)}`);
-                        // Simulate progress when content-length is unknown
-                        setExportProgress(prev => Math.min(prev + 1, 90));
-                    }
+        fetch('/biometric-export/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrfToken,
+            },
+            body: JSON.stringify(body),
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.jobId) {
+                    setExportJobId(data.jobId);
+                } else {
+                    toast.error('Failed to start export');
+                    setIsExporting(false);
                 }
-            }
-
-            setExportProgress(95);
-            setExportStatus('Preparing download...');
-
-            // Combine chunks into a single Uint8Array
-            const allChunks = new Uint8Array(receivedLength);
-            let position = 0;
-            for (const chunk of chunks) {
-                allChunks.set(chunk, position);
-                position += chunk.length;
-            }
-
-            // Create blob and download
-            const blob = new Blob([allChunks], {
-                type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            })
+            .catch(err => {
+                console.error('Export start error:', err);
+                toast.error('Failed to start export');
+                setIsExporting(false);
             });
+    };
 
-            // Extract filename from Content-Disposition header or generate default
-            const contentDisposition = response.headers.get('content-disposition');
-            let filename = `attendance_export_${startDate}_to_${endDate}.xlsx`;
-            if (contentDisposition) {
-                const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
-                if (filenameMatch && filenameMatch[1]) {
-                    filename = filenameMatch[1].replace(/['"]/g, '');
-                }
+    // Poll for export progress
+    useEffect(() => {
+        if (isExporting && exportJobId) {
+            if (exportIntervalRef.current) {
+                clearInterval(exportIntervalRef.current);
+                exportIntervalRef.current = null;
             }
 
-            // Trigger download
-            const downloadUrl = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = filename;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(downloadUrl);
+            const pollProgress = () => {
+                fetch(`/biometric-export/progress/${exportJobId}`)
+                    .then(res => {
+                        if (!res.ok) throw new Error('Failed to fetch progress');
+                        return res.json();
+                    })
+                    .then(data => {
+                        setExportProgress(data.percent || 0);
+                        setExportStatus(data.status || 'Processing...');
 
-            setExportProgress(100);
-            setExportStatus('Export complete!');
+                        if (data.finished) {
+                            if (exportIntervalRef.current) {
+                                clearInterval(exportIntervalRef.current);
+                                exportIntervalRef.current = null;
+                            }
 
-            // Reset after a short delay
-            setTimeout(() => {
-                setIsExporting(false);
-                setExportProgress(0);
-                setExportStatus('');
-            }, 1500);
+                            if (data.error) {
+                                toast.error('Export failed');
+                                setIsExporting(false);
+                                setExportJobId(null);
+                            } else if (data.downloadUrl) {
+                                window.location.href = data.downloadUrl;
+                                toast.success('Export complete! Download started.');
 
-        } catch (error) {
-            if (error instanceof Error && error.name === 'AbortError') {
-                setExportStatus('Export cancelled');
-            } else {
-                setExportStatus('Export failed. Please try again.');
-                console.error('Export error:', error);
+                                // Reset after a short delay
+                                setTimeout(() => {
+                                    setIsExporting(false);
+                                    setExportProgress(0);
+                                    setExportStatus('');
+                                    setExportJobId(null);
+                                }, 1500);
+                            }
+                        }
+                    })
+                    .catch(err => {
+                        console.error('Progress fetch error:', err);
+                    });
+            };
+
+            // Poll immediately
+            pollProgress();
+            // Then poll every 500ms
+            exportIntervalRef.current = setInterval(pollProgress, 500);
+        }
+
+        return () => {
+            if (exportIntervalRef.current) {
+                clearInterval(exportIntervalRef.current);
+                exportIntervalRef.current = null;
             }
-
-            setTimeout(() => {
-                setIsExporting(false);
-                setExportProgress(0);
-                setExportStatus('');
-            }, 2000);
-        } finally {
-            abortControllerRef.current = null;
-        }
-    };
-
-    const cancelExport = () => {
-        if (abortControllerRef.current) {
-            abortControllerRef.current.abort();
-        }
-    };
-
-    const formatBytes = (bytes: number): string => {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    };
+        };
+    }, [isExporting, exportJobId]);
 
     const toggleUser = (userId: number) => {
         setSelectedUsers(prev =>
@@ -649,15 +611,6 @@ export default function Export() {
                                     </div>
                                 )}
                                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                                    {isExporting && (
-                                        <Button
-                                            variant="outline"
-                                            onClick={cancelExport}
-                                            className="w-full sm:w-auto"
-                                        >
-                                            Cancel
-                                        </Button>
-                                    )}
                                     <Can permission="biometric.export">
                                         <Button
                                             onClick={handleExport}

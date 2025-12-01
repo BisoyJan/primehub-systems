@@ -108,6 +108,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('zip/{jobId}/download', [StationController::class, 'downloadZip']);
         Route::get('selected-progress/{jobId}', [StationController::class, 'selectedZipProgress']);
         Route::get('selected-zip/{jobId}/download', [StationController::class, 'downloadSelectedZip']);
+        // Streaming endpoints (no job queue - direct download like Excel export)
+        Route::post('bulk-all-stream', [StationController::class, 'bulkAllQRCodesStream']);
+        Route::post('zip-selected-stream', [StationController::class, 'zipSelectedStream']);
     });
     Route::get('stations/scan/{station}', [StationController::class, 'scanResult'])->name('stations.scanResult');
 
@@ -212,7 +215,10 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->middleware('permission:biometric.export')
         ->group(function () {
             Route::get('/', [BiometricExportController::class, 'index'])->name('index');
-            Route::get('export', [BiometricExportController::class, 'export'])->name('export');
+            // Job-based export endpoints
+            Route::post('start', [BiometricExportController::class, 'startExport'])->name('start');
+            Route::get('progress/{jobId}', [BiometricExportController::class, 'exportProgress'])->name('progress');
+            Route::get('download/{jobId}', [BiometricExportController::class, 'downloadExport'])->name('download');
         });
 
     // Attendance Uploads

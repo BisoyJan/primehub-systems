@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { Head, router, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { ArrowRight, Search, Trash2, History, CheckSquare, List, RefreshCw } from 'lucide-react';
+import { ArrowRight, Search, History, CheckSquare, List, RefreshCw } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
+import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import {
     Card,
     CardContent,
@@ -173,8 +174,6 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
             toast.error('No PC assigned to this station');
             return;
         }
-
-        if (!confirm(`Remove PC from ${station.station_number}?`)) return;
 
         setIsMutating(true);
         router.delete(pcTransfersRemoveRoute().url, {
@@ -468,19 +467,19 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                                             <Link href={pcTransfersTransferPageRoute(station.id).url}>
                                                                 <Button size="sm">
                                                                     <ArrowRight size={14} className="mr-1" />
-                                                                    {station.pc_spec_id ? 'Transfer PC' : 'Assign PC'}
+                                                                    {station.pc_spec_id ? 'Transfer' : 'Assign'}
                                                                 </Button>
                                                             </Link>
                                                         </Can>
                                                         {station.pc_spec_id && (
                                                             <Can permission="pc_transfers.remove">
-                                                                <Button
-                                                                    size="sm"
-                                                                    variant="destructive"
-                                                                    onClick={() => handleRemovePC(station)}
-                                                                >
-                                                                    <Trash2 size={14} />
-                                                                </Button>
+                                                                <DeleteConfirmDialog
+                                                                    onConfirm={() => handleRemovePC(station)}
+                                                                    title="Unassign PC from Station"
+                                                                    description={`Are you sure you want to unassign the PC from station "${station.station_number}"? The PC will become available for assignment to other stations.`}
+                                                                    triggerLabel="Unassign"
+                                                                    disabled={isMutating}
+                                                                />
                                                             </Can>
                                                         )}
                                                     </div>

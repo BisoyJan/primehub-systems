@@ -64,6 +64,7 @@ export default function PcSpecTable({
     const [filterRam, setFilterRam] = React.useState("");
     const [filterDisk, setFilterDisk] = React.useState("");
     const [page, setPage] = React.useState(1);
+    const [hasAutoNavigated, setHasAutoNavigated] = React.useState(false);
     const pageSize = 7;
 
     const filteredSpecs = pcSpecs.filter(spec => {
@@ -78,6 +79,23 @@ export default function PcSpecTable({
 
         return isNotUsed && matchesSearch && matchesRam && matchesDisk;
     });
+
+    // Auto-navigate to the page containing the selected PC spec on initial load
+    React.useEffect(() => {
+        if (hasAutoNavigated) return;
+
+        const currentSelectedId = multiSelect ? selectedIds[0] : selectedId;
+        if (!currentSelectedId) return;
+
+        const selectedIndex = filteredSpecs.findIndex(spec => String(spec.id) === currentSelectedId);
+        if (selectedIndex !== -1) {
+            const targetPage = Math.floor(selectedIndex / pageSize) + 1;
+            if (targetPage !== page) {
+                setPage(targetPage);
+            }
+            setHasAutoNavigated(true);
+        }
+    }, [filteredSpecs, selectedId, selectedIds, multiSelect, hasAutoNavigated, page, pageSize]);
 
     const paginatedSpecs = filteredSpecs.slice((page - 1) * pageSize, page * pageSize);
     const totalPages = Math.ceil(filteredSpecs.length / pageSize);
@@ -168,8 +186,8 @@ export default function PcSpecTable({
                                 key={spec.id}
                                 onClick={() => onSelect(String(spec.id))}
                                 className={`border rounded-lg p-4 shadow-sm space-y-3 cursor-pointer transition-all ${isSelected
-                                        ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
-                                        : 'bg-card hover:bg-gray-50 dark:hover:bg-gray-800'
+                                    ? 'bg-blue-50 dark:bg-blue-950 border-blue-500 ring-2 ring-blue-200 dark:ring-blue-800'
+                                    : 'bg-card hover:bg-gray-50 dark:hover:bg-gray-800'
                                     }`}
                             >
                                 <div className="flex items-start gap-3">
@@ -180,6 +198,7 @@ export default function PcSpecTable({
                                             onChange={() => onSelect(String(spec.id))}
                                             className="mt-1 h-4 w-4 rounded border-gray-300"
                                             onClick={(e) => e.stopPropagation()}
+                                            aria-label={`Select ${spec.model}`}
                                         />
                                     ) : (
                                         <input
@@ -188,6 +207,7 @@ export default function PcSpecTable({
                                             onChange={() => onSelect(String(spec.id))}
                                             className="mt-1 h-4 w-4"
                                             onClick={(e) => e.stopPropagation()}
+                                            aria-label={`Select ${spec.model}`}
                                         />
                                     )}
                                     <div className="flex-1">
@@ -217,8 +237,8 @@ export default function PcSpecTable({
                                         <button
                                             type="button"
                                             className={`underline text-sm mt-2 ${isSelected
-                                                    ? 'text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200'
-                                                    : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
+                                                ? 'text-blue-700 dark:text-blue-300 hover:text-blue-800 dark:hover:text-blue-200'
+                                                : 'text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300'
                                                 }`}
                                             onClick={(e) => {
                                                 e.stopPropagation();

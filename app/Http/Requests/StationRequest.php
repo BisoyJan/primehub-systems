@@ -19,6 +19,13 @@ class StationRequest extends FormRequest
                 'station_number' => strtoupper((string) $this->input('station_number')),
             ]);
         }
+
+        // Convert empty pc_spec_id to null
+        if ($this->has('pc_spec_id') && ($this->input('pc_spec_id') === '' || $this->input('pc_spec_id') === '0')) {
+            $this->merge([
+                'pc_spec_id' => null,
+            ]);
+        }
     }
 
     public function rules(): array

@@ -66,7 +66,7 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
         quantity: m.pivot.quantity
     })) || [];
 
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, processing, errors } = useForm({
         site_id: String(station.site_id),
         station_number: station.station_number,
         campaign_id: String(station.campaign_id),
@@ -103,7 +103,13 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(stationsUpdateRoute(station.id).url, {
+
+        // Use router.put with transformed data to properly handle null values
+        router.put(stationsUpdateRoute(station.id).url, {
+            ...data,
+            pc_spec_id: data.pc_spec_id || null,
+            monitor_ids: data.monitor_ids.length > 0 ? data.monitor_ids : [],
+        }, {
             onSuccess: () => {
                 toast.success("Station updated");
                 router.visit(stationsIndexRoute().url);
