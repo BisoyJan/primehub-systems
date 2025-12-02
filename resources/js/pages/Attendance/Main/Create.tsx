@@ -161,7 +161,10 @@ export default function Create({ users, campaigns }: Props) {
             user.schedule.site_name === filterShift.site;
     });
 
-    const selectedUser = users.find(user => user.id === Number(data.user_id));
+    const selectedUser = data.user_id ? users.find(user => user.id === Number(data.user_id)) : undefined;
+
+    // Debug: Log selected user info
+    console.log('Selected user_id:', data.user_id, 'Found user:', selectedUser?.name, 'Has schedule:', !!selectedUser?.schedule);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -532,6 +535,40 @@ export default function Create({ users, campaigns }: Props) {
                                             </Command>
                                         </PopoverContent>
                                     </Popover>
+                                    {/* Display selected employee schedule for single entry mode */}
+                                    {!isBulkMode && selectedUser && (
+                                        <div className="mt-3 p-4 bg-muted/50 border rounded-lg">
+                                            <p className="text-sm font-semibold mb-2 flex items-center gap-2">
+                                                <span>📅</span> Employee Schedule
+                                            </p>
+                                            {selectedUser.schedule ? (
+                                                <div className="text-sm space-y-1.5">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-muted-foreground w-24">Shift Type:</span>
+                                                        <span className="font-medium capitalize">{selectedUser.schedule.shift_type.replace('_', ' ')}</span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-muted-foreground w-24">Time In/Out:</span>
+                                                        <span className="font-medium">
+                                                            {formatTimeForDisplay(selectedUser.schedule.scheduled_time_in)} - {formatTimeForDisplay(selectedUser.schedule.scheduled_time_out)}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-muted-foreground w-24">Site:</span>
+                                                        <span className="font-medium">{selectedUser.schedule.site_name}</span>
+                                                    </div>
+                                                    {selectedUser.schedule.campaign_name && (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-muted-foreground w-24">Campaign:</span>
+                                                            <span className="font-medium">{selectedUser.schedule.campaign_name}</span>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="text-sm text-muted-foreground italic">No schedule assigned to this employee</p>
+                                            )}
+                                        </div>
+                                    )}
                                     {errors.user_id && (
                                         <p className="text-sm text-red-500">{errors.user_id}</p>
                                     )}
@@ -609,7 +646,7 @@ export default function Create({ users, campaigns }: Props) {
                                         <Label htmlFor="actual_time_in">
                                             Actual Time In
                                             <span className="ml-2 text-xs text-muted-foreground font-normal">
-                                                ({is24HourFormat ? '24-hour format' : '12-hour format'}) [Debug: {timeFormat} | Is24: {is24HourFormat ? 'YES' : 'NO'}]
+                                                ({is24HourFormat ? '24-hour format' : '12-hour format'})
                                             </span>
                                         </Label>
                                         <div className="grid grid-cols-2 gap-2">

@@ -48,7 +48,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, Filter, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
@@ -588,7 +588,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             </SelectContent>
                         </Select>
 
-                        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
                             <Input
                                 type="date"
@@ -598,7 +598,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                        <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">To:</span>
                             <Input
                                 type="date"
