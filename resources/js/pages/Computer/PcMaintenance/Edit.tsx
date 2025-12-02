@@ -22,11 +22,17 @@ import {
     edit as pcMaintenanceEditRoute,
     update as pcMaintenanceUpdateRoute,
 } from '@/routes/pc-maintenance';
-import { index as stationsIndexRoute } from '@/routes/stations';
+import { index as pcSpecsIndexRoute } from '@/routes/pcspecs';
 
 interface Site {
     id: number;
     name: string;
+}
+
+interface CurrentStation {
+    id: number;
+    station_number: string;
+    site: Site | null;
 }
 
 interface PcSpec {
@@ -36,34 +42,34 @@ interface PcSpec {
     manufacturer: string;
 }
 
-interface Station {
+interface PcSpecItem {
     id: number;
-    station_number: string;
-    site_id: number;
-    pc_spec_id: number | null;
-    site: Site;
-    pc_spec: PcSpec | null;
+    pc_number: string;
+    model: string;
+    manufacturer: string;
+    current_station: CurrentStation | null;
 }
 
 interface Maintenance {
     id: number;
-    station_id: number;
+    pc_spec_id: number;
     last_maintenance_date: string;
     next_due_date: string;
     maintenance_type: string | null;
     notes: string | null;
     performed_by: string | null;
     status: 'completed' | 'pending' | 'overdue';
-    station: Station;
+    pc_spec: PcSpec;
+    current_station: CurrentStation | null;
 }
 
 interface EditProps {
     maintenance: Maintenance;
-    stations: Station[];
+    pcSpecs: PcSpecItem[];
 }
 
 interface FormData {
-    station_id: number;
+    pc_spec_id: number;
     last_maintenance_date: string;
     next_due_date: string;
     maintenance_type: string;
@@ -72,10 +78,10 @@ interface FormData {
     status: 'completed' | 'pending' | 'overdue';
 }
 
-export default function Edit({ maintenance, stations }: EditProps) {
+export default function Edit({ maintenance, pcSpecs }: EditProps) {
     const [loading, setLoading] = useState(false);
     const [formData, setFormData] = useState<FormData>({
-        station_id: maintenance.station_id,
+        pc_spec_id: maintenance.pc_spec_id,
         last_maintenance_date: maintenance.last_maintenance_date,
         next_due_date: maintenance.next_due_date,
         maintenance_type: maintenance.maintenance_type || '',
@@ -87,16 +93,18 @@ export default function Edit({ maintenance, stations }: EditProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Edit PC Maintenance',
         breadcrumbs: [
-            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'PC Specs', href: pcSpecsIndexRoute().url },
             { title: 'PC Maintenance', href: pcMaintenanceIndexRoute().url },
             { title: 'Edit', href: pcMaintenanceEditRoute(maintenance.id).url }
         ]
     });
 
-    // Get display name for a station
-    const getStationDisplay = (station: Station): string => {
-        const pcNumber = station.pc_spec?.pc_number || 'No PC';
-        return `${station.station_number} - ${pcNumber} (${station.site.name})`;
+    // Get display name for a PC spec
+    const getPcSpecDisplay = (pcSpec: PcSpecItem): string => {
+        const stationInfo = pcSpec.current_station
+            ? `${pcSpec.current_station.station_number} (${pcSpec.current_station.site?.name || 'N/A'})`
+            : 'Not assigned';
+        return `${pcSpec.pc_number} - ${pcSpec.model} | Station: ${stationInfo}`;
     };
 
     const handleSubmit = (e: FormEvent) => {
@@ -110,7 +118,7 @@ export default function Edit({ maintenance, stations }: EditProps) {
         setLoading(true);
 
         router.put(pcMaintenanceUpdateRoute(maintenance.id).url, {
-            station_id: formData.station_id,
+            pc_spec_id: formData.pc_spec_id,
             last_maintenance_date: formData.last_maintenance_date,
             next_due_date: formData.next_due_date,
             maintenance_type: formData.maintenance_type,
@@ -141,7 +149,7 @@ export default function Edit({ maintenance, stations }: EditProps) {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <PageHeader
                     title="Edit PC Maintenance Record"
-                    description={`Editing maintenance record for Station ${maintenance.station.station_number}`}
+                    description={`Editing maintenance record for PC ${maintenance.pc_spec.pc_number}`}
                 />
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -150,35 +158,55 @@ export default function Edit({ maintenance, stations }: EditProps) {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Calendar className="h-5 w-5" />
-                                Station Information
+                                PC Information
                             </CardTitle>
                             <CardDescription>
-                                Select the station for this maintenance record
+                                Select the PC for this maintenance record
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div>
-                                <Label htmlFor="station_id">
-                                    Station <span className="text-red-500">*</span>
+                                <Label htmlFor="pc_spec_id">
+                                    PC <span className="text-red-500">*</span>
                                 </Label>
                                 <Select
-                                    value={formData.station_id.toString()}
+                                    value={formData.pc_spec_id.toString()}
                                     onValueChange={(value) =>
-                                        setFormData({ ...formData, station_id: parseInt(value) })
+                                        setFormData({ ...formData, pc_spec_id: parseInt(value) })
                                     }
                                 >
                                     <SelectTrigger>
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {stations.map(station => (
-                                            <SelectItem key={station.id} value={station.id.toString()}>
-                                                {getStationDisplay(station)}
+                                        {pcSpecs.map(pcSpec => (
+                                            <SelectItem key={pcSpec.id} value={pcSpec.id.toString()}>
+                                                {getPcSpecDisplay(pcSpec)}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
                             </div>
+
+                            {/* Display current station info */}
+                            {maintenance.current_station && (
+                                <div className="mt-4 p-3 bg-muted rounded-md">
+                                    <p className="text-sm text-muted-foreground">
+                                        <span className="font-medium">Current Station:</span>{' '}
+                                        {maintenance.current_station.station_number}
+                                        {maintenance.current_station.site && (
+                                            <> ({maintenance.current_station.site.name})</>
+                                        )}
+                                    </p>
+                                </div>
+                            )}
+                            {!maintenance.current_station && (
+                                <div className="mt-4 p-3 bg-muted rounded-md">
+                                    <p className="text-sm text-muted-foreground italic">
+                                        This PC is not currently assigned to any station.
+                                    </p>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
 

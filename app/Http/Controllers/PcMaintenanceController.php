@@ -3,8 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\PcMaintenance;
+use App\Models\PcSpec;
 use App\Models\Site;
-use App\Models\Station;
 use App\Http\Requests\PcMaintenanceRequest;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,41 +18,57 @@ class PcMaintenanceController extends Controller
      */
     public function index(Request $request): Response
     {
-        $query = PcMaintenance::with(['station.site', 'station.pcSpec']);
+        $query = PcMaintenance::with(['pcSpec.stations.site']);
 
         // Filter by status
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // Filter by site
+        // Filter by site (via pc_spec -> stations -> site)
         if ($request->filled('site')) {
-            $query->whereHas('station', fn($q) => $q->where('site_id', $request->site));
+            $query->whereHas('pcSpec.stations', fn($q) => $q->where('site_id', $request->site));
         }
 
-        // Filter by Station number or PC number
+        // Filter by PC number
         if ($request->filled('search')) {
-            $query->whereHas('station', function ($q) use ($request) {
-                $q->where('station_number', 'like', "%{$request->search}%")
-                  ->orWhereHas('pcSpec', fn($pcQ) =>
-                      $pcQ->where('pc_number', 'like', "%{$request->search}%")
-                  );
-            });
+            $query->whereHas('pcSpec', fn($q) =>
+                $q->where('pc_number', 'like', "%{$request->search}%")
+                  ->orWhere('model', 'like', "%{$request->search}%")
+            );
         }
 
         // Auto-update overdue statuses
         $this->updateOverdueStatuses();
 
+        // Get all IDs matching current filters (for bulk select all)
+        $allMatchingIds = (clone $query)->pluck('id')->toArray();
+
         $maintenances = $query->orderBy('next_due_date', 'asc')
             ->paginate(10)
             ->withQueryString();
 
+        // Transform data to include current station info
+        $maintenances->through(function ($maintenance) {
+            $currentStation = $maintenance->pcSpec?->stations?->first();
+            $maintenance->current_station = $currentStation ? [
+                'id' => $currentStation->id,
+                'station_number' => $currentStation->station_number,
+                'site' => $currentStation->site ? [
+                    'id' => $currentStation->site->id,
+                    'name' => $currentStation->site->name,
+                ] : null,
+            ] : null;
+            return $maintenance;
+        });
+
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('Station/PcMaintenance/Index', [
+        return Inertia::render('Computer/PcMaintenance/Index', [
             'maintenances' => $maintenances,
             'sites' => $sites,
             'filters' => $request->only(['status', 'search', 'site']),
+            'allMatchingIds' => $allMatchingIds,
         ]);
     }
 
@@ -61,15 +77,32 @@ class PcMaintenanceController extends Controller
      */
     public function create(): Response
     {
-        $stations = Station::with(['pcSpec', 'site'])
-        ->whereNotNull('pc_spec_id')
-            ->orderBy('station_number')
-            ->get();
+        // Get all PC specs with their current station assignment
+        $pcSpecs = PcSpec::with(['stations.site'])
+            ->orderBy('pc_number')
+            ->get()
+            ->map(function ($pcSpec) {
+                $currentStation = $pcSpec->stations->first();
+                return [
+                    'id' => $pcSpec->id,
+                    'pc_number' => $pcSpec->pc_number,
+                    'model' => $pcSpec->model,
+                    'manufacturer' => $pcSpec->manufacturer,
+                    'current_station' => $currentStation ? [
+                        'id' => $currentStation->id,
+                        'station_number' => $currentStation->station_number,
+                        'site' => $currentStation->site ? [
+                            'id' => $currentStation->site->id,
+                            'name' => $currentStation->site->name,
+                        ] : null,
+                    ] : null,
+                ];
+            });
 
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('Station/PcMaintenance/Create', [
-            'stations' => $stations,
+        return Inertia::render('Computer/PcMaintenance/Create', [
+            'pcSpecs' => $pcSpecs,
             'sites' => $sites,
         ]);
     }
@@ -81,8 +114,8 @@ class PcMaintenanceController extends Controller
     {
         $validated = $request->validated();
 
-        $records = collect($validated['station_ids'])->map(fn($stationId) => [
-            'station_id' => $stationId,
+        $records = collect($validated['pc_spec_ids'])->map(fn($pcSpecId) => [
+            'pc_spec_id' => $pcSpecId,
             'last_maintenance_date' => $validated['last_maintenance_date'],
             'next_due_date' => $validated['next_due_date'],
             'maintenance_type' => $validated['maintenance_type'] ?? null,
@@ -104,9 +137,19 @@ class PcMaintenanceController extends Controller
      */
     public function show(PcMaintenance $pcMaintenance): Response
     {
-        $pcMaintenance->load('station.site', 'station.pcSpec');
+        $pcMaintenance->load('pcSpec.stations.site');
 
-        return Inertia::render('Station/PcMaintenance/Show', [
+        $currentStation = $pcMaintenance->pcSpec?->stations?->first();
+        $pcMaintenance->current_station = $currentStation ? [
+            'id' => $currentStation->id,
+            'station_number' => $currentStation->station_number,
+            'site' => $currentStation->site ? [
+                'id' => $currentStation->site->id,
+                'name' => $currentStation->site->name,
+            ] : null,
+        ] : null;
+
+        return Inertia::render('Computer/PcMaintenance/Show', [
             'maintenance' => $pcMaintenance,
         ]);
     }
@@ -116,16 +159,44 @@ class PcMaintenanceController extends Controller
      */
     public function edit(PcMaintenance $pcMaintenance): Response
     {
-        $stations = Station::with(['pcSpec', 'site'])
-            ->whereNotNull('pc_spec_id')
-            ->orderBy('station_number')
-            ->get();
+        $pcMaintenance->load('pcSpec.stations.site');
+
+        $currentStation = $pcMaintenance->pcSpec?->stations?->first();
+        $pcMaintenance->current_station = $currentStation ? [
+            'id' => $currentStation->id,
+            'station_number' => $currentStation->station_number,
+            'site' => $currentStation->site ? [
+                'id' => $currentStation->site->id,
+                'name' => $currentStation->site->name,
+            ] : null,
+        ] : null;
+
+        $pcSpecs = PcSpec::with(['stations.site'])
+            ->orderBy('pc_number')
+            ->get()
+            ->map(function ($pcSpec) {
+                $currentStation = $pcSpec->stations->first();
+                return [
+                    'id' => $pcSpec->id,
+                    'pc_number' => $pcSpec->pc_number,
+                    'model' => $pcSpec->model,
+                    'manufacturer' => $pcSpec->manufacturer,
+                    'current_station' => $currentStation ? [
+                        'id' => $currentStation->id,
+                        'station_number' => $currentStation->station_number,
+                        'site' => $currentStation->site ? [
+                            'id' => $currentStation->site->id,
+                            'name' => $currentStation->site->name,
+                        ] : null,
+                    ] : null,
+                ];
+            });
 
         $sites = Site::orderBy('name')->get();
 
-        return Inertia::render('Station/PcMaintenance/Edit', [
-            'maintenance' => $pcMaintenance->load('station.pcSpec', 'station.site'),
-            'stations' => $stations,
+        return Inertia::render('Computer/PcMaintenance/Edit', [
+            'maintenance' => $pcMaintenance,
+            'pcSpecs' => $pcSpecs,
             'sites' => $sites,
         ]);
     }
@@ -150,6 +221,36 @@ class PcMaintenanceController extends Controller
 
         return redirect()->route('pc-maintenance.index')
             ->with('success', 'PC Maintenance record deleted successfully.');
+    }
+
+    /**
+     * Bulk update maintenance records.
+     */
+    public function bulkUpdate(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'exists:pc_maintenances,id',
+            'last_maintenance_date' => 'required|date',
+            'next_due_date' => 'required|date|after:last_maintenance_date',
+            'maintenance_type' => 'nullable|string|max:255',
+            'performed_by' => 'nullable|string|max:255',
+            'status' => 'required|in:completed,pending,overdue',
+            'notes' => 'nullable|string',
+        ]);
+
+        $count = PcMaintenance::whereIn('id', $validated['ids'])
+            ->update([
+                'last_maintenance_date' => $validated['last_maintenance_date'],
+                'next_due_date' => $validated['next_due_date'],
+                'maintenance_type' => $validated['maintenance_type'] ?? null,
+                'performed_by' => $validated['performed_by'] ?? null,
+                'status' => $validated['status'],
+                'notes' => $validated['notes'] ?? null,
+            ]);
+
+        return redirect()->route('pc-maintenance.index')
+            ->with('success', "{$count} PC Maintenance record(s) updated successfully.");
     }
 
     /**

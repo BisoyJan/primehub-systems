@@ -480,6 +480,7 @@ export default function ItConcernsIndex() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <TableHead>Date</TableHead>
                                     <TableHead>Priority</TableHead>
                                     <TableHead>Submitted By</TableHead>
                                     <TableHead>Site</TableHead>
@@ -488,13 +489,13 @@ export default function ItConcernsIndex() {
                                     <TableHead>Description</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Resolved By</TableHead>
-                                    <TableHead>Date</TableHead>
                                     <TableHead>Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {concernData.data.map((concern) => (
                                     <TableRow key={concern.id}>
+                                        <TableCell className="text-xs">{formatDate(concern.created_at)}</TableCell>
                                         <TableCell>{getPriorityBadge(concern.priority)}</TableCell>
                                         <TableCell className="font-medium">{concern.user?.name || 'N/A'}</TableCell>
                                         <TableCell>{concern.site.name}</TableCell>
@@ -505,7 +506,6 @@ export default function ItConcernsIndex() {
                                         </TableCell>
                                         <TableCell>{getStatusBadge(concern.status)}</TableCell>
                                         <TableCell className="text-sm">{concern.resolved_by?.name || '-'}</TableCell>
-                                        <TableCell className="text-xs">{formatDate(concern.created_at)}</TableCell>
                                         <TableCell>
                                             <div className="flex gap-2">
                                                 {/* Resolve Button - IT/Admin */}

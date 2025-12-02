@@ -218,19 +218,6 @@ export default function Index() {
         }
     }, [selectedPcIds]);
 
-    // Auto-clear selection after 15 minutes of inactivity
-    useEffect(() => {
-        const expiryTime = 15 * 60 * 1000; // 15 minutes
-        const clearTimer = setTimeout(() => {
-            if (selectedPcIds.length > 0) {
-                setSelectedPcIds([]);
-                toast.info('QR code selection cleared after 15 minutes of inactivity');
-            }
-        }, expiryTime);
-
-        return () => clearTimeout(clearTimer);
-    }, [selectedPcIds]);
-
     const selectedZipIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
     // Use new hooks for cleaner code

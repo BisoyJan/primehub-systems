@@ -3,9 +3,8 @@
 namespace Database\Factories;
 
 use App\Models\PcMaintenance;
-use App\Models\Station;
+use App\Models\PcSpec;
 use Illuminate\Database\Eloquent\Factories\Factory;
-use Illuminate\Support\Str;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\PcMaintenance>
@@ -16,11 +15,11 @@ class PcMaintenanceFactory extends Factory
 
     public function definition(): array
     {
-        $station = Station::inRandomOrder()->first();
+        $pcSpec = PcSpec::inRandomOrder()->first();
         $lastDate = $this->faker->dateTimeBetween('-6 months', 'now');
         $nextDate = (clone $lastDate)->modify('+3 months');
         return [
-            'station_id' => $station ? $station->id : Station::factory(),
+            'pc_spec_id' => $pcSpec ? $pcSpec->id : PcSpec::factory(),
             'last_maintenance_date' => $lastDate->format('Y-m-d'),
             'next_due_date' => $nextDate->format('Y-m-d'),
             'maintenance_type' => $this->faker->randomElement(['cleaning', 'hardware check', 'software update']),

@@ -248,7 +248,7 @@ class StationController extends Controller
     // Paginated, searchable index
     public function index(Request $request)
     {
-        $paginated = Station::query()
+        $query = Station::query()
             ->with([
                 'site',
                 'pcSpec.ramSpecs',
@@ -261,8 +261,12 @@ class StationController extends Controller
             ->filterBySite($request->query('site'))
             ->filterByCampaign($request->query('campaign'))
             ->filterByStatus($request->query('status'))
-            ->orderBy('id', 'desc')
-            ->paginate(10)
+            ->orderBy('id', 'desc');
+
+        // Get all IDs matching current filters (for bulk select all)
+        $allMatchingIds = (clone $query)->pluck('id')->toArray();
+
+        $paginated = $query->paginate(10)
             ->withQueryString();
 
         $items = $paginated->getCollection()->map(function (Station $station) {
@@ -309,6 +313,7 @@ class StationController extends Controller
             ],
             'filters' => $this->getFilterOptions(),
             'flash' => session('flash') ?? null,
+            'allMatchingIds' => $allMatchingIds,
         ]);
     }
 

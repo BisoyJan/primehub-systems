@@ -22,7 +22,7 @@ class PcMaintenance extends Model
     }
 
     protected $fillable = [
-        'station_id',
+        'pc_spec_id',
         'last_maintenance_date',
         'next_due_date',
         'maintenance_type',
@@ -36,30 +36,31 @@ class PcMaintenance extends Model
         return [
             'last_maintenance_date' => 'date',
             'next_due_date' => 'date',
-            'station_id' => 'integer',
+            'pc_spec_id' => 'integer',
         ];
     }
 
     /**
-     * Get the station that this maintenance is for.
+     * Get the PC spec that this maintenance is for.
      */
-    public function station(): BelongsTo
+    public function pcSpec(): BelongsTo
     {
-        return $this->belongsTo(Station::class);
+        return $this->belongsTo(PcSpec::class);
     }
 
     /**
-     * Get the PC spec through the station relationship.
+     * Get the current station where this PC is assigned.
+     * Returns the station that currently has this pc_spec_id assigned.
      */
-    public function pcSpec()
+    public function currentStation()
     {
         return $this->hasOneThrough(
-            PcSpec::class,
             Station::class,
-            'id', // Foreign key on stations table
+            PcSpec::class,
             'id', // Foreign key on pc_specs table
-            'station_id', // Local key on pc_maintenances table
-            'pc_spec_id' // Local key on stations table
+            'pc_spec_id', // Foreign key on stations table
+            'pc_spec_id', // Local key on pc_maintenances table
+            'id' // Local key on pc_specs table
         );
     }
 

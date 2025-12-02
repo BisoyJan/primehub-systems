@@ -159,6 +159,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         });
 
     // PC Maintenance
+    Route::post('pc-maintenance/bulk-update', [PcMaintenanceController::class, 'bulkUpdate'])
+        ->name('pc-maintenance.bulkUpdate')
+        ->middleware('permission:pc_maintenance.edit');
     Route::resource('pc-maintenance', PcMaintenanceController::class)
         ->middleware('permission:pc_maintenance.view,pc_maintenance.create,pc_maintenance.edit,pc_maintenance.delete');
 

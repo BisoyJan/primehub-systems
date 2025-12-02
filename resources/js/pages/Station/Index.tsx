@@ -92,7 +92,15 @@ interface Filters {
     statuses: string[];
 }
 
+interface PageProps extends Record<string, unknown> {
+    stations: StationsPayload;
+    flash?: Flash;
+    filters: Filters;
+    allMatchingIds: number[];
+}
+
 export default function StationIndex() {
+    const { stations, filters, allMatchingIds } = usePage<PageProps>().props;
     // QR Code ZIP state
     // Persist selectedStationIds in localStorage
     const LOCAL_STORAGE_KEY = 'station_selected_ids';
@@ -127,6 +135,9 @@ export default function StationIndex() {
     const bulkIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
     const selectedZipIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
 
+    // Track if all records are selected (across all pages)
+    const [isAllRecordsSelected, setIsAllRecordsSelected] = useState(false);
+
     // Selection logic
     // Save selectedStationIds to localStorage on change
     useEffect(() => {
@@ -143,24 +154,61 @@ export default function StationIndex() {
         }
     }, [selectedStationIds]);
 
-    // Auto-clear selection after 15 minutes of inactivity
+    // When "select all records" is active, sync selectedStationIds with allMatchingIds
     useEffect(() => {
-        const expiryTime = 15 * 60 * 1000; // 15 minutes
-        const clearTimer = setTimeout(() => {
-            if (selectedStationIds.length > 0) {
-                setSelectedStationIds([]);
-                toast.info('QR code selection cleared after 15 minutes of inactivity');
-            }
-        }, expiryTime);
+        if (isAllRecordsSelected) {
+            setSelectedStationIds(allMatchingIds);
+        }
+    }, [isAllRecordsSelected, allMatchingIds]);
 
-        return () => clearTimeout(clearTimer);
-    }, [selectedStationIds]);
+    // Current page IDs
+    const currentPageIds = stations.data.map((s) => s.id);
 
+    // Selection state helpers
+    const isCurrentPageAllSelected = currentPageIds.length > 0 && currentPageIds.every((id) => selectedStationIds.includes(id));
+    const isCurrentPagePartiallySelected = currentPageIds.some((id) => selectedStationIds.includes(id)) && !isCurrentPageAllSelected;
+
+    // Handle header checkbox - selects current page items
     const handleSelectAllStations = (checked: boolean) => {
-        setSelectedStationIds(checked ? stations.data.map(s => s.id) : []);
+        if (checked) {
+            // Add current page items to selection
+            setSelectedStationIds((prev) => [...new Set([...prev, ...currentPageIds])]);
+        } else {
+            // Clear all selections
+            setSelectedStationIds([]);
+            setIsAllRecordsSelected(false);
+        }
     };
+
+    // Handle "Select all X records" button click
+    const handleSelectAllRecords = () => {
+        setIsAllRecordsSelected(true);
+        setSelectedStationIds(allMatchingIds);
+    };
+
+    // Handle individual checkbox
     const handleSelectStation = (id: number, checked: boolean) => {
-        setSelectedStationIds(prev => checked ? [...prev, id] : prev.filter(sid => sid !== id));
+        if (checked) {
+            setSelectedStationIds((prev) => [...prev, id]);
+        } else {
+            setSelectedStationIds((prev) => prev.filter((sid) => sid !== id));
+            // If user unchecks one while "all records" is selected, turn off all-records mode
+            if (isAllRecordsSelected) {
+                setIsAllRecordsSelected(false);
+            }
+        }
+    };
+
+    // Clear all selections (including localStorage)
+    const handleClearStationSelection = () => {
+        setSelectedStationIds([]);
+        setIsAllRecordsSelected(false);
+        try {
+            localStorage.removeItem(LOCAL_STORAGE_KEY);
+            localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+        } catch {
+            // Ignore localStorage errors
+        }
     };
 
     // Bulk QR ZIP - job-based polling
@@ -276,7 +324,15 @@ export default function StationIndex() {
                             if (data.downloadUrl) {
                                 window.location.href = data.downloadUrl;
                                 toast.success('Download started');
-                                setSelectedStationIds([]); // Clear selection after successful download
+                                // Clear selection after successful download
+                                setSelectedStationIds([]);
+                                setIsAllRecordsSelected(false);
+                                try {
+                                    localStorage.removeItem(LOCAL_STORAGE_KEY);
+                                    localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+                                } catch {
+                                    // Ignore localStorage errors
+                                }
                             }
                         }
                     })
@@ -296,8 +352,6 @@ export default function StationIndex() {
             }
         };
     }, [selectedZipProgress.running, selectedZipProgress.jobId]);
-
-    const { stations, filters } = usePage<{ stations: StationsPayload; flash?: Flash; filters: Filters }>().props;
 
     // Use new hooks for cleaner code
     const { title, breadcrumbs } = usePageMeta({
@@ -398,16 +452,6 @@ export default function StationIndex() {
                 toast.error('Failed to update issue');
             },
         });
-    };
-
-    const toggleStationSelection = (stationId: number, hasPC: boolean) => {
-        if (hasPC) return; // Can't select stations that already have PCs
-
-        setSelectedEmptyStations(prev =>
-            prev.includes(stationId)
-                ? prev.filter(id => id !== stationId)
-                : [...prev, stationId]
-        );
     };
 
     const handleBulkAssign = () => {
@@ -567,9 +611,16 @@ export default function StationIndex() {
                                 <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between min-w-0 flex-1">
                                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center min-w-0">
                                         <span className="font-medium text-blue-900 dark:text-blue-100">
-                                            {selectedStationIds.length} Station{selectedStationIds.length !== 1 ? 's' : ''} selected
+                                            {isAllRecordsSelected
+                                                ? `All ${allMatchingIds.length} station${allMatchingIds.length !== 1 ? 's' : ''} selected`
+                                                : `${selectedStationIds.length} station${selectedStationIds.length !== 1 ? 's' : ''} selected`}
                                         </span>
-                                        <Button variant="outline" size="sm" onClick={() => setSelectedStationIds([])} className="w-full sm:w-auto min-w-0">
+                                        {!isAllRecordsSelected && selectedStationIds.length < allMatchingIds.length && allMatchingIds.length > currentPageIds.length && (
+                                            <Button variant="link" size="sm" className="h-auto p-0 text-primary" onClick={handleSelectAllRecords}>
+                                                Select all {allMatchingIds.length} stations
+                                            </Button>
+                                        )}
+                                        <Button variant="outline" size="sm" onClick={handleClearStationSelection} className="w-full sm:w-auto min-w-0">
                                             Clear
                                         </Button>
                                     </div>
@@ -622,8 +673,14 @@ export default function StationIndex() {
                                 <TableRow>
                                     <TableHead className="w-12">
                                         <Checkbox
-                                            checked={selectedStationIds.length === stations.data.length && stations.data.length > 0}
+                                            checked={isAllRecordsSelected || isCurrentPageAllSelected}
+                                            ref={(el) => {
+                                                if (el) {
+                                                    (el as HTMLButtonElement).dataset.state = isCurrentPagePartiallySelected ? 'indeterminate' : ((isAllRecordsSelected || isCurrentPageAllSelected) ? 'checked' : 'unchecked');
+                                                }
+                                            }}
                                             onCheckedChange={(checked) => handleSelectAllStations(checked === true)}
+                                            aria-label="Select all on this page"
                                         />
                                     </TableHead>
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
@@ -824,25 +881,24 @@ export default function StationIndex() {
                 {/* Mobile Card View - visible only on mobile */}
                 <div className="md:hidden space-y-4">
                     {stations.data.map((station) => {
-                        const hasPC = !!station.pc_spec_details;
                         const isSelected = selectedEmptyStations.includes(station.id);
+                        const isQRSelected = selectedStationIds.includes(station.id);
 
                         return (
                             <div
                                 key={station.id}
-                                className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500' : ''}`}
+                                className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20 border-blue-500' : ''} ${isQRSelected ? 'ring-2 ring-primary' : ''}`}
                             >
                                 {/* Header with Checkbox, Station Number and Status */}
                                 <div className="flex justify-between items-start">
                                     <div className="flex items-start gap-3">
-                                        {!hasPC && (
-                                            <Checkbox
-                                                checked={isSelected}
-                                                onCheckedChange={() => toggleStationSelection(station.id, hasPC)}
-                                                aria-label={`Select station ${station.station_number}`}
-                                                className="mt-1"
-                                            />
-                                        )}
+                                        {/* QR Code Selection Checkbox */}
+                                        <Checkbox
+                                            checked={isQRSelected}
+                                            onCheckedChange={(checked) => handleSelectStation(station.id, checked === true)}
+                                            aria-label={`Select station ${station.station_number} for QR download`}
+                                            className="mt-1"
+                                        />
                                         <div>
                                             <div className="text-xs text-muted-foreground">Station</div>
                                             <div className="font-semibold text-lg">{station.station_number}</div>

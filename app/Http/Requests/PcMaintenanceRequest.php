@@ -24,11 +24,11 @@ class PcMaintenanceRequest extends FormRequest
         $isCreating = $this->isMethod('POST');
 
         return [
-            // For bulk create, station_ids is required. For update, station_id is required.
-            'station_ids' => $isCreating ? ['required', 'array', 'min:1'] : ['sometimes', 'array'],
-            'station_ids.*' => ['exists:stations,id'],
-            'station_id' => !$isCreating ? ['required', 'exists:stations,id'] : ['sometimes', 'exists:stations,id'],
-            
+            // For bulk create, pc_spec_ids is required. For update, pc_spec_id is required.
+            'pc_spec_ids' => $isCreating ? ['required', 'array', 'min:1'] : ['sometimes', 'array'],
+            'pc_spec_ids.*' => ['exists:pc_specs,id'],
+            'pc_spec_id' => !$isCreating ? ['required', 'exists:pc_specs,id'] : ['sometimes', 'exists:pc_specs,id'],
+
             'last_maintenance_date' => ['required', 'date'],
             'next_due_date' => ['required', 'date', 'after:last_maintenance_date'],
             'maintenance_type' => ['nullable', 'string', 'max:255'],
@@ -46,8 +46,9 @@ class PcMaintenanceRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'station_ids' => 'stations',
-            'station_ids.*' => 'station',
+            'pc_spec_ids' => 'PC specs',
+            'pc_spec_ids.*' => 'PC spec',
+            'pc_spec_id' => 'PC spec',
             'last_maintenance_date' => 'last maintenance date',
             'next_due_date' => 'next due date',
             'maintenance_type' => 'maintenance type',
@@ -64,7 +65,7 @@ class PcMaintenanceRequest extends FormRequest
     {
         return [
             'next_due_date.after' => 'The next due date must be after the last maintenance date.',
-            'station_ids.min' => 'Please select at least one station.',
+            'pc_spec_ids.min' => 'Please select at least one PC.',
             'status.in' => 'The status must be either completed, pending, or overdue.',
         ];
     }

@@ -94,6 +94,11 @@ class PcSpec extends Model
         return $this->hasMany(PcTransfer::class);
     }
 
+    public function maintenances()
+    {
+        return $this->hasMany(PcMaintenance::class);
+    }
+
     public function station()
     {
         return $this->belongsTo(Station::class);
@@ -110,7 +115,7 @@ class PcSpec extends Model
             'model' => $this->model,
             'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
             'ram_gb' => $this->ramSpecs->sum(fn($ram) => $ram->capacity_gb * ($ram->pivot->quantity ?? 1)),
-            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) => 
+            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) =>
                 array_fill(0, $ram->pivot->quantity ?? 1, $ram->capacity_gb . ' GB')
             )->implode(' + '),
             'ram_ddr' => $this->ramSpecs->first()?->type ?? 'N/A',
@@ -141,7 +146,7 @@ class PcSpec extends Model
             'model' => $this->model,
             'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
             'ram_gb' => $this->ramSpecs->map(fn($ram) => $ram->capacity_gb)->implode(' + '),
-            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) => 
+            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) =>
                 array_fill(0, $ram->pivot->quantity ?? 1, $ram->capacity_gb . ' GB')
             )->implode(' + '),
             'ram_ddr' => $this->ramSpecs->first()?->type ?? 'N/A',

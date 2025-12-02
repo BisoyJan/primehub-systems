@@ -270,9 +270,49 @@ export default function AttendanceIndex() {
     const [startDate, setStartDate] = useState(appliedFilters.start_date || "");
     const [endDate, setEndDate] = useState(appliedFilters.end_date || "");
     const [needsVerification, setNeedsVerification] = useState(appliedFilters.needs_verification || false);
-    const [selectedRecords, setSelectedRecords] = useState<number[]>([]);
+
+    // LocalStorage keys for persisting selection
+    const LOCAL_STORAGE_KEY = 'attendance_selected_ids';
+    const LOCAL_STORAGE_TIMESTAMP_KEY = 'attendance_selected_ids_timestamp';
+    const EXPIRY_TIME_MS = 15 * 60 * 1000; // 15 minutes
+
+    const [selectedRecords, setSelectedRecords] = useState<number[]>(() => {
+        try {
+            const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
+            const timestamp = localStorage.getItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+
+            if (stored && timestamp) {
+                const age = Date.now() - parseInt(timestamp, 10);
+                if (age < EXPIRY_TIME_MS) {
+                    return JSON.parse(stored);
+                } else {
+                    // Clear expired data
+                    localStorage.removeItem(LOCAL_STORAGE_KEY);
+                    localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+                }
+            }
+            return [];
+        } catch {
+            return [];
+        }
+    });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+
+    // Save selectedRecords to localStorage on change
+    useEffect(() => {
+        try {
+            if (selectedRecords.length > 0) {
+                localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(selectedRecords));
+                localStorage.setItem(LOCAL_STORAGE_TIMESTAMP_KEY, Date.now().toString());
+            } else {
+                localStorage.removeItem(LOCAL_STORAGE_KEY);
+                localStorage.removeItem(LOCAL_STORAGE_TIMESTAMP_KEY);
+            }
+        } catch {
+            // Ignore localStorage errors
+        }
+    }, [selectedRecords]);
 
     // Update local state when filters prop changes (e.g., when navigating back or pagination)
     useEffect(() => {

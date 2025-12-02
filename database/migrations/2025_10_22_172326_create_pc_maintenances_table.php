@@ -13,7 +13,7 @@ return new class extends Migration
     {
         Schema::create('pc_maintenances', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('station_id')->constrained()->onDelete('cascade');
+            $table->foreignId('pc_spec_id')->constrained('pc_specs')->onDelete('cascade');
             $table->date('last_maintenance_date');
             $table->date('next_due_date');
             $table->string('maintenance_type')->nullable(); // e.g., 'cleaning', 'hardware check', 'software update'

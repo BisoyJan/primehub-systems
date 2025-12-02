@@ -32,31 +32,29 @@ import {
     create as pcMaintenanceCreateRoute,
     store as pcMaintenanceStoreRoute,
 } from '@/routes/pc-maintenance';
-import { index as stationsIndexRoute } from '@/routes/stations';
+import { index as pcSpecsIndexRoute } from '@/routes/pcspecs';
 
 interface Site {
     id: number;
     name: string;
 }
 
-interface PcSpec {
+interface CurrentStation {
+    id: number;
+    station_number: string;
+    site: Site | null;
+}
+
+interface PcSpecItem {
     id: number;
     pc_number: string;
     model: string;
     manufacturer: string;
-}
-
-interface Station {
-    id: number;
-    station_number: string;
-    site_id: number;
-    pc_spec_id: number | null;
-    site: Site;
-    pc_spec: PcSpec | null;
+    current_station: CurrentStation | null;
 }
 
 interface CreateProps {
-    stations: Station[];
+    pcSpecs: PcSpecItem[];
     sites: Site[];
 }
 
@@ -69,82 +67,108 @@ interface FormData {
     status: 'completed' | 'pending' | 'overdue';
 }
 
-export default function Create({ stations, sites }: CreateProps) {
+// Helper function to add months to a date
+const addMonths = (dateString: string, months: number): string => {
+    const date = new Date(dateString);
+    date.setMonth(date.getMonth() + months);
+    return date.toISOString().split('T')[0];
+};
+
+export default function Create({ pcSpecs, sites }: CreateProps) {
     const [loading, setLoading] = useState(false);
-    const [selectedStationIds, setSelectedStationIds] = useState<number[]>([]);
+    const [selectedPcSpecIds, setSelectedPcSpecIds] = useState<number[]>([]);
     const [siteFilter, setSiteFilter] = useState<string>('all');
+    const [assignmentFilter, setAssignmentFilter] = useState<string>('all');
     const [search, setSearch] = useState('');
+
+    const today = new Date().toISOString().split('T')[0];
     const [formData, setFormData] = useState<FormData>({
-        last_maintenance_date: new Date().toISOString().split('T')[0],
-        next_due_date: '',
+        last_maintenance_date: today,
+        next_due_date: addMonths(today, 4),
         maintenance_type: 'Routine Maintenance',
         notes: '',
         performed_by: '',
         status: 'completed',
     });
 
+    // Auto-update next due date when last maintenance date changes
+    const handleLastMaintenanceDateChange = (value: string) => {
+        setFormData({
+            ...formData,
+            last_maintenance_date: value,
+            next_due_date: addMonths(value, 4),
+        });
+    };
+
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create PC Maintenance',
         breadcrumbs: [
-            { title: 'Stations', href: stationsIndexRoute().url },
+            { title: 'PC Specs', href: pcSpecsIndexRoute().url },
             { title: 'PC Maintenance', href: pcMaintenanceIndexRoute().url },
             { title: 'Create', href: pcMaintenanceCreateRoute().url }
         ]
     });
 
-    // Filter stations by site and search
-    const filteredStations = useMemo(() => {
-        let filtered = stations;
+    // Filter PC specs by site, assignment status, and search
+    const filteredPcSpecs = useMemo(() => {
+        let filtered = pcSpecs;
 
-        // Filter by site
+        // Filter by assignment status
+        if (assignmentFilter === 'assigned') {
+            filtered = filtered.filter(pcSpec => pcSpec.current_station !== null);
+        } else if (assignmentFilter === 'not_assigned') {
+            filtered = filtered.filter(pcSpec => pcSpec.current_station === null);
+        }
+
+        // Filter by site (via current_station.site)
         if (siteFilter !== 'all') {
-            filtered = filtered.filter(station =>
-                station.site_id === parseInt(siteFilter)
+            filtered = filtered.filter(pcSpec =>
+                pcSpec.current_station?.site?.id === parseInt(siteFilter)
             );
         }
 
-        // Filter by search (Station number or PC number)
+        // Filter by search (PC number or model)
         if (search) {
-            filtered = filtered.filter(station =>
-                station.station_number.toLowerCase().includes(search.toLowerCase()) ||
-                (station.pc_spec?.pc_number && station.pc_spec.pc_number.toLowerCase().includes(search.toLowerCase()))
+            filtered = filtered.filter(pcSpec =>
+                pcSpec.pc_number.toLowerCase().includes(search.toLowerCase()) ||
+                pcSpec.model.toLowerCase().includes(search.toLowerCase())
             );
         }
 
         return filtered;
-    }, [stations, siteFilter, search]);
+    }, [pcSpecs, siteFilter, assignmentFilter, search]);
 
-    // Toggle station selection
-    const toggleStationSelection = (stationId: number) => {
-        setSelectedStationIds(prev =>
-            prev.includes(stationId)
-                ? prev.filter(id => id !== stationId)
-                : [...prev, stationId]
+    // Toggle PC spec selection
+    const togglePcSpecSelection = (pcSpecId: number) => {
+        setSelectedPcSpecIds(prev =>
+            prev.includes(pcSpecId)
+                ? prev.filter(id => id !== pcSpecId)
+                : [...prev, pcSpecId]
         );
     };
 
-    // Select/Deselect all filtered stations
+    // Select/Deselect all filtered PC specs
     const toggleSelectAll = () => {
-        const filteredIds = filteredStations.map(station => station.id);
-        const allSelected = filteredIds.every(id => selectedStationIds.includes(id));
+        const filteredIds = filteredPcSpecs.map(pcSpec => pcSpec.id);
+        const allSelected = filteredIds.every(id => selectedPcSpecIds.includes(id));
 
         if (allSelected) {
-            setSelectedStationIds(prev => prev.filter(id => !filteredIds.includes(id)));
+            setSelectedPcSpecIds(prev => prev.filter(id => !filteredIds.includes(id)));
         } else {
-            setSelectedStationIds(prev => [...new Set([...prev, ...filteredIds])]);
+            setSelectedPcSpecIds(prev => [...new Set([...prev, ...filteredIds])]);
         }
     };
 
     const isAllFilteredSelected = useMemo(() => {
-        if (filteredStations.length === 0) return false;
-        return filteredStations.every(station => selectedStationIds.includes(station.id));
-    }, [filteredStations, selectedStationIds]);
+        if (filteredPcSpecs.length === 0) return false;
+        return filteredPcSpecs.every(pcSpec => selectedPcSpecIds.includes(pcSpec.id));
+    }, [filteredPcSpecs, selectedPcSpecIds]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (selectedStationIds.length === 0) {
-            toast.error('Please select at least one station');
+        if (selectedPcSpecIds.length === 0) {
+            toast.error('Please select at least one PC');
             return;
         }
 
@@ -156,12 +180,12 @@ export default function Create({ stations, sites }: CreateProps) {
         setLoading(true);
 
         router.post(pcMaintenanceStoreRoute().url, {
-            station_ids: selectedStationIds,
+            pc_spec_ids: selectedPcSpecIds,
             ...formData,
         }, {
             preserveScroll: true,
             onSuccess: () => {
-                toast.success(`${selectedStationIds.length} maintenance record(s) created successfully`);
+                toast.success(`${selectedPcSpecIds.length} maintenance record(s) created successfully`);
             },
             onError: (errors) => {
                 console.error('Validation errors:', errors);
@@ -182,7 +206,7 @@ export default function Create({ stations, sites }: CreateProps) {
             <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <PageHeader
                     title="Create PC Maintenance Record"
-                    description="Select one or multiple stations and fill in maintenance details"
+                    description="Select one or multiple PCs and fill in maintenance details"
                 />
 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -191,27 +215,40 @@ export default function Create({ stations, sites }: CreateProps) {
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <Calendar className="h-5 w-5" />
-                                Select Stations for Maintenance
+                                Select PCs for Maintenance
                             </CardTitle>
                             <CardDescription>
-                                {selectedStationIds.length > 0
-                                    ? `${selectedStationIds.length} station(s) selected`
-                                    : 'Filter and select stations that received maintenance'}
+                                {selectedPcSpecIds.length > 0
+                                    ? `${selectedPcSpecIds.length} PC(s) selected`
+                                    : 'Filter and select PCs that received maintenance'}
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             {/* Filters */}
                             <div className="flex flex-col sm:flex-row gap-3">
                                 <div className="flex-1">
-                                    <Label htmlFor="search">Search Station/PC</Label>
+                                    <Label htmlFor="search">Search PC</Label>
                                     <SearchBar
                                         value={search}
                                         onChange={setSearch}
                                         onSubmit={(e) => e.preventDefault()}
-                                        placeholder="Search by station number or PC number..."
+                                        placeholder="Search by PC number or model..."
                                     />
                                 </div>
-                                <div className="w-full sm:w-64">
+                                <div className="w-full sm:w-48">
+                                    <Label htmlFor="assignment">Assignment Status</Label>
+                                    <Select value={assignmentFilter} onValueChange={setAssignmentFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="All PCs" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All PCs</SelectItem>
+                                            <SelectItem value="assigned">Assigned</SelectItem>
+                                            <SelectItem value="not_assigned">Not Assigned</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="w-full sm:w-48">
                                     <Label htmlFor="site">Filter by Site</Label>
                                     <Select value={siteFilter} onValueChange={setSiteFilter}>
                                         <SelectTrigger>
@@ -229,7 +266,7 @@ export default function Create({ stations, sites }: CreateProps) {
                                 </div>
                             </div>
 
-                            {/* Station Selection Table */}
+                            {/* PC Selection Table */}
                             <div className="border rounded-lg max-h-96 overflow-auto">
                                 <Table>
                                     <TableHeader className="sticky top-0 bg-background z-10">
@@ -238,40 +275,46 @@ export default function Create({ stations, sites }: CreateProps) {
                                                 <Checkbox
                                                     checked={isAllFilteredSelected}
                                                     onCheckedChange={toggleSelectAll}
-                                                    disabled={filteredStations.length === 0}
+                                                    disabled={filteredPcSpecs.length === 0}
                                                 />
                                             </TableHead>
-                                            <TableHead>Station Number</TableHead>
                                             <TableHead>PC Number</TableHead>
                                             <TableHead>Model</TableHead>
+                                            <TableHead>Current Station</TableHead>
                                             <TableHead>Site</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {filteredStations.length === 0 ? (
+                                        {filteredPcSpecs.length === 0 ? (
                                             <TableRow>
                                                 <TableCell colSpan={5} className="text-center py-8">
                                                     <p className="text-muted-foreground">
-                                                        No stations found matching your filters
+                                                        No PCs found matching your filters
                                                     </p>
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            filteredStations.map((station) => (
+                                            filteredPcSpecs.map((pcSpec) => (
                                                 <TableRow
-                                                    key={station.id}
-                                                    className={selectedStationIds.includes(station.id) ? 'bg-muted/50' : ''}
+                                                    key={pcSpec.id}
+                                                    className={selectedPcSpecIds.includes(pcSpec.id) ? 'bg-muted/50' : ''}
                                                 >
                                                     <TableCell>
                                                         <Checkbox
-                                                            checked={selectedStationIds.includes(station.id)}
-                                                            onCheckedChange={() => toggleStationSelection(station.id)}
+                                                            checked={selectedPcSpecIds.includes(pcSpec.id)}
+                                                            onCheckedChange={() => togglePcSpecSelection(pcSpec.id)}
                                                         />
                                                     </TableCell>
-                                                    <TableCell className="font-medium">{station.station_number}</TableCell>
-                                                    <TableCell className="text-muted-foreground">{station.pc_spec?.pc_number || 'N/A'}</TableCell>
-                                                    <TableCell>{station.pc_spec?.model || 'N/A'}</TableCell>
-                                                    <TableCell>{station.site.name}</TableCell>
+                                                    <TableCell className="font-medium">{pcSpec.pc_number}</TableCell>
+                                                    <TableCell>{pcSpec.model}</TableCell>
+                                                    <TableCell className="text-muted-foreground">
+                                                        {pcSpec.current_station?.station_number || (
+                                                            <span className="italic">Not assigned</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {pcSpec.current_station?.site?.name || '-'}
+                                                    </TableCell>
                                                 </TableRow>
                                             ))
                                         )}
@@ -286,7 +329,7 @@ export default function Create({ stations, sites }: CreateProps) {
                         <CardHeader>
                             <CardTitle>Maintenance Details</CardTitle>
                             <CardDescription>
-                                Fill in the maintenance information (applies to all selected stations)
+                                Fill in the maintenance information (applies to all selected PCs)
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -299,7 +342,7 @@ export default function Create({ stations, sites }: CreateProps) {
                                         id="last_maintenance_date"
                                         type="date"
                                         value={formData.last_maintenance_date}
-                                        onChange={(e) => setFormData({ ...formData, last_maintenance_date: e.target.value })}
+                                        onChange={(e) => handleLastMaintenanceDateChange(e.target.value)}
                                         required
                                         max={new Date().toISOString().split('T')[0]}
                                     />
@@ -308,6 +351,7 @@ export default function Create({ stations, sites }: CreateProps) {
                                 <div>
                                     <Label htmlFor="next_due_date">
                                         Next Due Date <span className="text-red-500">*</span>
+                                        <span className="text-xs text-muted-foreground ml-2">(Auto: 4 months ahead)</span>
                                     </Label>
                                     <Input
                                         id="next_due_date"
@@ -385,9 +429,9 @@ export default function Create({ stations, sites }: CreateProps) {
                             <ArrowLeft className="h-4 w-4 mr-2" />
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={loading || selectedStationIds.length === 0}>
+                        <Button type="submit" disabled={loading || selectedPcSpecIds.length === 0}>
                             <Save className="h-4 w-4 mr-2" />
-                            {loading ? 'Creating...' : `Create ${selectedStationIds.length > 0 ? `(${selectedStationIds.length})` : ''}`}
+                            {loading ? 'Creating...' : `Create ${selectedPcSpecIds.length > 0 ? `(${selectedPcSpecIds.length})` : ''}`}
                         </Button>
                     </div>
                 </form>
