@@ -110,7 +110,7 @@ class DashboardService
     {
         $now = Carbon::now();
 
-        $stations = PcMaintenance::with(['station.site'])
+        $maintenances = PcMaintenance::with(['pcSpec.stations.site'])
             ->where(function($query) use ($now) {
                 $query->where('status', 'overdue')
                       ->orWhere(function($q) use ($now) {
@@ -119,19 +119,32 @@ class DashboardService
                       });
             })
             ->orderBy('next_due_date', 'asc')
-            ->get()
-            ->map(function($maintenance) use ($now) {
-                $dueDate = Carbon::parse($maintenance->next_due_date);
-                $daysOverdue = abs($now->diffInDays($dueDate, false));
+            ->get();
 
-                return [
-                    'station' => $maintenance->station->station_number,
-                    'site' => $maintenance->station->site->name,
+        $stations = $maintenances->flatMap(function($maintenance) use ($now) {
+            $dueDate = Carbon::parse($maintenance->next_due_date);
+            $daysOverdue = abs($now->diffInDays($dueDate, false));
+
+            // Get all stations that have this PC spec assigned
+            $pcStations = $maintenance->pcSpec?->stations ?? collect();
+
+            if ($pcStations->isEmpty()) {
+                // If no station is assigned, still report the maintenance with PC number
+                return [[
+                    'station' => $maintenance->pcSpec?->pc_number ?? 'Unknown PC',
+                    'site' => 'Unassigned',
                     'dueDate' => $dueDate->format('Y-m-d'),
                     'daysOverdue' => $this->formatDaysOverdue($daysOverdue)
-                ];
-            })
-            ->toArray();
+                ]];
+            }
+
+            return $pcStations->map(fn($station) => [
+                'station' => $station->station_number,
+                'site' => $station->site?->name ?? 'Unknown Site',
+                'dueDate' => $dueDate->format('Y-m-d'),
+                'daysOverdue' => $this->formatDaysOverdue($daysOverdue)
+            ]);
+        })->toArray();
 
         return [
             'total' => count($stations),
