@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import {
     index as employeeSchedulesIndex,
@@ -26,6 +29,7 @@ import {
 interface User {
     id: number;
     name: string;
+    email?: string;
 }
 
 interface Campaign {
@@ -60,19 +64,72 @@ const DAYS_OF_WEEK = [
     { value: "sunday", label: "Sunday" },
 ];
 
+// Helper function to format time based on user preference
+const formatTime = (time: string, format: string): string => {
+    if (!time) return '';
+    if (format === '12') {
+        const [hour, minute] = time.split(':');
+        const h = parseInt(hour);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `${hour12}:${minute} ${period}`;
+    }
+    return time;
+};
+
 // Helper function to format time range based on user preference
 const formatTimeRange = (start: string, end: string, format: string): string => {
+    return `${formatTime(start, format)} - ${formatTime(end, format)}`;
+};
+
+// Generate hour options based on format
+const getHourOptions = (format: string) => {
     if (format === '12') {
-        const formatTime12 = (time: string) => {
-            const [hour, minute] = time.split(':');
-            const h = parseInt(hour);
-            const period = h >= 12 ? 'PM' : 'AM';
-            const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            return `${hour12}:${minute} ${period}`;
-        };
-        return `${formatTime12(start)} - ${formatTime12(end)}`;
+        return Array.from({ length: 12 }, (_, i) => {
+            const hour = i === 0 ? 12 : i;
+            return { value: String(hour), label: String(hour).padStart(2, '0') };
+        });
     }
-    return `${start} - ${end}`;
+    return Array.from({ length: 24 }, (_, i) => ({
+        value: String(i),
+        label: String(i).padStart(2, '0')
+    }));
+};
+
+// Generate minute options (00, 15, 30, 45 for convenience, or all 60)
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => ({
+    value: String(i).padStart(2, '0'),
+    label: String(i).padStart(2, '0')
+}));
+
+// Parse 24h time string to components
+const parseTime = (time: string, format: string): { hour: string; minute: string; period: string } => {
+    if (!time) return { hour: '', minute: '', period: 'AM' };
+    const [h, m] = time.split(':');
+    const hour24 = parseInt(h);
+
+    if (format === '12') {
+        const period = hour24 >= 12 ? 'PM' : 'AM';
+        let hour12 = hour24 % 12;
+        if (hour12 === 0) hour12 = 12;
+        return { hour: String(hour12), minute: m, period };
+    }
+    return { hour: String(hour24), minute: m, period: 'AM' };
+};
+
+// Convert components back to 24h time string
+const buildTime = (hour: string, minute: string, period: string, format: string): string => {
+    if (!hour || !minute) return '';
+    let h = parseInt(hour);
+
+    if (format === '12') {
+        if (period === 'AM') {
+            h = h === 12 ? 0 : h;
+        } else {
+            h = h === 12 ? 12 : h + 12;
+        }
+    }
+    return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
 export default function EmployeeScheduleCreate() {
@@ -89,6 +146,10 @@ export default function EmployeeScheduleCreate() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+
+    // Employee search popover state
+    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
 
     const { data, setData, post, processing, errors } = useForm({
         user_id: "",
@@ -121,6 +182,16 @@ export default function EmployeeScheduleCreate() {
         }
     };
 
+    // Filter users based on search query
+    const filteredUsers = users.filter((user) => {
+        const query = employeeSearchQuery.toLowerCase();
+        return user.name.toLowerCase().includes(query) ||
+            (user.email && user.email.toLowerCase().includes(query));
+    });
+
+    // Get selected user for display
+    const selectedUser = data.user_id ? users.find(user => user.id === Number(data.user_id)) : undefined;
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
@@ -146,21 +217,73 @@ export default function EmployeeScheduleCreate() {
                                     <Label htmlFor="user_id">
                                         Employee <span className="text-red-500">*</span>
                                     </Label>
-                                    <Select
-                                        value={data.user_id}
-                                        onValueChange={value => setData("user_id", value)}
-                                    >
-                                        <SelectTrigger>
-                                            <SelectValue placeholder="Select employee" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            {users.map(user => (
-                                                <SelectItem key={user.id} value={String(user.id)}>
-                                                    {user.name}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                                        <PopoverTrigger asChild>
+                                            <Button
+                                                variant="outline"
+                                                role="combobox"
+                                                aria-expanded={isEmployeePopoverOpen}
+                                                className="w-full justify-between font-normal"
+                                            >
+                                                {selectedUser ? (
+                                                    <span className="truncate">
+                                                        {selectedUser.name}{selectedUser.email && ` (${selectedUser.email})`}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-muted-foreground">Search employee...</span>
+                                                )}
+                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                            </Button>
+                                        </PopoverTrigger>
+                                        <PopoverContent className="w-full p-0" align="start">
+                                            <Command shouldFilter={false}>
+                                                <CommandInput
+                                                    placeholder="Search by name or email..."
+                                                    value={employeeSearchQuery}
+                                                    onValueChange={setEmployeeSearchQuery}
+                                                />
+                                                <CommandList>
+                                                    <CommandEmpty>
+                                                        {users.length === 0
+                                                            ? "All employees already have schedules."
+                                                            : "No employee found."}
+                                                    </CommandEmpty>
+                                                    <CommandGroup>
+                                                        {filteredUsers.map((user) => (
+                                                            <CommandItem
+                                                                key={user.id}
+                                                                value={`${user.name} ${user.email || ''}`}
+                                                                onSelect={() => {
+                                                                    setData("user_id", String(user.id));
+                                                                    setIsEmployeePopoverOpen(false);
+                                                                    setEmployeeSearchQuery("");
+                                                                }}
+                                                                className="cursor-pointer"
+                                                            >
+                                                                <Check
+                                                                    className={`mr-2 h-4 w-4 ${Number(data.user_id) === user.id
+                                                                        ? 'opacity-100'
+                                                                        : 'opacity-0'
+                                                                        }`}
+                                                                />
+                                                                <div className="flex flex-col">
+                                                                    <span className="font-medium">{user.name}</span>
+                                                                    {user.email && (
+                                                                        <span className="text-xs text-muted-foreground">
+                                                                            {user.email}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </CommandItem>
+                                                        ))}
+                                                    </CommandGroup>
+                                                </CommandList>
+                                            </Command>
+                                        </PopoverContent>
+                                    </Popover>
+                                    <p className="text-xs text-muted-foreground">
+                                        Only employees without an active schedule are shown
+                                    </p>
                                     {errors.user_id && (
                                         <p className="text-sm text-red-500">{errors.user_id}</p>
                                     )}
@@ -249,28 +372,130 @@ export default function EmployeeScheduleCreate() {
                                 {/* Shift Times */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="scheduled_time_in">
+                                        <Label>
                                             Time In <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input
-                                            type="time"
-                                            value={data.scheduled_time_in}
-                                            onChange={e => setData("scheduled_time_in", e.target.value)}
-                                        />
+                                        <div className="flex gap-2">
+                                            <Select
+                                                value={parseTime(data.scheduled_time_in, timeFormat).hour}
+                                                onValueChange={(hour) => {
+                                                    const parsed = parseTime(data.scheduled_time_in, timeFormat);
+                                                    setData("scheduled_time_in", buildTime(hour, parsed.minute || '00', parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="HH" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {getHourOptions(timeFormat).map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <span className="flex items-center text-lg">:</span>
+                                            <Select
+                                                value={parseTime(data.scheduled_time_in, timeFormat).minute}
+                                                onValueChange={(minute) => {
+                                                    const parsed = parseTime(data.scheduled_time_in, timeFormat);
+                                                    setData("scheduled_time_in", buildTime(parsed.hour || '0', minute, parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="MM" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {MINUTE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {timeFormat === '12' && (
+                                                <Select
+                                                    value={parseTime(data.scheduled_time_in, timeFormat).period}
+                                                    onValueChange={(period) => {
+                                                        const parsed = parseTime(data.scheduled_time_in, timeFormat);
+                                                        setData("scheduled_time_in", buildTime(parsed.hour || '12', parsed.minute || '00', period, timeFormat));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[80px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="AM">AM</SelectItem>
+                                                        <SelectItem value="PM">PM</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        </div>
                                         {errors.scheduled_time_in && (
                                             <p className="text-sm text-red-500">{errors.scheduled_time_in}</p>
                                         )}
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="scheduled_time_out">
+                                        <Label>
                                             Time Out <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input
-                                            type="time"
-                                            value={data.scheduled_time_out}
-                                            onChange={e => setData("scheduled_time_out", e.target.value)}
-                                        />
+                                        <div className="flex gap-2">
+                                            <Select
+                                                value={parseTime(data.scheduled_time_out, timeFormat).hour}
+                                                onValueChange={(hour) => {
+                                                    const parsed = parseTime(data.scheduled_time_out, timeFormat);
+                                                    setData("scheduled_time_out", buildTime(hour, parsed.minute || '00', parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="HH" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {getHourOptions(timeFormat).map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <span className="flex items-center text-lg">:</span>
+                                            <Select
+                                                value={parseTime(data.scheduled_time_out, timeFormat).minute}
+                                                onValueChange={(minute) => {
+                                                    const parsed = parseTime(data.scheduled_time_out, timeFormat);
+                                                    setData("scheduled_time_out", buildTime(parsed.hour || '0', minute, parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="MM" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {MINUTE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {timeFormat === '12' && (
+                                                <Select
+                                                    value={parseTime(data.scheduled_time_out, timeFormat).period}
+                                                    onValueChange={(period) => {
+                                                        const parsed = parseTime(data.scheduled_time_out, timeFormat);
+                                                        setData("scheduled_time_out", buildTime(parsed.hour || '12', parsed.minute || '00', period, timeFormat));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[80px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="AM">AM</SelectItem>
+                                                        <SelectItem value="PM">PM</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        </div>
                                         {errors.scheduled_time_out && (
                                             <p className="text-sm text-red-500">{errors.scheduled_time_out}</p>
                                         )}

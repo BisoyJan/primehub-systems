@@ -348,7 +348,7 @@ export default function AccountIndex() {
                                 {users.data.map((user) => {
                                     const statusBadge = getStatusBadge(user);
                                     return (
-                                        <TableRow key={user.id} className={isPendingDeletion(user) ? 'bg-orange-50' : isDeleted(user) ? 'bg-red-50' : ''}>
+                                        <TableRow key={user.id} className={isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50' : ''}>
                                             <TableCell>{user.id}</TableCell>
                                             <TableCell className="font-medium">{user.first_name}</TableCell>
                                             <TableCell>{user.middle_name || '-'}</TableCell>
@@ -486,7 +486,7 @@ export default function AccountIndex() {
                     {users.data.map((user) => {
                         const statusBadge = getStatusBadge(user);
                         return (
-                            <div key={user.id} className={`rounded-lg shadow p-4 space-y-3 ${isPendingDeletion(user) ? 'bg-orange-50 border border-orange-200' : isDeleted(user) ? 'bg-red-50 border border-red-200' : ''}`}>
+                            <div key={user.id} className={`rounded-lg shadow p-4 space-y-3 ${isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800' : 'bg-card border'}`}>
                                 <div className="flex justify-between items-start">
                                     <div className="flex-1">
                                         <h3 className="font-semibold text-lg">

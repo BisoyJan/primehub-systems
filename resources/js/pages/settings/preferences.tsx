@@ -1,5 +1,5 @@
-import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Form, Head, usePage } from '@inertiajs/react';
+import { type BreadcrumbItem, } from '@/types';
+import { Form, Head, } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import {

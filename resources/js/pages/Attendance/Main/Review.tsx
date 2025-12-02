@@ -59,6 +59,7 @@ interface EmployeeSchedule {
     shift_type: string;
     scheduled_time_in: string;
     scheduled_time_out: string;
+    grace_period_minutes?: number;
     site?: Site;
 }
 
@@ -183,6 +184,162 @@ const getStatusBadges = (record: AttendanceRecord) => {
     );
 };
 
+/**
+ * Calculate the suggested attendance status based on actual times and employee schedule.
+ *
+ * Status Rules:
+ * - on_time: Arrived within grace period
+ * - tardy: Arrived 15+ minutes late but within grace period threshold
+ * - half_day_absence: Arrived more than grace period minutes late
+ * - undertime: Left more than 60 minutes early
+ * - failed_bio_in: Has time out but no time in
+ * - failed_bio_out: Has time in but no time out
+ * - ncns: No time in or time out (no call no show)
+ * - present_no_bio: Explicitly marked present without biometric data
+ *
+ * @returns { status: string, secondaryStatus?: string, tardyMinutes?: number, undertimeMinutes?: number, overtimeMinutes?: number }
+ */
+const calculateSuggestedStatus = (
+    schedule: EmployeeSchedule | undefined,
+    shiftDate: string,
+    actualTimeIn: string,
+    actualTimeOut: string
+): {
+    status: string;
+    secondaryStatus?: string;
+    tardyMinutes?: number;
+    undertimeMinutes?: number;
+    overtimeMinutes?: number;
+    reason: string;
+} => {
+    const hasBioIn = !!actualTimeIn;
+    const hasBioOut = !!actualTimeOut;
+
+    // No bio at all
+    if (!hasBioIn && !hasBioOut) {
+        return { status: 'ncns', reason: 'No time in or time out recorded' };
+    }
+
+    // Has time out but no time in
+    if (!hasBioIn && hasBioOut) {
+        return { status: 'failed_bio_in', reason: 'Missing time in record' };
+    }
+
+    // No schedule - can't calculate status accurately
+    if (!schedule) {
+        if (hasBioIn && !hasBioOut) {
+            return { status: 'failed_bio_out', reason: 'No schedule found, missing time out' };
+        }
+        return { status: 'on_time', reason: 'No schedule found, defaulting to on time' };
+    }
+
+    // Parse dates and times
+    const timeInDate = hasBioIn ? new Date(actualTimeIn) : null;
+    const timeOutDate = hasBioOut ? new Date(actualTimeOut) : null;
+    const shiftDateObj = new Date(shiftDate + 'T00:00:00');
+
+    // Build scheduled time in (on shift date)
+    const [schedInHour, schedInMin] = schedule.scheduled_time_in.split(':').map(Number);
+    const scheduledTimeIn = new Date(shiftDateObj);
+    scheduledTimeIn.setHours(schedInHour, schedInMin, 0, 0);
+
+    // Build scheduled time out (may be next day for night shift)
+    const [schedOutHour, schedOutMin] = schedule.scheduled_time_out.split(':').map(Number);
+    const scheduledTimeOut = new Date(shiftDateObj);
+    scheduledTimeOut.setHours(schedOutHour, schedOutMin, 0, 0);
+
+    // Check if it's a night shift (time out is next day)
+    const isNightShift = schedule.shift_type === 'night_shift' ||
+        (schedOutHour < schedInHour || (schedOutHour === schedInHour && schedOutMin <= schedInMin));
+    if (isNightShift) {
+        scheduledTimeOut.setDate(scheduledTimeOut.getDate() + 1);
+    }
+
+    const gracePeriodMinutes = schedule.grace_period_minutes ?? 15;
+    let isTardy = false;
+    let isHalfDay = false;
+    let hasUndertime = false;
+    let tardyMinutes: number | undefined;
+    let undertimeMinutes: number | undefined;
+    let overtimeMinutes: number | undefined;
+
+    // Calculate tardiness (late arrival)
+    if (timeInDate) {
+        const scheduledWithGrace = new Date(scheduledTimeIn);
+        scheduledWithGrace.setMinutes(scheduledWithGrace.getMinutes() + gracePeriodMinutes);
+
+        // Calculate how many minutes late
+        const diffMinutes = Math.floor((timeInDate.getTime() - scheduledTimeIn.getTime()) / (1000 * 60));
+
+        if (diffMinutes > gracePeriodMinutes) {
+            // More than grace period = half day absence
+            isHalfDay = true;
+            tardyMinutes = diffMinutes;
+        } else if (diffMinutes >= 15) {
+            // 15+ minutes late but within grace period = tardy
+            isTardy = true;
+            tardyMinutes = diffMinutes;
+        }
+    }
+
+    // Calculate undertime (early leave) and overtime (late leave)
+    if (timeOutDate && timeInDate) {
+        const diffFromScheduledOut = Math.floor((timeOutDate.getTime() - scheduledTimeOut.getTime()) / (1000 * 60));
+
+        if (diffFromScheduledOut < -60) {
+            // Left more than 60 minutes early
+            hasUndertime = true;
+            undertimeMinutes = Math.abs(diffFromScheduledOut);
+        } else if (diffFromScheduledOut > 60) {
+            // Worked more than 60 minutes overtime
+            overtimeMinutes = diffFromScheduledOut;
+        }
+    }
+
+    // Determine status based on violations
+    let status: string;
+    let secondaryStatus: string | undefined;
+    let reason: string;
+
+    if (!hasBioOut) {
+        // Has time in but no time out
+        if (isHalfDay) {
+            status = 'half_day_absence';
+            secondaryStatus = 'failed_bio_out';
+            reason = `Arrived ${tardyMinutes} minutes late (more than ${gracePeriodMinutes}min grace period), missing time out`;
+        } else if (isTardy) {
+            status = 'tardy';
+            secondaryStatus = 'failed_bio_out';
+            reason = `Arrived ${tardyMinutes} minutes late, missing time out`;
+        } else {
+            status = 'failed_bio_out';
+            reason = 'Missing time out record';
+        }
+    } else if (isHalfDay && hasUndertime) {
+        status = 'half_day_absence';
+        secondaryStatus = 'undertime';
+        reason = `Arrived ${tardyMinutes} minutes late AND left ${undertimeMinutes} minutes early`;
+    } else if (isHalfDay) {
+        status = 'half_day_absence';
+        reason = `Arrived ${tardyMinutes} minutes late (more than ${gracePeriodMinutes}min grace period)`;
+    } else if (isTardy && hasUndertime) {
+        status = 'tardy';
+        secondaryStatus = 'undertime';
+        reason = `Arrived ${tardyMinutes} minutes late AND left ${undertimeMinutes} minutes early`;
+    } else if (isTardy) {
+        status = 'tardy';
+        reason = `Arrived ${tardyMinutes} minutes late`;
+    } else if (hasUndertime) {
+        status = 'undertime';
+        reason = `Left ${undertimeMinutes} minutes early`;
+    } else {
+        status = 'on_time';
+        reason = 'Arrived within grace period';
+    }
+
+    return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason };
+};
+
 export default function AttendanceReview() {
     const { attendances, employees, filters, auth } = usePage<PageProps>().props;
     const attendanceData = {
@@ -219,6 +376,14 @@ export default function AttendanceReview() {
     const [isWarningsDialogOpen, setIsWarningsDialogOpen] = useState(false);
     const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(null);
     const highlightedRowRef = React.useRef<HTMLTableRowElement | HTMLDivElement>(null);
+
+    // Auto status suggestion state
+    const [suggestedStatus, setSuggestedStatus] = useState<{
+        status: string;
+        secondaryStatus?: string;
+        reason: string;
+    } | null>(null);
+    const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] = useState(false);
 
     // Search state
     const [statusFilter, setStatusFilter] = useState(filters?.status || "all");
@@ -296,15 +461,80 @@ export default function AttendanceReview() {
 
     const openVerifyDialog = (record: AttendanceRecord) => {
         setSelectedRecord(record);
+
+        const timeIn = toLocalDateTimeString(record.actual_time_in);
+        const timeOut = toLocalDateTimeString(record.actual_time_out);
+
+        // Calculate suggested status based on times and schedule
+        const suggestion = calculateSuggestedStatus(
+            record.employee_schedule,
+            record.shift_date,
+            timeIn,
+            timeOut
+        );
+
+        setSuggestedStatus(suggestion);
+        setIsStatusManuallyOverridden(false);
+
         setData({
-            status: record.status,
-            actual_time_in: toLocalDateTimeString(record.actual_time_in),
-            actual_time_out: toLocalDateTimeString(record.actual_time_out),
+            status: suggestion.status, // Start with suggested status
+            actual_time_in: timeIn,
+            actual_time_out: timeOut,
             verification_notes: record.verification_notes || "",
             overtime_approved: record.overtime_approved || false,
         });
         setIsDialogOpen(true);
     };
+
+    // Recalculate suggested status when times change
+    const recalculateSuggestedStatus = (timeIn: string, timeOut: string) => {
+        if (!selectedRecord) return;
+
+        const suggestion = calculateSuggestedStatus(
+            selectedRecord.employee_schedule,
+            selectedRecord.shift_date,
+            timeIn,
+            timeOut
+        );
+
+        setSuggestedStatus(suggestion);
+
+        // Only auto-update status if user hasn't manually overridden it
+        if (!isStatusManuallyOverridden) {
+            setData('status', suggestion.status);
+        }
+    };
+
+    // Handle status change - mark as manually overridden if different from suggested
+    const handleStatusChange = (newStatus: string) => {
+        setData('status', newStatus);
+        if (suggestedStatus && newStatus !== suggestedStatus.status) {
+            setIsStatusManuallyOverridden(true);
+        } else {
+            setIsStatusManuallyOverridden(false);
+        }
+    };
+
+    // Reset to suggested status
+    const resetToSuggestedStatus = () => {
+        if (suggestedStatus) {
+            setData('status', suggestedStatus.status);
+            setIsStatusManuallyOverridden(false);
+        }
+    };
+
+    // Recalculate suggested status when times change
+    useEffect(() => {
+        if (!selectedRecord || !isDialogOpen) return;
+
+        // Debounce the recalculation
+        const timer = setTimeout(() => {
+            recalculateSuggestedStatus(data.actual_time_in, data.actual_time_out);
+        }, 300);
+
+        return () => clearTimeout(timer);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.actual_time_in, data.actual_time_out, selectedRecord?.id, isDialogOpen]);
 
     // Clear highlight when dialog closes
     useEffect(() => {
@@ -1100,6 +1330,10 @@ export default function AttendanceReview() {
                                         <span className="text-muted-foreground">Assigned Site:</span>{" "}
                                         {selectedRecord.employee_schedule?.site?.name || "-"}
                                     </div>
+                                    <div>
+                                        <span className="text-muted-foreground">Grace Period:</span>{" "}
+                                        {selectedRecord.employee_schedule?.grace_period_minutes ?? 15} minutes
+                                    </div>
                                     {selectedRecord.is_cross_site_bio && (
                                         <>
                                             <div>
@@ -1129,8 +1363,51 @@ export default function AttendanceReview() {
                             <Label htmlFor="status">
                                 Status <span className="text-red-500">*</span>
                             </Label>
-                            <Select value={data.status} onValueChange={value => setData("status", value)}>
-                                <SelectTrigger>
+
+                            {/* Suggested Status Info */}
+                            {suggestedStatus && (
+                                <div className={`p-3 rounded-lg border ${isStatusManuallyOverridden ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800' : 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'}`}>
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex-1">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                {isStatusManuallyOverridden ? (
+                                                    <AlertCircle className="h-4 w-4 text-amber-600" />
+                                                ) : (
+                                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                                )}
+                                                <span className={`text-sm font-medium ${isStatusManuallyOverridden ? 'text-amber-800 dark:text-amber-400' : 'text-green-800 dark:text-green-400'}`}>
+                                                    {isStatusManuallyOverridden ? 'Manual Override Active' : 'Auto-Suggested Status'}
+                                                </span>
+                                            </div>
+                                            <p className={`text-xs ${isStatusManuallyOverridden ? 'text-amber-700 dark:text-amber-500' : 'text-green-700 dark:text-green-500'}`}>
+                                                {isStatusManuallyOverridden
+                                                    ? `Suggested: ${suggestedStatus.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())} — ${suggestedStatus.reason}`
+                                                    : suggestedStatus.reason
+                                                }
+                                            </p>
+                                            {suggestedStatus.secondaryStatus && (
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    Secondary: {suggestedStatus.secondaryStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                </p>
+                                            )}
+                                        </div>
+                                        {isStatusManuallyOverridden && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={resetToSuggestedStatus}
+                                                className="h-7 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100"
+                                            >
+                                                Use Suggested
+                                            </Button>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
+
+                            <Select value={data.status} onValueChange={handleStatusChange}>
+                                <SelectTrigger className={isStatusManuallyOverridden ? 'border-amber-400' : ''}>
                                     <SelectValue placeholder="Select status" />
                                 </SelectTrigger>
                                 <SelectContent>

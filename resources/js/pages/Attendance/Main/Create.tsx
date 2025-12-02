@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Head, router, useForm, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { PageHeader } from '@/components/PageHeader';
@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertCircle, Check, ChevronsUpDown } from 'lucide-react';
+import { AlertCircle, Check, ChevronsUpDown, Sparkles, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageMeta } from '@/hooks';
 import { index as attendanceIndex, create as attendanceCreate, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
@@ -62,12 +62,11 @@ export default function Create({ users, campaigns }: Props) {
         ],
     });
 
-    console.log('Raw time format:', rawTimeFormat, 'Converted:', timeFormat, 'Is 24 hour:', is24HourFormat);
-
     const { data, setData, post, processing, errors } = useForm({
         user_id: '',
         shift_date: '',
         status: '',
+        secondary_status: '',
         actual_time_in: '',
         actual_time_out: '',
         actual_time_in_date: '',
@@ -81,6 +80,7 @@ export default function Create({ users, campaigns }: Props) {
         user_ids: [] as number[],
         shift_date: '',
         status: '',
+        secondary_status: '',
         actual_time_in: '',
         actual_time_out: '',
         actual_time_in_date: '',
@@ -97,6 +97,211 @@ export default function Create({ users, campaigns }: Props) {
     const [shiftFilter, setShiftFilter] = useState<string>('all');
     const [campaignFilter, setCampaignFilter] = useState<string>('all');
     const [timeOutValidationError, setTimeOutValidationError] = useState<string>('');
+
+    // Auto-status selection state (single entry mode only)
+    const [suggestedStatus, setSuggestedStatus] = useState<string>('');
+    const [suggestedSecondaryStatus, setSuggestedSecondaryStatus] = useState<string>('');
+    const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] = useState(false);
+
+    // Define selectedUser early so it can be used in callbacks
+    const selectedUser = data.user_id ? users.find(user => user.id === Number(data.user_id)) : undefined;
+
+    // Helper function to calculate suggested status based on schedule and times
+    // Returns object with status, secondaryStatus, and reason (matching Review.tsx logic)
+    const calculateSuggestedStatus = useCallback((
+        schedule: User['schedule'],
+        timeInDate: string,
+        timeInTime: string,
+        timeOutDate: string,
+        timeOutTime: string
+    ): { status: string; secondaryStatus?: string; reason: string } => {
+        // If no schedule, can't calculate - return empty to let backend handle
+        if (!schedule) return { status: '', reason: 'No schedule found' };
+
+        const hasTimeIn = timeInDate && timeInTime;
+        const hasTimeOut = timeOutDate && timeOutTime;
+
+        // No times provided - can't determine status
+        if (!hasTimeIn && !hasTimeOut) return { status: '', reason: 'No times provided' };
+
+        // Has time out but no time in - failed bio in
+        if (!hasTimeIn && hasTimeOut) return { status: 'failed_bio_in', reason: 'Missing time in record' };
+
+        // Both times provided - calculate based on schedule
+        const scheduledIn = schedule.scheduled_time_in; // Format: "HH:mm:ss"
+        const scheduledOut = schedule.scheduled_time_out;
+        const gracePeriodMinutes = 15; // Default grace period
+
+        // Parse scheduled times
+        const [schedInH, schedInM] = scheduledIn.split(':').map(Number);
+        const [schedOutH, schedOutM] = scheduledOut.split(':').map(Number);
+
+        // Parse actual times (time format is "HH:mm")
+        const [actualInH, actualInM] = timeInTime.split(':').map(Number);
+
+        // Create date objects for comparison
+        const schedInDate = new Date(timeInDate);
+        schedInDate.setHours(schedInH, schedInM, 0, 0);
+
+        const actualInDateTime = new Date(timeInDate);
+        actualInDateTime.setHours(actualInH, actualInM, 0, 0);
+
+        // Check for night shift (scheduled out is before scheduled in - crosses midnight)
+        const isNightShift = schedule.shift_type === 'night_shift' || schedOutH < schedInH;
+
+        // Calculate scheduled out datetime
+        const schedOutDate = new Date(timeInDate);
+        if (isNightShift) {
+            schedOutDate.setDate(schedOutDate.getDate() + 1);
+        }
+        schedOutDate.setHours(schedOutH, schedOutM, 0, 0);
+
+        // Calculate tardiness in minutes
+        const tardyMinutes = Math.max(0, (actualInDateTime.getTime() - schedInDate.getTime()) / (1000 * 60));
+
+        // Check time-in violations
+        let isTardy = false;
+        let isHalfDay = false;
+
+        if (tardyMinutes > gracePeriodMinutes) {
+            // More than grace period late = half_day_absence
+            isHalfDay = true;
+        } else if (tardyMinutes >= 15) {
+            // 15+ minutes late but within grace period = tardy
+            isTardy = true;
+        }
+
+        // Check time-out violations (if we have time out)
+        let hasUndertime = false;
+        let undertimeMinutes = 0;
+
+        if (hasTimeOut) {
+            const [actualOutH, actualOutM] = timeOutTime.split(':').map(Number);
+            const actualOutDateTime = new Date(timeOutDate);
+            actualOutDateTime.setHours(actualOutH, actualOutM, 0, 0);
+
+            const earlyDepartureMinutes = (schedOutDate.getTime() - actualOutDateTime.getTime()) / (1000 * 60);
+
+            if (earlyDepartureMinutes >= 60) {
+                hasUndertime = true;
+                undertimeMinutes = Math.round(earlyDepartureMinutes);
+            }
+        }
+
+        // Determine status based on violations
+        let status: string;
+        let secondaryStatus: string | undefined;
+        let reason: string;
+
+        if (!hasTimeOut) {
+            // Has time in but no time out
+            if (isHalfDay) {
+                status = 'half_day_absence';
+                secondaryStatus = 'failed_bio_out';
+                reason = `Arrived ${Math.round(tardyMinutes)} minutes late (more than ${gracePeriodMinutes}min grace period), missing time out`;
+            } else if (isTardy) {
+                status = 'tardy';
+                secondaryStatus = 'failed_bio_out';
+                reason = `Arrived ${Math.round(tardyMinutes)} minutes late, missing time out`;
+            } else {
+                status = 'failed_bio_out';
+                reason = 'Missing time out record';
+            }
+        } else if (isHalfDay && hasUndertime) {
+            status = 'half_day_absence';
+            secondaryStatus = 'undertime';
+            reason = `Arrived ${Math.round(tardyMinutes)} minutes late AND left ${undertimeMinutes} minutes early`;
+        } else if (isHalfDay) {
+            status = 'half_day_absence';
+            reason = `Arrived ${Math.round(tardyMinutes)} minutes late (more than ${gracePeriodMinutes}min grace period)`;
+        } else if (isTardy && hasUndertime) {
+            status = 'tardy';
+            secondaryStatus = 'undertime';
+            reason = `Arrived ${Math.round(tardyMinutes)} minutes late AND left ${undertimeMinutes} minutes early`;
+        } else if (isTardy) {
+            status = 'tardy';
+            reason = `Arrived ${Math.round(tardyMinutes)} minutes late`;
+        } else if (hasUndertime) {
+            status = 'undertime';
+            reason = `Left ${undertimeMinutes} minutes early`;
+        } else {
+            status = 'on_time';
+            reason = 'Arrived within grace period';
+        }
+
+        return { status, secondaryStatus, reason };
+    }, []);
+
+    // Recalculate suggested status when relevant fields change (single entry mode)
+    const recalculateSuggestedStatus = useCallback(() => {
+        if (isBulkMode || !selectedUser?.schedule) {
+            setSuggestedStatus('');
+            setSuggestedSecondaryStatus('');
+            return;
+        }
+
+        const result = calculateSuggestedStatus(
+            selectedUser.schedule,
+            data.actual_time_in_date,
+            data.actual_time_in_time,
+            data.actual_time_out_date,
+            data.actual_time_out_time
+        );
+
+        setSuggestedStatus(result.status);
+        setSuggestedSecondaryStatus(result.secondaryStatus || '');
+
+        // If status hasn't been manually overridden, auto-update it
+        if (!isStatusManuallyOverridden && result.status) {
+            setData('status', result.status);
+            setData('secondary_status', result.secondaryStatus || '');
+        }
+    }, [isBulkMode, selectedUser, data.actual_time_in_date, data.actual_time_in_time, data.actual_time_out_date, data.actual_time_out_time, isStatusManuallyOverridden, calculateSuggestedStatus, setData]);
+
+    // Handle status change - track if manually overridden
+    const handleStatusChange = (value: string) => {
+        if (isBulkMode) {
+            setBulkData('status', value);
+        } else {
+            setData('status', value);
+            // Mark as manually overridden if different from suggested
+            if (value !== suggestedStatus) {
+                setIsStatusManuallyOverridden(true);
+                // Clear secondary status when manually overriding
+                setData('secondary_status', '');
+            }
+        }
+    };
+
+    // Reset to suggested status
+    const resetToSuggestedStatus = () => {
+        if (suggestedStatus) {
+            setData('status', suggestedStatus);
+            setData('secondary_status', suggestedSecondaryStatus);
+            setIsStatusManuallyOverridden(false);
+        }
+    };
+
+    // Effect to recalculate status when times change
+    useEffect(() => {
+        if (isBulkMode) return;
+
+        const timer = setTimeout(() => {
+            recalculateSuggestedStatus();
+        }, 300); // Debounce
+
+        return () => clearTimeout(timer);
+    }, [data.actual_time_in_date, data.actual_time_in_time, data.actual_time_out_date, data.actual_time_out_time, selectedUser, recalculateSuggestedStatus, isBulkMode]);
+
+    // Reset override state when user changes
+    useEffect(() => {
+        setIsStatusManuallyOverridden(false);
+        setSuggestedStatus('');
+        setSuggestedSecondaryStatus('');
+        setData('status', '');
+        setData('secondary_status', '');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.user_id]);
 
     // Time format conversion helpers
     const convertTo24Hour = (hour: string, minute: string, period: 'AM' | 'PM') => {
@@ -160,11 +365,6 @@ export default function Create({ users, campaigns }: Props) {
             user.schedule.scheduled_time_out === filterShift.time_out &&
             user.schedule.site_name === filterShift.site;
     });
-
-    const selectedUser = data.user_id ? users.find(user => user.id === Number(data.user_id)) : undefined;
-
-    // Debug: Log selected user info
-    console.log('Selected user_id:', data.user_id, 'Found user:', selectedUser?.name, 'Has schedule:', !!selectedUser?.schedule);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -336,7 +536,12 @@ export default function Create({ users, campaigns }: Props) {
                     <div className="flex gap-2">
                         <Button
                             variant={!isBulkMode ? 'default' : 'outline'}
-                            onClick={() => setIsBulkMode(false)}
+                            onClick={() => {
+                                setIsBulkMode(false);
+                                // Reset filters when switching to single entry mode
+                                setCampaignFilter('all');
+                                setShiftFilter('all');
+                            }}
                         >
                             Single Entry
                         </Button>
@@ -605,15 +810,53 @@ export default function Create({ users, campaigns }: Props) {
                                     <Label htmlFor="status">
                                         Status <span className="text-xs text-muted-foreground font-normal">(Optional - Auto-calculated from times)</span>
                                     </Label>
+
+                                    {/* Auto-suggested status indicator (single entry mode only) */}
+                                    {!isBulkMode && suggestedStatus && (
+                                        <div className={`p-3 rounded-md border ${!isStatusManuallyOverridden
+                                            ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800'
+                                            : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
+                                            }`}>
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Sparkles className={`h-4 w-4 ${!isStatusManuallyOverridden ? 'text-green-600' : 'text-amber-600'}`} />
+                                                    <span className="text-sm font-medium">
+                                                        {!isStatusManuallyOverridden ? 'Auto-suggested: ' : 'Suggested: '}
+                                                        <span className="capitalize">{suggestedStatus.replace(/_/g, ' ')}</span>
+                                                        {suggestedSecondaryStatus && (
+                                                            <span className="text-muted-foreground"> + <span className="capitalize">{suggestedSecondaryStatus.replace(/_/g, ' ')}</span></span>
+                                                        )}
+                                                    </span>
+                                                </div>
+                                                {isStatusManuallyOverridden && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={resetToSuggestedStatus}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <RefreshCw className="h-3 w-3 mr-1" />
+                                                        Use Suggested
+                                                    </Button>
+                                                )}
+                                            </div>
+                                            {!isStatusManuallyOverridden && (
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    Based on schedule and entered times. You can override by selecting a different status below.
+                                                </p>
+                                            )}
+                                            {isStatusManuallyOverridden && (
+                                                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                                                    You've selected a different status. Click "Use Suggested" to revert.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
+
                                     <Select
                                         value={isBulkMode ? bulkData.status : data.status}
-                                        onValueChange={(value) => {
-                                            if (isBulkMode) {
-                                                setBulkData('status', value);
-                                            } else {
-                                                setData('status', value);
-                                            }
-                                        }}
+                                        onValueChange={handleStatusChange}
                                     >
                                         <SelectTrigger>
                                             <SelectValue placeholder="Auto (based on time in/out)" />
@@ -633,7 +876,12 @@ export default function Create({ users, campaigns }: Props) {
                                         </SelectContent>
                                     </Select>
                                     <p className="text-xs text-muted-foreground">
-                                        Leave empty to automatically determine status based on the schedule and actual times.
+                                        {isBulkMode
+                                            ? 'Leave empty to automatically determine status based on each employee\'s schedule and actual times.'
+                                            : suggestedStatus
+                                                ? 'Status auto-selected based on schedule. Override by selecting a different option.'
+                                                : 'Leave empty to automatically determine status based on the schedule and actual times.'
+                                        }
                                     </p>
                                     {(isBulkMode ? bulkErrors.status : errors.status) && (
                                         <p className="text-sm text-red-500">{isBulkMode ? bulkErrors.status : errors.status}</p>

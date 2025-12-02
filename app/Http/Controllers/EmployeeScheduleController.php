@@ -66,7 +66,15 @@ class EmployeeScheduleController extends Controller
      */
     public function create()
     {
-        $users = User::orderBy('first_name')->get();
+        // Only get users who don't have an active schedule
+        $usersWithActiveSchedule = EmployeeSchedule::where('is_active', true)
+            ->pluck('user_id')
+            ->toArray();
+
+        $users = User::whereNotIn('id', $usersWithActiveSchedule)
+            ->orderBy('first_name')
+            ->get();
+
         $campaigns = Campaign::orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
 
@@ -86,7 +94,7 @@ class EmployeeScheduleController extends Controller
             'user_id' => 'required|exists:users,id',
             'campaign_id' => 'nullable|exists:campaigns,id',
             'site_id' => 'nullable|exists:sites,id',
-            'shift_type' => 'required|in:night_shift,morning_shift,afternoon_shift,utility_24h',
+            'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
             'scheduled_time_in' => 'required|date_format:H:i',
             'scheduled_time_out' => 'required|date_format:H:i',
             'work_days' => 'required|array',
@@ -107,18 +115,6 @@ class EmployeeScheduleController extends Controller
 
         return redirect()->route('employee-schedules.index')
             ->with('flash', ['message' => 'Employee schedule created successfully', 'type' => 'success']);
-    }
-
-    /**
-     * Display the specified schedule.
-     */
-    public function show(EmployeeSchedule $employeeSchedule)
-    {
-        $employeeSchedule->load(['user', 'campaign', 'site', 'attendances']);
-
-        return Inertia::render('EmployeeSchedule/Show', [
-            'schedule' => $employeeSchedule,
-        ]);
     }
 
     /**
@@ -146,7 +142,7 @@ class EmployeeScheduleController extends Controller
         $validated = $request->validate([
             'campaign_id' => 'nullable|exists:campaigns,id',
             'site_id' => 'nullable|exists:sites,id',
-            'shift_type' => 'required|in:night_shift,morning_shift,afternoon_shift,utility_24h',
+            'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
             'scheduled_time_in' => 'required|date_format:H:i',
             'scheduled_time_out' => 'required|date_format:H:i',
             'work_days' => 'required|array',

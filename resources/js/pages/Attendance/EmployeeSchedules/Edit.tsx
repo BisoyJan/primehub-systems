@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -16,6 +16,9 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Check, ChevronsUpDown } from "lucide-react";
 import { toast } from "sonner";
 import {
     index as employeeSchedulesIndex,
@@ -26,6 +29,7 @@ import {
 interface User {
     id: number;
     name: string;
+    email?: string;
 }
 
 interface Campaign {
@@ -76,19 +80,72 @@ const DAYS_OF_WEEK = [
     { value: "sunday", label: "Sunday" },
 ];
 
+// Helper function to format time based on user preference
+const formatTime = (time: string, format: string): string => {
+    if (!time) return '';
+    if (format === '12') {
+        const [hour, minute] = time.split(':');
+        const h = parseInt(hour);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+        return `${hour12}:${minute} ${period}`;
+    }
+    return time;
+};
+
 // Helper function to format time range based on user preference
 const formatTimeRange = (start: string, end: string, format: string): string => {
+    return `${formatTime(start, format)} - ${formatTime(end, format)}`;
+};
+
+// Generate hour options based on format
+const getHourOptions = (format: string) => {
     if (format === '12') {
-        const formatTime12 = (time: string) => {
-            const [hour, minute] = time.split(':');
-            const h = parseInt(hour);
-            const period = h >= 12 ? 'PM' : 'AM';
-            const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-            return `${hour12}:${minute} ${period}`;
-        };
-        return `${formatTime12(start)} - ${formatTime12(end)}`;
+        return Array.from({ length: 12 }, (_, i) => {
+            const hour = i === 0 ? 12 : i;
+            return { value: String(hour), label: String(hour).padStart(2, '0') };
+        });
     }
-    return `${start} - ${end}`;
+    return Array.from({ length: 24 }, (_, i) => ({
+        value: String(i),
+        label: String(i).padStart(2, '0')
+    }));
+};
+
+// Generate minute options
+const MINUTE_OPTIONS = Array.from({ length: 60 }, (_, i) => ({
+    value: String(i).padStart(2, '0'),
+    label: String(i).padStart(2, '0')
+}));
+
+// Parse 24h time string to components
+const parseTime = (time: string, format: string): { hour: string; minute: string; period: string } => {
+    if (!time) return { hour: '', minute: '', period: 'AM' };
+    const [h, m] = time.split(':');
+    const hour24 = parseInt(h);
+
+    if (format === '12') {
+        const period = hour24 >= 12 ? 'PM' : 'AM';
+        let hour12 = hour24 % 12;
+        if (hour12 === 0) hour12 = 12;
+        return { hour: String(hour12), minute: m, period };
+    }
+    return { hour: String(hour24), minute: m, period: 'AM' };
+};
+
+// Convert components back to 24h time string
+const buildTime = (hour: string, minute: string, period: string, format: string): string => {
+    if (!hour || !minute) return '';
+    let h = parseInt(hour);
+
+    if (format === '12') {
+        if (period === 'AM') {
+            h = h === 12 ? 0 : h;
+        } else {
+            h = h === 12 ? 12 : h + 12;
+        }
+    }
+    return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
 export default function EmployeeScheduleEdit() {
@@ -254,28 +311,130 @@ export default function EmployeeScheduleEdit() {
                                 {/* Shift Times */}
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div className="space-y-2">
-                                        <Label htmlFor="scheduled_time_in">
+                                        <Label>
                                             Time In <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input
-                                            type="time"
-                                            value={data.scheduled_time_in}
-                                            onChange={e => setData("scheduled_time_in", e.target.value)}
-                                        />
+                                        <div className="flex gap-2">
+                                            <Select
+                                                value={parseTime(data.scheduled_time_in, timeFormat).hour}
+                                                onValueChange={(hour) => {
+                                                    const parsed = parseTime(data.scheduled_time_in, timeFormat);
+                                                    setData("scheduled_time_in", buildTime(hour, parsed.minute || '00', parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="HH" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {getHourOptions(timeFormat).map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <span className="flex items-center text-lg">:</span>
+                                            <Select
+                                                value={parseTime(data.scheduled_time_in, timeFormat).minute}
+                                                onValueChange={(minute) => {
+                                                    const parsed = parseTime(data.scheduled_time_in, timeFormat);
+                                                    setData("scheduled_time_in", buildTime(parsed.hour || '0', minute, parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="MM" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {MINUTE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {timeFormat === '12' && (
+                                                <Select
+                                                    value={parseTime(data.scheduled_time_in, timeFormat).period}
+                                                    onValueChange={(period) => {
+                                                        const parsed = parseTime(data.scheduled_time_in, timeFormat);
+                                                        setData("scheduled_time_in", buildTime(parsed.hour || '12', parsed.minute || '00', period, timeFormat));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[80px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="AM">AM</SelectItem>
+                                                        <SelectItem value="PM">PM</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        </div>
                                         {errors.scheduled_time_in && (
                                             <p className="text-sm text-red-500">{errors.scheduled_time_in}</p>
                                         )}
                                     </div>
 
                                     <div className="space-y-2">
-                                        <Label htmlFor="scheduled_time_out">
+                                        <Label>
                                             Time Out <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input
-                                            type="time"
-                                            value={data.scheduled_time_out}
-                                            onChange={e => setData("scheduled_time_out", e.target.value)}
-                                        />
+                                        <div className="flex gap-2">
+                                            <Select
+                                                value={parseTime(data.scheduled_time_out, timeFormat).hour}
+                                                onValueChange={(hour) => {
+                                                    const parsed = parseTime(data.scheduled_time_out, timeFormat);
+                                                    setData("scheduled_time_out", buildTime(hour, parsed.minute || '00', parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="HH" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {getHourOptions(timeFormat).map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            <span className="flex items-center text-lg">:</span>
+                                            <Select
+                                                value={parseTime(data.scheduled_time_out, timeFormat).minute}
+                                                onValueChange={(minute) => {
+                                                    const parsed = parseTime(data.scheduled_time_out, timeFormat);
+                                                    setData("scheduled_time_out", buildTime(parsed.hour || '0', minute, parsed.period, timeFormat));
+                                                }}
+                                            >
+                                                <SelectTrigger className="w-[80px]">
+                                                    <SelectValue placeholder="MM" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {MINUTE_OPTIONS.map(opt => (
+                                                        <SelectItem key={opt.value} value={opt.value}>
+                                                            {opt.label}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                            {timeFormat === '12' && (
+                                                <Select
+                                                    value={parseTime(data.scheduled_time_out, timeFormat).period}
+                                                    onValueChange={(period) => {
+                                                        const parsed = parseTime(data.scheduled_time_out, timeFormat);
+                                                        setData("scheduled_time_out", buildTime(parsed.hour || '12', parsed.minute || '00', period, timeFormat));
+                                                    }}
+                                                >
+                                                    <SelectTrigger className="w-[80px]">
+                                                        <SelectValue />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        <SelectItem value="AM">AM</SelectItem>
+                                                        <SelectItem value="PM">PM</SelectItem>
+                                                    </SelectContent>
+                                                </Select>
+                                            )}
+                                        </div>
                                         {errors.scheduled_time_out && (
                                             <p className="text-sm text-red-500">{errors.scheduled_time_out}</p>
                                         )}
