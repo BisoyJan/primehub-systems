@@ -21,16 +21,16 @@ class GenerateAttendanceExportExcel implements ShouldQueue
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     protected string $jobId;
-    protected string $startDate;
-    protected string $endDate;
+    protected ?string $startDate;
+    protected ?string $endDate;
     protected array $userIds;
     protected array $siteIds;
     protected array $campaignIds;
 
     public function __construct(
         string $jobId,
-        string $startDate,
-        string $endDate,
+        ?string $startDate,
+        ?string $endDate,
         array $userIds = [],
         array $siteIds = [],
         array $campaignIds = []
@@ -51,15 +51,11 @@ class GenerateAttendanceExportExcel implements ShouldQueue
             // Update progress: Starting
             $this->updateProgress($cacheKey, 5, 'Fetching attendance records...');
 
-            $startDate = Carbon::parse($this->startDate);
-            $endDate = Carbon::parse($this->endDate);
+            $startDate = $this->startDate ? Carbon::parse($this->startDate) : null;
+            $endDate = $this->endDate ? Carbon::parse($this->endDate) : null;
 
             // Build query for attendance records
-            $query = Attendance::whereBetween('shift_date', [
-                    $startDate->toDateString(),
-                    $endDate->toDateString()
-                ])
-                ->with([
+            $query = Attendance::with([
                     'user:id,first_name,last_name',
                     'bioInSite:id,name',
                     'bioOutSite:id,name',
@@ -67,6 +63,17 @@ class GenerateAttendanceExportExcel implements ShouldQueue
                     'employeeSchedule.campaign:id,name',
                     'employeeSchedule.site:id,name',
                 ]);
+
+            if ($startDate && $endDate) {
+                $query->whereBetween('shift_date', [
+                    $startDate->toDateString(),
+                    $endDate->toDateString()
+                ]);
+            } elseif ($startDate) {
+                $query->where('shift_date', '>=', $startDate->toDateString());
+            } elseif ($endDate) {
+                $query->where('shift_date', '<=', $endDate->toDateString());
+            }
 
             if (!empty($this->userIds)) {
                 $query->whereIn('user_id', $this->userIds);
@@ -172,10 +179,20 @@ class GenerateAttendanceExportExcel implements ShouldQueue
             $this->updateProgress($cacheKey, 90, 'Saving Excel file...');
 
             // Generate filename and save
+            $dateRangeStr = '';
+            if ($startDate && $endDate) {
+                $dateRangeStr = $startDate->format('Y-m-d') . '_to_' . $endDate->format('Y-m-d');
+            } elseif ($startDate) {
+                $dateRangeStr = 'from_' . $startDate->format('Y-m-d');
+            } elseif ($endDate) {
+                $dateRangeStr = 'to_' . $endDate->format('Y-m-d');
+            } else {
+                $dateRangeStr = 'all_records';
+            }
+
             $filename = sprintf(
-                'attendance_export_%s_to_%s_%s.xlsx',
-                $startDate->format('Y-m-d'),
-                $endDate->format('Y-m-d'),
+                'attendance_export_%s_%s.xlsx',
+                $dateRangeStr,
                 $this->jobId
             );
 
@@ -274,7 +291,7 @@ class GenerateAttendanceExportExcel implements ShouldQueue
         }
     }
 
-    protected function addStatisticsSheet($sheet, Carbon $startDate, Carbon $endDate, int $lastDataRow): void
+    protected function addStatisticsSheet($sheet, ?Carbon $startDate, ?Carbon $endDate, int $lastDataRow): void
     {
         $row = 1;
         $dataRange = "'Attendance Records'!K2:K" . $lastDataRow;
@@ -288,7 +305,17 @@ class GenerateAttendanceExportExcel implements ShouldQueue
 
         // Date Range
         $sheet->setCellValue('A' . $row, 'Date Range:');
-        $sheet->setCellValue('B' . $row, $startDate->format('M d, Y') . ' - ' . $endDate->format('M d, Y'));
+        $dateRangeText = '';
+        if ($startDate && $endDate) {
+            $dateRangeText = $startDate->format('M d, Y') . ' - ' . $endDate->format('M d, Y');
+        } elseif ($startDate) {
+            $dateRangeText = 'From ' . $startDate->format('M d, Y');
+        } elseif ($endDate) {
+            $dateRangeText = 'Until ' . $endDate->format('M d, Y');
+        } else {
+            $dateRangeText = 'All Records';
+        }
+        $sheet->setCellValue('B' . $row, $dateRangeText);
         $sheet->getStyle('A' . $row)->getFont()->setBold(true);
         $row++;
 

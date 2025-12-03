@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('attendance_points', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->foreignId('attendance_id')->constrained()->onDelete('cascade');
+            $table->foreignId('attendance_id')->nullable()->constrained()->onDelete('cascade');
             $table->date('shift_date');
             $table->enum('point_type', ['whole_day_absence', 'half_day_absence', 'undertime', 'tardy']);
             $table->decimal('points', 3, 2); // 1.00, 0.50, 0.25
@@ -22,6 +22,11 @@ return new class extends Migration
             $table->boolean('is_advised')->default(false);
             $table->text('notes')->nullable();
             $table->boolean('is_excused')->default(false);
+
+            // Manual entry tracking
+            $table->boolean('is_manual')->default(false);
+            $table->foreignId('created_by')->nullable()->constrained('users')->onDelete('set null');
+
             $table->foreignId('excused_by')->nullable()->constrained('users')->onDelete('set null');
             $table->timestamp('excused_at')->nullable();
             $table->text('excuse_reason')->nullable();

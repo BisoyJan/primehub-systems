@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Progress } from "@/components/ui/progress";
 import {
     Dialog,
     DialogContent,
@@ -28,13 +29,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, MoreVertical, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search } from "lucide-react";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -42,11 +37,11 @@ import {
     index as attendancePointsIndex,
     show as attendancePointsShow,
     statistics as attendancePointsStatistics,
-    exportMethod as attendancePointsExport,
-    exportExcel as attendancePointsExportExcel,
+    startExportExcel as attendancePointsStartExportExcel,
     excuse as attendancePointsExcuse,
     unexcuse as attendancePointsUnexcuse,
 } from "@/routes/attendance-points";
+import exportExcelRoutes from "@/routes/attendance-points/export-excel";
 
 interface User {
     id: number;
@@ -118,6 +113,7 @@ interface GbroStats {
 interface Filters {
     date_from?: string;
     date_to?: string;
+    show_all?: boolean;
 }
 
 interface PageProps extends SharedData {
@@ -183,6 +179,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     // Date filter state
     const [dateFrom, setDateFrom] = useState(filters?.date_from || dateRange.start);
     const [dateTo, setDateTo] = useState(filters?.date_to || dateRange.end);
+    const [showAll, setShowAll] = useState(filters?.show_all || false);
 
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
     const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(null);
@@ -208,6 +205,25 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     } | null>(null);
     const [isLoadingStats, setIsLoadingStats] = useState(false);
 
+    // Export progress state
+    const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [exportProgress, setExportProgress] = useState(0);
+    const [exportStatus, setExportStatus] = useState('');
+    const [, setExportJobId] = useState<string | null>(null);
+    const [exportError, setExportError] = useState(false);
+    const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
+    const [exportFilename, setExportFilename] = useState<string | null>(null);
+    const exportPollingRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => {
+            if (exportPollingRef.current) {
+                clearInterval(exportPollingRef.current);
+            }
+        };
+    }, []);
+
     const goBack = () => {
         router.get(attendancePointsIndex().url);
     };
@@ -231,6 +247,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
         setDateFrom(startOfMonth);
         setDateTo(endOfMonth);
+        setShowAll(false);
 
         router.get(
             attendancePointsShow({ user: user.id }).url,
@@ -239,12 +256,150 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         );
     };
 
-    const handleExportCSV = () => {
-        window.location.href = attendancePointsExport({ user: user.id }).url;
+    const handleShowAll = () => {
+        setShowAll(true);
+        router.get(
+            attendancePointsShow({ user: user.id }).url,
+            { show_all: '1' },
+            { preserveState: true }
+        );
     };
 
-    const handleExportExcel = () => {
-        window.location.href = attendancePointsExportExcel({ user: user.id }).url;
+    const handleExportExcel = async () => {
+        // Reset state
+        setExportProgress(0);
+        setExportStatus('Starting export...');
+        setExportError(false);
+        setExportDownloadUrl(null);
+        setExportFilename(null);
+        setIsExportDialogOpen(true);
+
+        try {
+            // Start the export job
+            const response = await fetch(attendancePointsStartExportExcel({ user: user.id }).url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+            });
+
+            const data = await response.json();
+
+            if (!data.jobId) {
+                throw new Error('Failed to start export');
+            }
+
+            setExportJobId(data.jobId);
+
+            // Immediately check status (job may have completed synchronously)
+            const immediateStatus = await fetch(exportExcelRoutes.status({ jobId: data.jobId }).url);
+            const immediateData = await immediateStatus.json();
+
+            if (immediateData.finished && immediateData.downloadUrl) {
+                setExportProgress(100);
+                setExportStatus('Complete');
+                setExportDownloadUrl(immediateData.downloadUrl);
+                setExportFilename(immediateData.filename || null);
+                return; // Job already done, no need to poll
+            }
+
+            if (immediateData.error) {
+                setExportError(true);
+                setExportStatus(immediateData.status || 'Export failed');
+                return;
+            }
+
+            // Update with initial progress
+            setExportProgress(immediateData.percent || 0);
+            setExportStatus(immediateData.status || 'Processing...');
+
+            // Start polling for status (for async queue)
+            exportPollingRef.current = setInterval(async () => {
+                try {
+                    const statusResponse = await fetch(exportExcelRoutes.status({ jobId: data.jobId }).url);
+                    const statusData = await statusResponse.json();
+
+                    setExportProgress(statusData.percent || 0);
+                    setExportStatus(statusData.status || 'Processing...');
+
+                    if (statusData.error) {
+                        setExportError(true);
+                        if (exportPollingRef.current) {
+                            clearInterval(exportPollingRef.current);
+                            exportPollingRef.current = null;
+                        }
+                    }
+
+                    if (statusData.finished && statusData.downloadUrl) {
+                        setExportDownloadUrl(statusData.downloadUrl);
+                        setExportFilename(statusData.filename || null);
+                        if (exportPollingRef.current) {
+                            clearInterval(exportPollingRef.current);
+                            exportPollingRef.current = null;
+                        }
+                    }
+                } catch {
+                    // Continue polling on status check failure
+                }
+            }, 500);
+        } catch {
+            setExportError(true);
+            setExportStatus('Failed to start export');
+        }
+    };
+
+    const handleDownloadExport = async () => {
+        if (exportDownloadUrl) {
+            try {
+                // Use fetch to get the file with credentials
+                const response = await fetch(exportDownloadUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Download failed');
+                }
+
+                // Get the blob and create a download link
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                // Use filename from backend if available, otherwise fallback
+                a.download = exportFilename || `attendance-points-${user.name.replace(/\s+/g, '-')}-${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                setIsExportDialogOpen(false);
+                // Reset state
+                setExportJobId(null);
+                setExportProgress(0);
+                setExportStatus('');
+                setExportDownloadUrl(null);
+                setExportFilename(null);
+            } catch {
+                setExportError(true);
+                setExportStatus('Download failed. Please try generating a new export.');
+            }
+        }
+    };
+
+    const handleCloseExportDialog = () => {
+        if (exportPollingRef.current) {
+            clearInterval(exportPollingRef.current);
+            exportPollingRef.current = null;
+        }
+        setIsExportDialogOpen(false);
+        setExportJobId(null);
+        setExportProgress(0);
+        setExportStatus('');
+        setExportError(false);
+        setExportDownloadUrl(null);
+        setExportFilename(null);
     };
 
     const handleViewStatistics = async () => {
@@ -327,7 +482,9 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         );
     };
 
-    const formattedDateRange = `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`;
+    const formattedDateRange = showAll
+        ? 'All Records'
+        : `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`;
 
     // Calculate which points are the last 2 eligible for GBRO
     const eligibleGbroPoints = React.useMemo(() => {
@@ -359,24 +516,10 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             <BarChart3 className="h-4 w-4 mr-2" />
                             View Statistics
                         </Button>
-                        <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="sm">
-                                    <Download className="h-4 w-4 mr-2" />
-                                    Export
-                                </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={handleExportCSV}>
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    Export as CSV
-                                </DropdownMenuItem>
-                                <DropdownMenuItem onClick={handleExportExcel}>
-                                    <FileText className="mr-2 h-4 w-4" />
-                                    Export as Excel
-                                </DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu>
+                        <Button variant="outline" size="sm" onClick={handleExportExcel}>
+                            <Download className="h-4 w-4 mr-2" />
+                            Export
+                        </Button>
                     </div>
                 </div>
 
@@ -386,12 +529,13 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                         <h1 className="text-xl font-bold tracking-tight">{title}</h1>
                         <p className="text-sm text-muted-foreground">{formattedDateRange}</p>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         <Input
                             type="date"
                             value={dateFrom}
                             onChange={(e) => setDateFrom(e.target.value)}
                             className="w-auto h-8 text-sm"
+                            disabled={showAll}
                         />
                         <span className="text-muted-foreground text-sm">to</span>
                         <Input
@@ -399,12 +543,21 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             value={dateTo}
                             onChange={(e) => setDateTo(e.target.value)}
                             className="w-auto h-8 text-sm"
+                            disabled={showAll}
                         />
-                        <Button onClick={handleFilter} size="sm" className="h-8">
+                        <Button onClick={handleFilter} size="sm" className="h-8" disabled={showAll}>
                             <Search className="h-3.5 w-3.5" />
                         </Button>
                         <Button onClick={handleReset} variant="outline" size="sm" className="h-8">
                             <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                            onClick={handleShowAll}
+                            variant={showAll ? "default" : "outline"}
+                            size="sm"
+                            className="h-8"
+                        >
+                            All Records
                         </Button>
                     </div>
                 </div>
@@ -654,27 +807,30 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                     </TableCell>
                                                     {can('attendance_points.excuse') && (
                                                         <TableCell className="text-right">
-                                                            <DropdownMenu>
-                                                                <DropdownMenuTrigger asChild>
-                                                                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
-                                                                        <MoreVertical className="h-4 w-4" />
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                {!point.is_expired && !point.is_excused && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-8 px-2 text-green-600 hover:text-green-700 hover:bg-green-50 dark:hover:bg-green-950"
+                                                                        onClick={() => openExcuseDialog(point)}
+                                                                    >
+                                                                        <CheckCircle className="h-4 w-4 mr-1" />
+                                                                        Excuse
                                                                     </Button>
-                                                                </DropdownMenuTrigger>
-                                                                <DropdownMenuContent align="end">
-                                                                    {!point.is_expired && !point.is_excused && (
-                                                                        <DropdownMenuItem onClick={() => openExcuseDialog(point)}>
-                                                                            <CheckCircle className="mr-2 h-4 w-4" />
-                                                                            Excuse Point
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                    {point.is_excused && (
-                                                                        <DropdownMenuItem onClick={() => handleUnexcuse(point.id)}>
-                                                                            <XCircle className="mr-2 h-4 w-4" />
-                                                                            Remove Excuse
-                                                                        </DropdownMenuItem>
-                                                                    )}
-                                                                </DropdownMenuContent>
-                                                            </DropdownMenu>
+                                                                )}
+                                                                {point.is_excused && (
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="sm"
+                                                                        className="h-8 px-2 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-950"
+                                                                        onClick={() => handleUnexcuse(point.id)}
+                                                                    >
+                                                                        <XCircle className="h-4 w-4 mr-1" />
+                                                                        Remove
+                                                                    </Button>
+                                                                )}
+                                                            </div>
                                                         </TableCell>
                                                     )}
                                                 </TableRow>
@@ -1131,6 +1287,72 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                         <Button variant="outline" onClick={() => setIsStatisticsDialogOpen(false)}>
                             Close
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Export Progress Dialog */}
+            <Dialog open={isExportDialogOpen} onOpenChange={(open) => !open && handleCloseExportDialog()}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Exporting Attendance Points</DialogTitle>
+                        <DialogDescription>
+                            Generating Excel file for {user.name}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {exportError ? (
+                            <div className="flex flex-col items-center gap-4 py-4">
+                                <div className="rounded-full bg-red-100 p-3">
+                                    <XCircle className="h-8 w-8 text-red-600" />
+                                </div>
+                                <p className="text-sm text-muted-foreground text-center">
+                                    {exportStatus || 'Export failed. Please try again.'}
+                                </p>
+                            </div>
+                        ) : exportDownloadUrl ? (
+                            <div className="flex flex-col items-center gap-4 py-4">
+                                <div className="rounded-full bg-green-100 p-3">
+                                    <CheckCircle className="h-8 w-8 text-green-600" />
+                                </div>
+                                <p className="text-sm text-muted-foreground text-center">
+                                    Export complete! Click download to get your file.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-center py-2">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                                <Progress value={exportProgress} className="w-full" />
+                                <p className="text-sm text-muted-foreground text-center">
+                                    {exportStatus || 'Processing...'} ({Math.round(exportProgress)}%)
+                                </p>
+                            </>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        {exportDownloadUrl ? (
+                            <>
+                                <Button variant="outline" onClick={handleCloseExportDialog}>
+                                    Close
+                                </Button>
+                                <Button onClick={handleDownloadExport}>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download
+                                </Button>
+                            </>
+                        ) : exportError ? (
+                            <Button variant="outline" onClick={handleCloseExportDialog}>
+                                Close
+                            </Button>
+                        ) : (
+                            <Button variant="outline" onClick={handleCloseExportDialog}>
+                                Cancel
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

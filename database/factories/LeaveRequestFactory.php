@@ -89,4 +89,48 @@ class LeaveRequestFactory extends Factory
             'status' => 'cancelled',
         ]);
     }
+
+    /**
+     * Indicate that the leave request has admin approval only.
+     */
+    public function adminApproved(?User $admin = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'pending',
+            'admin_approved_by' => $admin?->id ?? User::factory(),
+            'admin_approved_at' => now(),
+            'admin_review_notes' => 'Approved by Admin',
+        ]);
+    }
+
+    /**
+     * Indicate that the leave request has HR approval only.
+     */
+    public function hrApproved(?User $hr = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'pending',
+            'hr_approved_by' => $hr?->id ?? User::factory(),
+            'hr_approved_at' => now(),
+            'hr_review_notes' => 'Approved by HR',
+        ]);
+    }
+
+    /**
+     * Indicate that the leave request is fully approved (both Admin and HR).
+     */
+    public function fullyApproved(?User $admin = null, ?User $hr = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'status' => 'approved',
+            'admin_approved_by' => $admin?->id ?? User::factory(),
+            'admin_approved_at' => now(),
+            'admin_review_notes' => 'Approved by Admin',
+            'hr_approved_by' => $hr?->id ?? User::factory(),
+            'hr_approved_at' => now(),
+            'hr_review_notes' => 'Approved by HR',
+            'reviewed_by' => $hr?->id ?? User::factory(),
+            'reviewed_at' => now(),
+        ]);
+    }
 }

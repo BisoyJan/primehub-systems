@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
@@ -28,12 +28,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { Progress } from "@/components/ui/progress";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -48,17 +43,20 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
     show as attendancePointsShow,
+    store as attendancePointsStore,
+    update as attendancePointsUpdate,
+    destroy as attendancePointsDestroy,
     rescan as attendancePointsRescan,
-    exportAll as attendancePointsExportAll,
-    exportAllExcel as attendancePointsExportAllExcel,
+    startExportAllExcel as attendancePointsStartExportAllExcel,
     excuse as attendancePointsExcuse,
     unexcuse as attendancePointsUnexcuse,
 } from "@/routes/attendance-points";
+import exportAllExcelRoutes from "@/routes/attendance-points/export-all-excel";
 
 const defaultTitle = "Attendance Points";
 
@@ -72,6 +70,11 @@ interface ExcusedBy {
     name: string;
 }
 
+interface CreatedBy {
+    id: number;
+    name: string;
+}
+
 interface AttendancePoint {
     id: number;
     user: User;
@@ -81,6 +84,8 @@ interface AttendancePoint {
     status: string | null;
     is_advised: boolean;
     is_excused: boolean;
+    is_manual: boolean;
+    created_by: CreatedBy | null;
     excused_by: ExcusedBy | null;
     excused_at: string | null;
     excuse_reason: string | null;
@@ -215,6 +220,42 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const [selectedViolationPoint, setSelectedViolationPoint] = useState<AttendancePoint | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
 
+    // Manual entry state
+    const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [editingPoint, setEditingPoint] = useState<AttendancePoint | null>(null);
+    const [manualEntryUserId, setManualEntryUserId] = useState("");
+    const [isManualUserPopoverOpen, setIsManualUserPopoverOpen] = useState(false);
+    const [manualUserSearchQuery, setManualUserSearchQuery] = useState("");
+    const [manualShiftDate, setManualShiftDate] = useState("");
+    const [manualPointType, setManualPointType] = useState<string>("");
+    const [manualIsAdvised, setManualIsAdvised] = useState(false);
+    const [manualViolationDetails, setManualViolationDetails] = useState("");
+    const [manualNotes, setManualNotes] = useState("");
+    const [manualTardyMinutes, setManualTardyMinutes] = useState<string>("");
+    const [manualUndertimeMinutes, setManualUndertimeMinutes] = useState<string>("");
+    const [isManualSubmitting, setIsManualSubmitting] = useState(false);
+    const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+    const [pointToDelete, setPointToDelete] = useState<AttendancePoint | null>(null);
+
+    // Export progress state
+    const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+    const [exportProgress, setExportProgress] = useState(0);
+    const [exportStatus, setExportStatus] = useState('');
+    const [, setExportJobId] = useState<string | null>(null);
+    const [exportError, setExportError] = useState(false);
+    const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
+    const exportPollingRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Cleanup polling on unmount
+    useEffect(() => {
+        return () => {
+            if (exportPollingRef.current) {
+                clearInterval(exportPollingRef.current);
+            }
+        };
+    }, []);
+
     const pointsData = {
         data: points?.data || [],
         links: points?.links || [],
@@ -302,14 +343,136 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         );
     };
 
-    const handleExportAllCSV = () => {
-        const url = attendancePointsExportAll({ query: buildFilterQuery() }).url;
-        window.location.href = url;
+    const handleExportAllExcel = async () => {
+        // Reset state
+        setExportProgress(0);
+        setExportStatus('Starting export...');
+        setExportError(false);
+        setExportDownloadUrl(null);
+        setIsExportDialogOpen(true);
+
+        try {
+            // Start the export job
+            const response = await fetch(attendancePointsStartExportAllExcel().url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify(buildFilterQuery()),
+            });
+
+            const data = await response.json();
+
+            if (!data.jobId) {
+                throw new Error('Failed to start export');
+            }
+
+            setExportJobId(data.jobId);
+
+            // Immediately check status (job may have completed synchronously)
+            const immediateStatus = await fetch(exportAllExcelRoutes.status({ jobId: data.jobId }).url);
+            const immediateData = await immediateStatus.json();
+
+            if (immediateData.finished && immediateData.downloadUrl) {
+                setExportProgress(100);
+                setExportStatus('Complete');
+                setExportDownloadUrl(immediateData.downloadUrl);
+                return; // Job already done, no need to poll
+            }
+
+            if (immediateData.error) {
+                setExportError(true);
+                setExportStatus(immediateData.status || 'Export failed');
+                return;
+            }
+
+            // Update with initial progress
+            setExportProgress(immediateData.percent || 0);
+            setExportStatus(immediateData.status || 'Processing...');
+
+            // Start polling for status (for async queue)
+            exportPollingRef.current = setInterval(async () => {
+                try {
+                    const statusResponse = await fetch(exportAllExcelRoutes.status({ jobId: data.jobId }).url);
+                    const statusData = await statusResponse.json();
+
+                    setExportProgress(statusData.percent || 0);
+                    setExportStatus(statusData.status || 'Processing...');
+
+                    if (statusData.error) {
+                        setExportError(true);
+                        if (exportPollingRef.current) {
+                            clearInterval(exportPollingRef.current);
+                            exportPollingRef.current = null;
+                        }
+                    }
+
+                    if (statusData.finished && statusData.downloadUrl) {
+                        setExportDownloadUrl(statusData.downloadUrl);
+                        if (exportPollingRef.current) {
+                            clearInterval(exportPollingRef.current);
+                            exportPollingRef.current = null;
+                        }
+                    }
+                } catch {
+                    // Continue polling on status check failure
+                }
+            }, 500);
+        } catch {
+            setExportError(true);
+            setExportStatus('Failed to start export');
+        }
     };
 
-    const handleExportAllExcel = () => {
-        const url = attendancePointsExportAllExcel({ query: buildFilterQuery() }).url;
-        window.location.href = url;
+    const handleDownloadExport = async () => {
+        if (exportDownloadUrl) {
+            try {
+                // Use fetch to get the file with credentials
+                const response = await fetch(exportDownloadUrl, {
+                    method: 'GET',
+                    credentials: 'same-origin',
+                });
+
+                if (!response.ok) {
+                    throw new Error('Download failed');
+                }
+
+                // Get the blob and create a download link
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `attendance-points-export-${new Date().toISOString().split('T')[0]}.xlsx`;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                document.body.removeChild(a);
+
+                setIsExportDialogOpen(false);
+                // Reset state
+                setExportJobId(null);
+                setExportProgress(0);
+                setExportStatus('');
+                setExportDownloadUrl(null);
+            } catch {
+                setExportError(true);
+                setExportStatus('Download failed. Please try generating a new export.');
+            }
+        }
+    };
+
+    const handleCloseExportDialog = () => {
+        if (exportPollingRef.current) {
+            clearInterval(exportPollingRef.current);
+            exportPollingRef.current = null;
+        }
+        setIsExportDialogOpen(false);
+        setExportJobId(null);
+        setExportProgress(0);
+        setExportStatus('');
+        setExportError(false);
+        setExportDownloadUrl(null);
     };
 
     const viewUserDetails = (userId: number, shiftDate: string) => {
@@ -383,6 +546,125 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                 onFinish: () => {
                     setIsUnexcuseDialogOpen(false);
                     setPointToUnexcuse(null);
+                }
+            }
+        );
+    };
+
+    // Manual Entry Handlers
+    const resetManualEntryForm = () => {
+        setManualEntryUserId("");
+        setManualUserSearchQuery("");
+        setManualShiftDate("");
+        setManualPointType("");
+        setManualIsAdvised(false);
+        setManualViolationDetails("");
+        setManualNotes("");
+        setManualTardyMinutes("");
+        setManualUndertimeMinutes("");
+        setIsEditMode(false);
+        setEditingPoint(null);
+    };
+
+    const openManualEntryDialog = () => {
+        resetManualEntryForm();
+        setIsManualEntryOpen(true);
+    };
+
+    const openEditDialog = (point: AttendancePoint) => {
+        setEditingPoint(point);
+        setIsEditMode(true);
+        setManualEntryUserId(String(point.user.id));
+        setManualShiftDate(point.shift_date);
+        setManualPointType(point.point_type);
+        setManualIsAdvised(point.is_advised);
+        setManualViolationDetails(point.violation_details || "");
+        setManualNotes(point.notes || "");
+        setManualTardyMinutes(point.tardy_minutes ? String(point.tardy_minutes) : "");
+        setManualUndertimeMinutes(point.undertime_minutes ? String(point.undertime_minutes) : "");
+        setIsManualEntryOpen(true);
+    };
+
+    const handleManualEntrySubmit = () => {
+        if (!manualEntryUserId || !manualShiftDate || !manualPointType) {
+            toast.error("Please fill in all required fields");
+            return;
+        }
+
+        setIsManualSubmitting(true);
+
+        const payload = {
+            user_id: parseInt(manualEntryUserId),
+            shift_date: manualShiftDate,
+            point_type: manualPointType,
+            is_advised: manualIsAdvised,
+            violation_details: manualViolationDetails || null,
+            notes: manualNotes || null,
+            tardy_minutes: manualTardyMinutes ? parseInt(manualTardyMinutes) : null,
+            undertime_minutes: manualUndertimeMinutes ? parseInt(manualUndertimeMinutes) : null,
+        };
+
+        if (isEditMode && editingPoint) {
+            router.put(
+                attendancePointsUpdate({ point: editingPoint.id }).url,
+                payload,
+                {
+                    onSuccess: () => {
+                        toast.success("Manual attendance point updated successfully");
+                    },
+                    onError: (errors) => {
+                        const errorMessage = Object.values(errors).flat().join(', ') || "Failed to update attendance point";
+                        toast.error(errorMessage);
+                    },
+                    onFinish: () => {
+                        setIsManualSubmitting(false);
+                        setIsManualEntryOpen(false);
+                        resetManualEntryForm();
+                    }
+                }
+            );
+        } else {
+            router.post(
+                attendancePointsStore().url,
+                payload,
+                {
+                    onSuccess: () => {
+                        toast.success("Manual attendance point created successfully");
+                    },
+                    onError: (errors) => {
+                        const errorMessage = Object.values(errors).flat().join(', ') || "Failed to create attendance point";
+                        toast.error(errorMessage);
+                    },
+                    onFinish: () => {
+                        setIsManualSubmitting(false);
+                        setIsManualEntryOpen(false);
+                        resetManualEntryForm();
+                    }
+                }
+            );
+        }
+    };
+
+    const openDeleteDialog = (point: AttendancePoint) => {
+        setPointToDelete(point);
+        setIsDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (!pointToDelete) return;
+
+        router.delete(
+            attendancePointsDestroy({ point: pointToDelete.id }).url,
+            {
+                onSuccess: () => {
+                    toast.success("Manual attendance point deleted successfully");
+                },
+                onError: () => {
+                    toast.error("Failed to delete attendance point");
+                },
+                onFinish: () => {
+                    setIsDeleteDialogOpen(false);
+                    setPointToDelete(null);
                 }
             }
         );
@@ -464,24 +746,10 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                         {!isRestrictedUser && (
                             <div className="flex items-center gap-2">
                                 <Can permission="attendance_points.export">
-                                    <DropdownMenu>
-                                        <DropdownMenuTrigger asChild>
-                                            <Button variant="outline" size="sm">
-                                                <Download className="h-4 w-4 mr-2" />
-                                                Export
-                                            </Button>
-                                        </DropdownMenuTrigger>
-                                        <DropdownMenuContent align="end">
-                                            <DropdownMenuItem onClick={handleExportAllCSV}>
-                                                <FileText className="mr-2 h-4 w-4" />
-                                                Export as CSV
-                                            </DropdownMenuItem>
-                                            <DropdownMenuItem onClick={handleExportAllExcel}>
-                                                <FileText className="mr-2 h-4 w-4" />
-                                                Export as Excel
-                                            </DropdownMenuItem>
-                                        </DropdownMenuContent>
-                                    </DropdownMenu>
+                                    <Button variant="outline" size="sm" onClick={handleExportAllExcel}>
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Export
+                                    </Button>
                                 </Can>
                                 <Can permission="attendance_points.rescan">
                                     <Button
@@ -491,6 +759,15 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     >
                                         <RefreshCw className="h-4 w-4" />
                                         Rescan Points
+                                    </Button>
+                                </Can>
+                                <Can permission="attendance_points.create">
+                                    <Button
+                                        onClick={openManualEntryDialog}
+                                        className="gap-2"
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        Add Manual Entry
                                     </Button>
                                 </Can>
                             </div>
@@ -718,19 +995,26 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                 {Number(point.points).toFixed(2)}
                                             </TableCell>
                                             <TableCell>
-                                                {point.is_expired ? (
-                                                    <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border">
-                                                        {point.expiration_type === 'gbro' ? 'Expired (GBRO)' : 'Expired (SRO)'}
-                                                    </Badge>
-                                                ) : point.is_excused ? (
-                                                    <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border">
-                                                        Excused
-                                                    </Badge>
-                                                ) : (
-                                                    <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border">
-                                                        Active
-                                                    </Badge>
-                                                )}
+                                                <div className="flex flex-col gap-1">
+                                                    {point.is_expired ? (
+                                                        <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border w-fit">
+                                                            {point.expiration_type === 'gbro' ? 'Expired (GBRO)' : 'Expired (SRO)'}
+                                                        </Badge>
+                                                    ) : point.is_excused ? (
+                                                        <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border w-fit">
+                                                            Excused
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border w-fit">
+                                                            Active
+                                                        </Badge>
+                                                    )}
+                                                    {point.is_manual && (
+                                                        <Badge className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-100 border w-fit text-xs">
+                                                            Manual
+                                                        </Badge>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 {point.violation_details ? (
@@ -778,6 +1062,31 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                         <Eye className="h-4 w-4" />
                                                         View
                                                     </button>
+                                                    {point.is_manual && (
+                                                        <>
+                                                            <Can permission="attendance_points.edit">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => openEditDialog(point)}
+                                                                >
+                                                                    <Pencil className="h-4 w-4 mr-1" />
+                                                                    Edit
+                                                                </Button>
+                                                            </Can>
+                                                            <Can permission="attendance_points.delete">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    className="text-red-600 hover:text-red-800 dark:text-red-400"
+                                                                    onClick={() => openDeleteDialog(point)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 mr-1" />
+                                                                    Delete
+                                                                </Button>
+                                                            </Can>
+                                                        </>
+                                                    )}
                                                     {!point.is_expired && !point.is_excused && (
                                                         <Can permission="attendance_points.excuse">
                                                             <Button
@@ -829,19 +1138,26 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                         <Users className="h-4 w-4 text-muted-foreground" />
                                         <span className="font-medium text-sm">{point.user.name}</span>
                                     </div>
-                                    {point.is_expired ? (
-                                        <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border text-xs">
-                                            {point.expiration_type === 'gbro' ? 'GBRO' : 'Expired'}
-                                        </Badge>
-                                    ) : point.is_excused ? (
-                                        <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border text-xs">
-                                            Excused
-                                        </Badge>
-                                    ) : (
-                                        <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border text-xs">
-                                            Active
-                                        </Badge>
-                                    )}
+                                    <div className="flex flex-col items-end gap-1">
+                                        {point.is_expired ? (
+                                            <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border text-xs">
+                                                {point.expiration_type === 'gbro' ? 'GBRO' : 'Expired'}
+                                            </Badge>
+                                        ) : point.is_excused ? (
+                                            <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border text-xs">
+                                                Excused
+                                            </Badge>
+                                        ) : (
+                                            <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border text-xs">
+                                                Active
+                                            </Badge>
+                                        )}
+                                        {point.is_manual && (
+                                            <Badge className="bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900 dark:text-purple-100 border text-xs">
+                                                Manual
+                                            </Badge>
+                                        )}
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-3">
@@ -903,7 +1219,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     </div>
                                 )}
 
-                                <div className="flex gap-2 pt-2 border-t">
+                                <div className="flex flex-wrap gap-2 pt-2 border-t">
                                     <Button
                                         variant="outline"
                                         size="sm"
@@ -913,6 +1229,38 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                         <Eye className="h-4 w-4 mr-1" />
                                         View
                                     </Button>
+                                    {point.is_manual && (
+                                        <>
+                                            <Can permission="attendance_points.edit">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openEditDialog(point);
+                                                    }}
+                                                >
+                                                    <Pencil className="h-4 w-4 mr-1" />
+                                                    Edit
+                                                </Button>
+                                            </Can>
+                                            <Can permission="attendance_points.delete">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1 text-red-600 hover:text-red-800 dark:text-red-400 border-red-200"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        openDeleteDialog(point);
+                                                    }}
+                                                >
+                                                    <Trash2 className="h-4 w-4 mr-1" />
+                                                    Delete
+                                                </Button>
+                                            </Can>
+                                        </>
+                                    )}
                                     {!point.is_expired && !point.is_excused && (
                                         <Can permission="attendance_points.excuse">
                                             <Button
@@ -1309,6 +1657,371 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                         >
                             Close
                         </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Manual Entry Dialog */}
+            <Dialog open={isManualEntryOpen} onOpenChange={(open) => {
+                if (!open) resetManualEntryForm();
+                setIsManualEntryOpen(open);
+            }}>
+                <DialogContent className="sm:max-w-[600px] max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {isEditMode ? 'Edit Manual Attendance Point' : 'Add Manual Attendance Point'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {isEditMode
+                                ? 'Update the details of this manual attendance point.'
+                                : 'Create a new manual attendance point. This will not be linked to an attendance record.'}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="grid gap-4 py-4">
+                        {/* Employee Selection */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="manual_user">
+                                Employee <span className="text-red-500">*</span>
+                            </Label>
+                            <Popover open={isManualUserPopoverOpen} onOpenChange={setIsManualUserPopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isManualUserPopoverOpen}
+                                        className="w-full justify-between font-normal"
+                                        disabled={isManualSubmitting}
+                                    >
+                                        <span className="truncate">
+                                            {manualEntryUserId
+                                                ? users?.find(u => String(u.id) === manualEntryUserId)?.name || "Select employee..."
+                                                : "Select employee..."}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search employee..."
+                                            value={manualUserSearchQuery}
+                                            onValueChange={setManualUserSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No employee found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {users
+                                                    ?.filter(user =>
+                                                        !manualUserSearchQuery ||
+                                                        user.name.toLowerCase().includes(manualUserSearchQuery.toLowerCase())
+                                                    )
+                                                    .map((user) => (
+                                                        <CommandItem
+                                                            key={user.id}
+                                                            value={user.name}
+                                                            onSelect={() => {
+                                                                setManualEntryUserId(String(user.id));
+                                                                setIsManualUserPopoverOpen(false);
+                                                                setManualUserSearchQuery("");
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${manualEntryUserId === String(user.id)
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                                    }`}
+                                                            />
+                                                            {user.name}
+                                                        </CommandItem>
+                                                    ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        </div>
+
+                        {/* Violation Date */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="manual_shift_date">
+                                Violation Date <span className="text-red-500">*</span>
+                            </Label>
+                            <Input
+                                id="manual_shift_date"
+                                type="date"
+                                value={manualShiftDate}
+                                onChange={(e) => setManualShiftDate(e.target.value)}
+                                max={new Date().toISOString().split('T')[0]}
+                                disabled={isManualSubmitting}
+                            />
+                        </div>
+
+                        {/* Violation Type */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="manual_point_type">
+                                Violation Type <span className="text-red-500">*</span>
+                            </Label>
+                            <Select
+                                value={manualPointType}
+                                onValueChange={setManualPointType}
+                                disabled={isManualSubmitting}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select violation type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="whole_day_absence">Whole Day Absence (1.0 pt)</SelectItem>
+                                    <SelectItem value="half_day_absence">Half-Day Absence (0.5 pt)</SelectItem>
+                                    <SelectItem value="tardy">Tardy (0.25 pt)</SelectItem>
+                                    <SelectItem value="undertime">Undertime (0.25 pt)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        {/* Is Advised (only for whole_day_absence) */}
+                        {manualPointType === 'whole_day_absence' && (
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="manual_is_advised"
+                                    checked={manualIsAdvised}
+                                    onCheckedChange={(checked) => setManualIsAdvised(checked as boolean)}
+                                    disabled={isManualSubmitting}
+                                />
+                                <label
+                                    htmlFor="manual_is_advised"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                                >
+                                    Employee was advised (FTN - Failed to Notify)
+                                </label>
+                            </div>
+                        )}
+
+                        {/* Tardy Minutes (only for tardy type) */}
+                        {manualPointType === 'tardy' && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="manual_tardy_minutes">Tardy Minutes</Label>
+                                <Input
+                                    id="manual_tardy_minutes"
+                                    type="number"
+                                    min="0"
+                                    placeholder="Enter minutes late"
+                                    value={manualTardyMinutes}
+                                    onChange={(e) => setManualTardyMinutes(e.target.value)}
+                                    disabled={isManualSubmitting}
+                                />
+                            </div>
+                        )}
+
+                        {/* Undertime Minutes (only for undertime type) */}
+                        {manualPointType === 'undertime' && (
+                            <div className="grid gap-2">
+                                <Label htmlFor="manual_undertime_minutes">Undertime Minutes</Label>
+                                <Input
+                                    id="manual_undertime_minutes"
+                                    type="number"
+                                    min="0"
+                                    placeholder="Enter minutes early"
+                                    value={manualUndertimeMinutes}
+                                    onChange={(e) => setManualUndertimeMinutes(e.target.value)}
+                                    disabled={isManualSubmitting}
+                                />
+                            </div>
+                        )}
+
+                        {/* Violation Details */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="manual_violation_details">Violation Details</Label>
+                            <Textarea
+                                id="manual_violation_details"
+                                placeholder="Enter violation details (optional - auto-generated if empty)"
+                                value={manualViolationDetails}
+                                onChange={(e) => setManualViolationDetails(e.target.value)}
+                                rows={3}
+                                disabled={isManualSubmitting}
+                                className="resize-none"
+                            />
+                        </div>
+
+                        {/* Notes */}
+                        <div className="grid gap-2">
+                            <Label htmlFor="manual_notes">Additional Notes</Label>
+                            <Textarea
+                                id="manual_notes"
+                                placeholder="Add any additional notes..."
+                                value={manualNotes}
+                                onChange={(e) => setManualNotes(e.target.value)}
+                                rows={2}
+                                disabled={isManualSubmitting}
+                                className="resize-none"
+                            />
+                        </div>
+
+                        {/* Point Value Preview */}
+                        {manualPointType && (
+                            <div className="rounded-lg border bg-muted/50 p-4">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-sm text-muted-foreground">Point Value:</span>
+                                    <span className="text-lg font-bold text-red-600 dark:text-red-400">
+                                        {manualPointType === 'whole_day_absence' ? '1.00' :
+                                            manualPointType === 'half_day_absence' ? '0.50' : '0.25'} pts
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                    <span className="text-sm text-muted-foreground">Expiration:</span>
+                                    <span className="text-sm font-medium">
+                                        {manualPointType === 'whole_day_absence' && !manualIsAdvised
+                                            ? '1 year (NCNS)'
+                                            : '6 months (Standard)'}
+                                    </span>
+                                </div>
+                                <div className="flex items-center justify-between mt-2">
+                                    <span className="text-sm text-muted-foreground">GBRO Eligible:</span>
+                                    <span className="text-sm font-medium">
+                                        {manualPointType === 'whole_day_absence' && !manualIsAdvised
+                                            ? 'No'
+                                            : 'Yes'}
+                                    </span>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <Button
+                            variant="outline"
+                            onClick={() => {
+                                setIsManualEntryOpen(false);
+                                resetManualEntryForm();
+                            }}
+                            disabled={isManualSubmitting}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleManualEntrySubmit}
+                            disabled={!manualEntryUserId || !manualShiftDate || !manualPointType || isManualSubmitting}
+                        >
+                            {isManualSubmitting ? (
+                                <>
+                                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                                    {isEditMode ? 'Updating...' : 'Creating...'}
+                                </>
+                            ) : (
+                                <>
+                                    {isEditMode ? (
+                                        <>
+                                            <Pencil className="mr-2 h-4 w-4" />
+                                            Update Point
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Plus className="mr-2 h-4 w-4" />
+                                            Create Point
+                                        </>
+                                    )}
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete Confirmation Dialog */}
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Delete Manual Attendance Point</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to delete this manual attendance point?
+                            This action cannot be undone.
+                            {pointToDelete && (
+                                <div className="mt-3 p-3 bg-muted rounded-md">
+                                    <p className="text-sm"><strong>Employee:</strong> {pointToDelete.user.name}</p>
+                                    <p className="text-sm"><strong>Date:</strong> {formatDate(pointToDelete.shift_date)}</p>
+                                    <p className="text-sm"><strong>Type:</strong> {pointToDelete.point_type.replace(/_/g, ' ')}</p>
+                                    <p className="text-sm"><strong>Points:</strong> {Number(pointToDelete.points).toFixed(2)}</p>
+                                </div>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel onClick={() => setPointToDelete(null)}>
+                            Cancel
+                        </AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmDelete}
+                            className="bg-red-600 hover:bg-red-700"
+                        >
+                            Delete
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Export Progress Dialog */}
+            <Dialog open={isExportDialogOpen} onOpenChange={(open) => !open && handleCloseExportDialog()}>
+                <DialogContent className="sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Exporting Attendance Points</DialogTitle>
+                        <DialogDescription>
+                            Generating Excel file for all employees
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {exportError ? (
+                            <div className="flex flex-col items-center gap-4 py-4">
+                                <div className="rounded-full bg-red-100 p-3">
+                                    <XCircle className="h-8 w-8 text-red-600" />
+                                </div>
+                                <p className="text-sm text-muted-foreground text-center">
+                                    {exportStatus || 'Export failed. Please try again.'}
+                                </p>
+                            </div>
+                        ) : exportDownloadUrl ? (
+                            <div className="flex flex-col items-center gap-4 py-4">
+                                <div className="rounded-full bg-green-100 p-3">
+                                    <CheckCircle className="h-8 w-8 text-green-600" />
+                                </div>
+                                <p className="text-sm text-muted-foreground text-center">
+                                    Export complete! Click download to get your file.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-center py-2">
+                                    <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                </div>
+                                <Progress value={exportProgress} className="w-full" />
+                                <p className="text-sm text-muted-foreground text-center">
+                                    {exportStatus || 'Processing...'} ({Math.round(exportProgress)}%)
+                                </p>
+                            </>
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        {exportDownloadUrl ? (
+                            <>
+                                <Button variant="outline" onClick={handleCloseExportDialog}>
+                                    Close
+                                </Button>
+                                <Button onClick={handleDownloadExport}>
+                                    <Download className="h-4 w-4 mr-2" />
+                                    Download
+                                </Button>
+                            </>
+                        ) : exportError ? (
+                            <Button variant="outline" onClick={handleCloseExportDialog}>
+                                Close
+                            </Button>
+                        ) : (
+                            <Button variant="outline" onClick={handleCloseExportDialog}>
+                                Cancel
+                            </Button>
+                        )}
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

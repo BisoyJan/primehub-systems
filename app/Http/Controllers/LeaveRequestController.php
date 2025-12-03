@@ -38,7 +38,7 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
 
-        $query = LeaveRequest::with(['user', 'reviewer']);
+        $query = LeaveRequest::with(['user', 'reviewer', 'adminApprover', 'hrApprover']);
 
         // Admins see all requests, employees see only their own
         if (!$isAdmin) {
@@ -262,12 +262,21 @@ class LeaveRequestController extends Controller
                 );
             }
 
-            // Send confirmation email to the employee
-            if ($targetUser->email && filter_var($targetUser->email, FILTER_VALIDATE_EMAIL)) {
-                Mail::to($targetUser->email)->send(new LeaveRequestSubmitted($leaveRequest, $targetUser));
-            }
-
             DB::commit();
+
+            // Send confirmation email to the employee (outside transaction to prevent rollback on mail failure)
+            try {
+                if ($targetUser->email && filter_var($targetUser->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($targetUser->email)->send(new LeaveRequestSubmitted($leaveRequest, $targetUser));
+                }
+            } catch (\Exception $mailException) {
+                \Log::warning('Failed to send leave request confirmation email', [
+                    'error' => $mailException->getMessage(),
+                    'leave_request_id' => $leaveRequest->id,
+                    'user_email' => $targetUser->email,
+                ]);
+                // Don't fail the request just because email failed
+            }
 
             return redirect()->route('leave-requests.show', $leaveRequest)
                 ->with('success', 'Leave request submitted successfully.');
@@ -297,12 +306,22 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
 
-        $leaveRequest->load(['user', 'reviewer']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover']);
+
+        // Check if current user has already approved
+        $hasUserApproved = false;
+        if (in_array($user->role, ['Super Admin', 'Admin']) && $leaveRequest->isAdminApproved()) {
+            $hasUserApproved = true;
+        } elseif ($user->role === 'HR' && $leaveRequest->isHrApproved()) {
+            $hasUserApproved = true;
+        }
 
         return Inertia::render('FormRequest/Leave/Show', [
             'leaveRequest' => $leaveRequest,
             'isAdmin' => $isAdmin,
             'canCancel' => $leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id,
+            'hasUserApproved' => $hasUserApproved,
+            'userRole' => $user->role,
         ]);
     }
 
@@ -446,58 +465,128 @@ class LeaveRequestController extends Controller
 
     /**
      * Approve a leave request (Admin/HR only).
+     * Requires both Admin and HR approval before final approval.
      */
     public function approve(Request $request, LeaveRequest $leaveRequest)
     {
         $this->authorize('approve', $leaveRequest);
 
         $user = auth()->user();
+        $userRole = $user->role;
 
         if ($leaveRequest->status !== 'pending') {
             return back()->withErrors(['error' => 'Only pending requests can be approved.']);
+        }
+
+        // Determine if user is Admin or HR
+        $isAdmin = in_array($userRole, ['Super Admin', 'Admin']);
+        $isHr = $userRole === 'HR';
+
+        // Check if user has already approved
+        if ($isAdmin && $leaveRequest->isAdminApproved()) {
+            return back()->withErrors(['error' => 'Admin has already approved this request.']);
+        }
+
+        if ($isHr && $leaveRequest->isHrApproved()) {
+            return back()->withErrors(['error' => 'HR has already approved this request.']);
         }
 
         $leaveCreditService = $this->leaveCreditService;
 
         DB::beginTransaction();
         try {
-            // Update request status
-            $leaveRequest->update([
-                'status' => 'approved',
-                'reviewed_by' => $user->id,
-                'reviewed_at' => now(),
-                'review_notes' => $request->review_notes,
-            ]);
+            $updateData = [];
 
-            // Deduct leave credits if applicable
-            if ($leaveRequest->requiresCredits()) {
-                $year = $request->input('credits_year', now()->year);
-                $leaveCreditService->deductCredits($leaveRequest, $year);
+            if ($isAdmin) {
+                $updateData['admin_approved_by'] = $user->id;
+                $updateData['admin_approved_at'] = now();
+                $updateData['admin_review_notes'] = $request->review_notes;
+            } elseif ($isHr) {
+                $updateData['hr_approved_by'] = $user->id;
+                $updateData['hr_approved_at'] = now();
+                $updateData['hr_review_notes'] = $request->review_notes;
             }
 
-            // TODO: Create attendance records for the leave period
-            // This will mark the days as on leave in the attendance table
+            $leaveRequest->update($updateData);
+            $leaveRequest->refresh();
 
-            // Notify the employee about approval
-            $this->notificationService->notifyLeaveRequestStatusChange(
-                $leaveRequest->user_id,
-                'approved',
-                $leaveRequest->leave_type,
-                $leaveRequest->id
-            );
+            // Check if both have now approved
+            $isFullyApproved = $leaveRequest->isFullyApproved();
 
-            // Send Email Notification
-            $employee = $leaveRequest->user;
-            if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
-                Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
+            if ($isFullyApproved) {
+                // Both Admin and HR have approved - finalize the approval
+                $leaveRequest->update([
+                    'status' => 'approved',
+                    'reviewed_by' => $user->id,
+                    'reviewed_at' => now(),
+                    'review_notes' => $request->review_notes,
+                ]);
+
+                // Deduct leave credits if applicable
+                if ($leaveRequest->requiresCredits()) {
+                    $year = $request->input('credits_year', now()->year);
+                    $leaveCreditService->deductCredits($leaveRequest, $year);
+                }
+
+                // Notify the employee about full approval
+                $this->notificationService->notifyLeaveRequestFullyApproved(
+                    $leaveRequest->user_id,
+                    $leaveRequest->leave_type,
+                    $leaveRequest->id
+                );
+
+                DB::commit();
+
+                // Send Email Notification to the employee (outside transaction)
+                try {
+                    $employee = $leaveRequest->user;
+                    if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+                        Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
+                    }
+                } catch (\Exception $mailException) {
+                    \Log::warning('Failed to send leave request approval email', [
+                        'error' => $mailException->getMessage(),
+                        'leave_request_id' => $leaveRequest->id,
+                    ]);
+                }
+
+                return redirect()->route('leave-requests.show', $leaveRequest)
+                    ->with('success', 'Leave request fully approved by both Admin and HR.');
+            } else {
+                // Partial approval - notify the other role
+                $requesterName = $leaveRequest->user->name;
+
+                if ($isAdmin) {
+                    // Admin approved, notify HR
+                    $this->notificationService->notifyHrAboutAdminApproval(
+                        $requesterName,
+                        $leaveRequest->leave_type,
+                        $user->name,
+                        $leaveRequest->id
+                    );
+                } elseif ($isHr) {
+                    // HR approved, notify Admin
+                    $this->notificationService->notifyAdminAboutHrApproval(
+                        $requesterName,
+                        $leaveRequest->leave_type,
+                        $user->name,
+                        $leaveRequest->id
+                    );
+                }
+
+                DB::commit();
+
+                $otherRole = $isAdmin ? 'HR' : 'Admin';
+                return redirect()->route('leave-requests.show', $leaveRequest)
+                    ->with('success', "Your approval recorded. Waiting for {$otherRole} approval.");
             }
-
-            DB::commit();
-
-            return redirect()->route('leave-requests.show', $leaveRequest)
-                ->with('success', 'Leave request approved successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error('Leave request approval failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+                'user_id' => $user->id,
+            ]);
             return back()->withErrors(['error' => 'Failed to approve leave request. Please try again.']);
         }
     }
@@ -536,13 +625,20 @@ class LeaveRequestController extends Controller
                 $leaveRequest->id
             );
 
-            // Send Email Notification
-            $employee = $leaveRequest->user;
-            if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
-                Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
-            }
-
             DB::commit();
+
+            // Send Email Notification (outside transaction)
+            try {
+                $employee = $leaveRequest->user;
+                if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
+                }
+            } catch (\Exception $mailException) {
+                \Log::warning('Failed to send leave request denial email', [
+                    'error' => $mailException->getMessage(),
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
 
             return redirect()->route('leave-requests.show', $leaveRequest)
                 ->with('success', 'Leave request denied.');

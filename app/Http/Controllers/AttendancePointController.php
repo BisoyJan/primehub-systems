@@ -2,19 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\StoreAttendancePointRequest;
+use App\Http\Requests\UpdateAttendancePointRequest;
+use App\Http\Traits\RedirectsWithFlashMessages;
+use App\Jobs\GenerateAttendancePointsExportExcel;
+use App\Jobs\GenerateAllAttendancePointsExportExcel;
 use App\Models\AttendancePoint;
 use App\Models\Attendance;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Carbon\Carbon;
-use PhpOffice\PhpSpreadsheet\Spreadsheet;
-use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
-use PhpOffice\PhpSpreadsheet\Style\Fill;
-use PhpOffice\PhpSpreadsheet\Style\Alignment;
 
 class AttendancePointController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
     public function index(Request $request)
     {
         $this->authorize('viewAny', AttendancePoint::class);
@@ -25,11 +34,10 @@ class AttendancePointController extends Controller
             return redirect()->route('attendance-points.show', ['user' => auth()->id()]);
         }
 
-        $query = AttendancePoint::with(['user', 'attendance', 'excusedBy'])
+        $query = AttendancePoint::with(['user', 'attendance', 'excusedBy', 'createdBy'])
             ->orderBy('shift_date', 'desc');
 
         if (true) {
-            // Only allow user_id filter for non-restricted roles
             // Only allow user_id filter for non-restricted roles
             if ($request->filled('user_id')) {
                 $query->where('user_id', $request->user_id);
@@ -92,11 +100,13 @@ class AttendancePointController extends Controller
 
     public function show(User $user, Request $request)
     {
-        // Authorization: Users can only view their own points unless they're admin/HR
+        // Authorization: Users can only view their own points unless they're admin/HR/Team Lead
         $currentUser = $request->user();
-        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR'])) {
+        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR', 'Team Lead'])) {
             abort(403, 'Unauthorized to view other user points');
         }
+
+        $showAll = $request->boolean('show_all', false);
 
         $startDate = $request->filled('date_from')
             ? Carbon::parse($request->date_from)
@@ -106,11 +116,15 @@ class AttendancePointController extends Controller
             ? Carbon::parse($request->date_to)
             : Carbon::now()->endOfMonth();
 
-        $points = AttendancePoint::with(['attendance', 'excusedBy'])
-            ->where('user_id', $user->id)
-            ->dateRange($startDate, $endDate)
-            ->orderBy('shift_date', 'desc')
-            ->get();
+        $pointsQuery = AttendancePoint::with(['attendance', 'excusedBy'])
+            ->where('user_id', $user->id);
+
+        // Only apply date range if not showing all
+        if (!$showAll) {
+            $pointsQuery->dateRange($startDate, $endDate);
+        }
+
+        $points = $pointsQuery->orderBy('shift_date', 'desc')->get();
 
         $totals = [
             'total_points' => $points->where('is_excused', false)->where('is_expired', false)->sum('points'),
@@ -172,6 +186,7 @@ class AttendancePointController extends Controller
             'filters' => [
                 'date_from' => $request->date_from,
                 'date_to' => $request->date_to,
+                'show_all' => $showAll,
             ],
         ]);
     }
@@ -214,6 +229,154 @@ class AttendancePointController extends Controller
         ]);
 
         return redirect()->back()->with('success', 'Excuse removed successfully.');
+    }
+
+    /**
+     * Store a new manual attendance point
+     */
+    public function store(StoreAttendancePointRequest $request)
+    {
+        try {
+            DB::transaction(function () use ($request) {
+                $pointType = $request->point_type;
+                $isAdvised = $request->boolean('is_advised', false);
+                $shiftDate = Carbon::parse($request->shift_date);
+
+                // Determine if this is a NCNS/FTN type (1-year expiration, not GBRO eligible)
+                $isNcnsOrFtn = $pointType === 'whole_day_absence' && !$isAdvised;
+                $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+
+                // Generate violation details if not provided
+                $violationDetails = $request->violation_details;
+                if (empty($violationDetails)) {
+                    $violationDetails = $this->generateManualViolationDetails(
+                        $pointType,
+                        $isAdvised,
+                        $request->tardy_minutes,
+                        $request->undertime_minutes
+                    );
+                }
+
+                AttendancePoint::create([
+                    'user_id' => $request->user_id,
+                    'attendance_id' => null, // Manual entries don't have attendance records
+                    'shift_date' => $request->shift_date,
+                    'point_type' => $pointType,
+                    'points' => AttendancePoint::POINT_VALUES[$pointType] ?? 0,
+                    'status' => null,
+                    'is_advised' => $isAdvised,
+                    'is_manual' => true,
+                    'created_by' => $request->user()->id,
+                    'notes' => $request->notes,
+                    'violation_details' => $violationDetails,
+                    'tardy_minutes' => $request->tardy_minutes,
+                    'undertime_minutes' => $request->undertime_minutes,
+                    'expires_at' => $expiresAt,
+                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                    'eligible_for_gbro' => !$isNcnsOrFtn,
+                ]);
+            });
+
+            return $this->redirectWithFlash('attendance-points.index', 'Manual attendance point created successfully.');
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController Store Error: ' . $e->getMessage());
+            return $this->redirectWithFlash('attendance-points.index', 'Failed to create manual attendance point.', 'error');
+        }
+    }
+
+    /**
+     * Update a manual attendance point
+     */
+    public function update(UpdateAttendancePointRequest $request, AttendancePoint $point)
+    {
+        // Ensure it's a manual entry
+        if (!$point->is_manual) {
+            return $this->backWithFlash('Cannot edit auto-generated attendance points.', 'error');
+        }
+
+        try {
+            DB::transaction(function () use ($request, $point) {
+                $pointType = $request->point_type;
+                $isAdvised = $request->boolean('is_advised', false);
+                $shiftDate = Carbon::parse($request->shift_date);
+
+                // Recalculate expiration
+                $isNcnsOrFtn = $pointType === 'whole_day_absence' && !$isAdvised;
+                $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+
+                // Generate violation details if not provided
+                $violationDetails = $request->violation_details;
+                if (empty($violationDetails)) {
+                    $violationDetails = $this->generateManualViolationDetails(
+                        $pointType,
+                        $isAdvised,
+                        $request->tardy_minutes,
+                        $request->undertime_minutes
+                    );
+                }
+
+                $point->update([
+                    'user_id' => $request->user_id,
+                    'shift_date' => $request->shift_date,
+                    'point_type' => $pointType,
+                    'points' => AttendancePoint::POINT_VALUES[$pointType] ?? 0,
+                    'is_advised' => $isAdvised,
+                    'notes' => $request->notes,
+                    'violation_details' => $violationDetails,
+                    'tardy_minutes' => $request->tardy_minutes,
+                    'undertime_minutes' => $request->undertime_minutes,
+                    'expires_at' => $expiresAt,
+                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                    'eligible_for_gbro' => !$isNcnsOrFtn,
+                ]);
+            });
+
+            return $this->backWithFlash('Manual attendance point updated successfully.');
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController Update Error: ' . $e->getMessage());
+            return $this->backWithFlash('Failed to update manual attendance point.', 'error');
+        }
+    }
+
+    /**
+     * Delete a manual attendance point
+     */
+    public function destroy(AttendancePoint $point)
+    {
+        $this->authorize('delete', $point);
+
+        // Ensure it's a manual entry
+        if (!$point->is_manual) {
+            return $this->backWithFlash('Cannot delete auto-generated attendance points.', 'error');
+        }
+
+        try {
+            $point->delete();
+            return $this->redirectWithFlash('attendance-points.index', 'Manual attendance point deleted successfully.');
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController Destroy Error: ' . $e->getMessage());
+            return $this->backWithFlash('Failed to delete manual attendance point.', 'error');
+        }
+    }
+
+    /**
+     * Generate violation details for manual entries
+     */
+    private function generateManualViolationDetails(
+        string $pointType,
+        bool $isAdvised,
+        ?int $tardyMinutes,
+        ?int $undertimeMinutes
+    ): string {
+        return match ($pointType) {
+            'whole_day_absence' => $isAdvised
+                ? 'Manual Entry: Advised absence (Failed to Notify - FTN)'
+                : 'Manual Entry: No Call, No Show (NCNS) - Did not report for work without prior notice',
+            'half_day_absence' => 'Manual Entry: Half-day absence recorded',
+            'tardy' => sprintf('Manual Entry: Late arrival by %d minutes', $tardyMinutes ?? 0),
+            'undertime' => sprintf('Manual Entry: Early departure by %d minutes', $undertimeMinutes ?? 0),
+            default => 'Manual Entry: Attendance violation',
+        };
     }
 
     /**
@@ -384,9 +547,9 @@ class AttendancePointController extends Controller
      */
     public function statistics(User $user, Request $request)
     {
-        // Authorization: Users can only view their own statistics unless they're admin/HR
+        // Authorization: Users can only view their own statistics unless they're admin/HR/Team Lead
         $currentUser = $request->user();
-        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR'])) {
+        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR', 'Team Lead'])) {
             abort(403, 'Unauthorized to view other user statistics');
         }
 
@@ -411,9 +574,9 @@ class AttendancePointController extends Controller
      */
     public function export(User $user, Request $request)
     {
-        // Authorization: Users can only export their own points unless they're admin/HR
+        // Authorization: Users can only export their own points unless they're admin/HR/Team Lead
         $currentUser = $request->user();
-        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR'])) {
+        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR', 'Team Lead'])) {
             abort(403, 'Unauthorized to export other user points');
         }
 
@@ -480,200 +643,86 @@ class AttendancePointController extends Controller
     }
 
     /**
-     * Export attendance points for a specific user to Excel
+     * Start Excel export job for a specific user's attendance points
      */
-    public function exportExcel(User $user, Request $request)
+    public function startExportExcel(User $user, Request $request)
     {
-        // Authorization: Users can only export their own points unless they're admin/HR
+        // Authorization: Users can only export their own points unless they're admin/HR/Team Lead
         $currentUser = $request->user();
-        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR'])) {
+        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR', 'Team Lead'])) {
             abort(403, 'Unauthorized to export other user points');
         }
 
-        $points = AttendancePoint::where('user_id', $user->id)
-            ->with(['attendance', 'excusedBy'])
-            ->orderBy('shift_date', 'desc')
-            ->get();
+        $jobId = Str::uuid()->toString();
 
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Attendance Points');
+        $job = new GenerateAttendancePointsExportExcel($jobId, $user->id);
 
-        // Headers
-        $headers = [
-            'Date', 'Type', 'Points', 'Status', 'Violation Details',
-            'Expires At', 'Expiration Type', 'Is Expired', 'Expired At',
-            'Is Excused', 'Excuse Reason', 'Excused By', 'Excused At',
-            'Tardy Minutes', 'Undertime Minutes', 'GBRO Eligible'
-        ];
+        // Use dispatchSync for immediate execution when queue is sync
+        if (config('queue.default') === 'sync') {
+            Bus::dispatchSync($job);
+        } else {
+            Bus::dispatch($job);
+        }
 
-        $sheet->fromArray($headers, null, 'A1');
-
-        // Style header row
-        $headerRange = 'A1:P1';
-        $sheet->getStyle($headerRange)->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4F46E5']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        return response()->json([
+            'jobId' => $jobId,
+            'message' => 'Export job started',
         ]);
-
-        // Data
-        $row = 2;
-        foreach ($points as $point) {
-            $sheet->fromArray([
-                $point->shift_date,
-                $point->point_type,
-                $point->points,
-                $point->is_expired ? 'Expired' : ($point->is_excused ? 'Excused' : 'Active'),
-                $point->violation_details,
-                $point->expires_at ? Carbon::parse($point->expires_at)->format('Y-m-d') : '',
-                $point->expiration_type ?? '',
-                $point->is_expired ? 'Yes' : 'No',
-                $point->expired_at ? Carbon::parse($point->expired_at)->format('Y-m-d') : '',
-                $point->is_excused ? 'Yes' : 'No',
-                $point->excuse_reason ?? '',
-                $point->excusedBy?->name ?? '',
-                $point->excused_at ? Carbon::parse($point->excused_at)->format('Y-m-d H:i:s') : '',
-                $point->tardy_minutes ?? '',
-                $point->undertime_minutes ?? '',
-                $point->eligible_for_gbro ? 'Yes' : 'No',
-            ], null, "A{$row}");
-            $row++;
-        }
-
-        // Auto-size columns
-        foreach (range('A', 'P') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
-        }
-
-        $filename = "attendance-points-{$user->id}-" . now()->format('Y-m-d') . ".xlsx";
-
-        $writer = new Xlsx($spreadsheet);
-        $temp_file = tempnam(sys_get_temp_dir(), $filename);
-        $writer->save($temp_file);
-
-        return response()->download($temp_file, $filename)->deleteFileAfterSend(true);
     }
 
     /**
-     * Export all attendance points to CSV (with filters)
+     * Check single user export job progress
      */
-    public function exportAll(Request $request)
+    public function checkExportExcelStatus(string $jobId)
     {
-        // Authorization: Only admin/HR can export all points
-        $currentUser = $request->user();
-        if (!in_array($currentUser->role, ['Admin', 'Super Admin', 'HR'])) {
-            abort(403, 'Unauthorized to export all attendance points');
-        }
+        $progress = Cache::get("attendance_points_export:{$jobId}");
 
-        $query = AttendancePoint::with(['user', 'attendance', 'excusedBy'])
-            ->orderBy('shift_date', 'desc');
-
-        // Apply filters
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
-        }
-
-        if ($request->filled('point_type')) {
-            $query->where('point_type', $request->point_type);
-        }
-
-        if ($request->filled('status')) {
-            if ($request->status === 'active') {
-                $query->where('is_excused', false)->where('is_expired', false);
-            } elseif ($request->status === 'excused') {
-                $query->where('is_excused', true);
-            }
-        }
-
-        if ($request->filled('date_from')) {
-            $query->where('shift_date', '>=', $request->date_from);
-        }
-
-        if ($request->filled('date_to')) {
-            $query->where('shift_date', '<=', $request->date_to);
-        }
-
-        if ($request->filled('expiring_soon') && $request->expiring_soon === 'true') {
-            $query->where('is_expired', false)
-                ->where('is_excused', false)
-                ->whereNotNull('expires_at')
-                ->whereDate('expires_at', '<=', now()->addDays(30));
-        }
-
-        if ($request->filled('gbro_eligible') && $request->gbro_eligible === 'true') {
-            $query->where('eligible_for_gbro', true)
-                ->where('is_expired', false)
-                ->where('is_excused', false);
-        }
-
-        $points = $query->get();
-
-        // Generate CSV
-        $filename = "attendance-points-all-" . now()->format('Y-m-d') . ".csv";
-
-        $handle = fopen('php://temp', 'w');
-
-        // Headers
-        fputcsv($handle, [
-            'Employee Name',
-            'Employee ID',
-            'Date',
-            'Type',
-            'Points',
-            'Status',
-            'Violation Details',
-            'Expires At',
-            'Expiration Type',
-            'Is Expired',
-            'Expired At',
-            'Is Excused',
-            'Excuse Reason',
-            'Excused By',
-            'Excused At',
-            'Tardy Minutes',
-            'Undertime Minutes',
-            'GBRO Eligible',
-        ]);
-
-        // Data
-        foreach ($points as $point) {
-            fputcsv($handle, [
-                $point->user->name,
-                $point->user->id,
-                $point->shift_date,
-                $point->point_type,
-                $point->points,
-                $point->is_expired ? 'Expired' : ($point->is_excused ? 'Excused' : 'Active'),
-                $point->violation_details,
-                $point->expires_at ? Carbon::parse($point->expires_at)->format('Y-m-d') : '',
-                $point->expiration_type ?? '',
-                $point->is_expired ? 'Yes' : 'No',
-                $point->expired_at ? Carbon::parse($point->expired_at)->format('Y-m-d') : '',
-                $point->is_excused ? 'Yes' : 'No',
-                $point->excuse_reason ?? '',
-                $point->excusedBy?->name ?? '',
-                $point->excused_at ? Carbon::parse($point->excused_at)->format('Y-m-d H:i:s') : '',
-                $point->tardy_minutes ?? '',
-                $point->undertime_minutes ?? '',
-                $point->eligible_for_gbro ? 'Yes' : 'No',
+        if (!$progress) {
+            return response()->json([
+                'percent' => 0,
+                'status' => 'Job not found or expired',
+                'finished' => true,
+                'error' => true,
             ]);
         }
 
-        rewind($handle);
-        $csv = stream_get_contents($handle);
-        fclose($handle);
-
-        return response($csv, 200, [
-            'Content-Type' => 'text/csv',
-            'Content-Disposition' => "attachment; filename=\"{$filename}\"",
-        ]);
+        return response()->json($progress);
     }
 
     /**
-     * Export all attendance points to Excel (with filters)
+     * Download single user exported Excel file
      */
-    public function exportAllExcel(Request $request)
+    public function downloadExportExcel(string $jobId)
+    {
+        $cacheKey = "attendance_points_export:{$jobId}";
+        $progress = Cache::get($cacheKey);
+
+        if (!$progress || !$progress['finished'] || empty($progress['downloadUrl'])) {
+            abort(404, 'Export file not found or not ready');
+        }
+
+        $tempDir = storage_path('app/temp');
+        $files = glob($tempDir . '/' . $jobId . '_*.xlsx');
+
+        if (empty($files)) {
+            // Clear cache since file no longer exists
+            Cache::forget($cacheKey);
+            abort(404, 'Export file not found. Please generate a new export.');
+        }
+
+        $filePath = $files[0];
+        $filename = $progress['filename'] ?? basename($filePath);
+
+        // Clear cache after download since file will be deleted
+        Cache::forget($cacheKey);
+
+        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Start Excel export job for all attendance points (with filters)
+     */
+    public function startExportAllExcel(Request $request)
     {
         // Authorization: Only admin/HR can export all points
         $currentUser = $request->user();
@@ -681,108 +730,117 @@ class AttendancePointController extends Controller
             abort(403, 'Unauthorized to export all attendance points');
         }
 
-        $query = AttendancePoint::with(['user', 'attendance', 'excusedBy'])
-            ->orderBy('shift_date', 'desc');
+        $filters = [
+            'user_id' => $request->user_id,
+            'point_type' => $request->point_type,
+            'status' => $request->status,
+            'date_from' => $request->date_from,
+            'date_to' => $request->date_to,
+            'expiring_soon' => $request->expiring_soon,
+            'gbro_eligible' => $request->gbro_eligible,
+        ];
 
-        // Apply filters (same as exportAll)
-        if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+        // Check if there are any matching records before starting the export
+        $query = AttendancePoint::query();
+
+        if (!empty($filters['user_id'])) {
+            $query->where('user_id', $filters['user_id']);
         }
 
-        if ($request->filled('point_type')) {
-            $query->where('point_type', $request->point_type);
+        if (!empty($filters['point_type'])) {
+            $query->where('point_type', $filters['point_type']);
         }
 
-        if ($request->filled('status')) {
-            if ($request->status === 'active') {
+        if (!empty($filters['status'])) {
+            if ($filters['status'] === 'active') {
                 $query->where('is_excused', false)->where('is_expired', false);
-            } elseif ($request->status === 'excused') {
+            } elseif ($filters['status'] === 'excused') {
                 $query->where('is_excused', true);
+            } elseif ($filters['status'] === 'expired') {
+                $query->where('is_expired', true);
             }
         }
 
-        if ($request->filled('date_from')) {
-            $query->where('shift_date', '>=', $request->date_from);
+        if (!empty($filters['date_from'])) {
+            $query->where('shift_date', '>=', $filters['date_from']);
         }
 
-        if ($request->filled('date_to')) {
-            $query->where('shift_date', '<=', $request->date_to);
+        if (!empty($filters['date_to'])) {
+            $query->where('shift_date', '<=', $filters['date_to']);
         }
 
-        if ($request->filled('expiring_soon') && $request->expiring_soon === 'true') {
-            $query->where('is_expired', false)
-                ->where('is_excused', false)
-                ->whereNotNull('expires_at')
-                ->whereDate('expires_at', '<=', now()->addDays(30));
+        $recordCount = $query->count();
+
+        if ($recordCount === 0) {
+            return response()->json([
+                'error' => true,
+                'message' => 'No attendance points found matching your selected filters.',
+            ], 422);
         }
 
-        if ($request->filled('gbro_eligible') && $request->gbro_eligible === 'true') {
-            $query->where('eligible_for_gbro', true)
-                ->where('is_expired', false)
-                ->where('is_excused', false);
+        $jobId = Str::uuid()->toString();
+
+        $job = new GenerateAllAttendancePointsExportExcel($jobId, $filters);
+
+        // Use dispatchSync for immediate execution when queue is sync
+        if (config('queue.default') === 'sync') {
+            Bus::dispatchSync($job);
+        } else {
+            Bus::dispatch($job);
         }
 
-        $points = $query->get();
-
-        $spreadsheet = new Spreadsheet();
-        $sheet = $spreadsheet->getActiveSheet();
-        $sheet->setTitle('Attendance Points');
-
-        // Headers
-        $headers = [
-            'Employee Name', 'Employee ID', 'Date', 'Type', 'Points', 'Status',
-            'Violation Details', 'Expires At', 'Expiration Type', 'Is Expired',
-            'Expired At', 'Is Excused', 'Excuse Reason', 'Excused By', 'Excused At',
-            'Tardy Minutes', 'Undertime Minutes', 'GBRO Eligible'
-        ];
-
-        $sheet->fromArray($headers, null, 'A1');
-
-        // Style header row
-        $headerRange = 'A1:R1';
-        $sheet->getStyle($headerRange)->applyFromArray([
-            'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF']],
-            'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4F46E5']],
-            'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+        return response()->json([
+            'jobId' => $jobId,
+            'message' => 'Export job started',
         ]);
+    }
 
-        // Data
-        $row = 2;
-        foreach ($points as $point) {
-            $sheet->fromArray([
-                $point->user->name,
-                $point->user->id,
-                $point->shift_date,
-                $point->point_type,
-                $point->points,
-                $point->is_expired ? 'Expired' : ($point->is_excused ? 'Excused' : 'Active'),
-                $point->violation_details,
-                $point->expires_at ? Carbon::parse($point->expires_at)->format('Y-m-d') : '',
-                $point->expiration_type ?? '',
-                $point->is_expired ? 'Yes' : 'No',
-                $point->expired_at ? Carbon::parse($point->expired_at)->format('Y-m-d') : '',
-                $point->is_excused ? 'Yes' : 'No',
-                $point->excuse_reason ?? '',
-                $point->excusedBy?->name ?? '',
-                $point->excused_at ? Carbon::parse($point->excused_at)->format('Y-m-d H:i:s') : '',
-                $point->tardy_minutes ?? '',
-                $point->undertime_minutes ?? '',
-                $point->eligible_for_gbro ? 'Yes' : 'No',
-            ], null, "A{$row}");
-            $row++;
+    /**
+     * Check all users export job progress
+     */
+    public function checkExportAllExcelStatus(string $jobId)
+    {
+        $progress = Cache::get("attendance_points_export_all:{$jobId}");
+
+        if (!$progress) {
+            return response()->json([
+                'percent' => 0,
+                'status' => 'Job not found or expired',
+                'finished' => true,
+                'error' => true,
+            ]);
         }
 
-        // Auto-size columns
-        foreach (range('A', 'R') as $col) {
-            $sheet->getColumnDimension($col)->setAutoSize(true);
+        return response()->json($progress);
+    }
+
+    /**
+     * Download all users exported Excel file
+     */
+    public function downloadExportAllExcel(string $jobId)
+    {
+        $cacheKey = "attendance_points_export_all:{$jobId}";
+        $progress = Cache::get($cacheKey);
+
+        if (!$progress || !$progress['finished'] || empty($progress['downloadUrl'])) {
+            abort(404, 'Export file not found or not ready');
         }
 
-        $filename = "attendance-points-all-" . now()->format('Y-m-d') . ".xlsx";
+        $tempDir = storage_path('app/temp');
+        $files = glob($tempDir . '/' . $jobId . '_*.xlsx');
 
-        $writer = new Xlsx($spreadsheet);
-        $temp_file = tempnam(sys_get_temp_dir(), $filename);
-        $writer->save($temp_file);
+        if (empty($files)) {
+            // Clear cache since file no longer exists
+            Cache::forget($cacheKey);
+            abort(404, 'Export file not found. Please generate a new export.');
+        }
 
-        return response()->download($temp_file, $filename)->deleteFileAfterSend(true);
+        $filePath = $files[0];
+        $filename = $progress['filename'] ?? basename($filePath);
+
+        // Clear cache after download since file will be deleted
+        Cache::forget($cacheKey);
+
+        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
     }
 }

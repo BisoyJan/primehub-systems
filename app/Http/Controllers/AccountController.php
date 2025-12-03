@@ -463,4 +463,108 @@ class AccountController extends Controller
             'type' => 'success'
         ]);
     }
+
+    /**
+     * Bulk approve multiple user accounts.
+     */
+    public function bulkApprove(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:users,id',
+        ]);
+
+        $ids = $validated['ids'];
+
+        // Filter out current user's ID and already approved accounts
+        $usersToApprove = User::whereIn('id', $ids)
+            ->where('id', '!=', auth()->id())
+            ->where('is_approved', false)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($usersToApprove->isEmpty()) {
+            return back()->with('flash', [
+                'message' => 'No accounts to approve. Selected accounts may already be approved or deleted.',
+                'type' => 'info'
+            ]);
+        }
+
+        try {
+            foreach ($usersToApprove as $user) {
+                $this->authorize('update', $user);
+            }
+
+            $count = $usersToApprove->count();
+
+            User::whereIn('id', $usersToApprove->pluck('id'))
+                ->update([
+                    'is_approved' => true,
+                    'approved_at' => now(),
+                ]);
+
+            return back()->with('flash', [
+                'message' => "{$count} user account(s) approved successfully",
+                'type' => 'success'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AccountController BulkApprove Error: ' . $e->getMessage());
+            return back()->with('flash', [
+                'message' => 'Failed to approve selected accounts',
+                'type' => 'error'
+            ]);
+        }
+    }
+
+    /**
+     * Bulk unapprove (revoke) multiple user accounts.
+     */
+    public function bulkUnapprove(Request $request)
+    {
+        $validated = $request->validate([
+            'ids' => 'required|array|min:1',
+            'ids.*' => 'required|integer|exists:users,id',
+        ]);
+
+        $ids = $validated['ids'];
+
+        // Filter out current user's ID and already unapproved accounts
+        $usersToUnapprove = User::whereIn('id', $ids)
+            ->where('id', '!=', auth()->id())
+            ->where('is_approved', true)
+            ->whereNull('deleted_at')
+            ->get();
+
+        if ($usersToUnapprove->isEmpty()) {
+            return back()->with('flash', [
+                'message' => 'No accounts to revoke. Selected accounts may already be pending or deleted.',
+                'type' => 'info'
+            ]);
+        }
+
+        try {
+            foreach ($usersToUnapprove as $user) {
+                $this->authorize('update', $user);
+            }
+
+            $count = $usersToUnapprove->count();
+
+            User::whereIn('id', $usersToUnapprove->pluck('id'))
+                ->update([
+                    'is_approved' => false,
+                    'approved_at' => null,
+                ]);
+
+            return back()->with('flash', [
+                'message' => "{$count} user account(s) approval revoked successfully",
+                'type' => 'success'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AccountController BulkUnapprove Error: ' . $e->getMessage());
+            return back()->with('flash', [
+                'message' => 'Failed to revoke approval for selected accounts',
+                'type' => 'error'
+            ]);
+        }
+    }
 }

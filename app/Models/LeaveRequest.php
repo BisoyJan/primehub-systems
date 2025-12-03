@@ -38,6 +38,13 @@ class LeaveRequest extends Model
         'attendance_points_at_request',
         'auto_rejected',
         'auto_rejection_reason',
+        // Dual approval fields
+        'admin_approved_by',
+        'admin_approved_at',
+        'admin_review_notes',
+        'hr_approved_by',
+        'hr_approved_at',
+        'hr_review_notes',
     ];
 
     protected function casts(): array
@@ -52,6 +59,8 @@ class LeaveRequest extends Model
             'credits_year' => 'integer',
             'attendance_points_at_request' => 'decimal:2',
             'auto_rejected' => 'boolean',
+            'admin_approved_at' => 'datetime',
+            'hr_approved_at' => 'datetime',
         ];
     }
 
@@ -79,6 +88,22 @@ class LeaveRequest extends Model
     public function reviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'reviewed_by');
+    }
+
+    /**
+     * Get the admin who approved the request.
+     */
+    public function adminApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'admin_approved_by');
+    }
+
+    /**
+     * Get the HR who approved the request.
+     */
+    public function hrApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'hr_approved_by');
     }
 
     /**
@@ -199,5 +224,61 @@ class LeaveRequest extends Model
     public function canBeCancelled(): bool
     {
         return $this->isPending() || ($this->isApproved() && $this->start_date > now());
+    }
+
+    /**
+     * Check if admin has approved.
+     */
+    public function isAdminApproved(): bool
+    {
+        return $this->admin_approved_by !== null;
+    }
+
+    /**
+     * Check if HR has approved.
+     */
+    public function isHrApproved(): bool
+    {
+        return $this->hr_approved_by !== null;
+    }
+
+    /**
+     * Check if both Admin and HR have approved (fully approved).
+     */
+    public function isFullyApproved(): bool
+    {
+        return $this->isAdminApproved() && $this->isHrApproved();
+    }
+
+    /**
+     * Check if request has partial approval (only one of Admin/HR approved).
+     */
+    public function hasPartialApproval(): bool
+    {
+        return ($this->isAdminApproved() || $this->isHrApproved()) && !$this->isFullyApproved();
+    }
+
+    /**
+     * Get the approval status text for display.
+     */
+    public function getApprovalStatusText(): string
+    {
+        if ($this->status !== 'pending') {
+            return ucfirst($this->status);
+        }
+
+        if ($this->isFullyApproved()) {
+            return 'Fully Approved';
+        }
+
+        if ($this->isAdminApproved()) {
+            return 'Pending HR Approval';
+        }
+
+        if ($this->isHrApproved()) {
+            return 'Pending Admin Approval';
+        }
+
+        return 'Pending Both Approvals';
     }
 }

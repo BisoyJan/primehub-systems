@@ -16,7 +16,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2 } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute } from '@/routes/leave-requests';
@@ -31,6 +31,8 @@ interface LeaveRequest {
     id: number;
     user: User;
     reviewer?: User;
+    admin_approver?: User;
+    hr_approver?: User;
     leave_type: string;
     start_date: string;
     end_date: string;
@@ -41,6 +43,10 @@ interface LeaveRequest {
     status: string;
     reviewed_at: string | null;
     review_notes: string | null;
+    admin_approved_at: string | null;
+    admin_review_notes: string | null;
+    hr_approved_at: string | null;
+    hr_review_notes: string | null;
     credits_deducted: number | null;
     attendance_points_at_request: number;
     created_at: string;
@@ -50,9 +56,11 @@ interface Props {
     leaveRequest: LeaveRequest;
     isAdmin: boolean;
     canCancel: boolean;
+    hasUserApproved: boolean;
+    userRole: string;
 }
 
-export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
+export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -61,6 +69,14 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
 
     const approveForm = useForm({ review_notes: '' });
     const denyForm = useForm({ review_notes: '' });
+
+    // Check if Admin/HR has approved
+    const isAdminApproved = !!leaveRequest.admin_approved_at;
+    const isHrApproved = !!leaveRequest.hr_approved_at;
+    const isFullyApproved = isAdminApproved && isHrApproved;
+
+    // Determine if user can approve (not already approved by their role)
+    const canUserApprove = isAdmin && leaveRequest.status === 'pending' && !hasUserApproved;
 
     const handleApprove = () => {
         approveForm.post(leaveApproveRoute(leaveRequest.id).url, {
@@ -133,7 +149,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                     </Link>
 
                     <div className="flex flex-wrap gap-2">
-                        {isAdmin && leaveRequest.status === 'pending' && (
+                        {canUserApprove && (
                             <>
                                 <Can permission="leave.approve">
                                     <Button variant="default" size="sm" onClick={() => setShowApproveDialog(true)}>
@@ -148,6 +164,12 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                                     </Button>
                                 </Can>
                             </>
+                        )}
+                        {hasUserApproved && leaveRequest.status === 'pending' && (
+                            <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                                <CheckCircle className="mr-1 h-3 w-3" />
+                                You've Approved
+                            </Badge>
                         )}
                         {canCancel && leaveRequest.status === 'pending' && (
                             <Can permission="leave.cancel">
@@ -267,31 +289,142 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                             </Alert>
                         </div>
 
-                        {/* Review Info */}
-                        {leaveRequest.reviewed_at && (
+                        {/* Dual Approval Status */}
+                        {leaveRequest.status === 'pending' && (isAdminApproved || isHrApproved) && (
                             <div className="border-t pt-4">
-                                <h3 className="font-semibold mb-4">Review Information</h3>
+                                <h3 className="font-semibold mb-4">Approval Progress</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                    <div>
-                                        <p className="text-sm font-medium text-muted-foreground">Reviewed By</p>
-                                        <p className="text-base">{leaveRequest.reviewer?.name || 'N/A'}</p>
+                                    {/* Admin Approval Status */}
+                                    <div className={`p-4 rounded-lg border ${isAdminApproved ? 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40' : 'bg-yellow-500/10 border-yellow-500/30 dark:bg-yellow-500/20 dark:border-yellow-500/40'}`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {isAdminApproved ? (
+                                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                            ) : (
+                                                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                            )}
+                                            <span className="font-medium">Admin Approval</span>
+                                        </div>
+                                        {isAdminApproved ? (
+                                            <>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Approved by {leaveRequest.admin_approver?.name || 'Admin'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {leaveRequest.admin_approved_at && format(parseISO(leaveRequest.admin_approved_at), 'MMM d, yyyy h:mm a')}
+                                                </p>
+                                                {leaveRequest.admin_review_notes && (
+                                                    <p className="text-sm mt-2 italic text-muted-foreground">"{leaveRequest.admin_review_notes}"</p>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-yellow-700 dark:text-yellow-400">Awaiting Admin approval</p>
+                                        )}
                                     </div>
-                                    <div>
-                                        <p className="text-sm font-medium text-muted-foreground">Reviewed On</p>
-                                        <p className="text-base">
-                                            {format(parseISO(leaveRequest.reviewed_at), 'MMMM d, yyyy')}
-                                        </p>
+
+                                    {/* HR Approval Status */}
+                                    <div className={`p-4 rounded-lg border ${isHrApproved ? 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40' : 'bg-yellow-500/10 border-yellow-500/30 dark:bg-yellow-500/20 dark:border-yellow-500/40'}`}>
+                                        <div className="flex items-center gap-2 mb-2">
+                                            {isHrApproved ? (
+                                                <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                            ) : (
+                                                <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                            )}
+                                            <span className="font-medium">HR Approval</span>
+                                        </div>
+                                        {isHrApproved ? (
+                                            <>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Approved by {leaveRequest.hr_approver?.name || 'HR'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground mt-1">
+                                                    {leaveRequest.hr_approved_at && format(parseISO(leaveRequest.hr_approved_at), 'MMM d, yyyy h:mm a')}
+                                                </p>
+                                                {leaveRequest.hr_review_notes && (
+                                                    <p className="text-sm mt-2 italic text-muted-foreground">"{leaveRequest.hr_review_notes}"</p>
+                                                )}
+                                            </>
+                                        ) : (
+                                            <p className="text-sm text-yellow-700 dark:text-yellow-400">Awaiting HR approval</p>
+                                        )}
                                     </div>
                                 </div>
-                                {leaveRequest.review_notes && (
-                                    <div className="mt-4">
-                                        <p className="text-sm font-medium text-muted-foreground mb-2">
-                                            Review Notes
-                                        </p>
-                                        <Alert className="overflow-hidden">
-                                            <AlertDescription className="break-words whitespace-pre-wrap">{leaveRequest.review_notes}</AlertDescription>
-                                        </Alert>
+                            </div>
+                        )}
+
+                        {/* Review Info (for final approved/denied status) */}
+                        {leaveRequest.reviewed_at && (
+                            <div className="border-t pt-4">
+                                <h3 className="font-semibold mb-4">Final Review Information</h3>
+
+                                {/* Show both approval info when fully approved */}
+                                {leaveRequest.status === 'approved' && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                        {/* Admin Approval */}
+                                        {isAdminApproved && (
+                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                                    <span className="font-medium text-sm">Admin Approved</span>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {leaveRequest.admin_approver?.name || 'Admin'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {leaveRequest.admin_approved_at && format(parseISO(leaveRequest.admin_approved_at), 'MMM d, yyyy h:mm a')}
+                                                </p>
+                                                {leaveRequest.admin_review_notes && (
+                                                    <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.admin_review_notes}"</p>
+                                                )}
+                                            </div>
+                                        )}
+
+                                        {/* HR Approval */}
+                                        {isHrApproved && (
+                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                                    <span className="font-medium text-sm">HR Approved</span>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {leaveRequest.hr_approver?.name || 'HR'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {leaveRequest.hr_approved_at && format(parseISO(leaveRequest.hr_approved_at), 'MMM d, yyyy h:mm a')}
+                                                </p>
+                                                {leaveRequest.hr_review_notes && (
+                                                    <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.hr_review_notes}"</p>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
+                                )}
+
+                                {/* Denied or old review info */}
+                                {(leaveRequest.status === 'denied' || (!isAdminApproved && !isHrApproved)) && (
+                                    <>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            <div>
+                                                <p className="text-sm font-medium text-muted-foreground">Reviewed By</p>
+                                                <p className="text-base">{leaveRequest.reviewer?.name || 'N/A'}</p>
+                                            </div>
+                                            <div>
+                                                <p className="text-sm font-medium text-muted-foreground">Reviewed On</p>
+                                                <p className="text-base">
+                                                    {format(parseISO(leaveRequest.reviewed_at), 'MMMM d, yyyy')}
+                                                </p>
+                                            </div>
+                                        </div>
+                                        {leaveRequest.review_notes && (
+                                            <div className="mt-4">
+                                                <p className="text-sm font-medium text-muted-foreground mb-2">
+                                                    Review Notes
+                                                </p>
+                                                <Alert className="overflow-hidden">
+                                                    <AlertDescription className="break-words whitespace-pre-wrap">{leaveRequest.review_notes}</AlertDescription>
+                                                </Alert>
+                                            </div>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         )}
@@ -306,6 +439,14 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                         <DialogTitle>Approve Leave Request</DialogTitle>
                         <DialogDescription>
                             Approve this leave request for {leaveRequest.user.name}?
+                            {!isFullyApproved && (
+                                <span className="block mt-2 text-yellow-600">
+                                    Note: Leave requests require approval from both Admin and HR.
+                                    {isAdminApproved && ' Admin has already approved. Your HR approval will finalize this request.'}
+                                    {isHrApproved && ' HR has already approved. Your Admin approval will finalize this request.'}
+                                    {!isAdminApproved && !isHrApproved && ' The other role will be notified to review.'}
+                                </span>
+                            )}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">

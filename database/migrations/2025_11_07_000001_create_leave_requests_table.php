@@ -37,6 +37,14 @@ return new class extends Migration
             $table->timestamp('reviewed_at')->nullable();
             $table->text('review_notes')->nullable();
 
+            // Dual approval tracking (Admin + HR)
+            $table->foreignId('admin_approved_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('admin_approved_at')->nullable();
+            $table->text('admin_review_notes')->nullable();
+            $table->foreignId('hr_approved_by')->nullable()->constrained('users')->nullOnDelete();
+            $table->timestamp('hr_approved_at')->nullable();
+            $table->text('hr_review_notes')->nullable();
+
             // Leave credits tracking (null for non-credited leave types)
             $table->decimal('credits_deducted', 5, 2)->nullable();
             $table->year('credits_year')->nullable(); // Which year's credits were used

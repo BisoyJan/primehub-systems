@@ -1,10 +1,11 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { router, usePage, Link, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import {
     index as accountsIndex,
@@ -16,9 +17,11 @@ import {
     confirmDelete as accountsConfirmDelete,
     restore as accountsRestore,
     forceDelete as accountsForceDelete,
+    bulkApprove as accountsBulkApprove,
+    bulkUnapprove as accountsBulkUnapprove,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -69,8 +72,39 @@ export default function AccountIndex() {
     const [roleFilter, setRoleFilter] = useState(filters.role || "all");
     const [statusFilter, setStatusFilter] = useState(filters.status || "all");
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [selectedApproveIds, setSelectedApproveIds] = useState<number[]>([]);
+    const [selectedRevokeIds, setSelectedRevokeIds] = useState<number[]>([]);
     const auth = usePage().props.auth as { user?: { id: number } };
     const currentUserId = auth?.user?.id;
+
+    // Get users that can be selected for bulk approve (not approved, not deleted, not current user)
+    const approvableUsers = useMemo(() =>
+        users.data.filter(user =>
+            !user.is_approved &&
+            !user.deleted_at &&
+            user.id !== currentUserId
+        ),
+        [users.data, currentUserId]
+    );
+
+    // Get users that can be selected for bulk revoke (approved, not deleted, not current user)
+    const revokableUsers = useMemo(() =>
+        users.data.filter(user =>
+            user.is_approved &&
+            !user.deleted_at &&
+            user.id !== currentUserId
+        ),
+        [users.data, currentUserId]
+    );
+
+    const allApprovableSelected = approvableUsers.length > 0 &&
+        approvableUsers.every(user => selectedApproveIds.includes(user.id));
+
+    const allRevokableSelected = revokableUsers.length > 0 &&
+        revokableUsers.every(user => selectedRevokeIds.includes(user.id));
+
+    const someApproveSelected = selectedApproveIds.length > 0;
+    const someRevokeSelected = selectedRevokeIds.length > 0;
 
     // Use new hooks
     const { title, breadcrumbs } = usePageMeta({
@@ -168,6 +202,74 @@ export default function AccountIndex() {
         });
     };
 
+    const toggleSelectApprove = (userId: number) => {
+        setSelectedApproveIds(prev =>
+            prev.includes(userId)
+                ? prev.filter(id => id !== userId)
+                : [...prev, userId]
+        );
+    };
+
+    const toggleSelectRevoke = (userId: number) => {
+        setSelectedRevokeIds(prev =>
+            prev.includes(userId)
+                ? prev.filter(id => id !== userId)
+                : [...prev, userId]
+        );
+    };
+
+    const toggleSelectAllApprove = () => {
+        if (allApprovableSelected) {
+            setSelectedApproveIds([]);
+        } else {
+            setSelectedApproveIds(approvableUsers.map(user => user.id));
+        }
+    };
+
+    const toggleSelectAllRevoke = () => {
+        if (allRevokableSelected) {
+            setSelectedRevokeIds([]);
+        } else {
+            setSelectedRevokeIds(revokableUsers.map(user => user.id));
+        }
+    };
+
+    const handleBulkApprove = () => {
+        if (selectedApproveIds.length === 0) {
+            toast.error("Please select at least one account to approve");
+            return;
+        }
+
+        setLoading(true);
+        router.post(accountsBulkApprove().url, { ids: selectedApproveIds }, {
+            preserveScroll: true,
+            onFinish: () => {
+                setLoading(false);
+                setSelectedApproveIds([]);
+            },
+            onSuccess: () => toast.success(`${selectedApproveIds.length} account(s) approved successfully`),
+            onError: () => toast.error("Failed to approve selected accounts"),
+        });
+    };
+
+    const handleBulkRevoke = () => {
+        if (selectedRevokeIds.length === 0) {
+            toast.error("Please select at least one account to revoke");
+            return;
+        }
+
+        setLoading(true);
+        router.post(accountsBulkUnapprove().url, { ids: selectedRevokeIds }, {
+            preserveScroll: true,
+            onFinish: () => {
+                setLoading(false);
+                setSelectedRevokeIds([]);
+            },
+            onSuccess: () => toast.success(`${selectedRevokeIds.length} account(s) approval revoked successfully`),
+            onError: () => toast.error("Failed to revoke approval for selected accounts"),
+        });
+    };
+
     const clearFilters = () => {
         setSearch("");
         setRoleFilter("all");
@@ -189,6 +291,17 @@ export default function AccountIndex() {
             preserveState: true,
             preserveScroll: true,
             replace: true,
+            only: ["users"],
+            onSuccess: () => setLastRefresh(new Date()),
+            onFinish: () => setLoading(false),
+        });
+    };
+
+    const handlePageChange = (page: number) => {
+        setLoading(true);
+        router.get(accountsIndex().url, { ...buildFilterParams(search, roleFilter, statusFilter), page }, {
+            preserveState: true,
+            preserveScroll: true,
             only: ["users"],
             onSuccess: () => setLastRefresh(new Date()),
             onFinish: () => setLoading(false),
@@ -289,12 +402,57 @@ export default function AccountIndex() {
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <Can permission="accounts.create">
-                            <Button onClick={() => router.get(accountsCreate().url)} className="w-full sm:w-auto">
-                                <Plus className="mr-2 h-4 w-4" />
-                                Create Account
-                            </Button>
-                        </Can>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <Can permission="accounts.create">
+                                <Button onClick={() => router.get(accountsCreate().url)} className="w-full sm:w-auto">
+                                    <Plus className="mr-2 h-4 w-4" />
+                                    Create Account
+                                </Button>
+                            </Can>
+
+                            <Can permission="accounts.edit">
+                                {someApproveSelected && (
+                                    <Button
+                                        onClick={handleBulkApprove}
+                                        disabled={loading}
+                                        className="w-full sm:w-auto bg-green-600 hover:bg-green-700"
+                                    >
+                                        <CheckSquare className="mr-2 h-4 w-4" />
+                                        Bulk Approve ({selectedApproveIds.length})
+                                    </Button>
+                                )}
+                            </Can>
+
+                            <Can permission="accounts.edit">
+                                {someRevokeSelected && (
+                                    <Button
+                                        onClick={handleBulkRevoke}
+                                        disabled={loading}
+                                        className="w-full sm:w-auto bg-yellow-600 hover:bg-yellow-700"
+                                    >
+                                        <XSquare className="mr-2 h-4 w-4" />
+                                        Bulk Revoke ({selectedRevokeIds.length})
+                                    </Button>
+                                )}
+                            </Can>
+
+                            <Can permission="accounts.edit">
+                                {(someApproveSelected || someRevokeSelected) && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => {
+                                            setSelectedApproveIds([]);
+                                            setSelectedRevokeIds([]);
+                                        }}
+                                        disabled={loading}
+                                        className="w-full sm:w-auto"
+                                    >
+                                        <X className="mr-2 h-4 w-4" />
+                                        Clear Selection ({selectedApproveIds.length + selectedRevokeIds.length})
+                                    </Button>
+                                )}
+                            </Can>
+                        </div>
 
                         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:flex-1">
                             <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
@@ -332,6 +490,28 @@ export default function AccountIndex() {
                         <Table>
                             <TableHeader>
                                 <TableRow>
+                                    <Can permission="accounts.edit">
+                                        <TableHead className="w-12">
+                                            <div className="flex flex-col gap-1">
+                                                {approvableUsers.length > 0 && (
+                                                    <Checkbox
+                                                        checked={allApprovableSelected}
+                                                        onCheckedChange={toggleSelectAllApprove}
+                                                        aria-label="Select all pending"
+                                                        className="border-green-500 data-[state=checked]:bg-green-600"
+                                                    />
+                                                )}
+                                                {revokableUsers.length > 0 && (
+                                                    <Checkbox
+                                                        checked={allRevokableSelected}
+                                                        onCheckedChange={toggleSelectAllRevoke}
+                                                        aria-label="Select all approved"
+                                                        className="border-yellow-500 data-[state=checked]:bg-yellow-600"
+                                                    />
+                                                )}
+                                            </div>
+                                        </TableHead>
+                                    </Can>
                                     <TableHead>ID</TableHead>
                                     <TableHead>First Name</TableHead>
                                     <TableHead>M.I.</TableHead>
@@ -349,6 +529,27 @@ export default function AccountIndex() {
                                     const statusBadge = getStatusBadge(user);
                                     return (
                                         <TableRow key={user.id} className={isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50' : ''}>
+                                            <Can permission="accounts.edit">
+                                                <TableCell>
+                                                    {!user.deleted_at && user.id !== currentUserId && (
+                                                        user.is_approved ? (
+                                                            <Checkbox
+                                                                checked={selectedRevokeIds.includes(user.id)}
+                                                                onCheckedChange={() => toggleSelectRevoke(user.id)}
+                                                                aria-label={`Select ${user.first_name} ${user.last_name} for revoke`}
+                                                                className="border-yellow-500 data-[state=checked]:bg-yellow-600"
+                                                            />
+                                                        ) : (
+                                                            <Checkbox
+                                                                checked={selectedApproveIds.includes(user.id)}
+                                                                onCheckedChange={() => toggleSelectApprove(user.id)}
+                                                                aria-label={`Select ${user.first_name} ${user.last_name} for approve`}
+                                                                className="border-green-500 data-[state=checked]:bg-green-600"
+                                                            />
+                                                        )
+                                                    )}
+                                                </TableCell>
+                                            </Can>
                                             <TableCell>{user.id}</TableCell>
                                             <TableCell className="font-medium">{user.first_name}</TableCell>
                                             <TableCell>{user.middle_name || '-'}</TableCell>
@@ -471,7 +672,7 @@ export default function AccountIndex() {
                                 })}
                                 {users.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={11} className="py-8 text-center text-gray-500">
                                             No user accounts found
                                         </TableCell>
                                     </TableRow>
@@ -488,11 +689,32 @@ export default function AccountIndex() {
                         return (
                             <div key={user.id} className={`rounded-lg shadow p-4 space-y-3 ${isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50 border border-orange-200 dark:border-orange-800' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50 border border-red-200 dark:border-red-800' : 'bg-card border'}`}>
                                 <div className="flex justify-between items-start">
-                                    <div className="flex-1">
-                                        <h3 className="font-semibold text-lg">
-                                            {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
-                                        </h3>
-                                        <p className="text-sm text-gray-600">{user.email}</p>
+                                    <div className="flex items-start gap-3 flex-1">
+                                        <Can permission="accounts.edit">
+                                            {!user.deleted_at && user.id !== currentUserId && (
+                                                user.is_approved ? (
+                                                    <Checkbox
+                                                        checked={selectedRevokeIds.includes(user.id)}
+                                                        onCheckedChange={() => toggleSelectRevoke(user.id)}
+                                                        aria-label={`Select ${user.first_name} ${user.last_name} for revoke`}
+                                                        className="mt-1 border-yellow-500 data-[state=checked]:bg-yellow-600"
+                                                    />
+                                                ) : (
+                                                    <Checkbox
+                                                        checked={selectedApproveIds.includes(user.id)}
+                                                        onCheckedChange={() => toggleSelectApprove(user.id)}
+                                                        aria-label={`Select ${user.first_name} ${user.last_name} for approve`}
+                                                        className="mt-1 border-green-500 data-[state=checked]:bg-green-600"
+                                                    />
+                                                )
+                                            )}
+                                        </Can>
+                                        <div>
+                                            <h3 className="font-semibold text-lg">
+                                                {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
+                                            </h3>
+                                            <p className="text-sm text-gray-600">{user.email}</p>
+                                        </div>
                                     </div>
                                     <div className="flex flex-col gap-2 items-end">
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
@@ -619,7 +841,10 @@ export default function AccountIndex() {
                 {/* Pagination */}
                 <div className="flex justify-center mt-4">
                     {users.links && users.links.length > 0 && (
-                        <PaginationNav links={users.links} />
+                        <PaginationNav
+                            links={users.links}
+                            onPageChange={handlePageChange}
+                        />
                     )}
                 </div>
             </div>

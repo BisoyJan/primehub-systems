@@ -30,7 +30,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -52,6 +52,8 @@ interface LeaveRequest {
     end_date: string;
     days_requested: number;
     status: string;
+    admin_approved_at: string | null;
+    hr_approved_at: string | null;
     created_at: string;
 }
 
@@ -201,7 +203,43 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
         );
     };
 
-    const getStatusBadge = (status: string) => {
+    const getStatusBadge = (status: string, adminApprovedAt: string | null, hrApprovedAt: string | null) => {
+        const isAdminApproved = !!adminApprovedAt;
+        const isHrApproved = !!hrApprovedAt;
+
+        // For pending status, show partial approval info
+        if (status === 'pending') {
+            if (isAdminApproved && !isHrApproved) {
+                return (
+                    <div className="flex flex-col gap-1">
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                            PENDING HR
+                        </Badge>
+                        <span className="text-xs text-green-600 flex items-center gap-1">
+                            <CheckCircle className="h-3 w-3" /> Admin ✓
+                        </span>
+                    </div>
+                );
+            }
+            if (!isAdminApproved && isHrApproved) {
+                return (
+                    <div className="flex flex-col gap-1">
+                        <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                            PENDING ADMIN
+                        </Badge>
+                        <span className="text-xs text-green-600 flex items-center gap-1">
+                            <CheckCircle className="h-3 w-3" /> HR ✓
+                        </span>
+                    </div>
+                );
+            }
+            return (
+                <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                    PENDING
+                </Badge>
+            );
+        }
+
         const variants = {
             pending: 'bg-yellow-100 text-yellow-800 border-yellow-300',
             approved: 'bg-green-100 text-green-800 border-green-300',
@@ -353,7 +391,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                                 {format(parseISO(request.end_date), 'MMM d, yyyy')}
                                             </TableCell>
                                             <TableCell>{request.days_requested}</TableCell>
-                                            <TableCell>{getStatusBadge(request.status)}</TableCell>
+                                            <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at)}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {format(parseISO(request.created_at), 'MMM d, yyyy')}
                                             </TableCell>
@@ -423,7 +461,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                             {getLeaveTypeBadge(request.leave_type)}
                                         </div>
                                     </div>
-                                    {getStatusBadge(request.status)}
+                                    {getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at)}
                                 </div>
 
                                 <div className="space-y-2 text-sm">

@@ -317,6 +317,64 @@ class NotificationService
     }
 
     /**
+     * Notify Admin roles that HR has approved a leave request (pending Admin approval).
+     */
+    public function notifyAdminAboutHrApproval(string $requesterName, string $leaveType, string $hrApproverName, int $requestId): void
+    {
+        $title = 'Leave Request - HR Approved';
+        $message = "{$hrApproverName} (HR) has approved {$requesterName}'s {$leaveType} request. Awaiting your approval.";
+
+        $data = [
+            'requester' => $requesterName,
+            'type' => $leaveType,
+            'hr_approver' => $hrApproverName,
+            'request_id' => $requestId,
+            'link' => route('leave-requests.show', $requestId)
+        ];
+
+        $this->notifyUsersByRole('Admin', 'leave_request', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'leave_request', $title, $message, $data);
+    }
+
+    /**
+     * Notify HR roles that Admin has approved a leave request (pending HR approval).
+     */
+    public function notifyHrAboutAdminApproval(string $requesterName, string $leaveType, string $adminApproverName, int $requestId): void
+    {
+        $title = 'Leave Request - Admin Approved';
+        $message = "{$adminApproverName} (Admin) has approved {$requesterName}'s {$leaveType} request. Awaiting your approval.";
+
+        $data = [
+            'requester' => $requesterName,
+            'type' => $leaveType,
+            'admin_approver' => $adminApproverName,
+            'request_id' => $requestId,
+            'link' => route('leave-requests.show', $requestId)
+        ];
+
+        $this->notifyUsersByRole('HR', 'leave_request', $title, $message, $data);
+    }
+
+    /**
+     * Notify the employee that their leave request has been fully approved (by both Admin and HR).
+     */
+    public function notifyLeaveRequestFullyApproved(int $userId, string $leaveType, int $requestId): Notification
+    {
+        return $this->create(
+            $userId,
+            'leave_request',
+            'Leave Request Fully Approved',
+            "Your {$leaveType} request has been approved by both Admin and HR.",
+            [
+                'status' => 'approved',
+                'type' => $leaveType,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
      * Notify HR roles about a new medication request.
      */
     public function notifyHrRolesAboutNewMedicationRequest(string $requesterName, string $medicationType, int $requestId): void

@@ -131,6 +131,12 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::post('accounts/{account}/unapprove', [AccountController::class, 'unapprove'])
         ->middleware('permission:accounts.edit')
         ->name('accounts.unapprove');
+    Route::post('accounts/bulk-approve', [AccountController::class, 'bulkApprove'])
+        ->middleware('permission:accounts.edit')
+        ->name('accounts.bulkApprove');
+    Route::post('accounts/bulk-unapprove', [AccountController::class, 'bulkUnapprove'])
+        ->middleware('permission:accounts.edit')
+        ->name('accounts.bulkUnapprove');
     Route::post('accounts/{account}/confirm-delete', [AccountController::class, 'confirmDelete'])
         ->middleware('permission:accounts.delete')
         ->name('accounts.confirmDelete');
@@ -243,16 +249,28 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
 
     // Attendance Points
     Route::prefix('attendance-points')->name('attendance-points.')
-        ->middleware('permission:attendance_points.view,attendance_points.excuse,attendance_points.export,attendance_points.rescan')
+        ->middleware('permission:attendance_points.view,attendance_points.create,attendance_points.edit,attendance_points.delete,attendance_points.excuse,attendance_points.export,attendance_points.rescan')
         ->group(function () {
             Route::get('/', [AttendancePointController::class, 'index'])->name('index');
+            Route::post('/', [AttendancePointController::class, 'store'])->name('store');
             Route::post('/rescan', [AttendancePointController::class, 'rescan'])->name('rescan');
-            Route::get('/export-all', [AttendancePointController::class, 'exportAll'])->name('export-all');
-            Route::get('/export-all-excel', [AttendancePointController::class, 'exportAllExcel'])->name('export-all-excel');
+
+            // Job-based Excel exports (all employees)
+            Route::post('/start-export-all-excel', [AttendancePointController::class, 'startExportAllExcel'])->name('start-export-all-excel');
+            Route::get('/export-all-excel/status/{jobId}', [AttendancePointController::class, 'checkExportAllExcelStatus'])->name('export-all-excel.status');
+            Route::get('/export-all-excel/download/{jobId}', [AttendancePointController::class, 'downloadExportAllExcel'])->name('export-all-excel.download');
+
             Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
             Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])->name('statistics');
             Route::get('/{user}/export', [AttendancePointController::class, 'export'])->name('export');
-            Route::get('/{user}/export-excel', [AttendancePointController::class, 'exportExcel'])->name('export-excel');
+
+            // Job-based Excel exports (single user)
+            Route::post('/{user}/start-export-excel', [AttendancePointController::class, 'startExportExcel'])->name('start-export-excel');
+            Route::get('/export-excel/status/{jobId}', [AttendancePointController::class, 'checkExportExcelStatus'])->name('export-excel.status');
+            Route::get('/export-excel/download/{jobId}', [AttendancePointController::class, 'downloadExportExcel'])->name('export-excel.download');
+
+            Route::put('/{point}', [AttendancePointController::class, 'update'])->name('update');
+            Route::delete('/{point}', [AttendancePointController::class, 'destroy'])->name('destroy');
             Route::post('/{point}/excuse', [AttendancePointController::class, 'excuse'])->name('excuse');
             Route::post('/{point}/unexcuse', [AttendancePointController::class, 'unexcuse'])->name('unexcuse');
         });
