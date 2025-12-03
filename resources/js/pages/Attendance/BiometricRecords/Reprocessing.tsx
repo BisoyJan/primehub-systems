@@ -207,315 +207,314 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <PageHeader title={title} />
-            <LoadingOverlay isLoading={isPageLoading} />
 
-            <div className="py-6">
-                <div className="mx-auto max-w-7xl sm:px-6 lg:px-8">
-                    <div className="space-y-6">
-                        {/* Statistics Card */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Database Statistics</CardTitle>
-                                <CardDescription>
-                                    Overview of stored biometric records
-                                </CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-medium text-gray-500">Total Records</p>
-                                        <p className="text-2xl font-bold">{stats.total_records.toLocaleString()}</p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-medium text-gray-500">Oldest Record</p>
-                                        <p className="text-2xl font-bold">
-                                            {stats.oldest_record ? format(new Date(stats.oldest_record), 'MMM d, yyyy') : 'N/A'}
-                                        </p>
-                                    </div>
-                                    <div className="space-y-1">
-                                        <p className="text-sm font-medium text-gray-500">Newest Record</p>
-                                        <p className="text-2xl font-bold">
-                                            {stats.newest_record ? format(new Date(stats.newest_record), 'MMM d, yyyy') : 'N/A'}
-                                        </p>
-                                    </div>
+            <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
+                <LoadingOverlay isLoading={isPageLoading} />
+                <PageHeader title={title} />
+
+                <div className="space-y-6">
+                    {/* Statistics Card */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Database Statistics</CardTitle>
+                            <CardDescription>
+                                Overview of stored biometric records
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid gap-4 md:grid-cols-3">
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium text-gray-500">Total Records</p>
+                                    <p className="text-2xl font-bold">{stats.total_records.toLocaleString()}</p>
                                 </div>
-                            </CardContent>
-                        </Card>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium text-gray-500">Oldest Record</p>
+                                    <p className="text-2xl font-bold">
+                                        {stats.oldest_record ? format(new Date(stats.oldest_record), 'MMM d, yyyy') : 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-sm font-medium text-gray-500">Newest Record</p>
+                                    <p className="text-2xl font-bold">
+                                        {stats.newest_record ? format(new Date(stats.newest_record), 'MMM d, yyyy') : 'N/A'}
+                                    </p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
 
-                        {/* Reprocessing Form */}
+                    {/* Reprocessing Form */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <RefreshCw className="h-5 w-5" />
+                                Reprocess Attendance
+                            </CardTitle>
+                            <CardDescription>
+                                Reprocess attendance records for a specific date range
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-6">
+                            <Alert>
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>Important</AlertTitle>
+                                <AlertDescription>
+                                    Reprocessing will recalculate attendance using the latest algorithm.
+                                    Existing attendance records for the selected date range can be deleted and recreated.
+                                    <strong className="block mt-2">Note: Admin-verified/approved records will be preserved and not affected by reprocessing.</strong>
+                                </AlertDescription>
+                            </Alert>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="start-date">Start Date</Label>
+                                    <Input
+                                        id="start-date"
+                                        type="date"
+                                        value={startDate}
+                                        onChange={(e) => setStartDate(e.target.value)}
+                                    />
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="end-date">End Date</Label>
+                                    <Input
+                                        id="end-date"
+                                        type="date"
+                                        value={endDate}
+                                        onChange={(e) => setEndDate(e.target.value)}
+                                        min={startDate}
+                                    />
+                                </div>
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                                <Input
+                                    type="checkbox"
+                                    id="delete-existing"
+                                    checked={deleteExisting}
+                                    onChange={(e) => setDeleteExisting(e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300"
+                                />
+                                <Label htmlFor="delete-existing" className="cursor-pointer">
+                                    Delete existing attendance records before reprocessing
+                                </Label>
+                            </div>
+
+                            <div className="flex items-center space-x-2">
+                                <Input
+                                    type="checkbox"
+                                    id="rescan-points"
+                                    checked={rescanPoints}
+                                    onChange={(e) => setRescanPoints(e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300"
+                                />
+                                <Label htmlFor="rescan-points" className="cursor-pointer">
+                                    Automatically rescan attendance points after reprocessing
+                                </Label>
+                            </div>
+
+                            <div className="flex gap-3">
+                                <Can permission="biometric.preview">
+                                    <Button
+                                        onClick={handlePreview}
+                                        disabled={isLoading || !startDate || !endDate}
+                                        variant="outline"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Loading...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Calendar className="mr-2 h-4 w-4" />
+                                                Preview
+                                            </>
+                                        )}
+                                    </Button>
+                                </Can>
+                                <Can permission="biometric.reprocess">
+                                    <Button
+                                        onClick={handleReprocess}
+                                        disabled={isLoading || !startDate || !endDate}
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Processing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <RefreshCw className="mr-2 h-4 w-4" />
+                                                Reprocess
+                                            </>
+                                        )}
+                                    </Button>
+                                </Can>
+                                <Can permission="biometric.fix_statuses">
+                                    <Button
+                                        onClick={handleFixStatuses}
+                                        disabled={isLoading || !startDate || !endDate}
+                                        variant="secondary"
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                Fixing...
+                                            </>
+                                        ) : (
+                                            <>
+                                                <CheckCircle className="mr-2 h-4 w-4" />
+                                                Fix Statuses
+                                            </>
+                                        )}
+                                    </Button>
+                                </Can>
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Results Card */}
+                    {reprocessResult && (
                         <Card>
                             <CardHeader>
                                 <CardTitle className="flex items-center gap-2">
-                                    <RefreshCw className="h-5 w-5" />
-                                    Reprocess Attendance
+                                    <CheckCircle className="h-5 w-5 text-green-600" />
+                                    Reprocessing Results
                                 </CardTitle>
-                                <CardDescription>
-                                    Reprocess attendance records for a specific date range
-                                </CardDescription>
                             </CardHeader>
-                            <CardContent className="space-y-6">
-                                <Alert>
-                                    <AlertCircle className="h-4 w-4" />
-                                    <AlertTitle>Important</AlertTitle>
-                                    <AlertDescription>
-                                        Reprocessing will recalculate attendance using the latest algorithm.
-                                        Existing attendance records for the selected date range can be deleted and recreated.
-                                        <strong className="block mt-2">Note: Admin-verified/approved records will be preserved and not affected by reprocessing.</strong>
-                                    </AlertDescription>
-                                </Alert>
-
+                            <CardContent className="space-y-4">
                                 <div className="grid gap-4 md:grid-cols-2">
-                                    <div className="space-y-2">
-                                        <Label htmlFor="start-date">Start Date</Label>
-                                        <Input
-                                            id="start-date"
-                                            type="date"
-                                            value={startDate}
-                                            onChange={(e) => setStartDate(e.target.value)}
-                                        />
+                                    <div className="rounded-lg border p-4">
+                                        <p className="text-sm font-medium text-gray-500">Successfully Processed</p>
+                                        <p className="text-3xl font-bold text-green-600">{reprocessResult.processed}</p>
                                     </div>
-                                    <div className="space-y-2">
-                                        <Label htmlFor="end-date">End Date</Label>
-                                        <Input
-                                            id="end-date"
-                                            type="date"
-                                            value={endDate}
-                                            onChange={(e) => setEndDate(e.target.value)}
-                                            min={startDate}
-                                        />
+                                    <div className="rounded-lg border p-4">
+                                        <p className="text-sm font-medium text-gray-500">Failed</p>
+                                        <p className="text-3xl font-bold text-red-600">{reprocessResult.failed}</p>
                                     </div>
                                 </div>
 
-                                <div className="flex items-center space-x-2">
-                                    <Input
-                                        type="checkbox"
-                                        id="delete-existing"
-                                        checked={deleteExisting}
-                                        onChange={(e) => setDeleteExisting(e.target.checked)}
-                                        className="h-4 w-4 rounded border-gray-300"
-                                    />
-                                    <Label htmlFor="delete-existing" className="cursor-pointer">
-                                        Delete existing attendance records before reprocessing
-                                    </Label>
-                                </div>
+                                {reprocessResult.details.length > 0 && (
+                                    <div>
+                                        <h4 className="mb-2 font-semibold">Processing Details</h4>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Employee</TableHead>
+                                                    <TableHead>Shifts Processed</TableHead>
+                                                    <TableHead>Records Count</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {reprocessResult.details.map((detail, index) => (
+                                                    <TableRow key={index}>
+                                                        <TableCell>{detail.user}</TableCell>
+                                                        <TableCell>{detail.shifts_processed}</TableCell>
+                                                        <TableCell>{detail.records_count}</TableCell>
+                                                    </TableRow>
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
 
-                                <div className="flex items-center space-x-2">
-                                    <Input
-                                        type="checkbox"
-                                        id="rescan-points"
-                                        checked={rescanPoints}
-                                        onChange={(e) => setRescanPoints(e.target.checked)}
-                                        className="h-4 w-4 rounded border-gray-300"
-                                    />
-                                    <Label htmlFor="rescan-points" className="cursor-pointer">
-                                        Automatically rescan attendance points after reprocessing
-                                    </Label>
-                                </div>
-
-                                <div className="flex gap-3">
-                                    <Can permission="biometric.preview">
-                                        <Button
-                                            onClick={handlePreview}
-                                            disabled={isLoading || !startDate || !endDate}
-                                            variant="outline"
-                                        >
-                                            {isLoading ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Loading...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Calendar className="mr-2 h-4 w-4" />
-                                                    Preview
-                                                </>
-                                            )}
-                                        </Button>
-                                    </Can>
-                                    <Can permission="biometric.reprocess">
-                                        <Button
-                                            onClick={handleReprocess}
-                                            disabled={isLoading || !startDate || !endDate}
-                                        >
-                                            {isLoading ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Processing...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <RefreshCw className="mr-2 h-4 w-4" />
-                                                    Reprocess
-                                                </>
-                                            )}
-                                        </Button>
-                                    </Can>
-                                    <Can permission="biometric.fix_statuses">
-                                        <Button
-                                            onClick={handleFixStatuses}
-                                            disabled={isLoading || !startDate || !endDate}
-                                            variant="secondary"
-                                        >
-                                            {isLoading ? (
-                                                <>
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    Fixing...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <CheckCircle className="mr-2 h-4 w-4" />
-                                                    Fix Statuses
-                                                </>
-                                            )}
-                                        </Button>
-                                    </Can>
-                                </div>
+                                {reprocessResult.errors.length > 0 && (
+                                    <Alert variant="destructive">
+                                        <AlertCircle className="h-4 w-4" />
+                                        <AlertTitle>Errors Encountered</AlertTitle>
+                                        <AlertDescription>
+                                            <ul className="mt-2 space-y-1">
+                                                {reprocessResult.errors.map((error, index) => (
+                                                    <li key={index}>
+                                                        <strong>{error.user}:</strong> {error.error}
+                                                    </li>
+                                                ))}
+                                            </ul>
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
                             </CardContent>
                         </Card>
+                    )}
 
-                        {/* Results Card */}
-                        {reprocessResult && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <CheckCircle className="h-5 w-5 text-green-600" />
-                                        Reprocessing Results
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm font-medium text-gray-500">Successfully Processed</p>
-                                            <p className="text-3xl font-bold text-green-600">{reprocessResult.processed}</p>
-                                        </div>
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm font-medium text-gray-500">Failed</p>
-                                            <p className="text-3xl font-bold text-red-600">{reprocessResult.failed}</p>
-                                        </div>
+                    {/* Fix Statuses Results Card */}
+                    {fixStatusResult && (
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2">
+                                    <CheckCircle className="h-5 w-5 text-blue-600" />
+                                    Status Fix Results
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-4">
+                                <div className="grid gap-4 md:grid-cols-2">
+                                    <div className="rounded-lg border p-4">
+                                        <p className="text-sm font-medium text-gray-500">Statuses Updated</p>
+                                        <p className="text-3xl font-bold text-blue-600">{fixStatusResult.updated}</p>
                                     </div>
-
-                                    {reprocessResult.details.length > 0 && (
-                                        <div>
-                                            <h4 className="mb-2 font-semibold">Processing Details</h4>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Employee</TableHead>
-                                                        <TableHead>Shifts Processed</TableHead>
-                                                        <TableHead>Records Count</TableHead>
-                                                    </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {reprocessResult.details.map((detail, index) => (
-                                                        <TableRow key={index}>
-                                                            <TableCell>{detail.user}</TableCell>
-                                                            <TableCell>{detail.shifts_processed}</TableCell>
-                                                            <TableCell>{detail.records_count}</TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
-                                    )}
-
-                                    {reprocessResult.errors.length > 0 && (
-                                        <Alert variant="destructive">
-                                            <AlertCircle className="h-4 w-4" />
-                                            <AlertTitle>Errors Encountered</AlertTitle>
-                                            <AlertDescription>
-                                                <ul className="mt-2 space-y-1">
-                                                    {reprocessResult.errors.map((error, index) => (
-                                                        <li key={index}>
-                                                            <strong>{error.user}:</strong> {error.error}
-                                                        </li>
-                                                    ))}
-                                                </ul>
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* Fix Statuses Results Card */}
-                        {fixStatusResult && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2">
-                                        <CheckCircle className="h-5 w-5 text-blue-600" />
-                                        Status Fix Results
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent className="space-y-4">
-                                    <div className="grid gap-4 md:grid-cols-2">
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm font-medium text-gray-500">Statuses Updated</p>
-                                            <p className="text-3xl font-bold text-blue-600">{fixStatusResult.updated}</p>
-                                        </div>
-                                        <div className="rounded-lg border p-4">
-                                            <p className="text-sm font-medium text-gray-500">Total Checked</p>
-                                            <p className="text-3xl font-bold text-gray-600">{fixStatusResult.total_checked}</p>
-                                        </div>
+                                    <div className="rounded-lg border p-4">
+                                        <p className="text-sm font-medium text-gray-500">Total Checked</p>
+                                        <p className="text-3xl font-bold text-gray-600">{fixStatusResult.total_checked}</p>
                                     </div>
+                                </div>
 
-                                    {fixStatusResult.details.length > 0 && (
-                                        <div>
-                                            <h4 className="mb-2 font-semibold">Status Changes</h4>
-                                            <Table>
-                                                <TableHeader>
-                                                    <TableRow>
-                                                        <TableHead>Employee</TableHead>
-                                                        <TableHead>Date</TableHead>
-                                                        <TableHead>Old Status</TableHead>
-                                                        <TableHead>New Status</TableHead>
-                                                        <TableHead>Secondary</TableHead>
+                                {fixStatusResult.details.length > 0 && (
+                                    <div>
+                                        <h4 className="mb-2 font-semibold">Status Changes</h4>
+                                        <Table>
+                                            <TableHeader>
+                                                <TableRow>
+                                                    <TableHead>Employee</TableHead>
+                                                    <TableHead>Date</TableHead>
+                                                    <TableHead>Old Status</TableHead>
+                                                    <TableHead>New Status</TableHead>
+                                                    <TableHead>Secondary</TableHead>
+                                                </TableRow>
+                                            </TableHeader>
+                                            <TableBody>
+                                                {fixStatusResult.details.map((detail, index) => (
+                                                    <TableRow key={index}>
+                                                        <TableCell>{detail.user}</TableCell>
+                                                        <TableCell>{detail.date}</TableCell>
+                                                        <TableCell>
+                                                            <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">
+                                                                {detail.old_status}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">
+                                                                {detail.new_status}
+                                                            </span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {detail.secondary_status ? (
+                                                                <span className="rounded-full bg-purple-100 px-2 py-1 text-xs text-purple-800">
+                                                                    {detail.secondary_status}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="text-xs text-muted-foreground">-</span>
+                                                            )}
+                                                        </TableCell>
                                                     </TableRow>
-                                                </TableHeader>
-                                                <TableBody>
-                                                    {fixStatusResult.details.map((detail, index) => (
-                                                        <TableRow key={index}>
-                                                            <TableCell>{detail.user}</TableCell>
-                                                            <TableCell>{detail.date}</TableCell>
-                                                            <TableCell>
-                                                                <span className="rounded-full bg-gray-100 px-2 py-1 text-xs">
-                                                                    {detail.old_status}
-                                                                </span>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                <span className="rounded-full bg-blue-100 px-2 py-1 text-xs text-blue-800">
-                                                                    {detail.new_status}
-                                                                </span>
-                                                            </TableCell>
-                                                            <TableCell>
-                                                                {detail.secondary_status ? (
-                                                                    <span className="rounded-full bg-purple-100 px-2 py-1 text-xs text-purple-800">
-                                                                        {detail.secondary_status}
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="text-xs text-muted-foreground">-</span>
-                                                                )}
-                                                            </TableCell>
-                                                        </TableRow>
-                                                    ))}
-                                                </TableBody>
-                                            </Table>
-                                        </div>
-                                    )}
+                                                ))}
+                                            </TableBody>
+                                        </Table>
+                                    </div>
+                                )}
 
-                                    {fixStatusResult.updated === 0 && (
-                                        <Alert>
-                                            <CheckCircle className="h-4 w-4" />
-                                            <AlertTitle>No Changes Needed</AlertTitle>
-                                            <AlertDescription>
-                                                All attendance statuses in the selected date range are already correct.
-                                            </AlertDescription>
-                                        </Alert>
-                                    )}
-                                </CardContent>
-                            </Card>
-                        )}
-                    </div>
+                                {fixStatusResult.updated === 0 && (
+                                    <Alert>
+                                        <CheckCircle className="h-4 w-4" />
+                                        <AlertTitle>No Changes Needed</AlertTitle>
+                                        <AlertDescription>
+                                            All attendance statuses in the selected date range are already correct.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
             </div>
 

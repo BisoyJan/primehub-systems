@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { BreadcrumbItem } from '@/types';
 import notificationRoutes from '@/routes/notifications';
+import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Notifications', href: '/notifications' }
@@ -29,6 +30,7 @@ interface Notification {
 interface PageProps {
     notifications: {
         data: Notification[];
+        links: PaginationLink[];
         current_page: number;
         last_page: number;
         per_page: number;
@@ -254,19 +256,10 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                     </div>
                 )}
 
-                {/* Pagination if needed */}
-                {notifications.last_page > 1 && (
-                    <div className="flex justify-center gap-2 mt-4">
-                        {Array.from({ length: notifications.last_page }, (_, i) => i + 1).map((page) => (
-                            <Button
-                                key={page}
-                                variant={page === notifications.current_page ? 'default' : 'outline'}
-                                size="sm"
-                                onClick={() => router.visit(notificationRoutes.index.url({ query: { page } }))}
-                            >
-                                {page}
-                            </Button>
-                        ))}
+                {/* Pagination */}
+                {notifications.links && notifications.links.length > 0 && (
+                    <div className="flex justify-center mt-4">
+                        <PaginationNav links={notifications.links} />
                     </div>
                 )}
 

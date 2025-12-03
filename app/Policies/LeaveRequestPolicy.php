@@ -54,6 +54,30 @@ class LeaveRequestPolicy
     }
 
     /**
+     * Determine whether the user can update the model.
+     */
+    public function update(User $user, LeaveRequest $leaveRequest): bool
+    {
+        // Only pending requests can be updated
+        if ($leaveRequest->status !== 'pending') {
+            return false;
+        }
+
+        // Users can update their own pending requests
+        if ($leaveRequest->user_id === $user->id) {
+            return true;
+        }
+
+        // Admins/HR with edit permission can update any pending request
+        if ($this->permissionService->userHasPermission($user, 'leave.edit') &&
+            in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
      * Determine whether the user can approve leave requests.
      */
     public function approve(User $user): bool

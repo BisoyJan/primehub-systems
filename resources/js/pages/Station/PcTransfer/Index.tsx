@@ -236,7 +236,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                     title="PC Transfer Management"
                     description="Transfer PCs between stations and manage configurations"
                 >
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                         {bulkMode && selectedStations.size > 0 && (
                             <Badge variant="secondary" className="px-3 py-1">
                                 {selectedStations.size} selected
@@ -245,9 +245,12 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                         <Button
                             variant={bulkMode ? 'default' : 'outline'}
                             onClick={toggleBulkMode}
+                            size="sm"
+                            className="sm:size-default"
                         >
                             <CheckSquare size={16} className="mr-2" />
-                            {bulkMode ? 'Cancel Bulk Mode' : 'Bulk Transfer'}
+                            <span className="hidden sm:inline">{bulkMode ? 'Cancel Bulk Mode' : 'Bulk Transfer'}</span>
+                            <span className="sm:hidden">{bulkMode ? 'Cancel' : 'Bulk'}</span>
                         </Button>
                         {bulkMode && selectedStations.size > 0 && (
                             <Button
@@ -255,21 +258,24 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                     const stationIds = Array.from(selectedStations).join(',');
                                     router.visit(`${pcTransfersTransferPageRoute().url}?stations=${stationIds}`);
                                 }}
+                                size="sm"
                             >
                                 <List size={16} className="mr-2" />
-                                Configure Transfers
+                                <span className="hidden sm:inline">Configure Transfers</span>
+                                <span className="sm:hidden">Configure</span>
                             </Button>
                         )}
                         <Link href={pcTransfersTransferPageRoute().url}>
-                            <Button variant="outline">
+                            <Button variant="outline" size="sm">
                                 <ArrowRight size={16} className="mr-2" />
                                 Transfer
                             </Button>
                         </Link>
                         <Link href={pcTransfersHistoryRoute().url}>
-                            <Button variant="outline">
+                            <Button variant="outline" size="sm">
                                 <History size={16} className="mr-2" />
-                                View History
+                                <span className="hidden sm:inline">View History</span>
+                                <span className="sm:hidden">History</span>
                             </Button>
                         </Link>
                     </div>
@@ -378,7 +384,8 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                         </CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <div className="overflow-x-auto">
+                        {/* Desktop Table View */}
+                        <div className="hidden md:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
                                     <TableRow>
@@ -497,6 +504,107 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                     )}
                                 </TableBody>
                             </Table>
+                        </div>
+
+                        {/* Mobile Card View */}
+                        <div className="md:hidden space-y-4">
+                            {stationRows.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    No stations found
+                                </div>
+                            ) : (
+                                stationRows.map((station) => (
+                                    <div
+                                        key={station.id}
+                                        className={`bg-card border rounded-lg p-4 shadow-sm space-y-3 ${bulkMode && selectedStations.has(station.id) ? 'bg-blue-100 dark:bg-blue-900/30 ring-2 ring-blue-500' : ''
+                                            }`}
+                                    >
+                                        <div className="flex justify-between items-start">
+                                            <div className="flex items-center gap-3">
+                                                {bulkMode && (
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={selectedStations.has(station.id)}
+                                                        onChange={() => toggleStationSelection(station.id)}
+                                                        className="w-5 h-5 cursor-pointer"
+                                                        aria-label={`Select station ${station.station_number}`}
+                                                    />
+                                                )}
+                                                <div>
+                                                    <div className="font-semibold text-lg">{station.station_number}</div>
+                                                    <div className="text-sm text-muted-foreground">
+                                                        {station.site} • {station.campaign}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                            <Badge
+                                                className={
+                                                    station.status.toLowerCase() === 'occupied'
+                                                        ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                        : station.status.toLowerCase() === 'vacant'
+                                                            ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                            : station.status.toLowerCase() === 'no pc'
+                                                                ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                : station.status.toLowerCase() === 'admin'
+                                                                    ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                                    : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                                }
+                                            >
+                                                {station.status}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="space-y-2 text-sm">
+                                            <div className="flex justify-between">
+                                                <span className="text-muted-foreground">Current PC:</span>
+                                                <span className="font-medium">
+                                                    {station.pc_spec_details ? (
+                                                        <span className="text-green-600">
+                                                            {station.pc_spec_details.model}
+                                                            {station.pc_spec_details.pc_number && (
+                                                                <span className="text-blue-600 ml-1">({station.pc_spec_details.pc_number})</span>
+                                                            )}
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-gray-400">No PC assigned</span>
+                                                    )}
+                                                </span>
+                                            </div>
+                                            {station.pc_spec_details && (
+                                                <div className="text-xs text-muted-foreground bg-muted/50 rounded p-2">
+                                                    <div>{station.pc_spec_details.processor}</div>
+                                                    <div>{station.pc_spec_details.ram_ddr} {station.pc_spec_details.ram_gb}GB RAM</div>
+                                                    <div>{station.pc_spec_details.disk_type} {station.pc_spec_details.disk_gb}GB</div>
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {!bulkMode && (
+                                            <div className="flex gap-2 pt-2 border-t">
+                                                <Can permission="pc_transfers.create">
+                                                    <Link href={pcTransfersTransferPageRoute(station.id).url} className="flex-1">
+                                                        <Button size="sm" className="w-full">
+                                                            <ArrowRight size={14} className="mr-1" />
+                                                            {station.pc_spec_id ? 'Transfer' : 'Assign'}
+                                                        </Button>
+                                                    </Link>
+                                                </Can>
+                                                {station.pc_spec_id && (
+                                                    <Can permission="pc_transfers.remove">
+                                                        <DeleteConfirmDialog
+                                                            onConfirm={() => handleRemovePC(station)}
+                                                            title="Unassign PC from Station"
+                                                            description={`Are you sure you want to unassign the PC from station "${station.station_number}"? The PC will become available for assignment to other stations.`}
+                                                            triggerLabel="Unassign"
+                                                            disabled={isMutating}
+                                                        />
+                                                    </Can>
+                                                )}
+                                            </div>
+                                        )}
+                                    </div>
+                                ))
+                            )}
                         </div>
                     </CardContent>
                 </Card>

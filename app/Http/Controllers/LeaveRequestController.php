@@ -307,6 +307,144 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Show the form for editing the specified leave request.
+     */
+    public function edit(LeaveRequest $leaveRequest)
+    {
+        $this->authorize('update', $leaveRequest);
+
+        $user = auth()->user();
+        $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+
+        // Only pending requests can be edited
+        if ($leaveRequest->status !== 'pending') {
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('error', 'Only pending leave requests can be edited.');
+        }
+
+        $targetUser = $leaveRequest->user;
+        $leaveCreditService = $this->leaveCreditService;
+
+        // Auto-backfill missing credits if any
+        $leaveCreditService->backfillCredits($targetUser);
+
+        // Get leave credits summary
+        $creditsSummary = $leaveCreditService->getSummary($targetUser);
+
+        // Get attendance points total
+        $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
+
+        // Get detailed attendance violations
+        $attendanceViolations = AttendancePoint::where('user_id', $targetUser->id)
+            ->where('is_expired', false)
+            ->where('is_excused', false)
+            ->orderBy('shift_date', 'desc')
+            ->get()
+            ->map(function ($point) {
+                return [
+                    'id' => $point->id,
+                    'shift_date' => $point->shift_date,
+                    'point_type' => $point->point_type,
+                    'points' => $point->points,
+                    'violation_details' => $point->violation_details,
+                    'expires_at' => $point->expires_at,
+                ];
+            });
+
+        // Check if user has recent absence
+        $hasRecentAbsence = $leaveCreditService->hasRecentAbsence($targetUser);
+        $nextEligibleLeaveDate = $hasRecentAbsence
+            ? $leaveCreditService->getNextEligibleLeaveDate($targetUser)
+            : null;
+
+        // Campaign/Department options
+        $campaignsFromDb = Campaign::orderBy('name')->pluck('name')->toArray();
+        $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
+
+        // Calculate two weeks from now for 2-week notice validation
+        $twoWeeksFromNow = now()->addWeeks(2)->format('Y-m-d');
+
+        $leaveRequest->load('user');
+
+        return Inertia::render('FormRequest/Leave/Edit', [
+            'leaveRequest' => $leaveRequest,
+            'creditsSummary' => $creditsSummary,
+            'attendancePoints' => $attendancePoints,
+            'attendanceViolations' => $attendanceViolations,
+            'hasRecentAbsence' => $hasRecentAbsence,
+            'nextEligibleLeaveDate' => $nextEligibleLeaveDate,
+            'campaigns' => $campaigns,
+            'twoWeeksFromNow' => $twoWeeksFromNow,
+            'isAdmin' => $isAdmin,
+        ]);
+    }
+
+    /**
+     * Update the specified leave request.
+     */
+    public function update(LeaveRequestRequest $request, LeaveRequest $leaveRequest)
+    {
+        $this->authorize('update', $leaveRequest);
+
+        // Only pending requests can be edited
+        if ($leaveRequest->status !== 'pending') {
+            return back()->withErrors(['error' => 'Only pending leave requests can be edited.']);
+        }
+
+        $targetUser = $leaveRequest->user;
+        $leaveCreditService = $this->leaveCreditService;
+
+        // Calculate days
+        $startDate = Carbon::parse($request->start_date);
+        $endDate = Carbon::parse($request->end_date);
+        $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate);
+
+        // Get current attendance points
+        $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
+
+        // Prepare data for validation
+        $validationData = array_merge($request->validated(), [
+            'days_requested' => $daysRequested,
+            'credits_year' => now()->year,
+        ]);
+
+        // Validate business rules
+        $validation = $leaveCreditService->validateLeaveRequest($targetUser, $validationData);
+
+        if (!$validation['valid']) {
+            return back()->withErrors(['validation' => $validation['errors']])->withInput();
+        }
+
+        DB::beginTransaction();
+        try {
+            $leaveRequest->update([
+                'leave_type' => $request->leave_type,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'days_requested' => $daysRequested,
+                'reason' => $request->reason,
+                'campaign_department' => $request->campaign_department,
+                'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
+                'attendance_points_at_request' => $attendancePoints,
+            ]);
+
+            DB::commit();
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', 'Leave request updated successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Leave request update failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+
+            return back()->withErrors(['error' => 'Failed to update leave request. Please try again.'])->withInput();
+        }
+    }
+
+    /**
      * Approve a leave request (Admin/HR only).
      */
     public function approve(Request $request, LeaveRequest $leaveRequest)

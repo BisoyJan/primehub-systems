@@ -1669,13 +1669,13 @@ export default function AttendanceReview() {
 
                         {/* Overtime Approval */}
                         {selectedRecord?.overtime_minutes && selectedRecord.overtime_minutes > 0 && (
-                            <div className="space-y-2 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
                                 <div className="flex items-center justify-between">
                                     <div>
-                                        <Label className="text-sm font-semibold text-blue-900">
+                                        <Label className="text-sm font-semibold text-blue-900 dark:text-blue-100">
                                             Overtime Detected: {selectedRecord.overtime_minutes} minutes
                                         </Label>
-                                        <p className="text-xs text-blue-700 mt-1">
+                                        <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
                                             Employee worked beyond scheduled time out
                                         </p>
                                     </div>
@@ -1685,7 +1685,7 @@ export default function AttendanceReview() {
                                             id="overtime_approved"
                                             checked={data.overtime_approved}
                                             onChange={e => setData("overtime_approved", e.target.checked)}
-                                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
                                         />
                                         <Label htmlFor="overtime_approved" className="text-sm font-medium cursor-pointer">
                                             Approve Overtime
@@ -1693,7 +1693,7 @@ export default function AttendanceReview() {
                                     </div>
                                 </div>
                                 {selectedRecord.overtime_approved && (
-                                    <div className="text-xs text-green-700 mt-2">
+                                    <div className="text-xs text-green-700 dark:text-green-400 mt-2">
                                         ✓ Overtime was approved
                                         {selectedRecord.overtime_approved_at && (
                                             <span> on {new Date(selectedRecord.overtime_approved_at).toLocaleString()}</span>

@@ -270,12 +270,14 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
 
     // Form Requests - Leave Requests
     Route::prefix('form-requests/leave-requests')->name('leave-requests.')
-        ->middleware('permission:leave.view,leave.create,leave.approve,leave.deny,leave.cancel,leave.delete')
+        ->middleware('permission:leave.view,leave.create,leave.edit,leave.approve,leave.deny,leave.cancel,leave.delete')
         ->group(function () {
             Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
             Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
             Route::post('/', [LeaveRequestController::class, 'store'])->name('store');
             Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->name('show');
+            Route::get('/{leaveRequest}/edit', [LeaveRequestController::class, 'edit'])->name('edit');
+            Route::put('/{leaveRequest}', [LeaveRequestController::class, 'update'])->name('update');
         Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
         Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
         Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');

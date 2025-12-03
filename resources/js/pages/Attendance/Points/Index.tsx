@@ -312,8 +312,16 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         window.location.href = url;
     };
 
-    const viewUserDetails = (userId: number) => {
-        router.get(attendancePointsShow({ user: userId }).url);
+    const viewUserDetails = (userId: number, shiftDate: string) => {
+        // Calculate a date range around the shift date (1 month before and after)
+        const date = new Date(shiftDate);
+        const dateFrom = new Date(date.getFullYear(), date.getMonth(), 1).toISOString().split('T')[0];
+        const dateTo = new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().split('T')[0];
+
+        router.get(attendancePointsShow({ user: userId }).url, {
+            date_from: dateFrom,
+            date_to: dateTo,
+        });
     };
 
     const openExcuseDialog = (point: AttendancePoint) => {
@@ -764,7 +772,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                             <TableCell className="text-right">
                                                 <div className="flex items-center justify-end gap-2">
                                                     <button
-                                                        onClick={() => viewUserDetails(point.user.id)}
+                                                        onClick={() => viewUserDetails(point.user.id, point.shift_date)}
                                                         className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
                                                     >
                                                         <Eye className="h-4 w-4" />
@@ -900,7 +908,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                         variant="outline"
                                         size="sm"
                                         className="flex-1"
-                                        onClick={() => viewUserDetails(point.user.id)}
+                                        onClick={() => viewUserDetails(point.user.id, point.shift_date)}
                                     >
                                         <Eye className="h-4 w-4 mr-1" />
                                         View

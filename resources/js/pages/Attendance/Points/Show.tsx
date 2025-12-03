@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
-import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { usePermission } from "@/hooks/useAuthorization";
@@ -35,7 +34,8 @@ import {
     DropdownMenuItem,
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, MoreVertical, CheckCircle, XCircle, FileText, Download, BarChart3 } from "lucide-react";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, MoreVertical, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
@@ -115,12 +115,18 @@ interface GbroStats {
     is_gbro_ready: boolean;
 }
 
+interface Filters {
+    date_from?: string;
+    date_to?: string;
+}
+
 interface PageProps extends SharedData {
     user: User;
     points: AttendancePoint[];
     totals: Totals;
     dateRange: DateRange;
     gbroStats: GbroStats;
+    filters?: Filters;
 }
 
 const formatDate = (date: string) => {
@@ -160,7 +166,7 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats, auth }) => {
+const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats, auth, filters }) => {
     useFlashMessage();
     const timeFormat = (auth.user.time_format as '12' | '24') ?? '24';
     const { can } = usePermission();
@@ -173,6 +179,10 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         ],
     });
     const isPageLoading = usePageLoading();
+
+    // Date filter state
+    const [dateFrom, setDateFrom] = useState(filters?.date_from || dateRange.start);
+    const [dateTo, setDateTo] = useState(filters?.date_to || dateRange.end);
 
     const [isExcuseDialogOpen, setIsExcuseDialogOpen] = useState(false);
     const [selectedPoint, setSelectedPoint] = useState<AttendancePoint | null>(null);
@@ -200,6 +210,33 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
     const goBack = () => {
         router.get(attendancePointsIndex().url);
+    };
+
+    const handleFilter = () => {
+        const query: Record<string, string> = {};
+        if (dateFrom) query.date_from = dateFrom;
+        if (dateTo) query.date_to = dateTo;
+
+        router.get(
+            attendancePointsShow({ user: user.id }).url,
+            query,
+            { preserveState: true }
+        );
+    };
+
+    const handleReset = () => {
+        const now = new Date();
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+        const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+        setDateFrom(startOfMonth);
+        setDateTo(endOfMonth);
+
+        router.get(
+            attendancePointsShow({ user: user.id }).url,
+            { date_from: startOfMonth, date_to: endOfMonth },
+            { preserveState: true }
+        );
     };
 
     const handleExportCSV = () => {
@@ -343,7 +380,34 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                     </div>
                 </div>
 
-                <PageHeader title={title} description={formattedDateRange} />
+                {/* Page Title with Date Filters */}
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                        <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+                        <p className="text-sm text-muted-foreground">{formattedDateRange}</p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <Input
+                            type="date"
+                            value={dateFrom}
+                            onChange={(e) => setDateFrom(e.target.value)}
+                            className="w-auto h-8 text-sm"
+                        />
+                        <span className="text-muted-foreground text-sm">to</span>
+                        <Input
+                            type="date"
+                            value={dateTo}
+                            onChange={(e) => setDateTo(e.target.value)}
+                            className="w-auto h-8 text-sm"
+                        />
+                        <Button onClick={handleFilter} size="sm" className="h-8">
+                            <Search className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button onClick={handleReset} variant="outline" size="sm" className="h-8">
+                            <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+                </div>
 
                 {/* Summary Cards */}
                 <div className="grid gap-4 md:grid-cols-4">

@@ -169,6 +169,10 @@ class AttendancePointController extends Controller
                 'last_violation_date' => $lastViolationDate,
                 'is_gbro_ready' => $daysClean >= 60 && $eligiblePointsCount > 0,
             ],
+            'filters' => [
+                'date_from' => $request->date_from,
+                'date_to' => $request->date_to,
+            ],
         ]);
     }
 

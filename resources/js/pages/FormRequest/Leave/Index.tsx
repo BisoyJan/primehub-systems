@@ -30,14 +30,14 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Eye, Ban, RefreshCw, Search, Filter, Trash2 } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import PaginationNav from '@/components/pagination-nav';
-import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -364,6 +364,13 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     </Link>
+                                                    {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
+                                                        <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
+                                                            <Button size="sm" variant="ghost">
+                                                                <Pencil className="h-4 w-4" />
+                                                            </Button>
+                                                        </Link>
+                                                    )}
                                                     {request.status === 'pending' && auth.user.id === request.user.id && (
                                                         <Button
                                                             size="sm"
@@ -437,13 +444,21 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                     </div>
                                 </div>
 
-                                <div className="flex gap-2 pt-2 border-t">
+                                <div className="flex flex-wrap gap-2 pt-2 border-t">
                                     <Link href={leaveShowRoute(request.id).url} className="flex-1">
                                         <Button size="sm" variant="outline" className="w-full">
                                             <Eye className="mr-2 h-4 w-4" />
                                             View
                                         </Button>
                                     </Link>
+                                    {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
+                                        <Link href={leaveEditRoute({ leaveRequest: request.id }).url} className="flex-1">
+                                            <Button size="sm" variant="outline" className="w-full">
+                                                <Pencil className="mr-2 h-4 w-4" />
+                                                Edit
+                                            </Button>
+                                        </Link>
+                                    )}
                                     {request.status === 'pending' && auth.user.id === request.user.id && (
                                         <Button
                                             size="sm"

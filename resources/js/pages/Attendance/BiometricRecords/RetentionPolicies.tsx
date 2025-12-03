@@ -338,88 +338,173 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
 
                 <Card>
                     <CardContent className="pt-6">
-                        <div className="overflow-x-auto">
-                            {policies.length === 0 ? (
-                                <p className="text-center text-muted-foreground py-8">
-                                    No retention policies configured. Click "Add Policy" to create one.
-                                </p>
-                            ) : (
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Name</TableHead>
-                                            <TableHead>Retention Period</TableHead>
-                                            <TableHead>Applies To</TableHead>
-                                            <TableHead>Priority</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {policies.map((policy) => (
-                                            <TableRow key={policy.id}>
-                                                <TableCell>
-                                                    <div>
-                                                        <p className="font-medium">{policy.name}</p>
-                                                        {policy.description && (
-                                                            <p className="text-sm text-muted-foreground">
-                                                                {policy.description}
-                                                            </p>
+                        {policies.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-8">
+                                No retention policies configured. Click "Add Policy" to create one.
+                            </p>
+                        ) : (
+                            <>
+                                {/* Desktop Table */}
+                                <div className="hidden md:block overflow-x-auto">
+                                    <Table>
+                                        <TableHeader>
+                                            <TableRow>
+                                                <TableHead>Name</TableHead>
+                                                <TableHead>Retention Period</TableHead>
+                                                <TableHead>Applies To</TableHead>
+                                                <TableHead>Priority</TableHead>
+                                                <TableHead>Status</TableHead>
+                                                <TableHead className="text-right">Actions</TableHead>
+                                            </TableRow>
+                                        </TableHeader>
+                                        <TableBody>
+                                            {policies.map((policy) => (
+                                                <TableRow key={policy.id}>
+                                                    <TableCell>
+                                                        <div>
+                                                            <p className="font-medium">{policy.name}</p>
+                                                            {policy.description && (
+                                                                <p className="text-sm text-muted-foreground">
+                                                                    {policy.description}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {policy.retention_months} {policy.retention_months === 1 ? 'month' : 'months'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {policy.applies_to_type === 'global' ? (
+                                                            <Badge variant="outline">Global</Badge>
+                                                        ) : (
+                                                            <Badge variant="secondary">{policy.site?.name}</Badge>
                                                         )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {policy.retention_months} {policy.retention_months === 1 ? 'month' : 'months'}
-                                                </TableCell>
-                                                <TableCell>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge>{policy.priority}</Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <div className="flex items-center gap-2">
+                                                            <Switch
+                                                                checked={policy.is_active}
+                                                                onCheckedChange={() => handleToggle(policy.id)}
+                                                            />
+                                                            <span className="text-sm">
+                                                                {policy.is_active ? 'Active' : 'Inactive'}
+                                                            </span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <Can permission="biometric.retention">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => openEditDialog(policy)}
+                                                                >
+                                                                    <Pencil className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                            <Can permission="biometric.retention">
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => handleDelete(policy.id)}
+                                                                >
+                                                                    <Trash2 className="h-4 w-4 text-red-600" />
+                                                                </Button>
+                                                            </Can>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))}
+                                        </TableBody>
+                                    </Table>
+                                </div>
+
+                                {/* Mobile Cards */}
+                                <div className="md:hidden space-y-4">
+                                    {policies.map((policy) => (
+                                        <div
+                                            key={policy.id}
+                                            className="bg-card border rounded-lg p-4 shadow-sm space-y-3"
+                                        >
+                                            <div className="flex items-start justify-between">
+                                                <div className="flex-1">
+                                                    <p className="font-medium">{policy.name}</p>
+                                                    {policy.description && (
+                                                        <p className="text-sm text-muted-foreground mt-1">
+                                                            {policy.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <Badge variant={policy.is_active ? 'default' : 'secondary'}>
+                                                    {policy.is_active ? 'Active' : 'Inactive'}
+                                                </Badge>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3 text-sm">
+                                                <div>
+                                                    <span className="text-muted-foreground">Retention:</span>
+                                                    <p className="font-medium">
+                                                        {policy.retention_months} {policy.retention_months === 1 ? 'month' : 'months'}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground">Priority:</span>
+                                                    <p className="font-medium">{policy.priority}</p>
+                                                </div>
+                                            </div>
+
+                                            <div className="text-sm">
+                                                <span className="text-muted-foreground">Applies To:</span>
+                                                <div className="mt-1">
                                                     {policy.applies_to_type === 'global' ? (
                                                         <Badge variant="outline">Global</Badge>
                                                     ) : (
                                                         <Badge variant="secondary">{policy.site?.name}</Badge>
                                                     )}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Badge>{policy.priority}</Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center gap-2">
-                                                        <Switch
-                                                            checked={policy.is_active}
-                                                            onCheckedChange={() => handleToggle(policy.id)}
-                                                        />
-                                                        <span className="text-sm">
-                                                            {policy.is_active ? 'Active' : 'Inactive'}
-                                                        </span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell className="text-right">
-                                                    <div className="flex justify-end gap-2">
-                                                        <Can permission="biometric.retention">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => openEditDialog(policy)}
-                                                            >
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                        </Can>
-                                                        <Can permission="biometric.retention">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => handleDelete(policy.id)}
-                                                            >
-                                                                <Trash2 className="h-4 w-4 text-red-600" />
-                                                            </Button>
-                                                        </Can>
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                    </TableBody>
-                                </Table>
-                            )}
-                        </div>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center justify-between pt-2 border-t">
+                                                <div className="flex items-center gap-2">
+                                                    <Switch
+                                                        checked={policy.is_active}
+                                                        onCheckedChange={() => handleToggle(policy.id)}
+                                                    />
+                                                    <span className="text-sm">
+                                                        {policy.is_active ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex gap-2">
+                                                    <Can permission="biometric.retention">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => openEditDialog(policy)}
+                                                        >
+                                                            <Pencil className="h-4 w-4 mr-1" />
+                                                            Edit
+                                                        </Button>
+                                                    </Can>
+                                                    <Can permission="biometric.retention">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => handleDelete(policy.id)}
+                                                            className="text-red-600 hover:text-red-700"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    </Can>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </>
+                        )}
                     </CardContent>
                 </Card>
             </div>

@@ -124,43 +124,43 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
             <Head title={`Leave Request #${leaveRequest.id}`} />
 
             <div className="container mx-auto px-4 py-8 max-w-4xl">
-                <div className="mb-6 flex justify-between items-center">
+                <div className="mb-6 flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4">
                     <Link href={leaveIndexRoute().url}>
-                        <Button variant="ghost">
+                        <Button variant="ghost" size="sm">
                             <ArrowLeft className="mr-2 h-4 w-4" />
                             Back to List
                         </Button>
                     </Link>
 
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                         {isAdmin && leaveRequest.status === 'pending' && (
                             <>
                                 <Can permission="leave.approve">
-                                    <Button variant="default" onClick={() => setShowApproveDialog(true)}>
-                                        <Check className="mr-2 h-4 w-4" />
-                                        Approve
+                                    <Button variant="default" size="sm" onClick={() => setShowApproveDialog(true)}>
+                                        <Check className="mr-1 h-4 w-4" />
+                                        <span className="hidden sm:inline">Approve</span>
                                     </Button>
                                 </Can>
                                 <Can permission="leave.approve">
-                                    <Button variant="destructive" onClick={() => setShowDenyDialog(true)}>
-                                        <X className="mr-2 h-4 w-4" />
-                                        Deny
+                                    <Button variant="destructive" size="sm" onClick={() => setShowDenyDialog(true)}>
+                                        <X className="mr-1 h-4 w-4" />
+                                        <span className="hidden sm:inline">Deny</span>
                                     </Button>
                                 </Can>
                             </>
                         )}
                         {canCancel && leaveRequest.status === 'pending' && (
                             <Can permission="leave.cancel">
-                                <Button variant="outline" onClick={() => setShowCancelDialog(true)}>
-                                    <Ban className="mr-2 h-4 w-4" />
-                                    Cancel Request
+                                <Button variant="outline" size="sm" onClick={() => setShowCancelDialog(true)}>
+                                    <Ban className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">Cancel</span>
                                 </Button>
                             </Can>
                         )}
                         {can('leave.delete') && (
-                            <Button variant="destructive" onClick={() => setShowDeleteDialog(true)}>
-                                <Trash2 className="mr-2 h-4 w-4" />
-                                Delete
+                            <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
+                                <Trash2 className="mr-1 h-4 w-4" />
+                                <span className="hidden sm:inline">Delete</span>
                             </Button>
                         )}
                     </div>
@@ -180,19 +180,19 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {/* Employee Info */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Employee</p>
                                 <p className="text-base">{leaveRequest.user.name}</p>
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Email</p>
-                                <p className="text-base">{leaveRequest.user.email}</p>
+                                <p className="text-base break-all">{leaveRequest.user.email}</p>
                             </div>
                         </div>
 
                         {/* Leave Details */}
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Leave Type</p>
                                 <Badge variant="secondary" className="mt-1">
@@ -205,7 +205,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                             </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Start Date</p>
                                 <p className="text-base">
@@ -261,9 +261,9 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                         {/* Reason */}
                         <div>
                             <p className="text-sm font-medium text-muted-foreground mb-2">Reason</p>
-                            <Alert>
-                                <Info className="h-4 w-4" />
-                                <AlertDescription>{leaveRequest.reason}</AlertDescription>
+                            <Alert className="overflow-hidden">
+                                <Info className="h-4 w-4 flex-shrink-0" />
+                                <AlertDescription className="break-words whitespace-pre-wrap">{leaveRequest.reason}</AlertDescription>
                             </Alert>
                         </div>
 
@@ -271,7 +271,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                         {leaveRequest.reviewed_at && (
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold mb-4">Review Information</h3>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                     <div>
                                         <p className="text-sm font-medium text-muted-foreground">Reviewed By</p>
                                         <p className="text-base">{leaveRequest.reviewer?.name || 'N/A'}</p>
@@ -288,8 +288,8 @@ export default function Show({ leaveRequest, isAdmin, canCancel }: Props) {
                                         <p className="text-sm font-medium text-muted-foreground mb-2">
                                             Review Notes
                                         </p>
-                                        <Alert>
-                                            <AlertDescription>{leaveRequest.review_notes}</AlertDescription>
+                                        <Alert className="overflow-hidden">
+                                            <AlertDescription className="break-words whitespace-pre-wrap">{leaveRequest.review_notes}</AlertDescription>
                                         </Alert>
                                     </div>
                                 )}
