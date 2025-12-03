@@ -636,7 +636,7 @@ public function downloadZip($jobId)
         abort(404, 'ZIP file not found');
     }
 
-    return Response::download($zipPath, $zipFileName);
+    return Response::download($zipPath, $zipFileName)->deleteFileAfterSend(true);
 }
 
 public function zipSelected(Request $request)
@@ -684,7 +684,7 @@ public function downloadSelectedZip($jobId)
         abort(404, 'ZIP file not found');
     }
 
-    return Response::download($zipPath, $zipFileName);
+    return Response::download($zipPath, $zipFileName)->deleteFileAfterSend(true);
 }
 
 }

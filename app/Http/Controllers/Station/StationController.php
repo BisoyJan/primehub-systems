@@ -64,7 +64,7 @@ class StationController extends Controller
         if (!file_exists($zipPath)) {
             abort(404, 'ZIP file not found');
         }
-        return Response::download($zipPath, 'all-station-qrcodes.zip');
+        return Response::download($zipPath, 'all-station-qrcodes.zip')->deleteFileAfterSend(true);
     }
 
     public function zipSelected(Request $request)
@@ -106,7 +106,7 @@ class StationController extends Controller
         if (!file_exists($zipPath)) {
             abort(404, 'ZIP file not found');
         }
-        return Response::download($zipPath, 'selected-station-qrcodes.zip');
+        return Response::download($zipPath, 'selected-station-qrcodes.zip')->deleteFileAfterSend(true);
     }
 
     /**
