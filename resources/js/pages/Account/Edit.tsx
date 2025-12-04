@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { router, useForm, usePage, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,7 +10,10 @@ import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
-import { index as accountsIndex, edit as accountsEdit, update as accountsUpdate } from "@/routes/accounts";
+import { index as accountsIndex, edit as accountsEdit, update as accountsUpdate, toggleActive } from "@/routes/accounts";
+import { Switch } from "@/components/ui/switch";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
+import { AlertTriangle } from "lucide-react";
 
 interface User {
     id: number;
@@ -20,12 +23,17 @@ interface User {
     email: string;
     role: string;
     hired_date: string;
+    is_active: boolean;
 }
 
 export default function AccountEdit() {
-    const { user, roles } = usePage<{ user: User; roles: string[] }>().props;
+    const { user, roles, auth } = usePage<{ user: User; roles: string[]; auth: { user: { id: number } } }>().props;
 
     const fullName = `${user.first_name} ${user.last_name}`;
+    const currentUserId = auth.user.id;
+
+    const [employeeStatus, setEmployeeStatus] = useState(user.is_active);
+    const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Edit ${fullName}`,
@@ -48,6 +56,31 @@ export default function AccountEdit() {
         role: user.role,
         hired_date: user.hired_date,
     });
+
+    const handleToggleActive = () => {
+        if (employeeStatus) {
+            // If currently active, show confirmation dialog
+            setToggleActiveDialogOpen(true);
+        } else {
+            // If currently inactive, activate immediately
+            confirmToggleActive();
+        }
+    };
+
+    const confirmToggleActive = () => {
+        router.post(toggleActive(user.id).url, {}, {
+            preserveState: true,
+            preserveScroll: true,
+            onSuccess: () => {
+                setEmployeeStatus(!employeeStatus);
+                setToggleActiveDialogOpen(false);
+                toast.success(`Employee ${employeeStatus ? 'deactivated' : 'activated'} successfully`);
+            },
+            onError: () => {
+                toast.error('Failed to update employee status');
+            }
+        });
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -167,6 +200,36 @@ export default function AccountEdit() {
                                 </div>
                             </div>
 
+                            {/* Employee Status Section */}
+                            {user.id !== currentUserId && (
+                                <div className="space-y-4">
+                                    <h3 className="text-lg font-semibold">Employee Status</h3>
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Active Status</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {employeeStatus
+                                                    ? "Employee is currently active and can access the system"
+                                                    : "Employee is inactive and all their schedules are deactivated"}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${employeeStatus
+                                                    ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                                    : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
+                                                }`}>
+                                                {employeeStatus ? 'Active' : 'Inactive'}
+                                            </span>
+                                            <Switch
+                                                checked={employeeStatus}
+                                                onCheckedChange={handleToggleActive}
+                                                aria-label="Toggle employee active status"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Security Section */}
                             <div className="space-y-4">
                                 <div>
@@ -218,6 +281,35 @@ export default function AccountEdit() {
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Deactivate Employee Confirmation Dialog */}
+            <AlertDialog open={toggleActiveDialogOpen} onOpenChange={setToggleActiveDialogOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                            Deactivate Employee?
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="space-y-2">
+                            <p>
+                                Are you sure you want to deactivate <strong>{fullName}</strong>?
+                            </p>
+                            <p className="text-yellow-600 dark:text-yellow-500 font-medium">
+                                ⚠️ This will also deactivate all their active employee schedules.
+                            </p>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={confirmToggleActive}
+                            className="bg-yellow-600 hover:bg-yellow-700"
+                        >
+                            Deactivate
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

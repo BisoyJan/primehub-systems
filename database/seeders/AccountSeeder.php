@@ -24,6 +24,7 @@ class AccountSeeder extends Seeder
                 'role' => 'Super Admin',
                 'email_verified_at' => now(),
                 'is_approved' => true,
+                'is_active' => true,
                 'approved_at' => now(),
             ],
             [
@@ -35,6 +36,7 @@ class AccountSeeder extends Seeder
                 'role' => 'Admin',
                 'email_verified_at' => now(),
                 'is_approved' => true,
+                'is_active' => true,
                 'approved_at' => now(),
             ],
             [
@@ -46,6 +48,7 @@ class AccountSeeder extends Seeder
                 'role' => 'Agent',
                 'email_verified_at' => now(),
                 'is_approved' => true,
+                'is_active' => true,
                 'approved_at' => now(),
             ],
             [
@@ -57,6 +60,7 @@ class AccountSeeder extends Seeder
                 'role' => 'IT',
                 'email_verified_at' => now(),
                 'is_approved' => true,
+                'is_active' => true,
                 'approved_at' => now(),
             ],
             [
@@ -68,6 +72,7 @@ class AccountSeeder extends Seeder
                 'role' => 'Utility',
                 'email_verified_at' => now(),
                 'is_approved' => true,
+                'is_active' => true,
                 'approved_at' => now(),
             ],
             [
@@ -79,6 +84,19 @@ class AccountSeeder extends Seeder
                 'role' => 'HR',
                 'email_verified_at' => now(),
                 'is_approved' => true,
+                'is_active' => true,
+                'approved_at' => now(),
+            ],
+            [
+                'first_name' => 'Team',
+                'middle_name' => 'U',
+                'last_name' => 'Lead',
+                'email' => 'teamlead@example.com',
+                'password' => Hash::make('password'),
+                'role' => 'Team Lead',
+                'email_verified_at' => now(),
+                'is_approved' => true,
+                'is_active' => true,
                 'approved_at' => now(),
             ],
             [
@@ -90,6 +108,7 @@ class AccountSeeder extends Seeder
                 'role' => 'Super Admin',
                 'email_verified_at' => now(),
                 'is_approved' => true,
+                'is_active' => true,
                 'approved_at' => now(),
             ],
         ];

@@ -1,4 +1,3 @@
-import React, { useState } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -16,9 +15,7 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Check, ChevronsUpDown } from "lucide-react";
+
 import { toast } from "sonner";
 import {
     index as employeeSchedulesIndex,
@@ -62,6 +59,7 @@ interface PageProps {
     users: User[];
     campaigns: Campaign[];
     sites: Site[];
+    canEditEffectiveDate: boolean;
     auth: {
         user: {
             time_format: string;
@@ -149,7 +147,7 @@ const buildTime = (hour: string, minute: string, period: string, format: string)
 };
 
 export default function EmployeeScheduleEdit() {
-    const { schedule, users, campaigns, sites, auth } = usePage<PageProps>().props;
+    const { schedule, users, campaigns, sites, auth, canEditEffectiveDate } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format || '24';
 
     const { title, breadcrumbs } = usePageMeta({
@@ -172,6 +170,7 @@ export default function EmployeeScheduleEdit() {
         work_days: schedule.work_days,
         grace_period_minutes: schedule.grace_period_minutes,
         is_active: schedule.is_active,
+        effective_date: schedule.effective_date || "",
         end_date: schedule.end_date || "",
     });
 
@@ -488,18 +487,24 @@ export default function EmployeeScheduleEdit() {
                                     )}
                                 </div>
 
-                                {/* Effective Date (Read-only) */}
+                                {/* Effective Date */}
                                 <div className="space-y-2">
-                                    <Label>Effective Date</Label>
+                                    <Label htmlFor="effective_date">Hired Date</Label>
                                     <Input
                                         type="date"
-                                        value={schedule.effective_date}
-                                        disabled
-                                        className="bg-muted"
+                                        value={canEditEffectiveDate ? data.effective_date : schedule.effective_date}
+                                        onChange={e => setData("effective_date", e.target.value)}
+                                        disabled={!canEditEffectiveDate}
+                                        className={!canEditEffectiveDate ? "bg-muted" : ""}
                                     />
                                     <p className="text-xs text-muted-foreground">
-                                        Effective date cannot be changed after creation
+                                        {canEditEffectiveDate
+                                            ? "The employee's hire date (can be updated by admins)"
+                                            : "Hired date cannot be changed after creation"}
                                     </p>
+                                    {errors.effective_date && (
+                                        <p className="text-sm text-red-500">{errors.effective_date}</p>
+                                    )}
                                 </div>
 
                                 {/* End Date */}
@@ -519,15 +524,22 @@ export default function EmployeeScheduleEdit() {
                                 </div>
 
                                 {/* Active Status */}
-                                <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id="is_active"
-                                        checked={data.is_active}
-                                        onCheckedChange={checked => setData("is_active", checked as boolean)}
-                                    />
-                                    <Label htmlFor="is_active" className="text-sm font-normal cursor-pointer">
-                                        Active Schedule
-                                    </Label>
+                                <div className="space-y-2">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="is_active"
+                                            checked={data.is_active}
+                                            onCheckedChange={checked => setData("is_active", checked as boolean)}
+                                        />
+                                        <Label htmlFor="is_active" className="text-sm font-normal cursor-pointer">
+                                            Active Schedule
+                                        </Label>
+                                    </div>
+                                    {data.is_active && !schedule.is_active && (
+                                        <p className="text-xs text-amber-600">
+                                            ⚠️ Activating this schedule will deactivate any other active schedule for this employee.
+                                        </p>
+                                    )}
                                 </div>
 
                                 {/* Form Actions */}

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\EnsureUserHasSchedule;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\UpdateLastActivity;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
             AddLinkHeadersForPreloadedAssets::class,
             UpdateLastActivity::class,
+            EnsureUserHasSchedule::class,
         ]);
 
         // Register permission and role middleware aliases

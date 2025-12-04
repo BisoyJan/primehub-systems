@@ -131,6 +131,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::post('accounts/{account}/unapprove', [AccountController::class, 'unapprove'])
         ->middleware('permission:accounts.edit')
         ->name('accounts.unapprove');
+    Route::post('accounts/{account}/toggle-active', [AccountController::class, 'toggleActive'])
+        ->middleware('permission:accounts.edit')
+        ->name('accounts.toggleActive');
     Route::post('accounts/bulk-approve', [AccountController::class, 'bulkApprove'])
         ->middleware('permission:accounts.edit')
         ->name('accounts.bulkApprove');
@@ -192,7 +195,13 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete');
         });
 
-    // Employee Schedules
+    // First-time schedule setup for Agent/Team Lead (no permission check, just auth)
+    Route::get('schedule-setup', [EmployeeScheduleController::class, 'firstTimeSetup'])
+        ->name('schedule-setup');
+    Route::post('schedule-setup', [EmployeeScheduleController::class, 'storeFirstTimeSetup'])
+        ->name('schedule-setup.store');
+
+    // Employee Schedules (with permission middleware)
     Route::resource('employee-schedules', EmployeeScheduleController::class)
         ->middleware('permission:schedules.view,schedules.create,schedules.edit,schedules.delete');
     Route::post('employee-schedules/{employeeSchedule}/toggle-active', [EmployeeScheduleController::class, 'toggleActive'])

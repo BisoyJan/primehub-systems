@@ -527,14 +527,27 @@ export default function Export() {
             body: JSON.stringify(body),
         })
             .then(async res => {
-                const data = await res.json();
+                // Check response status before parsing JSON
                 if (!res.ok) {
-                    if (data.error && data.message) {
-                        throw new Error(data.message);
+                    // Handle specific HTTP status codes
+                    if (res.status === 419) {
+                        throw new Error('Session expired. Please refresh the page and try again.');
+                    }
+                    if (res.status === 401 || res.status === 403) {
+                        throw new Error('You are not authorized to perform this action.');
+                    }
+                    // Try to parse error message from JSON response
+                    try {
+                        const errorData = await res.json();
+                        if (errorData.message) {
+                            throw new Error(errorData.message);
+                        }
+                    } catch {
+                        // If JSON parsing fails, throw generic error
                     }
                     throw new Error(`HTTP error! status: ${res.status}`);
                 }
-                return data;
+                return res.json();
             })
             .then(data => {
                 if (data.jobId) {
@@ -546,11 +559,7 @@ export default function Export() {
             })
             .catch(err => {
                 console.error('Points export start error:', err);
-                if (err.message.includes('419')) {
-                    toast.error('Session expired. Please refresh the page and try again.');
-                } else if (err.message.includes('401') || err.message.includes('403')) {
-                    toast.error('You are not authorized to perform this action.');
-                } else if (err.message.includes('No attendance points')) {
+                if (err.message.includes('No attendance points')) {
                     toast.warning(err.message);
                 } else {
                     toast.error(err.message || 'Failed to start export. Please try again.');
@@ -599,11 +608,8 @@ export default function Export() {
                                 pointsExportIntervalRef.current = null;
                             }
 
-                            if (data.error) {
-                                toast.error('Export failed');
-                                setIsPointsExporting(false);
-                                setPointsExportJobId(null);
-                            } else if (data.downloadUrl) {
+                            // Check for downloadUrl first - if it exists, export succeeded
+                            if (data.downloadUrl) {
                                 // Mark download as started immediately
                                 pointsDownloadStartedRef.current = true;
 
@@ -648,6 +654,11 @@ export default function Export() {
                                         setPointsExportStatus('');
                                         setPointsExportJobId(null);
                                     });
+                            } else if (data.error) {
+                                // Only show error if there's no downloadUrl
+                                toast.error(data.status || 'Export failed');
+                                setIsPointsExporting(false);
+                                setPointsExportJobId(null);
                             }
                         }
                     })

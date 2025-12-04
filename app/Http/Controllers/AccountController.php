@@ -54,6 +54,14 @@ class AccountController extends Controller
             $query->whereNotNull('deleted_at')->whereNotNull('deletion_confirmed_at');
         }
 
+        // Filter by employee status (is_active)
+        $employeeStatus = $request->query('employee_status');
+        if ($employeeStatus === 'active') {
+            $query->where('is_active', true);
+        } elseif ($employeeStatus === 'inactive') {
+            $query->where('is_active', false);
+        }
+
         $users = $query->orderBy('created_at', 'desc')
             ->paginate(25)
             ->withQueryString();
@@ -73,6 +81,7 @@ class AccountController extends Controller
                 'search' => $search ?? '',
                 'role' => $role ?? '',
                 'status' => $status ?? '',
+                'employee_status' => $employeeStatus ?? '',
             ],
         ]);
     }
@@ -130,6 +139,7 @@ class AccountController extends Controller
                 'email' => $account->email,
                 'role' => $account->role,
                 'hired_date' => $account->hired_date ? Carbon::parse($account->hired_date)->format('Y-m-d') : '',
+                'is_active' => $account->is_active,
             ],
             'roles' => ['Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility'],
         ]);
@@ -460,6 +470,44 @@ class AccountController extends Controller
 
         return back()->with('flash', [
             'message' => 'User account approval revoked successfully',
+            'type' => 'success'
+        ]);
+    }
+
+    /**
+     * Toggle the active status of a user account.
+     * When deactivating, also deactivates all employee schedules.
+     */
+    public function toggleActive(User $account)
+    {
+        $this->authorize('update', $account);
+
+        // Prevent toggling own account
+        if ($account->id === auth()->id()) {
+            return back()->with('flash', [
+                'message' => 'You cannot change the status of your own account',
+                'type' => 'error'
+            ]);
+        }
+
+        $newStatus = !$account->is_active;
+
+        // If deactivating, also deactivate all employee schedules
+        if (!$newStatus) {
+            $account->employeeSchedules()->update(['is_active' => false]);
+        }
+
+        $account->update(['is_active' => $newStatus]);
+
+        $statusText = $newStatus ? 'activated' : 'deactivated';
+        $message = "Employee {$statusText} successfully";
+
+        if (!$newStatus) {
+            $message .= ". All schedules have been deactivated.";
+        }
+
+        return back()->with('flash', [
+            'message' => $message,
             'type' => 'success'
         ]);
     }

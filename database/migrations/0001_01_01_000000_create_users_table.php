@@ -18,6 +18,7 @@ return new class extends Migration
             $table->string('last_name');
             $table->string('email')->unique();
             $table->enum('role', ['Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility'])->default('Agent');
+            $table->boolean('is_active')->default(true);
             $table->boolean('is_approved')->default(false);
             $table->timestamp('approved_at')->nullable();
             $table->enum('time_format', ['12', '24'])->default('24');

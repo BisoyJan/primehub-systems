@@ -3,6 +3,7 @@
 namespace App\Jobs;
 
 use App\Models\AttendancePoint;
+use App\Models\Campaign;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Bus\Queueable;
@@ -127,6 +128,48 @@ class GenerateAllAttendancePointsExportExcel implements ShouldQueue
                 ];
             })->sortByDesc('points')->take(10)->values();
 
+            // Calculate per-employee statistics with campaign info
+            $allEmployeeStats = $points->groupBy('user_id')->map(function ($userPoints) {
+                $user = $userPoints->first()->user;
+                $activeUserPoints = $userPoints->where('is_excused', false)->where('is_expired', false);
+
+                // Get the user's current campaign from their active schedule
+                $currentSchedule = $user->employeeSchedules()
+                    ->where('is_active', true)
+                    ->with('campaign')
+                    ->first();
+                $campaignName = $currentSchedule?->campaign?->name ?? 'No Campaign';
+
+                return [
+                    'name' => $user->name,
+                    'campaign' => $campaignName,
+                    'total_violations' => $userPoints->count(),
+                    'active_violations' => $activeUserPoints->count(),
+                    'active_points' => $activeUserPoints->sum('points'),
+                    'excused_count' => $userPoints->where('is_excused', true)->count(),
+                    'expired_count' => $userPoints->where('is_expired', true)->count(),
+                    'whole_day_count' => $activeUserPoints->where('point_type', 'whole_day_absence')->count(),
+                    'half_day_count' => $activeUserPoints->where('point_type', 'half_day_absence')->count(),
+                    'tardy_count' => $activeUserPoints->where('point_type', 'tardy')->count(),
+                    'undertime_count' => $activeUserPoints->where('point_type', 'undertime')->count(),
+                    'gbro_eligible' => $activeUserPoints->where('eligible_for_gbro', true)->count(),
+                ];
+            })->sortByDesc('active_points')->values();
+
+            // Calculate campaign statistics
+            $campaignStats = $allEmployeeStats->groupBy('campaign')->map(function ($campaignUsers, $campaignName) {
+                return [
+                    'campaign' => $campaignName,
+                    'employee_count' => $campaignUsers->count(),
+                    'total_violations' => $campaignUsers->sum('total_violations'),
+                    'active_violations' => $campaignUsers->sum('active_violations'),
+                    'total_active_points' => $campaignUsers->sum('active_points'),
+                    'avg_points_per_employee' => $campaignUsers->count() > 0
+                        ? round($campaignUsers->sum('active_points') / $campaignUsers->count(), 2)
+                        : 0,
+                ];
+            })->sortByDesc('total_active_points')->values();
+
             $this->updateProgress($cacheKey, 30, 'Creating spreadsheet...');
 
             $spreadsheet = new Spreadsheet();
@@ -244,7 +287,7 @@ class GenerateAllAttendancePointsExportExcel implements ShouldQueue
                     $typeLabel,
                     number_format((float) ($point->points ?? 0), 2),
                     $status,
-                    $point->violation_details ? substr($point->violation_details, 0, 50) . (strlen($point->violation_details) > 50 ? '...' : '') : '-',
+                    $point->violation_details ? substr($point->violation_details, 0, 70) . (strlen($point->violation_details) > 70 ? '...' : '') : '-',
                     $point->expires_at ? Carbon::parse($point->expires_at)->format('M j, Y') : '-',
                     $point->excusedBy?->name ?? '-',
                     $point->notes ?? '-',
@@ -398,26 +441,67 @@ class GenerateAllAttendancePointsExportExcel implements ShouldQueue
                 ]);
             }
 
-            // Top 10 Employees Section
-            $sheet2->setCellValue('A22', 'TOP 10 EMPLOYEES BY POINTS');
-            $sheet2->mergeCells('A22:D22');
+            // Campaign Statistics Section (NEW)
+            $sheet2->setCellValue('A22', 'BREAKDOWN BY CAMPAIGN');
+            $sheet2->mergeCells('A22:F22');
             $sheet2->getStyle('A22')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '7C3AED']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            $campaignHeaders = ['Campaign', 'Employees', 'Total Violations', 'Active Violations', 'Active Points', 'Avg Points/Employee'];
+            $sheet2->fromArray($campaignHeaders, null, 'A23');
+            $sheet2->getStyle('A23:F23')->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => '374151']],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'EDE9FE']],
+                'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'C4B5FD']]],
+            ]);
+
+            $campaignRow = 24;
+            foreach ($campaignStats as $campaign) {
+                $sheet2->fromArray([
+                    $campaign['campaign'],
+                    $campaign['employee_count'],
+                    $campaign['total_violations'],
+                    $campaign['active_violations'],
+                    number_format($campaign['total_active_points'], 2),
+                    number_format($campaign['avg_points_per_employee'], 2),
+                ], null, "A{$campaignRow}");
+                $sheet2->getStyle("A{$campaignRow}:F{$campaignRow}")->applyFromArray([
+                    'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'E5E7EB']]],
+                ]);
+                // Highlight campaigns with high points
+                if ($campaign['total_active_points'] > 5) {
+                    $sheet2->getStyle("E{$campaignRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => 'DC2626']],
+                    ]);
+                }
+                $campaignRow++;
+            }
+
+            // Top 10 Employees Section
+            $top10StartRow = $campaignRow + 2;
+            $sheet2->setCellValue("A{$top10StartRow}", 'TOP 10 EMPLOYEES BY POINTS');
+            $sheet2->mergeCells("A{$top10StartRow}:E{$top10StartRow}");
+            $sheet2->getStyle("A{$top10StartRow}")->applyFromArray([
                 'font' => ['bold' => true, 'size' => 14, 'color' => ['rgb' => 'FFFFFF']],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'F59E0B']],
                 'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
             ]);
 
-            $sheet2->setCellValue('A23', 'Rank');
-            $sheet2->setCellValue('B23', 'Employee Name');
-            $sheet2->setCellValue('C23', 'Violations');
-            $sheet2->setCellValue('D23', 'Total Points');
-            $sheet2->getStyle('A23:D23')->applyFromArray([
+            $top10HeaderRow = $top10StartRow + 1;
+            $sheet2->setCellValue("A{$top10HeaderRow}", 'Rank');
+            $sheet2->setCellValue("B{$top10HeaderRow}", 'Employee Name');
+            $sheet2->setCellValue("C{$top10HeaderRow}", 'Violations');
+            $sheet2->setCellValue("D{$top10HeaderRow}", 'Total Points');
+            $sheet2->getStyle("A{$top10HeaderRow}:D{$top10HeaderRow}")->applyFromArray([
                 'font' => ['bold' => true, 'color' => ['rgb' => '374151']],
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEF3C7']],
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FCD34D']]],
             ]);
 
-            $topRow = 24;
+            $topRow = $top10HeaderRow + 1;
             $rank = 1;
             foreach ($topEmployees as $employee) {
                 $sheet2->setCellValue("A{$topRow}", $rank);
@@ -492,10 +576,128 @@ class GenerateAllAttendancePointsExportExcel implements ShouldQueue
             }
 
             // Set fixed column widths for sheet 2
-            $sheet2->getColumnDimension('A')->setWidth(20);
+            $sheet2->getColumnDimension('A')->setWidth(25);
             $sheet2->getColumnDimension('B')->setWidth(30);
-            $sheet2->getColumnDimension('C')->setWidth(15);
-            $sheet2->getColumnDimension('D')->setWidth(40);
+            $sheet2->getColumnDimension('C')->setWidth(18);
+            $sheet2->getColumnDimension('D')->setWidth(18);
+            $sheet2->getColumnDimension('E')->setWidth(15);
+            $sheet2->getColumnDimension('F')->setWidth(20);
+
+            $this->updateProgress($cacheKey, 85, 'Creating employee statistics sheet...');
+
+            // ========================================
+            // SHEET 3: Employee Statistics (Searchable)
+            // ========================================
+            $sheet3 = $spreadsheet->createSheet();
+            $sheet3->setTitle('Employee Statistics');
+
+            // Title
+            $sheet3->setCellValue('A1', 'EMPLOYEE STATISTICS - SEARCHABLE');
+            $sheet3->mergeCells('A1:L1');
+            $sheet3->getStyle('A1')->applyFromArray([
+                'font' => ['bold' => true, 'size' => 18, 'color' => ['rgb' => '1F2937']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            $sheet3->setCellValue('A2', 'Use Excel\'s Filter (Ctrl+Shift+L) or Data > Filter to search by employee name or campaign');
+            $sheet3->mergeCells('A2:L2');
+            $sheet3->getStyle('A2')->applyFromArray([
+                'font' => ['size' => 11, 'italic' => true, 'color' => ['rgb' => '6B7280']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            $sheet3->setCellValue('A3', 'Generated: ' . now()->format('F j, Y \a\t g:i A'));
+            $sheet3->mergeCells('A3:L3');
+            $sheet3->getStyle('A3')->applyFromArray([
+                'font' => ['size' => 10, 'italic' => true, 'color' => ['rgb' => '9CA3AF']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER],
+            ]);
+
+            // Headers for employee statistics
+            $empHeaders = [
+                'Employee Name',
+                'Campaign',
+                'Total Violations',
+                'Active Violations',
+                'Active Points',
+                'Excused',
+                'Expired',
+                'Whole Day',
+                'Half Day',
+                'Tardy',
+                'Undertime',
+                'GBRO Eligible'
+            ];
+            $sheet3->fromArray($empHeaders, null, 'A5');
+            $sheet3->getStyle('A5:L5')->applyFromArray([
+                'font' => ['bold' => true, 'color' => ['rgb' => 'FFFFFF'], 'size' => 11],
+                'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => '4F46E5']],
+                'alignment' => ['horizontal' => Alignment::HORIZONTAL_CENTER, 'vertical' => Alignment::VERTICAL_CENTER],
+                'borders' => [
+                    'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => '4F46E5']],
+                ],
+            ]);
+            $sheet3->getRowDimension(5)->setRowHeight(25);
+
+            // Data rows for all employees
+            $empRow = 6;
+            foreach ($allEmployeeStats as $empStat) {
+                $sheet3->fromArray([
+                    $empStat['name'],
+                    $empStat['campaign'],
+                    $empStat['total_violations'],
+                    $empStat['active_violations'],
+                    number_format($empStat['active_points'], 2),
+                    $empStat['excused_count'],
+                    $empStat['expired_count'],
+                    $empStat['whole_day_count'],
+                    $empStat['half_day_count'],
+                    $empStat['tardy_count'],
+                    $empStat['undertime_count'],
+                    $empStat['gbro_eligible'],
+                ], null, "A{$empRow}");
+
+                // Alternate row colors
+                $bgColor = ($empRow % 2 === 0) ? 'F9FAFB' : 'FFFFFF';
+                $sheet3->getStyle("A{$empRow}:L{$empRow}")->applyFromArray([
+                    'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => $bgColor]],
+                    'borders' => [
+                        'allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'E5E7EB']],
+                    ],
+                    'alignment' => ['vertical' => Alignment::VERTICAL_CENTER],
+                ]);
+
+                // Highlight high points
+                if ($empStat['active_points'] >= 3) {
+                    $sheet3->getStyle("E{$empRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => 'DC2626']],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
+                    ]);
+                } elseif ($empStat['active_points'] >= 2) {
+                    $sheet3->getStyle("E{$empRow}")->applyFromArray([
+                        'font' => ['bold' => true, 'color' => ['rgb' => 'D97706']],
+                        'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEF3C7']],
+                    ]);
+                }
+
+                $empRow++;
+            }
+
+            // Enable AutoFilter for search functionality
+            $lastEmpRow = $empRow - 1;
+            if ($lastEmpRow >= 6) {
+                $sheet3->setAutoFilter("A5:L{$lastEmpRow}");
+            }
+
+            // Freeze pane to keep headers visible
+            $sheet3->freezePane('A6');
+
+            // Auto-size columns for sheet 3
+            $sheet3->getColumnDimension('A')->setWidth(25);
+            $sheet3->getColumnDimension('B')->setWidth(20);
+            foreach (range('C', 'L') as $col) {
+                $sheet3->getColumnDimension($col)->setWidth(15);
+            }
 
             // Set active sheet back to first sheet
             $spreadsheet->setActiveSheetIndex(0);

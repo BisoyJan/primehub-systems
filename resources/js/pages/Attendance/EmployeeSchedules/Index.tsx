@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -17,11 +17,12 @@ import {
 } from "@/components/ui/select";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, Users } from "lucide-react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, XCircle, RefreshCw, Search } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, RefreshCw, Search } from "lucide-react";
 import {
     index as employeeSchedulesIndex,
     create as employeeSchedulesCreate,
@@ -132,6 +133,29 @@ const getShiftTypeBadge = (shiftType: string) => {
     return <Badge className={className}>{label}</Badge>;
 };
 
+// Group schedules by user and count schedules per user
+const groupSchedulesByUser = (schedules: Schedule[]) => {
+    const userScheduleCount: Record<number, number> = {};
+    const userGroupIndex: Record<number, number> = {};
+    let groupCounter = 0;
+
+    // First pass: count schedules per user
+    schedules.forEach(schedule => {
+        userScheduleCount[schedule.user.id] = (userScheduleCount[schedule.user.id] || 0) + 1;
+    });
+
+    // Second pass: assign group index to each user (for alternating colors)
+    let lastUserId: number | null = null;
+    schedules.forEach(schedule => {
+        if (schedule.user.id !== lastUserId) {
+            userGroupIndex[schedule.user.id] = groupCounter++;
+            lastUserId = schedule.user.id;
+        }
+    });
+
+    return { userScheduleCount, userGroupIndex };
+};
+
 export default function EmployeeSchedulesIndex() {
     const { schedules, users, campaigns = [], filters, auth } = usePage<PageProps>().props;
     const timeFormat = (auth.user as { time_format?: '12' | '24' })?.time_format || '24';
@@ -146,6 +170,12 @@ export default function EmployeeSchedulesIndex() {
         },
     };
     const appliedFilters = filters ?? {};
+
+    // Group schedules by user for visual grouping
+    const { userScheduleCount, userGroupIndex } = useMemo(
+        () => groupSchedulesByUser(scheduleData.data),
+        [scheduleData.data]
+    );
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Employee Schedules",
@@ -176,6 +206,8 @@ export default function EmployeeSchedulesIndex() {
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [scheduleToDelete, setScheduleToDelete] = useState<number | null>(null);
+    const [toggleDialogOpen, setToggleDialogOpen] = useState(false);
+    const [scheduleToToggle, setScheduleToToggle] = useState<Schedule | null>(null);
 
     const handleSearch = () => {
         const params: Record<string, string> = {};
@@ -224,9 +256,24 @@ export default function EmployeeSchedulesIndex() {
         });
     };
 
-    const handleToggleActive = (scheduleId: number) => {
+    const handleToggleActive = (schedule: Schedule) => {
+        // If activating, show confirmation dialog (will deactivate other schedules)
+        if (!schedule.is_active) {
+            setScheduleToToggle(schedule);
+            setToggleDialogOpen(true);
+        } else {
+            // Deactivating - no confirmation needed
+            confirmToggleActive(schedule.id);
+        }
+    };
+
+    const confirmToggleActive = (scheduleId: number) => {
         router.post(employeeSchedulesToggleActive({ employeeSchedule: scheduleId }).url, {}, {
             preserveScroll: true,
+            onSuccess: () => {
+                setToggleDialogOpen(false);
+                setScheduleToToggle(null);
+            },
         });
     };
 
@@ -425,68 +472,82 @@ export default function EmployeeSchedulesIndex() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {scheduleData.data.map(schedule => (
-                                    <TableRow key={schedule.id}>
-                                        <TableCell className="font-medium">{schedule.user.name}</TableCell>
-                                        <TableCell>{schedule.campaign?.name || "-"}</TableCell>
-                                        <TableCell>{schedule.site?.name || "-"}</TableCell>
-                                        <TableCell>{getShiftTypeBadge(schedule.shift_type)}</TableCell>
-                                        <TableCell>{formatTime(schedule.scheduled_time_in, timeFormat)}</TableCell>
-                                        <TableCell>{formatTime(schedule.scheduled_time_out, timeFormat)}</TableCell>
-                                        <TableCell className="text-xs">
-                                            {schedule.work_days.slice(0, 3).map(day => day.substring(0, 3)).join(", ")}
-                                            {schedule.work_days.length > 3 && ` +${schedule.work_days.length - 3}`}
-                                        </TableCell>
-                                        <TableCell>
-                                            {schedule.is_active ? (
-                                                <Badge className="bg-green-500">
-                                                    <CheckCircle className="mr-1 h-3 w-3" />
-                                                    Active
-                                                </Badge>
-                                            ) : (
-                                                <Badge variant="secondary">
-                                                    <XCircle className="mr-1 h-3 w-3" />
-                                                    Inactive
-                                                </Badge>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-2">
-                                                <Can permission="schedules.edit">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
-                                                    >
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                </Can>
-                                                <Can permission="schedules.toggle_active">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleToggleActive(schedule.id)}
-                                                    >
-                                                        {schedule.is_active ? (
-                                                            <XCircle className="h-4 w-4 text-orange-500" />
-                                                        ) : (
-                                                            <CheckCircle className="h-4 w-4 text-green-500" />
-                                                        )}
-                                                    </Button>
-                                                </Can>
-                                                <Can permission="schedules.delete">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleDelete(schedule.id)}
-                                                    >
-                                                        <Trash2 className="h-4 w-4 text-red-500" />
-                                                    </Button>
-                                                </Can>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
+                                {scheduleData.data.map(schedule => {
+                                    const scheduleCount = userScheduleCount[schedule.user.id] || 1;
+                                    const groupIndex = userGroupIndex[schedule.user.id] || 0;
+                                    const hasMultipleSchedules = scheduleCount > 1;
+                                    const isEvenGroup = groupIndex % 2 === 0;
+
+                                    return (
+                                        <TableRow
+                                            key={schedule.id}
+                                            className={hasMultipleSchedules ? (isEvenGroup ? "bg-blue-50/50 dark:bg-blue-950/20" : "bg-amber-50/50 dark:bg-amber-950/20") : ""}
+                                        >
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    {schedule.user.name}
+                                                    {hasMultipleSchedules && (
+                                                        <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-1">
+                                                            <Users className="h-3 w-3" />
+                                                            {scheduleCount}
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>{schedule.campaign?.name || "-"}</TableCell>
+                                            <TableCell>{schedule.site?.name || "-"}</TableCell>
+                                            <TableCell>{getShiftTypeBadge(schedule.shift_type)}</TableCell>
+                                            <TableCell>{formatTime(schedule.scheduled_time_in, timeFormat)}</TableCell>
+                                            <TableCell>{formatTime(schedule.scheduled_time_out, timeFormat)}</TableCell>
+                                            <TableCell className="text-xs">
+                                                {schedule.work_days.slice(0, 3).map(day => day.substring(0, 3)).join(", ")}
+                                                {schedule.work_days.length > 3 && ` +${schedule.work_days.length - 3}`}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Can permission="schedules.toggle">
+                                                        <Switch
+                                                            checked={schedule.is_active}
+                                                            onCheckedChange={() => handleToggleActive(schedule)}
+                                                            aria-label="Toggle schedule active status"
+                                                        />
+                                                    </Can>
+                                                    {schedule.is_active ? (
+                                                        <Badge className="bg-green-500">
+                                                            Active
+                                                        </Badge>
+                                                    ) : (
+                                                        <Badge variant="secondary">
+                                                            Inactive
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    <Can permission="schedules.edit">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    </Can>
+                                                    <Can permission="schedules.delete">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleDelete(schedule.id)}
+                                                        >
+                                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                                        </Button>
+                                                    </Can>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })}
                                 {scheduleData.data.length === 0 && !loading && (
                                     <TableRow>
                                         <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
@@ -500,67 +561,96 @@ export default function EmployeeSchedulesIndex() {
                 </div>
 
                 <div className="md:hidden space-y-4">
-                    {scheduleData.data.map(schedule => (
-                        <div key={schedule.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
-                            <div className="flex justify-between items-start">
-                                <div>
-                                    <div className="text-lg font-semibold">{schedule.user.name}</div>
-                                    <div className="text-sm text-muted-foreground">
-                                        {schedule.campaign?.name || "No Campaign"}
+                    {scheduleData.data.map(schedule => {
+                        const scheduleCount = userScheduleCount[schedule.user.id] || 1;
+                        const groupIndex = userGroupIndex[schedule.user.id] || 0;
+                        const hasMultipleSchedules = scheduleCount > 1;
+                        const isEvenGroup = groupIndex % 2 === 0;
+
+                        return (
+                            <div
+                                key={schedule.id}
+                                className={`border rounded-lg p-4 shadow-sm space-y-3 ${hasMultipleSchedules
+                                        ? isEvenGroup
+                                            ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
+                                            : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
+                                        : "bg-card"
+                                    }`}
+                            >
+                                <div className="flex justify-between items-start">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-lg font-semibold">{schedule.user.name}</span>
+                                            {hasMultipleSchedules && (
+                                                <Badge variant="outline" className="text-xs px-1.5 py-0 h-5 gap-1">
+                                                    <Users className="h-3 w-3" />
+                                                    {scheduleCount}
+                                                </Badge>
+                                            )}
+                                        </div>
+                                        <div className="text-sm text-muted-foreground">
+                                            {schedule.campaign?.name || "No Campaign"}
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Can permission="schedules.toggle">
+                                            <Switch
+                                                checked={schedule.is_active}
+                                                onCheckedChange={() => handleToggleActive(schedule)}
+                                                aria-label="Toggle schedule active status"
+                                            />
+                                        </Can>
+                                        {schedule.is_active ? (
+                                            <Badge className="bg-green-500">Active</Badge>
+                                        ) : (
+                                            <Badge variant="secondary">Inactive</Badge>
+                                        )}
                                     </div>
                                 </div>
-                                {schedule.is_active ? (
-                                    <Badge className="bg-green-500">Active</Badge>
-                                ) : (
-                                    <Badge variant="secondary">Inactive</Badge>
-                                )}
-                            </div>
 
-                            <div className="space-y-2 text-sm">
-                                <div className="flex items-center gap-2">
-                                    <span className="font-medium">Shift:</span>
-                                    {getShiftTypeBadge(schedule.shift_type)}
+                                <div className="space-y-2 text-sm">
+                                    <div className="flex items-center gap-2">
+                                        <span className="font-medium">Shift:</span>
+                                        {getShiftTypeBadge(schedule.shift_type)}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Time:</span>{" "}
+                                        {formatTime(schedule.scheduled_time_in, timeFormat)} - {formatTime(schedule.scheduled_time_out, timeFormat)}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Work Days:</span>{" "}
+                                        {schedule.work_days.map(day => day.substring(0, 3)).join(", ")}
+                                    </div>
+                                    <div>
+                                        <span className="font-medium">Site:</span> {schedule.site?.name || "-"}
+                                    </div>
                                 </div>
-                                <div>
-                                    <span className="font-medium">Time:</span>{" "}
-                                    {formatTime(schedule.scheduled_time_in, timeFormat)} - {formatTime(schedule.scheduled_time_out, timeFormat)}
-                                </div>
-                                <div>
-                                    <span className="font-medium">Work Days:</span>{" "}
-                                    {schedule.work_days.map(day => day.substring(0, 3)).join(", ")}
-                                </div>
-                                <div>
-                                    <span className="font-medium">Site:</span> {schedule.site?.name || "-"}
-                                </div>
-                            </div>
 
-                            <div className="flex gap-2 pt-2 border-t">
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex-1"
-                                    onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
-                                >
-                                    <Edit className="mr-2 h-4 w-4" />
-                                    Edit
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleToggleActive(schedule.id)}
-                                >
-                                    {schedule.is_active ? <XCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
-                                </Button>
-                                <Button
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => handleDelete(schedule.id)}
-                                >
-                                    <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
+                                <div className="flex gap-2 pt-2 border-t">
+                                    <Can permission="schedules.edit">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="flex-1"
+                                            onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
+                                        >
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            Edit
+                                        </Button>
+                                    </Can>
+                                    <Can permission="schedules.delete">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleDelete(schedule.id)}
+                                        >
+                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                        </Button>
+                                    </Can>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        );
+                    })}
 
                     {scheduleData.data.length === 0 && !loading && (
                         <div className="py-12 text-center text-gray-500 border rounded-lg bg-card">
@@ -574,6 +664,31 @@ export default function EmployeeSchedulesIndex() {
                         <PaginationNav links={scheduleData.links} only={["schedules"]} />
                     )}
                 </div>
+
+                <AlertDialog open={toggleDialogOpen} onOpenChange={setToggleDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Activate Schedule?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {scheduleToToggle && (
+                                    <>
+                                        Are you sure you want to activate this schedule for <strong>{scheduleToToggle.user.name}</strong>?
+                                        <br /><br />
+                                        <span className="text-amber-600 dark:text-amber-400">
+                                            Note: This will automatically deactivate any other active schedules for this employee.
+                                        </span>
+                                    </>
+                                )}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => scheduleToToggle && confirmToggleActive(scheduleToToggle.id)}>
+                                Activate
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
 
                 <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
                     <AlertDialogContent>

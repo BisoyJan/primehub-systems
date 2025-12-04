@@ -647,10 +647,11 @@ class AttendancePointController extends Controller
      */
     public function startExportExcel(User $user, Request $request)
     {
-        // Authorization: Users can only export their own points unless they're admin/HR/Team Lead
+        // Use policy-based authorization
+        // Users can export their own points, or those with export permission can export any user
         $currentUser = $request->user();
-        if ($currentUser->id !== $user->id && !in_array($currentUser->role, ['Admin', 'Super Admin', 'HR', 'Team Lead'])) {
-            abort(403, 'Unauthorized to export other user points');
+        if ($currentUser->id !== $user->id) {
+            $this->authorize('export', AttendancePoint::class);
         }
 
         $jobId = Str::uuid()->toString();
@@ -678,11 +679,12 @@ class AttendancePointController extends Controller
         $progress = Cache::get("attendance_points_export:{$jobId}");
 
         if (!$progress) {
+            // Job might still be starting, return pending status instead of error
             return response()->json([
                 'percent' => 0,
-                'status' => 'Job not found or expired',
-                'finished' => true,
-                'error' => true,
+                'status' => 'Initializing...',
+                'finished' => false,
+                'error' => false,
             ]);
         }
 
@@ -724,11 +726,8 @@ class AttendancePointController extends Controller
      */
     public function startExportAllExcel(Request $request)
     {
-        // Authorization: Only admin/HR can export all points
-        $currentUser = $request->user();
-        if (!in_array($currentUser->role, ['Admin', 'Super Admin', 'HR'])) {
-            abort(403, 'Unauthorized to export all attendance points');
-        }
+        // Use policy-based authorization
+        $this->authorize('export', AttendancePoint::class);
 
         $filters = [
             'user_id' => $request->user_id,
@@ -803,11 +802,13 @@ class AttendancePointController extends Controller
         $progress = Cache::get("attendance_points_export_all:{$jobId}");
 
         if (!$progress) {
+            // Job might still be starting, return pending status instead of error
+            // Frontend will continue polling until job starts or timeout
             return response()->json([
                 'percent' => 0,
-                'status' => 'Job not found or expired',
-                'finished' => true,
-                'error' => true,
+                'status' => 'Initializing...',
+                'finished' => false,
+                'error' => false,
             ]);
         }
 

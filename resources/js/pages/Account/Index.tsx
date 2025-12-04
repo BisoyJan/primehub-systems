@@ -3,6 +3,7 @@ import { router, usePage, Link, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -14,6 +15,7 @@ import {
     destroy as accountsDestroy,
     approve as accountsApprove,
     unapprove as accountsUnapprove,
+    toggleActive as accountsToggleActive,
     confirmDelete as accountsConfirmDelete,
     restore as accountsRestore,
     forceDelete as accountsForceDelete,
@@ -21,7 +23,7 @@ import {
     bulkUnapprove as accountsBulkUnapprove,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -31,6 +33,17 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 
 // Authorization components and hooks
 import { Can, HasRole } from "@/components/authorization";
+
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface User {
     id: number;
@@ -42,6 +55,7 @@ interface User {
     hired_date: string | null;
     created_at: string;
     is_approved: boolean;
+    is_active: boolean;
     approved_at: string | null;
     deleted_at: string | null;
     deletion_confirmed_at: string | null;
@@ -63,6 +77,7 @@ interface Filters {
     search: string;
     role: string;
     status: string;
+    employee_status: string;
 }
 
 export default function AccountIndex() {
@@ -71,9 +86,12 @@ export default function AccountIndex() {
     const [search, setSearch] = useState(filters.search || "");
     const [roleFilter, setRoleFilter] = useState(filters.role || "all");
     const [statusFilter, setStatusFilter] = useState(filters.status || "all");
+    const [employeeStatusFilter, setEmployeeStatusFilter] = useState(filters.employee_status || "all");
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [selectedApproveIds, setSelectedApproveIds] = useState<number[]>([]);
     const [selectedRevokeIds, setSelectedRevokeIds] = useState<number[]>([]);
+    const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
+    const [userToToggle, setUserToToggle] = useState<User | null>(null);
     const auth = usePage().props.auth as { user?: { id: number } };
     const currentUserId = auth?.user?.id;
 
@@ -114,24 +132,26 @@ export default function AccountIndex() {
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading();
 
-    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || Boolean(search);
+    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search);
 
     const buildFilterParams = (
         searchValue: string,
         roleValue: string,
         statusValue: string,
+        employeeStatusValue: string,
         options: { resetPage?: boolean } = {}
     ) => {
         const params: Record<string, string | number> = {};
         if (searchValue) params.search = searchValue;
         if (roleValue && roleValue !== "all") params.role = roleValue;
         if (statusValue && statusValue !== "all") params.status = statusValue;
+        if (employeeStatusValue && employeeStatusValue !== "all") params.employee_status = employeeStatusValue;
         if (options.resetPage) params.page = 1;
         return params;
     };
 
     const handleSearch = () => {
-        const params = buildFilterParams(search, roleFilter, statusFilter, { resetPage: true });
+        const params = buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter, { resetPage: true });
         setLoading(true);
         router.get(accountsIndex().url, params, {
             preserveState: true,
@@ -169,6 +189,29 @@ export default function AccountIndex() {
             onFinish: () => setLoading(false),
             onSuccess: () => toast.success("User account approval revoked successfully"),
             onError: () => toast.error("Failed to revoke user approval"),
+        });
+    };
+
+    const handleToggleActive = (user: User) => {
+        // If deactivating, show confirmation dialog
+        if (user.is_active) {
+            setUserToToggle(user);
+            setToggleActiveDialogOpen(true);
+        } else {
+            // Activating - no confirmation needed
+            confirmToggleActive(user.id);
+        }
+    };
+
+    const confirmToggleActive = (userId: number) => {
+        setLoading(true);
+        router.post(accountsToggleActive(userId).url, {}, {
+            preserveScroll: true,
+            onFinish: () => {
+                setLoading(false);
+                setToggleActiveDialogOpen(false);
+                setUserToToggle(null);
+            },
         });
     };
 
@@ -274,6 +317,7 @@ export default function AccountIndex() {
         setSearch("");
         setRoleFilter("all");
         setStatusFilter("all");
+        setEmployeeStatusFilter("all");
         // Trigger a reload with cleared filters
         setLoading(true);
         router.get(accountsIndex().url, {}, {
@@ -287,7 +331,7 @@ export default function AccountIndex() {
 
     const handleManualRefresh = () => {
         setLoading(true);
-        router.get(accountsIndex().url, buildFilterParams(search, roleFilter, statusFilter), {
+        router.get(accountsIndex().url, buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter), {
             preserveState: true,
             preserveScroll: true,
             replace: true,
@@ -299,7 +343,7 @@ export default function AccountIndex() {
 
     const handlePageChange = (page: number) => {
         setLoading(true);
-        router.get(accountsIndex().url, { ...buildFilterParams(search, roleFilter, statusFilter), page }, {
+        router.get(accountsIndex().url, { ...buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter), page }, {
             preserveState: true,
             preserveScroll: true,
             only: ["users"],
@@ -390,13 +434,24 @@ export default function AccountIndex() {
 
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
                             <SelectTrigger className="w-full">
-                                <SelectValue placeholder="Filter by Status" />
+                                <SelectValue placeholder="Filter by Account Status" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
+                                <SelectItem value="all">All Account Statuses</SelectItem>
                                 <SelectItem value="active">Active</SelectItem>
                                 <SelectItem value="pending_deletion">Pending Deletion</SelectItem>
                                 <SelectItem value="deleted">Deleted</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Select value={employeeStatusFilter} onValueChange={setEmployeeStatusFilter}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Filter by Employee Status" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Employee Statuses</SelectItem>
+                                <SelectItem value="active">Active Employees</SelectItem>
+                                <SelectItem value="inactive">Inactive Employees</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -518,7 +573,8 @@ export default function AccountIndex() {
                                     <TableHead>Last Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
-                                    <TableHead>Status</TableHead>
+                                    <TableHead>Employee Status</TableHead>
+                                    <TableHead>Account Status</TableHead>
                                     <TableHead>Hired Date</TableHead>
                                     <TableHead>Created At</TableHead>
                                     <TableHead>Actions</TableHead>
@@ -559,6 +615,25 @@ export default function AccountIndex() {
                                                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
                                                     {user.role}
                                                 </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Can permission="accounts.edit">
+                                                        {!user.deleted_at && user.id !== currentUserId && (
+                                                            <Switch
+                                                                checked={user.is_active}
+                                                                onCheckedChange={() => handleToggleActive(user)}
+                                                                aria-label="Toggle employee active status"
+                                                            />
+                                                        )}
+                                                    </Can>
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${user.is_active
+                                                            ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                                            : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
+                                                        }`}>
+                                                        {user.is_active ? 'Active' : 'Inactive'}
+                                                    </span>
+                                                </div>
                                             </TableCell>
                                             <TableCell>
                                                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
@@ -672,7 +747,7 @@ export default function AccountIndex() {
                                 })}
                                 {users.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={11} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={12} className="py-8 text-center text-gray-500">
                                             No user accounts found
                                         </TableCell>
                                     </TableRow>
@@ -720,6 +795,23 @@ export default function AccountIndex() {
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
                                             {user.role}
                                         </span>
+                                        <div className="flex items-center gap-2">
+                                            <Can permission="accounts.edit">
+                                                {!user.deleted_at && user.id !== currentUserId && (
+                                                    <Switch
+                                                        checked={user.is_active}
+                                                        onCheckedChange={() => handleToggleActive(user)}
+                                                        aria-label="Toggle employee active status"
+                                                    />
+                                                )}
+                                            </Can>
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${user.is_active
+                                                    ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                                    : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
+                                                }`}>
+                                                {user.is_active ? 'Active' : 'Inactive'}
+                                            </span>
+                                        </div>
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
                                             {statusBadge.label}
                                         </span>
@@ -847,6 +939,38 @@ export default function AccountIndex() {
                         />
                     )}
                 </div>
+
+                {/* Toggle Active Confirmation Dialog */}
+                <AlertDialog open={toggleActiveDialogOpen} onOpenChange={setToggleActiveDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <UserX className="h-5 w-5 text-amber-500" />
+                                Deactivate Employee?
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                                {userToToggle && (
+                                    <>
+                                        Are you sure you want to deactivate <strong>{userToToggle.first_name} {userToToggle.last_name}</strong>?
+                                        <br /><br />
+                                        <span className="text-amber-600 dark:text-amber-400">
+                                            ⚠️ This will also deactivate all schedules assigned to this employee.
+                                        </span>
+                                    </>
+                                )}
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                                onClick={() => userToToggle && confirmToggleActive(userToToggle.id)}
+                                className="bg-amber-600 hover:bg-amber-700"
+                            >
+                                Deactivate
+                            </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </AppLayout>
     );
