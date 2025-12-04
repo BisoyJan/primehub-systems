@@ -48,7 +48,7 @@ export function TextAnimate({
     as: Component = "p",
     className,
     delay = 0,
-    duration = 3.5,
+    duration = 9,
 }: TextAnimateProps) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const MotionComponent = motion[Component as keyof typeof motion] as any;

@@ -2,16 +2,21 @@ import { useEffect, useState } from "react";
 import { TextAnimate } from "@/components/ui/text-animate";
 
 const motivationalQuotes = [
-    "Success is not final, failure is not fatal: it is the courage to continue that counts.",
-    "The only way to do great work is to love what you do.",
-    "Don't watch the clock; do what it does. Keep going.",
-    "The future depends on what you do today.",
-    "Believe you can and you're halfway there.",
-    "Success is walking from failure to failure with no loss of enthusiasm.",
-    "The only limit to our realization of tomorrow is our doubts of today.",
-    "Quality is not an act, it is a habit.",
-    "The best time to plant a tree was 20 years ago. The second best time is now.",
-    "Your work is going to fill a large part of your life, and the only way to be truly satisfied is to do what you believe is great work.",
+    "Your only limit is your mind. Push past the doubt; your potential is infinite. Start today, not tomorrow.",
+    "Consistency is quiet magic. Small, daily efforts compound into massive success. Trust the process and keep building.",
+    "Failure is just feedback. Learn from the fall, adjust your path, and rise stronger. Progress is not linear.",
+    "The best way to predict the future is to create it. Stop wishing and start doing. Action overcomes anxiety.",
+    "Don't wait for permission to shine. Be your own biggest cheerleader and step into the spotlight you deserve.",
+    "Gratitude fuels grit. Appreciate what you have while working for what you want. A thankful heart is powerful.",
+    "Choose courage over comfort. Growth lives outside your familiar zone. Embrace the challenge and expand your world.",
+    "Be kinder to yourself. Self-compassion is not a weakness; it's the foundation of unstoppable resilience.",
+    "Ideas are cheap. Execution is everything. Stop planning perfectly and start doing imperfectly. Get to work!",
+    "Your mindset is the master key. Change your thoughts, and you change your reality. Believe you can, and you will.",
+    "Let your passion be your purpose. When you love what you do, the journey becomes its own reward. Find your fire.",
+    "Don't compare your Chapter 1 to someone else's Chapter 20. Focus on your page, your pace, and your story.",
+    "Embrace the discomfort of change. That feeling is the sound of your spirit growing stronger. Keep moving forward.",
+    "Do one thing every day that scares you. Building bravery is a muscle. Flex it daily for a fearless life.",
+    "Strive for progress, not perfection. Small steps forward are still wins. Celebrate the journey, not just the goal."
 ];
 
 interface AnimatedQuotesProps {
@@ -34,7 +39,7 @@ export function AnimatedQuotes({ className, interval = 8000 }: AnimatedQuotesPro
 
     return (
         <div className="relative">
-            <svg className="absolute -left-4 -top-2 w-8 h-8 text-white/30" fill="currentColor" viewBox="0 0 32 32">
+            <svg className="absolute -left-4 -top-2 w-8 h-8 text-white/30 gap-5" fill="currentColor" viewBox="0 0 32 32">
                 <path d="M10 8c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8zm14 0c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8z" />
             </svg>
             <TextAnimate
@@ -42,11 +47,11 @@ export function AnimatedQuotes({ className, interval = 8000 }: AnimatedQuotesPro
                 animation="blurIn"
                 as="p"
                 className={`italic font-serif ${className}`}
-                duration={1.2}
+                duration={1.3}
             >
                 {`"${motivationalQuotes[currentQuote]}"`}
             </TextAnimate>
-            <svg className="absolute -right-4 -bottom-2 w-8 h-8 text-white/30 rotate-180" fill="currentColor" viewBox="0 0 32 32">
+            <svg className="absolute -right-4 -bottom-2 w-8 h-8 text-white/30 rotate-180 gap-3" fill="currentColor" viewBox="0 0 32 32">
                 <path d="M10 8c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8zm14 0c-3.3 0-6 2.7-6 6v10h8V14h-6c0-2.2 1.8-4 4-4V8z" />
             </svg>
         </div>
