@@ -141,16 +141,24 @@ class EmployeeScheduleController extends Controller
 
         $validated = $request->validate($rules);
 
-        // Check for duplicate schedule (same shift type, time in, time out for this user)
-        $existingSchedule = EmployeeSchedule::where('user_id', $validated['user_id'])
+        // Check for duplicate schedule (same site, shift type, time in, time out for this user)
+        $duplicateQuery = EmployeeSchedule::where('user_id', $validated['user_id'])
             ->where('shift_type', $validated['shift_type'])
             ->where('scheduled_time_in', $validated['scheduled_time_in'])
-            ->where('scheduled_time_out', $validated['scheduled_time_out'])
-            ->first();
+            ->where('scheduled_time_out', $validated['scheduled_time_out']);
+
+        // Check site_id (handle null values properly)
+        if (isset($validated['site_id']) && $validated['site_id']) {
+            $duplicateQuery->where('site_id', $validated['site_id']);
+        } else {
+            $duplicateQuery->whereNull('site_id');
+        }
+
+        $existingSchedule = $duplicateQuery->first();
 
         if ($existingSchedule) {
             throw ValidationException::withMessages([
-                'shift_type' => 'A schedule with the same shift type and times already exists for this employee.',
+                'shift_type' => 'A schedule with the same site, shift type, and times already exists for this employee.',
             ]);
         }
 
@@ -230,17 +238,25 @@ class EmployeeScheduleController extends Controller
 
         $validated = $request->validate($rules);
 
-        // Check for duplicate schedule (same shift type, time in, time out for this user, excluding current schedule)
-        $existingSchedule = EmployeeSchedule::where('user_id', $employeeSchedule->user_id)
+        // Check for duplicate schedule (same site, shift type, time in, time out for this user, excluding current schedule)
+        $duplicateQuery = EmployeeSchedule::where('user_id', $employeeSchedule->user_id)
             ->where('id', '!=', $employeeSchedule->id)
             ->where('shift_type', $validated['shift_type'])
             ->where('scheduled_time_in', $validated['scheduled_time_in'])
-            ->where('scheduled_time_out', $validated['scheduled_time_out'])
-            ->first();
+            ->where('scheduled_time_out', $validated['scheduled_time_out']);
+
+        // Check site_id (handle null values properly)
+        if (isset($validated['site_id']) && $validated['site_id']) {
+            $duplicateQuery->where('site_id', $validated['site_id']);
+        } else {
+            $duplicateQuery->whereNull('site_id');
+        }
+
+        $existingSchedule = $duplicateQuery->first();
 
         if ($existingSchedule) {
             throw ValidationException::withMessages([
-                'shift_type' => 'A schedule with the same shift type and times already exists for this employee.',
+                'shift_type' => 'A schedule with the same site, shift type, and times already exists for this employee.',
             ]);
         }
 
@@ -381,16 +397,24 @@ class EmployeeScheduleController extends Controller
         $validated['grace_period_minutes'] = 15; // Default grace period
         $validated['is_active'] = true;
 
-        // Check for duplicate schedule (same shift type, time in, time out) - safeguard
-        $existingSchedule = EmployeeSchedule::where('user_id', $validated['user_id'])
+        // Check for duplicate schedule (same site, shift type, time in, time out) - safeguard
+        $duplicateQuery = EmployeeSchedule::where('user_id', $validated['user_id'])
             ->where('shift_type', $validated['shift_type'])
             ->where('scheduled_time_in', $validated['scheduled_time_in'])
-            ->where('scheduled_time_out', $validated['scheduled_time_out'])
-            ->first();
+            ->where('scheduled_time_out', $validated['scheduled_time_out']);
+
+        // Check site_id (handle null values properly)
+        if (isset($validated['site_id']) && $validated['site_id']) {
+            $duplicateQuery->where('site_id', $validated['site_id']);
+        } else {
+            $duplicateQuery->whereNull('site_id');
+        }
+
+        $existingSchedule = $duplicateQuery->first();
 
         if ($existingSchedule) {
             throw ValidationException::withMessages([
-                'shift_type' => 'A schedule with the same shift type and times already exists.',
+                'shift_type' => 'A schedule with the same site, shift type, and times already exists.',
             ]);
         }
 
