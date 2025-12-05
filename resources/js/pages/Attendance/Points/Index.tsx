@@ -296,6 +296,25 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         handleFilter();
     };
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(
+                attendancePointsIndex().url,
+                buildFilterQuery(),
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                    only: ['points', 'stats'],
+                    onSuccess: () => setLastRefresh(new Date())
+                }
+            );
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [selectedUserId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
+
     const handleReset = () => {
         setSelectedUserId("");
         setUserSearchQuery("");

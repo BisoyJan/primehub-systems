@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
@@ -102,6 +102,30 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
         setLastRefresh(new Date());
         router.reload({ only: ['uploads'] });
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(
+                attendanceUploadsIndex().url,
+                {
+                    search: searchQuery,
+                    status: selectedStatus,
+                    date_from: dateFrom,
+                    date_to: dateTo,
+                },
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                    only: ['uploads'],
+                    onSuccess: () => setLastRefresh(new Date()),
+                }
+            );
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [searchQuery, selectedStatus, dateFrom, dateTo]);
 
     const handleFilter = () => {
         router.get(

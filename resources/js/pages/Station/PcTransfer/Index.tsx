@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Head, router, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { ArrowRight, Search, History, CheckSquare, List, RefreshCw } from 'lucide-react';
@@ -168,6 +168,21 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
     const handleManualRefresh = () => {
         requestWithFilters(buildFilterParams());
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(pcTransfersIndexRoute().url, buildFilterParams(), {
+                preserveScroll: true,
+                preserveState: true,
+                replace: true,
+                only: ['stations'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [search, siteFilter, campaignFilter]);
 
     const handleRemovePC = (station: Station) => {
         if (!station.pc_spec_id) {

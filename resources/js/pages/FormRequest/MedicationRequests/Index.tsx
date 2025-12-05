@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -134,6 +134,21 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const handleManualRefresh = () => {
         requestWithFilters(buildFilterParams());
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(medicationIndexRoute().url, buildFilterParams(), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['medicationRequests'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [search, status, medicationType]);
 
     const clearFilters = () => {
         setSearch('');

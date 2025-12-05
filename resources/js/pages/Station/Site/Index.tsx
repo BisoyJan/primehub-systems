@@ -104,6 +104,24 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
         });
     }, [debouncedSearch]);
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const params: Record<string, string> = {};
+            if (debouncedSearch) params.search = debouncedSearch;
+
+            router.get(sitesIndex().url, params, {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['sites'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [debouncedSearch]);
+
     // Add new site
     const handleAdd = () => {
         setEditSite(null);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { formatDistanceToNow } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
@@ -48,6 +48,18 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
             onSuccess: () => setLastRefresh(new Date()),
         });
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.reload({
+                only: ['notifications', 'unreadCount'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     const handleMarkAsRead = async (notificationId: number) => {
         try {

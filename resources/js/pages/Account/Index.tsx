@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { router, usePage, Link, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -131,6 +131,21 @@ export default function AccountIndex() {
     });
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading();
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(accountsIndex().url, buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ["users"],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [search, roleFilter, statusFilter, employeeStatusFilter]);
 
     const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search);
 
@@ -628,8 +643,8 @@ export default function AccountIndex() {
                                                         )}
                                                     </Can>
                                                     <span className={`px-3 py-1 rounded-full text-xs font-medium border ${user.is_active
-                                                            ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
-                                                            : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
+                                                        ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                                        : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
                                                         }`}>
                                                         {user.is_active ? 'Active' : 'Inactive'}
                                                     </span>
@@ -806,8 +821,8 @@ export default function AccountIndex() {
                                                 )}
                                             </Can>
                                             <span className={`px-2 py-1 rounded-full text-xs font-medium border ${user.is_active
-                                                    ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
-                                                    : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
+                                                ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                                : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
                                                 }`}>
                                                 {user.is_active ? 'Active' : 'Inactive'}
                                             </span>

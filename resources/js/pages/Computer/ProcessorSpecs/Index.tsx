@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Head, Link, useForm, usePage, router } from "@inertiajs/react";
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 
@@ -77,6 +77,18 @@ export default function Index() {
         setLastRefresh(new Date());
         router.reload({ only: ['processorspecs'] });
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.reload({
+                only: ['processorspecs'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, []);
 
     const handleFilter = () => {
         router.get(

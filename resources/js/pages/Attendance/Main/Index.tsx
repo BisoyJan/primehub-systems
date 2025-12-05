@@ -368,6 +368,34 @@ export default function AttendanceIndex() {
         handleSearch();
     };
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const params: Record<string, string> = {};
+
+            if (isRestrictedUser && userId) {
+                params.user_id = userId.toString();
+            } else if (selectedUserId) {
+                params.user_id = selectedUserId;
+            }
+
+            if (statusFilter !== "all") params.status = statusFilter;
+            if (startDate) params.start_date = startDate;
+            if (endDate) params.end_date = endDate;
+            if (needsVerification) params.needs_verification = "1";
+
+            router.get(attendanceIndex().url, params, {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['attendances'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [selectedUserId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
+
     const showClearFilters =
         statusFilter !== "all" ||
         Boolean(startDate) ||

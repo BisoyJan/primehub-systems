@@ -231,6 +231,28 @@ export default function EmployeeSchedulesIndex() {
         handleSearch();
     };
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const params: Record<string, string> = {};
+            if (search) params.search = search;
+            if (userFilter !== "all") params.user_id = userFilter;
+            if (campaignFilter !== "all") params.campaign_id = campaignFilter;
+            if (statusFilter !== "all") params.is_active = statusFilter;
+            if (activeOnly) params.active_only = "1";
+
+            router.get(employeeSchedulesIndex().url, params, {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['schedules'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [search, userFilter, campaignFilter, statusFilter, activeOnly]);
+
     const showClearFilters =
         userFilter !== "all" ||
         campaignFilter !== "all" ||
@@ -571,10 +593,10 @@ export default function EmployeeSchedulesIndex() {
                             <div
                                 key={schedule.id}
                                 className={`border rounded-lg p-4 shadow-sm space-y-3 ${hasMultipleSchedules
-                                        ? isEvenGroup
-                                            ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
-                                            : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
-                                        : "bg-card"
+                                    ? isEvenGroup
+                                        ? "bg-blue-50 dark:bg-blue-950/30 border-blue-200 dark:border-blue-800"
+                                        : "bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800"
+                                    : "bg-card"
                                     }`}
                             >
                                 <div className="flex justify-between items-start">

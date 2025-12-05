@@ -78,6 +78,19 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
         }
     }, [debouncedSearch, filters.search, event]);
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(
+                activityLogs.index().url,
+                { search: debouncedSearch, event: event === 'all' ? '' : event },
+                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'] }
+            );
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [debouncedSearch, event]);
+
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         isUserTyping.current = true;
         setSearch(e.target.value);

@@ -334,6 +334,21 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         requestWithFilters(buildFilterParams(), false);
     };
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(pcMaintenanceIndexRoute().url, buildFilterParams(), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['maintenances', 'allMatchingIds'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [search, status, siteFilter]);
+
     const handleDelete = (id: number) => {
         setIsMutating(true);
         router.delete(pcMaintenanceDestroyRoute(id).url, {

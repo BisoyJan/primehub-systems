@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import { format, parseISO } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
@@ -149,6 +149,21 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
     const handleManualRefresh = () => {
         requestWithFilters(buildFilterParams());
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(leaveIndexRoute().url, buildFilterParams(), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['leaveRequests', 'hasPendingRequests'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [filterStatus, filterType]);
 
     const clearFilters = () => {
         setFilterStatus('all');

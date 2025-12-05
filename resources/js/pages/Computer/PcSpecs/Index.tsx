@@ -129,6 +129,18 @@ export default function Index() {
         router.reload({ only: ['pcspecs'] });
     };
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.reload({
+                only: ['pcspecs'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, []);
+
     const handleFilter = () => {
         router.get(
             pcSpecIndex().url,

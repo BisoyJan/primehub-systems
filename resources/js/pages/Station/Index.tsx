@@ -388,6 +388,27 @@ export default function StationIndex() {
         });
     };
 
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const params: Record<string, string | number> = {};
+            if (debouncedSearch) params.search = debouncedSearch;
+            if (siteFilter && siteFilter !== "all") params.site = siteFilter;
+            if (campaignFilter && campaignFilter !== "all") params.campaign = campaignFilter;
+            if (statusFilter && statusFilter !== "all") params.status = statusFilter;
+
+            router.get(stationsIndexRoute().url, params, {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['stations'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [debouncedSearch, siteFilter, campaignFilter, statusFilter]);
+
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
         return () => clearTimeout(timer);

@@ -87,7 +87,7 @@ export default function Register() {
                                     tabIndex={4}
                                     autoComplete="email"
                                     name="email"
-                                    placeholder="email@example.com"
+                                    placeholder="email@primehubmail.com"
                                 />
                                 <InputError message={errors.email} />
                             </div>

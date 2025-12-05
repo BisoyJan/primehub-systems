@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -106,6 +106,21 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const handleManualRefresh = () => {
         requestWithFilters(buildFilterParams());
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(campaignsIndexRoute().url, buildFilterParams(), {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ['campaigns'],
+                onSuccess: () => setLastRefresh(new Date()),
+            });
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [search]);
 
     const openCreateDialog = () => {
         setEditingCampaign(null);

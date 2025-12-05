@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
@@ -181,6 +181,31 @@ export default function BiometricRecordsIndex() {
     const handleManualRefresh = () => {
         handleFilter();
     };
+
+    // Auto-refresh every 30 seconds
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.get(
+                biometricRecordsIndex().url,
+                {
+                    search: searchTerm,
+                    user_id: selectedUserId,
+                    site_id: selectedSiteId,
+                    date_from: dateFrom,
+                    date_to: dateTo
+                },
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                    only: ['records', 'stats'],
+                    onSuccess: () => setLastRefresh(new Date())
+                }
+            );
+        }, 30000);
+
+        return () => clearInterval(interval);
+    }, [searchTerm, selectedUserId, selectedSiteId, dateFrom, dateTo]);
 
     const handleReset = () => {
         setSearchTerm("");
