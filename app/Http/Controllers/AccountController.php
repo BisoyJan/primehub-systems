@@ -33,11 +33,17 @@ class AccountController extends Controller
         // Search by name or email
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
-                $q->where('name', 'like', "%{$search}%")
-                  ->orWhere('first_name', 'like', "%{$search}%")
+                $q->where('first_name', 'like', "%{$search}%")
+                  ->orWhere('middle_name', 'like', "%{$search}%")
                   ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%");
+                  ->orWhere('email', 'like', "%{$search}%")
+                  ->orWhereRaw("CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name) LIKE ?", ["%{$search}%"]);
             });
+        }
+
+        // Filter by user_id (for employee dropdown)
+        if ($userId = $request->query('user_id')) {
+            $query->where('id', $userId);
         }
 
         // Filter by role
@@ -67,6 +73,17 @@ class AccountController extends Controller
             ->paginate(25)
             ->withQueryString();
 
+        // Get all users for employee dropdown (only basic info)
+        $allUsers = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn ($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ]);
+
         return Inertia::render('Account/Index', [
             'users' => [
                 'data' => $users->items(),
@@ -78,11 +95,13 @@ class AccountController extends Controller
                     'total' => $users->total(),
                 ],
             ],
+            'allUsers' => $allUsers,
             'filters' => [
                 'search' => $search ?? '',
                 'role' => $role ?? '',
                 'status' => $status ?? '',
                 'employee_status' => $employeeStatus ?? '',
+                'user_id' => $userId ?? '',
             ],
         ]);
     }

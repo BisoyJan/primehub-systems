@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import {
     index as accountsIndex,
@@ -23,7 +25,7 @@ import {
     bulkUnapprove as accountsBulkUnapprove,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -61,6 +63,12 @@ interface User {
     deletion_confirmed_at: string | null;
 }
 
+interface UserOption {
+    id: number;
+    name: string;
+    email: string;
+}
+
 interface Meta {
     current_page: number;
     last_page: number;
@@ -78,12 +86,16 @@ interface Filters {
     role: string;
     status: string;
     employee_status: string;
+    user_id: string;
 }
 
 export default function AccountIndex() {
-    const { users, filters } = usePage<{ users: UsersPayload; filters: Filters }>().props;
+    const { users, allUsers = [], filters } = usePage<{ users: UsersPayload; allUsers: UserOption[]; filters: Filters }>().props;
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(filters.search || "");
+    const [selectedUserId, setSelectedUserId] = useState(filters.user_id || "");
+    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState("");
     const [roleFilter, setRoleFilter] = useState(filters.role || "all");
     const [statusFilter, setStatusFilter] = useState(filters.status || "all");
     const [employeeStatusFilter, setEmployeeStatusFilter] = useState(filters.employee_status || "all");
@@ -133,12 +145,22 @@ export default function AccountIndex() {
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading();
 
+    // Filter users based on search query for the popover
+    const filteredUsers = useMemo(() => {
+        if (!userSearchQuery) return allUsers;
+        const query = userSearchQuery.toLowerCase();
+        return allUsers.filter(user =>
+            user.name.toLowerCase().includes(query) ||
+            user.email.toLowerCase().includes(query)
+        );
+    }, [allUsers, userSearchQuery]);
+
     // Auto-refresh every 30 seconds (only when enabled)
     useEffect(() => {
         if (!autoRefreshEnabled) return;
 
         const interval = setInterval(() => {
-            router.get(accountsIndex().url, buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter), {
+            router.get(accountsIndex().url, buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter), {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
@@ -148,12 +170,13 @@ export default function AccountIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, roleFilter, statusFilter, employeeStatusFilter]);
+    }, [autoRefreshEnabled, search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter]);
 
-    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search);
+    const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search) || Boolean(selectedUserId);
 
     const buildFilterParams = (
         searchValue: string,
+        userIdValue: string,
         roleValue: string,
         statusValue: string,
         employeeStatusValue: string,
@@ -161,6 +184,7 @@ export default function AccountIndex() {
     ) => {
         const params: Record<string, string | number> = {};
         if (searchValue) params.search = searchValue;
+        if (userIdValue) params.user_id = userIdValue;
         if (roleValue && roleValue !== "all") params.role = roleValue;
         if (statusValue && statusValue !== "all") params.status = statusValue;
         if (employeeStatusValue && employeeStatusValue !== "all") params.employee_status = employeeStatusValue;
@@ -169,7 +193,7 @@ export default function AccountIndex() {
     };
 
     const handleSearch = () => {
-        const params = buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter, { resetPage: true });
+        const params = buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter, { resetPage: true });
         setLoading(true);
         router.get(accountsIndex().url, params, {
             preserveState: true,
@@ -333,6 +357,8 @@ export default function AccountIndex() {
 
     const clearFilters = () => {
         setSearch("");
+        setSelectedUserId("");
+        setUserSearchQuery("");
         setRoleFilter("all");
         setStatusFilter("all");
         setEmployeeStatusFilter("all");
@@ -349,7 +375,7 @@ export default function AccountIndex() {
 
     const handleManualRefresh = () => {
         setLoading(true);
-        router.get(accountsIndex().url, buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter), {
+        router.get(accountsIndex().url, buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter), {
             preserveState: true,
             preserveScroll: true,
             replace: true,
@@ -361,7 +387,7 @@ export default function AccountIndex() {
 
     const handlePageChange = (page: number) => {
         setLoading(true);
-        router.get(accountsIndex().url, { ...buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter), page }, {
+        router.get(accountsIndex().url, { ...buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter), page }, {
             preserveState: true,
             preserveScroll: true,
             only: ["users"],
@@ -426,15 +452,75 @@ export default function AccountIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)]">
-                        <Input
-                            type="search"
-                            placeholder="Search by name or email..."
-                            value={search}
-                            onChange={e => setSearch(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                            className="w-full"
-                        />
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
+                        <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={isUserPopoverOpen}
+                                    className="w-full justify-between font-normal"
+                                >
+                                    <span className="truncate">
+                                        {selectedUserId
+                                            ? allUsers.find(u => u.id.toString() === selectedUserId)?.name || "Select employee..."
+                                            : "All Employees"}
+                                    </span>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start">
+                                <Command shouldFilter={false}>
+                                    <CommandInput
+                                        placeholder="Search employee..."
+                                        value={userSearchQuery}
+                                        onValueChange={setUserSearchQuery}
+                                    />
+                                    <CommandList>
+                                        <CommandEmpty>No employee found.</CommandEmpty>
+                                        <CommandGroup>
+                                            <CommandItem
+                                                value="all"
+                                                onSelect={() => {
+                                                    setSelectedUserId("");
+                                                    setIsUserPopoverOpen(false);
+                                                    setUserSearchQuery("");
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                <Check
+                                                    className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"}`}
+                                                />
+                                                All Employees
+                                            </CommandItem>
+                                            {filteredUsers.map((user) => (
+                                                <CommandItem
+                                                    key={user.id}
+                                                    value={user.name}
+                                                    onSelect={() => {
+                                                        setSelectedUserId(user.id.toString());
+                                                        setIsUserPopoverOpen(false);
+                                                        setUserSearchQuery("");
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${selectedUserId === user.id.toString()
+                                                            ? "opacity-100"
+                                                            : "opacity-0"
+                                                            }`}
+                                                    />
+                                                    <div className="flex flex-col">
+                                                        <span>{user.name}</span>
+                                                        <span className="text-xs text-muted-foreground">{user.email}</span>
+                                                    </div>
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
 
                         <Select value={roleFilter} onValueChange={setRoleFilter}>
                             <SelectTrigger className="w-full">
@@ -472,6 +558,15 @@ export default function AccountIndex() {
                                 <SelectItem value="inactive">Inactive Employees</SelectItem>
                             </SelectContent>
                         </Select>
+
+                        <Input
+                            type="search"
+                            placeholder="Search by name or email..."
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                            className="w-full"
+                        />
                     </div>
 
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
