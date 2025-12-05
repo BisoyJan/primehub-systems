@@ -13,7 +13,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, Eye, Trash2, RefreshCw, Filter } from 'lucide-react';
+import { Plus, Search, Eye, Trash2, RefreshCw, Filter, Play, Pause } from 'lucide-react';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -73,6 +73,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const [medicationType, setMedicationType] = useState(filters.medication_type || 'all');
     const [localLoading, setLocalLoading] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const showClearFilters = Boolean(search) || status !== 'all' || medicationType !== 'all';
 
@@ -137,6 +138,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(medicationIndexRoute().url, buildFilterParams(), {
                 preserveState: true,
@@ -148,7 +150,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [search, status, medicationType]);
+    }, [autoRefreshEnabled, search, status, medicationType]);
 
     const clearFilters = () => {
         setSearch('');
@@ -226,7 +228,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                             </Select>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                             <Button variant="outline" onClick={handleSearch} className="flex-1 sm:flex-none">
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
@@ -238,10 +240,19 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
 
                             <Can permission="medication_requests.create">
                                 <Link href={medicationCreateRoute().url} className="flex-1 sm:flex-none">

@@ -22,7 +22,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, RefreshCw, Search } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, RefreshCw, Search, Play, Pause } from "lucide-react";
 import {
     index as employeeSchedulesIndex,
     create as employeeSchedulesCreate,
@@ -194,6 +194,7 @@ export default function EmployeeSchedulesIndex() {
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
     const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Update local state when filters prop changes (e.g., when navigating back)
     useEffect(() => {
@@ -233,6 +234,7 @@ export default function EmployeeSchedulesIndex() {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             const params: Record<string, string> = {};
             if (search) params.search = search;
@@ -251,7 +253,7 @@ export default function EmployeeSchedulesIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [search, userFilter, campaignFilter, statusFilter, activeOnly]);
+    }, [autoRefreshEnabled, search, userFilter, campaignFilter, statusFilter, activeOnly]);
 
     const showClearFilters =
         userFilter !== "all" ||
@@ -446,7 +448,7 @@ export default function EmployeeSchedulesIndex() {
                             </Button>
                         </Can>
 
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:flex-1">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:flex-1">
                             <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
                                 <Search className="mr-2 h-4 w-4" />
                                 Apply Filters
@@ -458,10 +460,19 @@ export default function EmployeeSchedulesIndex() {
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} className="w-full sm:w-auto">
-                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
+                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>

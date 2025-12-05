@@ -1,6 +1,6 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useState, useMemo, useEffect } from 'react';
-import { ArrowLeft, ArrowRight, Clock, RefreshCw } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Clock, RefreshCw, Play, Pause } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -70,6 +70,7 @@ export default function History({ transfers }: PageProps) {
     const isPageLoading = usePageLoading();
 
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const summary = useMemo(() => {
         const showingStart = transfers.data.length > 0
@@ -104,6 +105,7 @@ export default function History({ transfers }: PageProps) {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(pcTransfersHistoryRoute().url, {}, {
                 preserveScroll: true,
@@ -115,7 +117,7 @@ export default function History({ transfers }: PageProps) {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [autoRefreshEnabled]);
 
     function getTransferTypeVariant(type: string): 'default' | 'secondary' | 'destructive' | 'outline' {
         switch (type) {
@@ -142,9 +144,16 @@ export default function History({ transfers }: PageProps) {
                     description="Complete log of assignments, swaps, and removals"
                 >
                     <div className="flex flex-wrap items-center gap-2">
-                        <Button variant="ghost" onClick={handleRefresh} size="sm">
-                            <RefreshCw className="h-4 w-4 mr-2" />
-                            Refresh
+                        <Button variant="ghost" size="icon" onClick={handleRefresh} title="Refresh">
+                            <RefreshCw className="h-4 w-4" />
+                        </Button>
+                        <Button
+                            variant={autoRefreshEnabled ? "default" : "ghost"}
+                            size="icon"
+                            onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                            title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                        >
+                            {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                         </Button>
                         <Link href={pcTransfersIndexRoute().url}>
                             <Button variant="outline" size="sm">

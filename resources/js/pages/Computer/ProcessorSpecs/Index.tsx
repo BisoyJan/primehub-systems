@@ -15,7 +15,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { RefreshCw, Search, Filter, Plus } from "lucide-react";
+import { RefreshCw, Search, Filter, Plus, Play, Pause } from "lucide-react";
 
 // New reusable components and hooks
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -72,6 +72,7 @@ export default function Index() {
 
     const [searchQuery, setSearchQuery] = useState(initialSearch || "");
     const [lastRefresh, setLastRefresh] = useState(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const handleManualRefresh = () => {
         setLastRefresh(new Date());
@@ -80,6 +81,7 @@ export default function Index() {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.reload({
                 only: ['processorspecs'],
@@ -88,7 +90,7 @@ export default function Index() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [autoRefreshEnabled]);
 
     const handleFilter = () => {
         router.get(
@@ -140,7 +142,7 @@ export default function Index() {
                             </div>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                             <Button onClick={handleFilter} className="flex-1 sm:flex-none">
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
@@ -148,9 +150,19 @@ export default function Index() {
                             <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
                                 Reset
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
-                                <RefreshCw className="h-4 w-4" />
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                             {can("hardware.create") && (
                                 <Link href={create.url()}>
                                     <Button className="flex-1 sm:flex-none">

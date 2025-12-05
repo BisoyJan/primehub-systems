@@ -11,7 +11,7 @@ import { Can } from '@/components/authorization';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { Search, RefreshCw, Plus, Filter } from 'lucide-react';
+import { Search, RefreshCw, Plus, Filter, Play, Pause } from 'lucide-react';
 import {
     index as campaignsIndexRoute,
     store as campaignsStoreRoute,
@@ -62,6 +62,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
     const [search, setSearch] = useState(filters.search || '');
     const [isFilterLoading, setIsFilterLoading] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingCampaign, setEditingCampaign] = useState<Campaign | null>(null);
@@ -109,6 +110,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(campaignsIndexRoute().url, buildFilterParams(), {
                 preserveState: true,
@@ -120,7 +122,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [search]);
+    }, [autoRefreshEnabled, search]);
 
     const openCreateDialog = () => {
         setEditingCampaign(null);
@@ -272,7 +274,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                             </div>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                             <Button variant="outline" onClick={handleApplyFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
@@ -284,10 +286,19 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} disabled={isFilterLoading} className="flex-1 sm:flex-none">
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={isFilterLoading} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
 
                             <Can permission="campaigns.create">
                                 <Button onClick={openCreateDialog} className="flex-1 sm:flex-none">

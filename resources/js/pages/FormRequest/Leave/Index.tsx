@@ -30,7 +30,7 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -111,6 +111,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const paginationMeta: PaginationMeta = leaveRequests.meta || {
         current_page: 1,
@@ -152,6 +153,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(leaveIndexRoute().url, buildFilterParams(), {
                 preserveState: true,
@@ -163,7 +165,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [filterStatus, filterType]);
+    }, [autoRefreshEnabled, filterStatus, filterType]);
 
     const clearFilters = () => {
         setFilterStatus('all');
@@ -327,7 +329,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                             </Select>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                             <Button variant="outline" onClick={handleFilter} className="flex-1 sm:flex-none">
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
@@ -339,10 +341,19 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
 
                             <Can permission="leave.create">
                                 <Link href={leaveCreateRoute().url} onClick={handleRequestLeaveClick} className="flex-1 sm:flex-none">

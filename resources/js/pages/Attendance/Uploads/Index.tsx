@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { FileText, AlertTriangle, CheckCircle, Clock, XCircle, Eye, RefreshCw, Search, Filter } from "lucide-react";
+import { FileText, AlertTriangle, CheckCircle, Clock, XCircle, Eye, RefreshCw, Search, Filter, Play, Pause } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { index as attendanceUploadsIndex, show as attendanceUploadsShow } from "@/routes/attendance-uploads";
 
@@ -97,6 +97,7 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
     const [lastRefresh, setLastRefresh] = useState(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const handleManualRefresh = () => {
         setLastRefresh(new Date());
@@ -105,6 +106,7 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(
                 attendanceUploadsIndex().url,
@@ -125,7 +127,7 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [searchQuery, selectedStatus, dateFrom, dateTo]);
+    }, [autoRefreshEnabled, searchQuery, selectedStatus, dateFrom, dateTo]);
 
     const handleFilter = () => {
         router.get(
@@ -243,7 +245,7 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
                             </div>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                             <Button onClick={handleFilter} className="flex-1 sm:flex-none">
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
@@ -251,9 +253,19 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
                             <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
                                 Reset
                             </Button>
-                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
-                                <RefreshCw className="h-4 w-4" />
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                         </div>
                     </div>
 

@@ -43,7 +43,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2 } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
@@ -219,6 +219,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const [isViolationDetailsOpen, setIsViolationDetailsOpen] = useState(false);
     const [selectedViolationPoint, setSelectedViolationPoint] = useState<AttendancePoint | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Manual entry state
     const [isManualEntryOpen, setIsManualEntryOpen] = useState(false);
@@ -298,6 +299,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(
                 attendancePointsIndex().url,
@@ -313,7 +315,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [selectedUserId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
+    }, [autoRefreshEnabled, selectedUserId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
 
     const handleReset = () => {
         setSelectedUserId("");
@@ -945,22 +947,31 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             </div>
                         </div>
 
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                            <Button variant="default" onClick={handleFilter} className="w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-3 sm:flex-row sm:items-center sm:justify-end">
+                            <Button variant="default" onClick={handleFilter} className="flex-1 sm:flex-none">
                                 <Search className="mr-2 h-4 w-4" />
                                 Apply Filters
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
+                                <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
                                     Clear Filters
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} className="w-full sm:w-auto">
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -23,7 +23,7 @@ import {
     bulkUnapprove as accountsBulkUnapprove,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -88,6 +88,7 @@ export default function AccountIndex() {
     const [statusFilter, setStatusFilter] = useState(filters.status || "all");
     const [employeeStatusFilter, setEmployeeStatusFilter] = useState(filters.employee_status || "all");
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [selectedApproveIds, setSelectedApproveIds] = useState<number[]>([]);
     const [selectedRevokeIds, setSelectedRevokeIds] = useState<number[]>([]);
     const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
@@ -132,8 +133,10 @@ export default function AccountIndex() {
     useFlashMessage(); // Automatically handles flash messages
     const isPageLoading = usePageLoading();
 
-    // Auto-refresh every 30 seconds
+    // Auto-refresh every 30 seconds (only when enabled)
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
+
         const interval = setInterval(() => {
             router.get(accountsIndex().url, buildFilterParams(search, roleFilter, statusFilter, employeeStatusFilter), {
                 preserveState: true,
@@ -145,7 +148,7 @@ export default function AccountIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [search, roleFilter, statusFilter, employeeStatusFilter]);
+    }, [autoRefreshEnabled, search, roleFilter, statusFilter, employeeStatusFilter]);
 
     const showClearFilters = roleFilter !== "all" || statusFilter !== "all" || employeeStatusFilter !== "all" || Boolean(search);
 
@@ -524,7 +527,7 @@ export default function AccountIndex() {
                             </Can>
                         </div>
 
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:flex-1">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-end sm:flex-1">
                             <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
                                 <Search className="mr-2 h-4 w-4" />
                                 Apply Filters
@@ -536,10 +539,20 @@ export default function AccountIndex() {
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} className="w-full sm:w-auto">
-                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} size="icon" title="Refresh">
+                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                </Button>
+
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    size="icon"
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -693,24 +706,41 @@ export default function AccountIndex() {
                                                             </Can>
                                                         </>
                                                     ) : isDeleted(user) ? (
-                                                        <HasRole role={['Super Admin', 'Admin', 'IT']}>
-                                                            <DeleteConfirmDialog
-                                                                onConfirm={() => handleForceDelete(user.id)}
-                                                                title="Permanently Delete Account"
-                                                                description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
-                                                                disabled={loading || user.id === currentUserId}
-                                                                trigger={
-                                                                    <Button
-                                                                        variant="destructive"
-                                                                        size="sm"
-                                                                        disabled={loading || user.id === currentUserId}
-                                                                    >
-                                                                        <XCircle className="mr-1 h-4 w-4" />
-                                                                        Permanently Delete
-                                                                    </Button>
-                                                                }
-                                                            />
-                                                        </HasRole>
+                                                        <>
+                                                            {/* Restore Button for deleted accounts */}
+                                                            <HasRole role={['Super Admin', 'Admin', 'HR', 'IT']}>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="sm"
+                                                                    onClick={() => handleRestore(user.id)}
+                                                                    disabled={loading}
+                                                                    className="text-green-600 hover:text-green-700 border-green-300"
+                                                                >
+                                                                    <RotateCcw className="mr-1 h-4 w-4" />
+                                                                    Restore
+                                                                </Button>
+                                                            </HasRole>
+
+                                                            {/* Permanently Delete Button */}
+                                                            <HasRole role={['Super Admin', 'Admin', 'IT']}>
+                                                                <DeleteConfirmDialog
+                                                                    onConfirm={() => handleForceDelete(user.id)}
+                                                                    title="Permanently Delete Account"
+                                                                    description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
+                                                                    disabled={loading || user.id === currentUserId}
+                                                                    trigger={
+                                                                        <Button
+                                                                            variant="destructive"
+                                                                            size="sm"
+                                                                            disabled={loading || user.id === currentUserId}
+                                                                        >
+                                                                            <XCircle className="mr-1 h-4 w-4" />
+                                                                            Permanently Delete
+                                                                        </Button>
+                                                                    }
+                                                                />
+                                                            </HasRole>
+                                                        </>
                                                     ) : (
                                                         <>
                                                             <Can permission="accounts.edit">
@@ -867,25 +897,42 @@ export default function AccountIndex() {
                                             </Can>
                                         </>
                                     ) : isDeleted(user) ? (
-                                        <HasRole role={['Super Admin', 'Admin', 'IT']}>
-                                            <DeleteConfirmDialog
-                                                onConfirm={() => handleForceDelete(user.id)}
-                                                title="Permanently Delete Account"
-                                                description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
-                                                disabled={loading || user.id === currentUserId}
-                                                trigger={
-                                                    <Button
-                                                        variant="destructive"
-                                                        size="sm"
-                                                        className="w-full"
-                                                        disabled={loading || user.id === currentUserId}
-                                                    >
-                                                        <XCircle className="mr-1 h-4 w-4" />
-                                                        Permanently Delete
-                                                    </Button>
-                                                }
-                                            />
-                                        </HasRole>
+                                        <>
+                                            {/* Restore Button for deleted accounts */}
+                                            <HasRole role={['Super Admin', 'Admin', 'HR', 'IT']}>
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handleRestore(user.id)}
+                                                    disabled={loading}
+                                                    className="w-full text-green-600 hover:text-green-700 border-green-300"
+                                                >
+                                                    <RotateCcw className="mr-1 h-4 w-4" />
+                                                    Restore Account
+                                                </Button>
+                                            </HasRole>
+
+                                            {/* Permanently Delete Button */}
+                                            <HasRole role={['Super Admin', 'Admin', 'IT']}>
+                                                <DeleteConfirmDialog
+                                                    onConfirm={() => handleForceDelete(user.id)}
+                                                    title="Permanently Delete Account"
+                                                    description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
+                                                    disabled={loading || user.id === currentUserId}
+                                                    trigger={
+                                                        <Button
+                                                            variant="destructive"
+                                                            size="sm"
+                                                            className="w-full"
+                                                            disabled={loading || user.id === currentUserId}
+                                                        >
+                                                            <XCircle className="mr-1 h-4 w-4" />
+                                                            Permanently Delete
+                                                        </Button>
+                                                    }
+                                                />
+                                            </HasRole>
+                                        </>
                                     ) : (
                                         <>
                                             <div className="flex gap-2">

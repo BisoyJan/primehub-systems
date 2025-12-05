@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rules\Password;
@@ -254,13 +255,20 @@ class AccountController extends Controller
         }
 
         try {
-            $account->update([
-                'deletion_confirmed_at' => now(),
-                'deletion_confirmed_by' => auth()->id(),
-            ]);
+            DB::transaction(function () use ($account) {
+                // Confirm the account deletion and set employee status to inactive
+                $account->update([
+                    'deletion_confirmed_at' => now(),
+                    'deletion_confirmed_by' => auth()->id(),
+                    'is_active' => false,
+                ]);
+
+                // Deactivate all employee schedules for this user
+                $account->employeeSchedules()->update(['is_active' => false]);
+            });
 
             return back()->with('flash', [
-                'message' => 'User account deletion has been confirmed',
+                'message' => 'User account deletion has been confirmed, employee and schedules deactivated',
                 'type' => 'success'
             ]);
         } catch (\Exception $e) {
@@ -273,7 +281,8 @@ class AccountController extends Controller
     }
 
     /**
-     * Restore a soft-deleted account (admin action - before confirmation).
+     * Restore a soft-deleted account (admin action).
+     * Can restore both pending deletion and confirmed deletion accounts.
      */
     public function restore(User $account)
     {
@@ -284,14 +293,6 @@ class AccountController extends Controller
             return back()->with('flash', [
                 'message' => 'This account is not deleted',
                 'type' => 'info'
-            ]);
-        }
-
-        // Only allow restoring if deletion is not confirmed
-        if ($account->isDeletionConfirmed()) {
-            return back()->with('flash', [
-                'message' => 'Cannot restore an account that has confirmed deletion. User must reactivate their account.',
-                'type' => 'error'
             ]);
         }
 

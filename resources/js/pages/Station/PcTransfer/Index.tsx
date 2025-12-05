@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Head, router, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
-import { ArrowRight, Search, History, CheckSquare, List, RefreshCw } from 'lucide-react';
+import { ArrowRight, Search, History, CheckSquare, List, RefreshCw, Play, Pause } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -123,12 +123,13 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
     const [isFilterLoading, setIsFilterLoading] = useState(false);
     const [isMutating, setIsMutating] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [bulkMode, setBulkMode] = useState(false);
     const [selectedStations, setSelectedStations] = useState<Set<number>>(new Set());
 
     const showClearFilters = Boolean(search.trim()) || siteFilter !== 'all' || campaignFilter !== 'all';
 
-    const buildFilterParams = () => {
+    const buildFilterParams = useCallback(() => {
         const params: Record<string, string> = {};
         if (search.trim()) {
             params.search = search.trim();
@@ -140,7 +141,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
             params.campaign = campaignFilter;
         }
         return params;
-    };
+    }, [search, siteFilter, campaignFilter]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         setIsFilterLoading(true);
@@ -171,6 +172,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(pcTransfersIndexRoute().url, buildFilterParams(), {
                 preserveScroll: true,
@@ -182,7 +184,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [search, siteFilter, campaignFilter]);
+    }, [autoRefreshEnabled, buildFilterParams]);
 
     const handleRemovePC = (station: Station) => {
         if (!station.pc_spec_id) {
@@ -367,15 +369,25 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                                         Clear Filters
                                     </Button>
                                 )}
-                                <Button
-                                    variant="ghost"
-                                    onClick={handleManualRefresh}
-                                    disabled={isFilterLoading}
-                                    className="w-full md:w-auto"
-                                >
-                                    <RefreshCw className="h-4 w-4 mr-2" />
-                                    Refresh
-                                </Button>
+                                <div className="flex gap-2 justify-end">
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={handleManualRefresh}
+                                        disabled={isFilterLoading}
+                                        title="Refresh"
+                                    >
+                                        <RefreshCw className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant={autoRefreshEnabled ? "default" : "ghost"}
+                                        size="icon"
+                                        onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                        title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    >
+                                        {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </CardContent>

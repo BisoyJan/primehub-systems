@@ -18,7 +18,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { toast } from "sonner";
-import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Search, Download } from "lucide-react";
+import { Eye, AlertTriangle, Plus, CheckSquare, RefreshCw, Search, Download, Play, Pause } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { transferPage } from '@/routes/pc-transfers';
@@ -378,6 +378,7 @@ export default function StationIndex() {
     const [issueText, setIssueText] = useState("");
     const [selectedEmptyStations, setSelectedEmptyStations] = useState<number[]>([]);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const handleManualRefresh = () => {
         setLoading(true);
@@ -388,8 +389,10 @@ export default function StationIndex() {
         });
     };
 
-    // Auto-refresh every 30 seconds
+    // Auto-refresh every 30 seconds (only when enabled)
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
+
         const interval = setInterval(() => {
             const params: Record<string, string | number> = {};
             if (debouncedSearch) params.search = debouncedSearch;
@@ -407,7 +410,7 @@ export default function StationIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [debouncedSearch, siteFilter, campaignFilter, statusFilter]);
+    }, [autoRefreshEnabled, debouncedSearch, siteFilter, campaignFilter, statusFilter]);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -572,10 +575,20 @@ export default function StationIndex() {
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" onClick={handleManualRefresh} size="icon" title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    size="icon"
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
 
                             <Can permission="stations.create">
                                 <Button onClick={() => router.get(stationsCreateRoute().url)} className="flex-1 sm:flex-none">

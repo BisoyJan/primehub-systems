@@ -20,7 +20,7 @@ import { Input } from "@/components/ui/input";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Plus, Edit, Trash2, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Search } from "lucide-react";
+import { Plus, Edit, Trash2, CheckCircle, Clock, XCircle, AlertCircle, RefreshCw, Search, Play, Pause } from "lucide-react";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -181,6 +181,7 @@ export default function ItConcernsIndex() {
     const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
     const [priorityFilter, setPriorityFilter] = useState(appliedFilters.priority || "all");
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     useEffect(() => {
         setSearch(appliedFilters.search || "");
@@ -209,6 +210,7 @@ export default function ItConcernsIndex() {
 
     // Auto-refresh every 30 seconds to check for new concerns
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             const params: Record<string, string> = {};
             if (debouncedSearch) params.search = debouncedSearch;
@@ -230,7 +232,7 @@ export default function ItConcernsIndex() {
         }, 30000); // 30 seconds
 
         return () => clearInterval(interval);
-    }, [debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter]);
+    }, [autoRefreshEnabled, debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter]);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -444,11 +446,20 @@ export default function ItConcernsIndex() {
                             </Select>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
-                            <Button variant="outline" onClick={handleManualRefresh} disabled={loading} className="flex-1 sm:flex-none">
-                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </Button>
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
+                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                             {showClearFilters && (
                                 <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
                                     Reset

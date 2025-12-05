@@ -20,7 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Database, Calendar, Clock, Trash2, Eye, Check, ChevronsUpDown, RefreshCw, Search } from "lucide-react";
+import { Database, Calendar, Clock, Trash2, Eye, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause } from "lucide-react";
 import { index as biometricRecordsIndex, show as biometricRecordsShow } from "@/routes/biometric-records";
 
 interface User {
@@ -131,6 +131,7 @@ export default function BiometricRecordsIndex() {
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Filter employees based on search query
     const filteredEmployees = useMemo(() => {
@@ -184,6 +185,7 @@ export default function BiometricRecordsIndex() {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(
                 biometricRecordsIndex().url,
@@ -205,7 +207,7 @@ export default function BiometricRecordsIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [searchTerm, selectedUserId, selectedSiteId, dateFrom, dateTo]);
+    }, [autoRefreshEnabled, searchTerm, selectedUserId, selectedSiteId, dateFrom, dateTo]);
 
     const handleReset = () => {
         setSearchTerm("");
@@ -400,22 +402,31 @@ export default function BiometricRecordsIndex() {
                         </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
-                        <Button variant="default" onClick={handleFilter} className="w-full sm:w-auto">
+                    <div className="flex flex-wrap gap-3 sm:flex-row sm:items-center sm:justify-end">
+                        <Button variant="default" onClick={handleFilter} className="flex-1 sm:flex-none">
                             <Search className="mr-2 h-4 w-4" />
                             Apply Filters
                         </Button>
 
                         {showClearFilters && (
-                            <Button variant="outline" onClick={handleReset} className="w-full sm:w-auto">
+                            <Button variant="outline" onClick={handleReset} className="flex-1 sm:flex-none">
                                 Clear Filters
                             </Button>
                         )}
 
-                        <Button variant="ghost" onClick={handleManualRefresh} className="w-full sm:w-auto">
-                            <RefreshCw className="mr-2 h-4 w-4" />
-                            Refresh
-                        </Button>
+                        <div className="flex gap-2">
+                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                <RefreshCw className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                variant={autoRefreshEnabled ? "default" : "ghost"}
+                                size="icon"
+                                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                            >
+                                {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            </Button>
+                        </div>
                     </div>
                 </div>
 

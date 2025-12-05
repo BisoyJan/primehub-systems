@@ -104,6 +104,7 @@ interface AttendancePayload {
 interface PageProps extends SharedData {
     attendances?: AttendancePayload;
     employees?: User[];
+    sites?: Site[];
     filters?: {
         search?: string;
         user_id?: string;
@@ -111,6 +112,7 @@ interface PageProps extends SharedData {
         date_from?: string;
         date_to?: string;
         verified?: string;
+        site_id?: string;
     };
     [key: string]: unknown;
 }
@@ -341,7 +343,7 @@ const calculateSuggestedStatus = (
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, filters, auth } = usePage<PageProps>().props;
+    const { attendances, employees, sites = [], filters, auth } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
@@ -354,6 +356,7 @@ export default function AttendanceReview() {
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
+    const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Review Flagged Records",
@@ -421,6 +424,7 @@ export default function AttendanceReview() {
             "/attendance/review",
             {
                 user_id: selectedUserId,
+                site_id: selectedSiteId,
                 status: statusFilter === "all" ? "" : statusFilter,
                 verified: verifiedFilter,
                 date_from: dateFrom,
@@ -436,6 +440,7 @@ export default function AttendanceReview() {
     const handleClearFilters = () => {
         setSelectedUserId("");
         setEmployeeSearchQuery("");
+        setSelectedSiteId("");
         setStatusFilter("all");
         setVerifiedFilter("all");
         setDateFrom("");
@@ -703,7 +708,7 @@ export default function AttendanceReview() {
                 <Card>
                     <CardContent className="pt-6">
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
                                 {/* Employee Search */}
                                 <div className="space-y-2">
                                     <Label>Employee</Label>
@@ -784,6 +789,24 @@ export default function AttendanceReview() {
                                             <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
                                             <SelectItem value="tardy">Tardy</SelectItem>
                                             <SelectItem value="undertime">Undertime</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Site Filter */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="site-filter">Site</Label>
+                                    <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
+                                        <SelectTrigger id="site-filter">
+                                            <SelectValue placeholder="All Sites" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Sites</SelectItem>
+                                            {sites.map((site) => (
+                                                <SelectItem key={site.id} value={site.id.toString()}>
+                                                    {site.name}
+                                                </SelectItem>
+                                            ))}
                                         </SelectContent>
                                     </Select>
                                 </div>

@@ -21,7 +21,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search } from "lucide-react";
+import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause } from "lucide-react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -104,12 +104,14 @@ interface AttendancePayload {
 interface PageProps extends SharedData {
     attendances?: AttendancePayload;
     users?: User[];
+    sites?: Site[];
     filters?: {
         search?: string;
         status?: string;
         start_date?: string;
         end_date?: string;
         user_id?: string;
+        site_id?: string;
         needs_verification?: boolean;
     };
     [key: string]: unknown;
@@ -242,7 +244,7 @@ const getShiftTypeBadge = (shiftType: string) => {
 };
 
 export default function AttendanceIndex() {
-    const { attendances, users = [], filters, auth } = usePage<PageProps>().props;
+    const { attendances, users = [], sites = [], filters, auth } = usePage<PageProps>().props;
     const timeFormat = auth.user.time_format || '24';
 
     // Ensure we have proper data structure
@@ -266,6 +268,7 @@ export default function AttendanceIndex() {
     const [selectedUserId, setSelectedUserId] = useState(appliedFilters.user_id || "");
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
+    const [selectedSiteId, setSelectedSiteId] = useState(appliedFilters.site_id || "");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
     const [startDate, setStartDate] = useState(appliedFilters.start_date || "");
     const [endDate, setEndDate] = useState(appliedFilters.end_date || "");
@@ -298,6 +301,7 @@ export default function AttendanceIndex() {
     });
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Save selectedRecords to localStorage on change
     useEffect(() => {
@@ -317,12 +321,13 @@ export default function AttendanceIndex() {
     // Update local state when filters prop changes (e.g., when navigating back or pagination)
     useEffect(() => {
         setSelectedUserId(appliedFilters.user_id || "");
+        setSelectedSiteId(appliedFilters.site_id || "");
         setStatusFilter(appliedFilters.status || "all");
         setStartDate(appliedFilters.start_date || "");
         setEndDate(appliedFilters.end_date || "");
         setNeedsVerification(appliedFilters.needs_verification || false);
         // Don't clear selections when filters change
-    }, [appliedFilters.user_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
+    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
 
     const userId = auth.user?.id;
     const userRole = auth.user?.role;
@@ -349,6 +354,7 @@ export default function AttendanceIndex() {
             params.user_id = selectedUserId;
         }
 
+        if (selectedSiteId) params.site_id = selectedSiteId;
         if (statusFilter !== "all") params.status = statusFilter;
         if (startDate) params.start_date = startDate;
         if (endDate) params.end_date = endDate;
@@ -370,6 +376,7 @@ export default function AttendanceIndex() {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             const params: Record<string, string> = {};
 
@@ -379,6 +386,7 @@ export default function AttendanceIndex() {
                 params.user_id = selectedUserId;
             }
 
+            if (selectedSiteId) params.site_id = selectedSiteId;
             if (statusFilter !== "all") params.status = statusFilter;
             if (startDate) params.start_date = startDate;
             if (endDate) params.end_date = endDate;
@@ -394,18 +402,20 @@ export default function AttendanceIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [selectedUserId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
+    }, [autoRefreshEnabled, selectedUserId, selectedSiteId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
 
     const showClearFilters =
         statusFilter !== "all" ||
         Boolean(startDate) ||
         Boolean(endDate) ||
         needsVerification ||
-        Boolean(selectedUserId);
+        Boolean(selectedUserId) ||
+        Boolean(selectedSiteId);
 
     const clearFilters = () => {
         setSelectedUserId("");
         setUserSearchQuery("");
+        setSelectedSiteId("");
         setStatusFilter("all");
         setStartDate("");
         setEndDate("");
@@ -534,7 +544,7 @@ export default function AttendanceIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                         {!isRestrictedUser && (
                             <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                                 <PopoverTrigger asChild>
@@ -621,6 +631,20 @@ export default function AttendanceIndex() {
                             </SelectContent>
                         </Select>
 
+                        <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="All Sites" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Sites</SelectItem>
+                                {sites.map((site) => (
+                                    <SelectItem key={site.id} value={site.id.toString()}>
+                                        {site.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
                         <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
                             <Input
@@ -684,10 +708,19 @@ export default function AttendanceIndex() {
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} disabled={loading} className="w-full sm:w-auto">
-                                <RefreshCw className={`mr-2 h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
+                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                         </div>
                     </div>
 

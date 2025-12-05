@@ -32,7 +32,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
-import { Edit, Calendar, Search, RefreshCw, Filter, Plus, Monitor, Wrench } from 'lucide-react';
+import { Edit, Calendar, Search, RefreshCw, Filter, Plus, Monitor, Wrench, Play, Pause } from 'lucide-react';
 
 import { PageHeader } from '@/components/PageHeader';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
@@ -126,6 +126,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
     const [isFilterLoading, setIsFilterLoading] = useState(false);
     const [isMutating, setIsMutating] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // LocalStorage keys for persisting selection
     const LOCAL_STORAGE_KEY = 'pc_maintenance_selected_ids';
@@ -336,6 +337,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(pcMaintenanceIndexRoute().url, buildFilterParams(), {
                 preserveState: true,
@@ -347,7 +349,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [search, status, siteFilter]);
+    }, [autoRefreshEnabled, search, status, siteFilter]);
 
     const handleDelete = (id: number) => {
         setIsMutating(true);
@@ -478,7 +480,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                             </Select>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                             <Button variant="outline" onClick={handleApplyFilters} disabled={isFilterLoading} className="flex-1 sm:flex-none">
                                 <Filter className="mr-2 h-4 w-4" />
                                 Filter
@@ -490,10 +492,19 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} disabled={isFilterLoading} className="flex-1 sm:flex-none">
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={isFilterLoading} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
 
                             {can('pc_maintenance.create') && (
                                 <Link href={pcMaintenanceCreateRoute().url} className="flex-1 sm:flex-none">

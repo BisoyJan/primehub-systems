@@ -6,7 +6,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bell, Check, Trash2, RefreshCw } from 'lucide-react';
+import { Bell, Check, Trash2, RefreshCw, Play, Pause } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { BreadcrumbItem } from '@/types';
@@ -41,6 +41,7 @@ interface PageProps {
 
 export default function NotificationsIndex({ notifications, unreadCount }: PageProps) {
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     const handleManualRefresh = () => {
         router.reload({
@@ -51,6 +52,7 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.reload({
                 only: ['notifications', 'unreadCount'],
@@ -59,7 +61,7 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
         }, 30000);
 
         return () => clearInterval(interval);
-    }, []);
+    }, [autoRefreshEnabled]);
 
     const handleMarkAsRead = async (notificationId: number) => {
         try {
@@ -176,11 +178,20 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                     title="Notifications"
                     description="View and manage your notifications"
                     actions={
-                        <div className="flex gap-2">
-                            <Button variant="ghost" onClick={handleManualRefresh} size="sm">
-                                <RefreshCw className="h-4 w-4 mr-2" />
-                                Refresh
-                            </Button>
+                        <div className="flex flex-wrap gap-2">
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
                             {notifications.data.length > 0 && (
                                 <Button variant="destructive" onClick={handleDeleteAll} size="sm">
                                     <Trash2 className="h-4 w-4 mr-2" />

@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { index as stationsIndexRoute } from "@/routes/stations";
-import { RefreshCw, Search, Plus } from 'lucide-react';
+import { RefreshCw, Search, Plus, Play, Pause } from 'lucide-react';
 
 interface Site {
     id: number;
@@ -60,6 +60,7 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
     const [deleteOpen, setDeleteOpen] = useState(false);
     const [deleteSite, setDeleteSite] = useState<Site | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
     // Search state
     const [search, setSearch] = useState(filters.search || "");
@@ -106,6 +107,7 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             const params: Record<string, string> = {};
             if (debouncedSearch) params.search = debouncedSearch;
@@ -120,7 +122,7 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [debouncedSearch]);
+    }, [autoRefreshEnabled, debouncedSearch]);
 
     // Add new site
     const handleAdd = () => {
@@ -236,17 +238,26 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                             </div>
                         </div>
 
-                        <div className="flex gap-2 w-full sm:w-auto">
+                        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
                             {search && (
                                 <Button variant="outline" onClick={() => setSearch("")} className="flex-1 sm:flex-none">
                                     Reset
                                 </Button>
                             )}
 
-                            <Button variant="ghost" onClick={handleManualRefresh} className="flex-1 sm:flex-none">
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Refresh
-                            </Button>
+                            <div className="flex gap-2">
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
+                                    <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                            </div>
 
                             <Can permission="sites.create">
                                 <Button onClick={handleAdd} disabled={loading} className="flex-1 sm:flex-none">

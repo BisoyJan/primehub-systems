@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendanceUpload;
 use App\Models\AttendancePoint;
 use App\Models\User;
+use App\Models\Site;
 use App\Services\AttendanceProcessor;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -72,6 +73,13 @@ class AttendanceController extends Controller
             $query->needsVerification();
         }
 
+        // Filter by site (via employee schedule)
+        if ($request->has('site_id') && $request->site_id !== 'all' && $request->site_id) {
+            $query->whereHas('employeeSchedule', function ($q) use ($request) {
+                $q->where('site_id', $request->site_id);
+            });
+        }
+
         $attendances = $query->orderBy('shift_date', 'desc')
             ->orderBy('created_at', 'desc')
             ->paginate(25)
@@ -89,10 +97,14 @@ class AttendanceController extends Controller
                 'name' => $user->first_name . ' ' . $user->last_name,
             ]);
 
+        // Get all sites for site filter dropdown
+        $sites = Site::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Attendance/Main/Index', [
             'attendances' => $attendances,
             'users' => $users,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'needs_verification']),
+            'sites' => $sites,
+            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'site_id', 'needs_verification']),
         ]);
     }
 
@@ -727,6 +739,13 @@ class AttendanceController extends Controller
             $query->where('shift_date', '<=', $request->date_to);
         }
 
+        // Filter by site (via employee schedule)
+        if ($request->filled('site_id')) {
+            $query->whereHas('employeeSchedule', function ($q) use ($request) {
+                $q->where('site_id', $request->site_id);
+            });
+        }
+
         $attendances = $query->orderBy('shift_date', 'desc')->paginate(50);
 
         // Get all employees for the dropdown
@@ -741,15 +760,20 @@ class AttendanceController extends Controller
                 'name' => $user->first_name . ' ' . $user->last_name,
             ]);
 
+        // Get all sites for site filter dropdown
+        $sites = Site::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Attendance/Main/Review', [
             'attendances' => $attendances,
             'employees' => $employees,
+            'sites' => $sites,
             'filters' => [
                 'user_id' => $request->user_id,
                 'status' => $request->status,
                 'verified' => $request->verified,
                 'date_from' => $request->date_from,
                 'date_to' => $request->date_to,
+                'site_id' => $request->site_id,
             ],
         ]);
     }

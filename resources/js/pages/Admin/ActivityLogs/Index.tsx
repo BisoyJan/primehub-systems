@@ -17,7 +17,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Search, X } from 'lucide-react';
+import { Search, X, RefreshCw, Play, Pause } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useDebounce } from '@/hooks/use-debounce';
 import { Badge } from '@/components/ui/badge';
@@ -55,6 +55,8 @@ interface Props {
 export default function ActivityLogsIndex({ activities, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [event, setEvent] = useState(filters.event || 'all');
+    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+    const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const debouncedSearch = useDebounce(search, 300);
     const isUserTyping = useRef(false);
 
@@ -80,16 +82,17 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
 
     // Auto-refresh every 30 seconds
     useEffect(() => {
+        if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
             router.get(
                 activityLogs.index().url,
                 { search: debouncedSearch, event: event === 'all' ? '' : event },
-                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'] }
+                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'], onSuccess: () => setLastRefresh(new Date()) }
             );
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [debouncedSearch, event]);
+    }, [autoRefreshEnabled, debouncedSearch, event]);
 
     const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         isUserTyping.current = true;
@@ -163,10 +166,23 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
                                     </SelectContent>
                                 </Select>
                                 {(search || event !== 'all') && (
-                                    <Button variant="ghost" size="icon" onClick={clearFilters}>
+                                    <Button variant="ghost" size="icon" onClick={clearFilters} title="Clear filters">
                                         <X className="h-4 w-4" />
                                     </Button>
                                 )}
+                                <div className="flex gap-1">
+                                    <Button variant="ghost" size="icon" onClick={() => router.reload({ only: ['activities'], onSuccess: () => setLastRefresh(new Date()) })} title="Refresh">
+                                        <RefreshCw className="h-4 w-4" />
+                                    </Button>
+                                    <Button
+                                        variant={autoRefreshEnabled ? "default" : "ghost"}
+                                        size="icon"
+                                        onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                        title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                    >
+                                        {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                    </Button>
+                                </div>
                             </div>
                         </div>
                     </CardHeader>
