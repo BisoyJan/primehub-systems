@@ -1,3 +1,4 @@
+import { useState, useCallback } from 'react';
 //import { NavFooter } from '@/components/nav-footer';
 import { NavGroup } from '@/components/nav-group';
 import { NavUser } from '@/components/nav-user';
@@ -241,9 +242,47 @@ const getNavigationConfig = (userId: number, userRole: string) => {
 //     },
 // ];
 
+// Maximum number of groups that can be open at the same time
+const MAX_OPEN_GROUPS = 2;
+
 export function AppSidebar() {
     const { can } = usePermission();
     const { auth } = usePage<SharedData>().props;
+
+    // Track which groups are currently open (max 2)
+    const [openGroups, setOpenGroups] = useState<string[]>([]);
+
+    // Handle hover on a group - opens it and closes oldest if needed
+    const handleGroupHover = useCallback((groupId: string) => {
+        setOpenGroups((prev) => {
+            // If already open, don't change anything
+            if (prev.includes(groupId)) {
+                return prev;
+            }
+            // Add new group, remove oldest if we exceed max
+            const newGroups = [...prev, groupId];
+            if (newGroups.length > MAX_OPEN_GROUPS) {
+                return newGroups.slice(-MAX_OPEN_GROUPS);
+            }
+            return newGroups;
+        });
+    }, []);
+
+    // Handle click toggle on a group
+    const handleGroupToggle = useCallback((groupId: string) => {
+        setOpenGroups((prev) => {
+            if (prev.includes(groupId)) {
+                // Close the group
+                return prev.filter((id) => id !== groupId);
+            }
+            // Open the group, remove oldest if we exceed max
+            const newGroups = [...prev, groupId];
+            if (newGroups.length > MAX_OPEN_GROUPS) {
+                return newGroups.slice(-MAX_OPEN_GROUPS);
+            }
+            return newGroups;
+        });
+    }, []);
 
     // Get navigation config based on current user
     const navigationConfig = getNavigationConfig(auth.user.id, auth.user.role);
@@ -314,12 +353,54 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavGroup label={filteredNavigation.main.label} items={filteredNavigation.main.items} />
-                <NavGroup label={filteredNavigation.computer.label} items={filteredNavigation.computer.items} />
-                <NavGroup label={filteredNavigation.station.label} items={filteredNavigation.station.items} />
-                <NavGroup label={filteredNavigation.attendance.label} items={filteredNavigation.attendance.items} />
-                <NavGroup label={filteredNavigation.requests.label} items={filteredNavigation.requests.items} />
-                <NavGroup label={filteredNavigation.account.label} items={filteredNavigation.account.items} />
+                <NavGroup
+                    groupId="main"
+                    label={filteredNavigation.main.label}
+                    items={filteredNavigation.main.items}
+                    isOpen={openGroups.includes('main')}
+                    onHover={handleGroupHover}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="computer"
+                    label={filteredNavigation.computer.label}
+                    items={filteredNavigation.computer.items}
+                    isOpen={openGroups.includes('computer')}
+                    onHover={handleGroupHover}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="station"
+                    label={filteredNavigation.station.label}
+                    items={filteredNavigation.station.items}
+                    isOpen={openGroups.includes('station')}
+                    onHover={handleGroupHover}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="attendance"
+                    label={filteredNavigation.attendance.label}
+                    items={filteredNavigation.attendance.items}
+                    isOpen={openGroups.includes('attendance')}
+                    onHover={handleGroupHover}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="requests"
+                    label={filteredNavigation.requests.label}
+                    items={filteredNavigation.requests.items}
+                    isOpen={openGroups.includes('requests')}
+                    onHover={handleGroupHover}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="account"
+                    label={filteredNavigation.account.label}
+                    items={filteredNavigation.account.items}
+                    isOpen={openGroups.includes('account')}
+                    onHover={handleGroupHover}
+                    onToggle={handleGroupToggle}
+                />
             </SidebarContent>
 
             <SidebarFooter>
