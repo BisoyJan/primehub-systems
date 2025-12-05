@@ -9,13 +9,16 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { AlertCircle, ArrowLeft, ArrowRight, Check } from 'lucide-react';
-import { useState } from 'react';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertCircle, ArrowLeft, ArrowRight, Check, ChevronsUpDown } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { toast } from 'sonner';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 
 interface User {
     id: number;
     name: string;
+    email: string;
 }
 
 interface CreateProps {
@@ -36,6 +39,19 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
     useFlashMessage();
     const isPageLoading = usePageLoading();
     const [currentStep, setCurrentStep] = useState(1);
+    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState('');
+
+    // Filter users based on search query
+    const filteredUsers = useMemo(() => {
+        if (!users) return [];
+        if (!userSearchQuery) return users;
+        const query = userSearchQuery.toLowerCase();
+        return users.filter(user =>
+            user.name.toLowerCase().includes(query) ||
+            user.email.toLowerCase().includes(query)
+        );
+    }, [users, userSearchQuery]);
 
     const { data, setData, post, processing, errors } = useForm({
         requested_for_user_id: undefined as number | undefined,
@@ -52,13 +68,28 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
 
     const goToNextStep = () => {
         // Validate step 1 fields
-        if (!data.medication_type || !data.reason || !data.onset_of_symptoms) {
-            return;
-        }
-        // If can request for others, validate user selection
+        const missingFields: string[] = [];
+
         if (canRequestForOthers && !data.requested_for_user_id) {
+            missingFields.push('Employee');
+        }
+        if (!data.medication_type) {
+            missingFields.push('Type of Medication');
+        }
+        if (!data.reason) {
+            missingFields.push('Reason for Request');
+        }
+        if (!data.onset_of_symptoms) {
+            missingFields.push('Onset of Symptoms');
+        }
+
+        if (missingFields.length > 0) {
+            toast.error('Please fill in required fields', {
+                description: missingFields.join(', '),
+            });
             return;
         }
+
         setCurrentStep(2);
     };
 
@@ -128,21 +159,60 @@ export default function Create({ medicationTypes, onsetOptions, canRequestForOth
                                             <Label htmlFor="requested_for_user_id">
                                                 Request for Employee <span className="text-red-500">*</span>
                                             </Label>
-                                            <Select
-                                                value={data.requested_for_user_id?.toString()}
-                                                onValueChange={(value) => setData('requested_for_user_id', parseInt(value))}
-                                            >
-                                                <SelectTrigger>
-                                                    <SelectValue placeholder="Select employee" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    {users.map((user) => (
-                                                        <SelectItem key={user.id} value={user.id.toString()}>
-                                                            {user.name}
-                                                        </SelectItem>
-                                                    ))}
-                                                </SelectContent>
-                                            </Select>
+                                            <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                                <PopoverTrigger asChild>
+                                                    <Button
+                                                        variant="outline"
+                                                        role="combobox"
+                                                        aria-expanded={isUserPopoverOpen}
+                                                        className="w-full justify-between font-normal"
+                                                    >
+                                                        <span className="truncate">
+                                                            {data.requested_for_user_id
+                                                                ? users.find(u => u.id === data.requested_for_user_id)?.name || "Select employee..."
+                                                                : "Select employee..."}
+                                                        </span>
+                                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                    </Button>
+                                                </PopoverTrigger>
+                                                <PopoverContent className="w-full p-0" align="start">
+                                                    <Command shouldFilter={false}>
+                                                        <CommandInput
+                                                            placeholder="Search employee..."
+                                                            value={userSearchQuery}
+                                                            onValueChange={setUserSearchQuery}
+                                                        />
+                                                        <CommandList>
+                                                            <CommandEmpty>No employee found.</CommandEmpty>
+                                                            <CommandGroup>
+                                                                {filteredUsers.map((user) => (
+                                                                    <CommandItem
+                                                                        key={user.id}
+                                                                        value={user.name}
+                                                                        onSelect={() => {
+                                                                            setData('requested_for_user_id', user.id);
+                                                                            setIsUserPopoverOpen(false);
+                                                                            setUserSearchQuery('');
+                                                                        }}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Check
+                                                                            className={`mr-2 h-4 w-4 shrink-0 ${data.requested_for_user_id === user.id
+                                                                                ? "opacity-100"
+                                                                                : "opacity-0"
+                                                                                }`}
+                                                                        />
+                                                                        <div className="flex flex-col">
+                                                                            <span>{user.name}</span>
+                                                                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                                                                        </div>
+                                                                    </CommandItem>
+                                                                ))}
+                                                            </CommandGroup>
+                                                        </CommandList>
+                                                    </Command>
+                                                </PopoverContent>
+                                            </Popover>
                                             {errors.requested_for_user_id && (
                                                 <p className="text-sm text-red-500">{errors.requested_for_user_id}</p>
                                             )}

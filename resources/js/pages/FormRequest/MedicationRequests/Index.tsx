@@ -13,6 +13,16 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import {
+    AlertDialog,
+    AlertDialogAction,
+    AlertDialogCancel,
+    AlertDialogContent,
+    AlertDialogDescription,
+    AlertDialogFooter,
+    AlertDialogHeader,
+    AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Plus, Search, Eye, Trash2, RefreshCw, Filter, Play, Pause } from 'lucide-react';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -24,7 +34,6 @@ import { index as medicationIndexRoute, create as medicationCreateRoute, show as
 interface MedicationRequest {
     id: number;
     name: string;
-    work_email: string;
     medication_type: string;
     reason: string;
     onset_of_symptoms: string;
@@ -32,6 +41,7 @@ interface MedicationRequest {
     created_at: string;
     user?: {
         name: string;
+        email: string;
     };
 }
 
@@ -74,6 +84,8 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const [localLoading, setLocalLoading] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+    const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    const [requestToDelete, setRequestToDelete] = useState<number | null>(null);
 
     const showClearFilters = Boolean(search) || status !== 'all' || medicationType !== 'all';
 
@@ -107,11 +119,20 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     };
 
     const handleDelete = (id: number) => {
-        if (confirm('Are you sure you want to delete this medication request?')) {
+        setRequestToDelete(id);
+        setDeleteDialogOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (requestToDelete) {
             setLocalLoading(true);
-            router.delete(medicationDestroyRoute(id).url, {
+            router.delete(medicationDestroyRoute(requestToDelete).url, {
                 preserveScroll: true,
-                onSuccess: () => setLastRefresh(new Date()),
+                onSuccess: () => {
+                    setLastRefresh(new Date());
+                    setDeleteDialogOpen(false);
+                    setRequestToDelete(null);
+                },
                 onFinish: () => setLocalLoading(false),
             });
         }
@@ -300,7 +321,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                     medicationRequests.data.map((request) => (
                                         <TableRow key={request.id}>
                                             <TableCell className="font-medium">{request.name}</TableCell>
-                                            <TableCell>{request.work_email}</TableCell>
+                                            <TableCell>{request.user?.email || '-'}</TableCell>
                                             <TableCell>{request.medication_type}</TableCell>
                                             <TableCell className="capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</TableCell>
                                             <TableCell>{getStatusBadge(request.status)}</TableCell>
@@ -349,7 +370,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                 <div className="flex justify-between items-start">
                                     <div>
                                         <div className="text-lg font-semibold">{request.name}</div>
-                                        <div className="text-sm text-muted-foreground">{request.work_email}</div>
+                                        <div className="text-sm text-muted-foreground">{request.user?.email || '-'}</div>
                                     </div>
                                     {getStatusBadge(request.status)}
                                 </div>
@@ -397,6 +418,22 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                         </div>
                     )}
                 </div>
+
+                {/* Delete Confirmation Dialog */}
+                <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+                    <AlertDialogContent>
+                        <AlertDialogHeader>
+                            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete the medication request.
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={confirmDelete}>Delete</AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
             </div>
         </AppLayout>
     );

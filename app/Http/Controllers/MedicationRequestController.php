@@ -76,7 +76,7 @@ class MedicationRequestController extends Controller
             ],
             'canRequestForOthers' => $canRequestForOthers,
             'users' => $canRequestForOthers
-                ? User::select('id', 'first_name', 'middle_name', 'last_name')
+                ? User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
                     ->where('is_active', true)
                     ->orderBy('first_name')
                     ->orderBy('last_name')
