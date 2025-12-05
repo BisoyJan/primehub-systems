@@ -49,18 +49,23 @@ export function NavGroup({ label, items = [], groupId, isOpen, onHover, onToggle
                 <CollapsibleTrigger asChild>
                     <SidebarGroupLabel
                         className="cursor-pointer select-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-colors flex items-center justify-between w-full pr-2"
-                        onMouseEnter={() => onHover(groupId)}
+                        onMouseEnter={() => {
+                            // Don't trigger hover if group already has active item (prevents unnecessary state changes)
+                            if (!hasActiveItem) {
+                                onHover(groupId);
+                            }
+                        }}
                     >
                         <span>{label}</span>
                         <ChevronRight
                             className={cn(
-                                "h-4 w-4 shrink-0 transition-transform duration-200",
+                                "h-4 w-4 shrink-0 transition-transform duration-500 ease-in-out",
                                 isExpanded && "rotate-90"
                             )}
                         />
                     </SidebarGroupLabel>
                 </CollapsibleTrigger>
-                <CollapsibleContent>
+                <CollapsibleContent className="overflow-hidden transition-all duration-500 ease-in-out data-[state=closed]:animate-collapsible-up data-[state=open]:animate-collapsible-down">
                     <SidebarMenu>
                         {items.map((item) => (
                             <SidebarMenuItem key={item.title}>

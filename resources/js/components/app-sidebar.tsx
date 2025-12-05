@@ -243,7 +243,7 @@ const getNavigationConfig = (userId: number, userRole: string) => {
 // ];
 
 // Maximum number of groups that can be open at the same time
-const MAX_OPEN_GROUPS = 2;
+const MAX_OPEN_GROUPS = 1;
 
 export function AppSidebar() {
     const { can } = usePermission();
