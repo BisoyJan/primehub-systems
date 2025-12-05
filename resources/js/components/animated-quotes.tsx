@@ -24,7 +24,7 @@ interface AnimatedQuotesProps {
     interval?: number;
 }
 
-export function AnimatedQuotes({ className, interval = 8000 }: AnimatedQuotesProps) {
+export function AnimatedQuotes({ className, interval = 12000 }: AnimatedQuotesProps) {
     const [currentQuote, setCurrentQuote] = useState(0);
     const [key, setKey] = useState(0);
 
