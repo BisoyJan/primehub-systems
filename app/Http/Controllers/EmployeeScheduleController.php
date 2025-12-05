@@ -189,6 +189,9 @@ class EmployeeScheduleController extends Controller
         $scheduleData = $employeeSchedule->toArray();
         $scheduleData['scheduled_time_in'] = substr($employeeSchedule->scheduled_time_in, 0, 5);
         $scheduleData['scheduled_time_out'] = substr($employeeSchedule->scheduled_time_out, 0, 5);
+        // Format date fields to Y-m-d for frontend compatibility
+        $scheduleData['effective_date'] = $employeeSchedule->effective_date?->format('Y-m-d');
+        $scheduleData['end_date'] = $employeeSchedule->end_date?->format('Y-m-d');
 
         return Inertia::render('Attendance/EmployeeSchedules/Edit', [
             'schedule' => $scheduleData,
