@@ -606,8 +606,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         setIsEditMode(true);
         setManualEntryUserId(String(point.user.id));
         // Format date as YYYY-MM-DD for date input
-        const formattedDate = point.shift_date.includes('T') 
-            ? point.shift_date.split('T')[0] 
+        const formattedDate = point.shift_date.includes('T')
+            ? point.shift_date.split('T')[0]
             : point.shift_date;
         setManualShiftDate(formattedDate);
         setManualPointType(point.point_type);
