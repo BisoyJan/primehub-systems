@@ -1123,7 +1123,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                     Not Eligible for GBRO
                                                 </p>
                                                 <p className="text-sm text-orange-700 dark:text-orange-300 mt-1">
-                                                    This point type (likely NCNS or FTN) requires a <strong>1-year expiration period</strong>
+                                                    This point type (likely NCNS or FTN) requires a <strong>1-year expiration period </strong>
                                                     and cannot be removed through Good Behavior Roll Off.
                                                     It will expire automatically after {selectedViolationPoint.expires_at ? formatDate(selectedViolationPoint.expires_at) : '1 year'}.
                                                 </p>
