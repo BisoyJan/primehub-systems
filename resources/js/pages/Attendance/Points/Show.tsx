@@ -1080,7 +1080,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                     </p>
                                                     <p className="text-sm text-green-700 dark:text-green-300 mt-1">
                                                         This is one of the <strong>last 2 violation points</strong> that will be automatically deducted
-                                                        after {Math.floor(gbroStats.days_clean)} days without violations.
+                                                        after {Math.floor(gbroStats.days_until_gbro)} days without violations.
                                                         {gbroStats.is_gbro_ready && (
                                                             <span className="block mt-1 font-semibold">
                                                                 ✅ Ready for GBRO processing!

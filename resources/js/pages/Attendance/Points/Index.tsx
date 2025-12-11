@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
@@ -63,7 +63,16 @@ const defaultTitle = "Attendance Points";
 interface User {
     id: number;
     name: string;
+    first_name: string;
+    last_name: string;
+    middle_name?: string;
 }
+
+// Helper function to format user name as "Last Name, First Name M."
+const formatUserName = (user: User | { first_name: string; last_name: string; middle_name?: string }): string => {
+    const middleInitial = user.middle_name ? ` ${user.middle_name}.` : '';
+    return `${user.last_name}, ${user.first_name}${middleInitial}`;
+};
 
 interface ExcusedBy {
     id: number;
@@ -270,7 +279,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         }
     };
 
-    const buildFilterQuery = () => {
+    const buildFilterQuery = useCallback(() => {
         const query: Record<string, string> = {};
         if (selectedUserId) query.user_id = selectedUserId;
         if (selectedPointType) query.point_type = selectedPointType;
@@ -280,7 +289,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         if (filterExpiringSoon) query.expiring_soon = 'true';
         if (filterGbroEligible) query.gbro_eligible = 'true';
         return query;
-    };
+    }, [selectedUserId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
 
     const handleFilter = () => {
         router.get(
@@ -315,7 +324,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, selectedUserId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
+    }, [autoRefreshEnabled, buildFilterQuery]);
 
     const handleReset = () => {
         setSelectedUserId("");
@@ -807,7 +816,10 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     >
                                         <span className="truncate">
                                             {selectedUserId
-                                                ? users?.find(u => String(u.id) === selectedUserId)?.name || "Select employee..."
+                                                ? (() => {
+                                                    const user = users?.find(u => String(u.id) === selectedUserId);
+                                                    return user ? formatUserName(user) : "Select employee...";
+                                                })()
                                                 : "All Employees"}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -841,14 +853,17 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                     All Employees
                                                 </CommandItem>
                                                 {users
-                                                    ?.filter(user =>
-                                                        !userSearchQuery ||
-                                                        user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
-                                                    )
+                                                    ?.filter(user => {
+                                                        if (!userSearchQuery) return true;
+                                                        const query = userSearchQuery.toLowerCase();
+                                                        const formattedName = formatUserName(user).toLowerCase();
+                                                        const regularName = user.name.toLowerCase();
+                                                        return formattedName.includes(query) || regularName.includes(query);
+                                                    })
                                                     .map((user) => (
                                                         <CommandItem
                                                             key={user.id}
-                                                            value={user.name}
+                                                            value={formatUserName(user)}
                                                             onSelect={() => {
                                                                 setSelectedUserId(String(user.id));
                                                                 setIsUserPopoverOpen(false);
@@ -862,7 +877,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                                     : "opacity-0"
                                                                     }`}
                                                             />
-                                                            {user.name}
+                                                            {formatUserName(user)}
                                                         </CommandItem>
                                                     ))}
                                             </CommandGroup>
@@ -1016,7 +1031,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     <Users className="h-4 w-4 text-muted-foreground" />
-                                                    <span className="font-medium">{point.user.name}</span>
+                                                    <span className="font-medium">{formatUserName(point.user)}</span>
                                                 </div>
                                             </TableCell>
                                             <TableCell>{formatDate(point.shift_date)}</TableCell>
@@ -1166,7 +1181,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                 <div className="flex items-start justify-between">
                                     <div className="flex items-center gap-2 flex-1">
                                         <Users className="h-4 w-4 text-muted-foreground" />
-                                        <span className="font-medium text-sm">{point.user.name}</span>
+                                        <span className="font-medium text-sm">{formatUserName(point.user)}</span>
                                     </div>
                                     <div className="flex flex-col items-end gap-1">
                                         {point.is_expired ? (
@@ -1416,7 +1431,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             <div className="space-y-2 p-3 bg-muted rounded-md">
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Employee:</span>
-                                    <span className="font-medium">{selectedPoint.user.name}</span>
+                                    <span className="font-medium">{formatUserName(selectedPoint.user)}</span>
                                 </div>
                                 <div className="flex justify-between text-sm">
                                     <span className="text-muted-foreground">Date:</span>
@@ -1541,7 +1556,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
                                     <Label className="text-sm font-medium text-muted-foreground">Employee</Label>
-                                    <p className="text-sm font-medium mt-1">{selectedViolationPoint.user.name}</p>
+                                    <p className="text-sm font-medium mt-1">{formatUserName(selectedViolationPoint.user)}</p>
                                 </div>
                                 <div>
                                     <Label className="text-sm font-medium text-muted-foreground">Date</Label>
@@ -1725,7 +1740,10 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     >
                                         <span className="truncate">
                                             {manualEntryUserId
-                                                ? users?.find(u => String(u.id) === manualEntryUserId)?.name || "Select employee..."
+                                                ? (() => {
+                                                    const user = users?.find(u => String(u.id) === manualEntryUserId);
+                                                    return user ? formatUserName(user) : "Select employee...";
+                                                })()
                                                 : "Select employee..."}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
@@ -1742,14 +1760,17 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                             <CommandEmpty>No employee found.</CommandEmpty>
                                             <CommandGroup>
                                                 {users
-                                                    ?.filter(user =>
-                                                        !manualUserSearchQuery ||
-                                                        user.name.toLowerCase().includes(manualUserSearchQuery.toLowerCase())
-                                                    )
+                                                    ?.filter(user => {
+                                                        if (!manualUserSearchQuery) return true;
+                                                        const query = manualUserSearchQuery.toLowerCase();
+                                                        const formattedName = formatUserName(user).toLowerCase();
+                                                        const regularName = user.name.toLowerCase();
+                                                        return formattedName.includes(query) || regularName.includes(query);
+                                                    })
                                                     .map((user) => (
                                                         <CommandItem
                                                             key={user.id}
-                                                            value={user.name}
+                                                            value={formatUserName(user)}
                                                             onSelect={() => {
                                                                 setManualEntryUserId(String(user.id));
                                                                 setIsManualUserPopoverOpen(false);
@@ -1763,7 +1784,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                                     : "opacity-0"
                                                                     }`}
                                                             />
-                                                            {user.name}
+                                                            {formatUserName(user)}
                                                         </CommandItem>
                                                     ))}
                                             </CommandGroup>
@@ -1968,7 +1989,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             This action cannot be undone.
                             {pointToDelete && (
                                 <div className="mt-3 p-3 bg-muted rounded-md">
-                                    <p className="text-sm"><strong>Employee:</strong> {pointToDelete.user.name}</p>
+                                    <p className="text-sm"><strong>Employee:</strong> {formatUserName(pointToDelete.user)}</p>
                                     <p className="text-sm"><strong>Date:</strong> {formatDate(pointToDelete.shift_date)}</p>
                                     <p className="text-sm"><strong>Type:</strong> {pointToDelete.point_type.replace(/_/g, ' ')}</p>
                                     <p className="text-sm"><strong>Points:</strong> {Number(pointToDelete.points).toFixed(2)}</p>
