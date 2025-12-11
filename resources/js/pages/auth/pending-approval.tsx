@@ -3,11 +3,28 @@ import AuthLayout from '@/layouts/auth-layout';
 import { login } from '@/routes';
 import { Head, router } from '@inertiajs/react';
 import { LogOut, Clock, CheckCircle } from 'lucide-react';
+import { useEffect } from 'react';
 
 export default function PendingApproval() {
     const handleLogout = () => {
         router.post('/logout');
     };
+
+    // Auto-refresh every 5 seconds to check if user has been approved
+    useEffect(() => {
+        const interval = setInterval(() => {
+            router.reload({
+                only: [], // Don't reload any props, just trigger the route check
+                preserveScroll: true,
+                preserveState: true,
+                onSuccess: () => {
+                    // The backend route will automatically redirect if approved
+                },
+            });
+        }, 5000); // Check every 5 seconds
+
+        return () => clearInterval(interval);
+    }, []);
 
     return (
         <AuthLayout

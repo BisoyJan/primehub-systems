@@ -25,7 +25,7 @@ import {
     bulkUnapprove as accountsBulkUnapprove,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -542,7 +542,8 @@ export default function AccountIndex() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Account Statuses</SelectItem>
-                                <SelectItem value="active">Active</SelectItem>
+                                <SelectItem value="pending">Pending</SelectItem>
+                                <SelectItem value="approved">Approved</SelectItem>
                                 <SelectItem value="pending_deletion">Pending Deletion</SelectItem>
                                 <SelectItem value="deleted">Deleted</SelectItem>
                             </SelectContent>
@@ -750,12 +751,12 @@ export default function AccountIndex() {
                                                             />
                                                         )}
                                                     </Can>
-                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${user.is_active
+                                                    <div className={`flex items-center justify-center px-3 py-1 rounded-full border ${user.is_active
                                                         ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
                                                         : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
                                                         }`}>
-                                                        {user.is_active ? 'Active' : 'Inactive'}
-                                                    </span>
+                                                        {user.is_active ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                                                    </div>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
@@ -945,12 +946,12 @@ export default function AccountIndex() {
                                                     />
                                                 )}
                                             </Can>
-                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${user.is_active
+                                            <div className={`flex items-center justify-center px-2 py-1 rounded-full border ${user.is_active
                                                 ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
                                                 : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
                                                 }`}>
-                                                {user.is_active ? 'Active' : 'Inactive'}
-                                            </span>
+                                                {user.is_active ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                                            </div>
                                         </div>
                                         <span className={`px-2 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
                                             {statusBadge.label}

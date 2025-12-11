@@ -139,7 +139,10 @@ class LeaveCreditService
     }
 
     /**
-     * Backfill missing leave credits from hire date to present.
+     * Backfill missing leave credits for the current year only.
+     * Only creates credits from January of current year to avoid database bloat
+     * and confusion about expired credits from previous years.
+     *
      * Useful when adding existing employees or fixing missing accruals.
      */
     public function backfillCredits(User $user): int
@@ -150,13 +153,24 @@ class LeaveCreditService
 
         $hireDate = Carbon::parse($user->hired_date);
         $today = now();
+        $currentYear = $today->year;
         $accrued = 0;
 
-        // Start from hire month
-        $currentDate = $hireDate->copy()->startOfMonth();
+        // Start from January of current year or hire month (whichever is later)
+        $currentDate = Carbon::create($currentYear, 1, 1)->startOfMonth();
 
-        // Loop through each month from hire date to last completed month
-        while ($currentDate->endOfMonth()->lt($today)) {
+        // If hired this year, start from hire month instead
+        if ($hireDate->year === $currentYear) {
+            $currentDate = $hireDate->copy()->startOfMonth();
+        }
+
+        // Don't backfill if hired after current date
+        if ($currentDate->gt($today)) {
+            return 0;
+        }
+
+        // Loop through each month from start date to last completed month (current year only)
+        while ($currentDate->endOfMonth()->lt($today) && $currentDate->year === $currentYear) {
             $year = $currentDate->year;
             $month = $currentDate->month;
 

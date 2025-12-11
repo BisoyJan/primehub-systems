@@ -1823,7 +1823,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     htmlFor="manual_is_advised"
                                     className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
                                 >
-                                    Employee was advised (FTN - Failed to Notify)
+                                    Advised absence (FTN - Failed to Notify)
                                 </label>
                             </div>
                         )}

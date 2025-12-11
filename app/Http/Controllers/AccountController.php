@@ -53,8 +53,10 @@ class AccountController extends Controller
 
         // Filter by status
         $status = $request->query('status');
-        if ($status === 'active') {
-            $query->whereNull('deleted_at');
+        if ($status === 'pending') {
+            $query->whereNull('deleted_at')->where('is_approved', false);
+        } elseif ($status === 'approved') {
+            $query->whereNull('deleted_at')->where('is_approved', true);
         } elseif ($status === 'pending_deletion') {
             $query->whereNotNull('deleted_at')->whereNull('deletion_confirmed_at');
         } elseif ($status === 'deleted') {
