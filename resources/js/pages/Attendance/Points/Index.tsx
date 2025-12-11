@@ -389,6 +389,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                     'Content-Type': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                 },
+                credentials: 'same-origin',
                 body: JSON.stringify(buildFilterQuery()),
             });
 
