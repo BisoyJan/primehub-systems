@@ -252,22 +252,6 @@ export function AppSidebar() {
     // Track which groups are currently open (max 2)
     const [openGroups, setOpenGroups] = useState<string[]>([]);
 
-    // Handle hover on a group - opens it and closes oldest if needed
-    const handleGroupHover = useCallback((groupId: string) => {
-        setOpenGroups((prev) => {
-            // If already open, don't change anything
-            if (prev.includes(groupId)) {
-                return prev;
-            }
-            // Add new group, remove oldest if we exceed max
-            const newGroups = [...prev, groupId];
-            if (newGroups.length > MAX_OPEN_GROUPS) {
-                return newGroups.slice(-MAX_OPEN_GROUPS);
-            }
-            return newGroups;
-        });
-    }, []);
-
     // Handle click toggle on a group
     const handleGroupToggle = useCallback((groupId: string) => {
         setOpenGroups((prev) => {
@@ -358,7 +342,6 @@ export function AppSidebar() {
                     label={filteredNavigation.main.label}
                     items={filteredNavigation.main.items}
                     isOpen={openGroups.includes('main')}
-                    onHover={handleGroupHover}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
@@ -366,7 +349,6 @@ export function AppSidebar() {
                     label={filteredNavigation.computer.label}
                     items={filteredNavigation.computer.items}
                     isOpen={openGroups.includes('computer')}
-                    onHover={handleGroupHover}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
@@ -374,7 +356,6 @@ export function AppSidebar() {
                     label={filteredNavigation.station.label}
                     items={filteredNavigation.station.items}
                     isOpen={openGroups.includes('station')}
-                    onHover={handleGroupHover}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
@@ -382,7 +363,6 @@ export function AppSidebar() {
                     label={filteredNavigation.attendance.label}
                     items={filteredNavigation.attendance.items}
                     isOpen={openGroups.includes('attendance')}
-                    onHover={handleGroupHover}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
@@ -390,7 +370,6 @@ export function AppSidebar() {
                     label={filteredNavigation.requests.label}
                     items={filteredNavigation.requests.items}
                     isOpen={openGroups.includes('requests')}
-                    onHover={handleGroupHover}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
@@ -398,12 +377,9 @@ export function AppSidebar() {
                     label={filteredNavigation.account.label}
                     items={filteredNavigation.account.items}
                     isOpen={openGroups.includes('account')}
-                    onHover={handleGroupHover}
                     onToggle={handleGroupToggle}
                 />
-            </SidebarContent>
-
-            <SidebarFooter>
+            </SidebarContent>            <SidebarFooter>
                 {/* <NavFooter items={footerNavItems} className="mt-auto" /> */}
                 <NavUser />
             </SidebarFooter>

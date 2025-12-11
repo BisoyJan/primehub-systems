@@ -20,11 +20,10 @@ interface NavGroupProps {
     items: readonly NavItem[];
     groupId: string;
     isOpen: boolean;
-    onHover: (groupId: string) => void;
     onToggle: (groupId: string) => void;
 }
 
-export function NavGroup({ label, items = [], groupId, isOpen, onHover, onToggle }: NavGroupProps) {
+export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGroupProps) {
     const page = usePage();
 
     if (items.length === 0) {
@@ -49,12 +48,6 @@ export function NavGroup({ label, items = [], groupId, isOpen, onHover, onToggle
                 <CollapsibleTrigger asChild>
                     <SidebarGroupLabel
                         className="cursor-pointer select-none hover:bg-sidebar-accent hover:text-sidebar-accent-foreground rounded-md transition-colors flex items-center justify-between w-full pr-2"
-                        onMouseEnter={() => {
-                            // Don't trigger hover if group already has active item (prevents unnecessary state changes)
-                            if (!hasActiveItem) {
-                                onHover(groupId);
-                            }
-                        }}
                     >
                         <span>{label}</span>
                         <ChevronRight
