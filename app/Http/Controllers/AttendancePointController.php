@@ -10,6 +10,7 @@ use App\Jobs\GenerateAllAttendancePointsExportExcel;
 use App\Models\AttendancePoint;
 use App\Models\Attendance;
 use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Cache;
@@ -23,6 +24,13 @@ use Carbon\Carbon;
 class AttendancePointController extends Controller
 {
     use RedirectsWithFlashMessages;
+
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        $this->notificationService = $notificationService;
+    }
 
     public function index(Request $request)
     {
@@ -257,7 +265,7 @@ class AttendancePointController extends Controller
                     );
                 }
 
-                AttendancePoint::create([
+                $point = AttendancePoint::create([
                     'user_id' => $request->user_id,
                     'attendance_id' => null, // Manual entries don't have attendance records
                     'shift_date' => $request->shift_date,
@@ -275,9 +283,17 @@ class AttendancePointController extends Controller
                     'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
                     'eligible_for_gbro' => !$isNcnsOrFtn,
                 ]);
+
+                // Send notification to the employee about the manually created attendance point
+                $this->notificationService->notifyManualAttendancePoint(
+                    $request->user_id,
+                    $pointType,
+                    Carbon::parse($request->shift_date)->format('M d, Y'),
+                    $point->points
+                );
             });
 
-            return $this->redirectWithFlash('attendance-points.index', 'Manual attendance point created successfully.');
+            return $this->redirectWithFlash('attendance-points.index', 'Manual attendance point created successfully. Employee notified.');
         } catch (\Exception $e) {
             Log::error('AttendancePointController Store Error: ' . $e->getMessage());
             return $this->redirectWithFlash('attendance-points.index', 'Failed to create manual attendance point.', 'error');
@@ -329,9 +345,17 @@ class AttendancePointController extends Controller
                     'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
                     'eligible_for_gbro' => !$isNcnsOrFtn,
                 ]);
+
+                // Send notification to the employee about the updated attendance point
+                $this->notificationService->notifyManualAttendancePoint(
+                    $request->user_id,
+                    $pointType,
+                    Carbon::parse($request->shift_date)->format('M d, Y'),
+                    $point->fresh()->points
+                );
             });
 
-            return $this->backWithFlash('Manual attendance point updated successfully.');
+            return $this->backWithFlash('Manual attendance point updated successfully. Employee notified.');
         } catch (\Exception $e) {
             Log::error('AttendancePointController Update Error: ' . $e->getMessage());
             return $this->backWithFlash('Failed to update manual attendance point.', 'error');

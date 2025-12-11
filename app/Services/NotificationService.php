@@ -211,6 +211,39 @@ class NotificationService
     }
 
     /**
+     * Notify about manual attendance point entry.
+     */
+    public function notifyManualAttendancePoint(User|int $user, string $pointType, string $date, float $points): Notification
+    {
+        // Format point type for display
+        $typeText = match($pointType) {
+            'whole_day_absence' => 'Whole Day Absence',
+            'half_day_absence' => 'Half-Day Absence',
+            'tardy' => 'Tardy',
+            'undertime' => 'Undertime',
+            default => ucfirst(str_replace('_', ' ', $pointType))
+        };
+
+        $message = "A manual attendance point has been recorded for {$date}.";
+        $message .= " Violation Type: {$typeText}.";
+        $message .= " Points: {$points}.";
+
+        return $this->create(
+            $user,
+            'attendance_status',
+            'Manual Attendance Point Added',
+            $message,
+            [
+                'point_type' => $pointType,
+                'date' => $date,
+                'points' => $points,
+                'is_manual' => true,
+                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user)
+            ]
+        );
+    }
+
+    /**
      * Notify IT roles about a new IT concern.
      */
     public function notifyItRolesAboutNewConcern(string $stationNumber, string $siteName, string $agentName, string $category, string $priority, string $description, int $concernId): void
