@@ -58,11 +58,31 @@ class EmployeeScheduleController extends Controller
         $campaigns = Campaign::orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
 
+        // Get users without any schedules
+        $usersWithoutSchedules = User::doesntHave('employeeSchedules')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name']);
+
+        // Get users with schedules but no active schedule
+        $usersWithInactiveSchedules = User::whereHas('employeeSchedules', function ($query) {
+                // Has at least one schedule
+            })
+            ->whereDoesntHave('employeeSchedules', function ($query) {
+                // But no active schedule
+                $query->where('is_active', true);
+            })
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name']);
+
         return Inertia::render('Attendance/EmployeeSchedules/Index', [
             'schedules' => $schedules,
             'users' => $users,
             'campaigns' => $campaigns,
             'sites' => $sites,
+            'usersWithoutSchedules' => $usersWithoutSchedules,
+            'usersWithInactiveSchedules' => $usersWithInactiveSchedules,
             'filters' => $request->only(['search', 'user_id', 'campaign_id', 'is_active', 'active_only']),
         ]);
     }
@@ -321,6 +341,23 @@ class EmployeeScheduleController extends Controller
             ->first();
 
         return response()->json($schedule);
+    }
+
+    /**
+     * Get all schedules for a specific user.
+     */
+    public function getUserSchedules(Request $request, $userId)
+    {
+        $request->validate([
+            'user_id' => 'nullable|exists:users,id',
+        ]);
+
+        $schedules = EmployeeSchedule::where('user_id', $userId)
+            ->with(['user', 'campaign', 'site'])
+            ->orderBy('effective_date', 'desc')
+            ->get();
+
+        return response()->json($schedules);
     }
 
     /**

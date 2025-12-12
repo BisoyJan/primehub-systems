@@ -210,6 +210,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::get('employee-schedules/get-schedule', [EmployeeScheduleController::class, 'getSchedule'])
         ->middleware('permission:schedules.view')
         ->name('employee-schedules.getSchedule');
+    Route::get('employee-schedules/user/{userId}/schedules', [EmployeeScheduleController::class, 'getUserSchedules'])
+        ->middleware('permission:schedules.view')
+        ->name('employee-schedules.getUserSchedules');
 
     // Biometric Records
     Route::prefix('biometric-records')->name('biometric-records.')

@@ -691,7 +691,6 @@ export default function AccountIndex() {
                                             </div>
                                         </TableHead>
                                     </Can>
-                                    <TableHead>ID</TableHead>
                                     <TableHead>First Name</TableHead>
                                     <TableHead>M.I.</TableHead>
                                     <TableHead>Last Name</TableHead>
@@ -730,7 +729,6 @@ export default function AccountIndex() {
                                                     )}
                                                 </TableCell>
                                             </Can>
-                                            <TableCell>{user.id}</TableCell>
                                             <TableCell className="font-medium">{user.first_name}</TableCell>
                                             <TableCell>{user.middle_name || '-'}</TableCell>
                                             <TableCell className="font-medium">{user.last_name}</TableCell>

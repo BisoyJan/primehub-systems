@@ -193,10 +193,17 @@ export default function EmployeeScheduleCreate() {
         end_date: "",
     });
 
-    // Auto-select current user for restricted roles
+    // Auto-select current user for restricted roles or from URL parameter
     useEffect(() => {
         if (isRestrictedRole && currentUser) {
             setData("user_id", String(currentUser.id));
+        } else {
+            // Check if user_id is passed in URL query parameter
+            const urlParams = new URLSearchParams(window.location.search);
+            const userIdParam = urlParams.get('user_id');
+            if (userIdParam && !data.user_id) {
+                setData("user_id", userIdParam);
+            }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isRestrictedRole, currentUser]);
