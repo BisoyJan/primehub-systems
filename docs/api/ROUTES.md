@@ -33,6 +33,12 @@ Routes are organized across multiple files:
 | GET | /reset-password/{token} | NewPasswordController@create | password.reset |
 | POST | /reset-password | NewPasswordController@store | password.store |
 
+### Account Reactivation
+| Method | URI | Controller | Name |
+|--------|-----|------------|------|
+| GET | /account/reactivate | AccountController@showReactivate | account.reactivate.show |
+| POST | /account/reactivate | AccountController@reactivate | account.reactivate |
+
 ### Authenticated Routes
 | Method | URI | Controller | Name |
 |--------|-----|------------|------|
@@ -166,6 +172,8 @@ Routes are organized across multiple files:
 | GET | /stations/qrcode/zip/{jobId}/download | StationController@downloadZip | stations.qrcode |
 | GET | /stations/qrcode/selected-progress/{jobId} | StationController@selectedZipProgress | stations.qrcode |
 | GET | /stations/qrcode/selected-zip/{jobId}/download | StationController@downloadSelectedZip | stations.qrcode |
+| POST | /stations/qrcode/bulk-all-stream | StationController@bulkAllQRCodesStream | stations.qrcode |
+| POST | /stations/qrcode/zip-selected-stream | StationController@zipSelectedStream | stations.qrcode |
 
 ---
 
@@ -208,6 +216,7 @@ Routes are organized across multiple files:
 | GET | /pc-maintenance/{id}/edit | PcMaintenanceController@edit | pc-maintenance.edit | pc_maintenance.edit |
 | PUT | /pc-maintenance/{id} | PcMaintenanceController@update | pc-maintenance.update | pc_maintenance.edit |
 | DELETE | /pc-maintenance/{id} | PcMaintenanceController@destroy | pc-maintenance.destroy | pc_maintenance.delete |
+| POST | /pc-maintenance/bulk-update | PcMaintenanceController@bulkUpdate | pc-maintenance.bulkUpdate | pc_maintenance.edit |
 
 ---
 
@@ -223,6 +232,12 @@ Routes are organized across multiple files:
 | DELETE | /accounts/{id} | AccountController@destroy | accounts.destroy | accounts.delete |
 | POST | /accounts/{id}/approve | AccountController@approve | accounts.approve | accounts.edit |
 | POST | /accounts/{id}/unapprove | AccountController@unapprove | accounts.unapprove | accounts.edit |
+| POST | /accounts/{id}/toggle-active | AccountController@toggleActive | accounts.toggleActive | accounts.edit |
+| POST | /accounts/bulk-approve | AccountController@bulkApprove | accounts.bulkApprove | accounts.edit |
+| POST | /accounts/bulk-unapprove | AccountController@bulkUnapprove | accounts.bulkUnapprove | accounts.edit |
+| POST | /accounts/{id}/confirm-delete | AccountController@confirmDelete | accounts.confirmDelete | accounts.delete |
+| POST | /accounts/{id}/restore | AccountController@restore | accounts.restore | accounts.edit |
+| DELETE | /accounts/{id}/force-delete | AccountController@forceDelete | accounts.forceDelete | accounts.delete |
 
 ---
 
@@ -269,6 +284,9 @@ Routes are organized across multiple files:
 | DELETE | /employee-schedules/{id} | EmployeeScheduleController@destroy | employee-schedules.destroy | schedules.delete |
 | POST | /employee-schedules/{id}/toggle-active | EmployeeScheduleController@toggleActive | employee-schedules.toggleActive | schedules.toggle |
 | GET | /employee-schedules/get-schedule | EmployeeScheduleController@getSchedule | employee-schedules.getSchedule | schedules.view |
+| GET | /employee-schedules/user/{userId}/schedules | EmployeeScheduleController@getUserSchedules | employee-schedules.getUserSchedules | schedules.view |
+| GET | /schedule-setup | EmployeeScheduleController@firstTimeSetup | schedule-setup | - |
+| POST | /schedule-setup | EmployeeScheduleController@storeFirstTimeSetup | schedule-setup.store | - |
 
 ---
 
@@ -297,7 +315,9 @@ Routes are organized across multiple files:
 | Method | URI | Controller | Name | Permission |
 |--------|-----|------------|------|------------|
 | GET | /biometric-export | BiometricExportController@index | biometric-export.index | biometric.export |
-| GET | /biometric-export/export | BiometricExportController@export | biometric-export.export | biometric.export |
+| POST | /biometric-export/start | BiometricExportController@startExport | biometric-export.start | biometric.export |
+| GET | /biometric-export/progress/{jobId} | BiometricExportController@exportProgress | biometric-export.progress | biometric.export |
+| GET | /biometric-export/download/{jobId} | BiometricExportController@downloadExport | biometric-export.download | biometric.export |
 
 ### Biometric Retention Policies
 | Method | URI | Controller | Name | Permission |
@@ -315,13 +335,19 @@ Routes are organized across multiple files:
 | Method | URI | Controller | Name | Permission |
 |--------|-----|------------|------|------------|
 | GET | /attendance-points | AttendancePointController@index | attendance-points.index | attendance_points.view |
+| POST | /attendance-points | AttendancePointController@store | attendance-points.store | attendance_points.create |
 | POST | /attendance-points/rescan | AttendancePointController@rescan | attendance-points.rescan | attendance_points.rescan |
-| GET | /attendance-points/export-all | AttendancePointController@exportAll | attendance-points.export-all | attendance_points.export |
-| GET | /attendance-points/export-all-excel | AttendancePointController@exportAllExcel | attendance-points.export-all-excel | attendance_points.export |
+| POST | /attendance-points/start-export-all-excel | AttendancePointController@startExportAllExcel | attendance-points.start-export-all-excel | attendance_points.export |
+| GET | /attendance-points/export-all-excel/status/{jobId} | AttendancePointController@checkExportAllExcelStatus | attendance-points.export-all-excel.status | attendance_points.export |
+| GET | /attendance-points/export-all-excel/download/{jobId} | AttendancePointController@downloadExportAllExcel | attendance-points.export-all-excel.download | attendance_points.export |
 | GET | /attendance-points/{user} | AttendancePointController@show | attendance-points.show | attendance_points.view |
 | GET | /attendance-points/{user}/statistics | AttendancePointController@statistics | attendance-points.statistics | attendance_points.view |
 | GET | /attendance-points/{user}/export | AttendancePointController@export | attendance-points.export | attendance_points.export |
-| GET | /attendance-points/{user}/export-excel | AttendancePointController@exportExcel | attendance-points.export-excel | attendance_points.export |
+| POST | /attendance-points/{user}/start-export-excel | AttendancePointController@startExportExcel | attendance-points.start-export-excel | attendance_points.export |
+| GET | /attendance-points/export-excel/status/{jobId} | AttendancePointController@checkExportExcelStatus | attendance-points.export-excel.status | attendance_points.export |
+| GET | /attendance-points/export-excel/download/{jobId} | AttendancePointController@downloadExportExcel | attendance-points.export-excel.download | attendance_points.export |
+| PUT | /attendance-points/{point} | AttendancePointController@update | attendance-points.update | attendance_points.edit |
+| DELETE | /attendance-points/{point} | AttendancePointController@destroy | attendance-points.destroy | attendance_points.delete |
 | POST | /attendance-points/{point}/excuse | AttendancePointController@excuse | attendance-points.excuse | attendance_points.excuse |
 | POST | /attendance-points/{point}/unexcuse | AttendancePointController@unexcuse | attendance-points.unexcuse | attendance_points.excuse |
 
@@ -344,11 +370,25 @@ Routes are organized across multiple files:
 | GET | /form-requests/leave-requests/create | LeaveRequestController@create | leave-requests.create | leave.create |
 | POST | /form-requests/leave-requests | LeaveRequestController@store | leave-requests.store | leave.create |
 | GET | /form-requests/leave-requests/{id} | LeaveRequestController@show | leave-requests.show | leave.view |
+| GET | /form-requests/leave-requests/{id}/edit | LeaveRequestController@edit | leave-requests.edit | leave.edit |
+| PUT | /form-requests/leave-requests/{id} | LeaveRequestController@update | leave-requests.update | leave.edit |
 | POST | /form-requests/leave-requests/{id}/approve | LeaveRequestController@approve | leave-requests.approve | leave.approve |
 | POST | /form-requests/leave-requests/{id}/deny | LeaveRequestController@deny | leave-requests.deny | leave.deny |
+| POST | /form-requests/leave-requests/{id}/approve-tl | LeaveRequestController@approveTL | leave-requests.approve-tl | leave.approve |
+| POST | /form-requests/leave-requests/{id}/deny-tl | LeaveRequestController@denyTL | leave-requests.deny-tl | leave.deny |
 | POST | /form-requests/leave-requests/{id}/cancel | LeaveRequestController@cancel | leave-requests.cancel | leave.cancel |
+| DELETE | /form-requests/leave-requests/{id} | LeaveRequestController@destroy | leave-requests.destroy | leave.delete |
 | GET | /form-requests/leave-requests/api/credits-balance | LeaveRequestController@getCreditsBalance | leave-requests.api.credits-balance | leave.view |
 | POST | /form-requests/leave-requests/api/calculate-days | LeaveRequestController@calculateDays | leave-requests.api.calculate-days | leave.view |
+| POST | /form-requests/leave-requests/export/credits | LeaveRequestController@exportCredits | leave-requests.export.credits | leave.export |
+| GET | /form-requests/leave-requests/export/credits/progress | LeaveRequestController@exportCreditsProgress | leave-requests.export.credits.progress | leave.export |
+| GET | /form-requests/leave-requests/export/credits/download/{filename} | LeaveRequestController@exportCreditsDownload | leave-requests.export.download | leave.export |
+
+### Leave Credits
+| Method | URI | Controller | Name | Permission |
+|--------|-----|------------|------|------------|
+| GET | /form-requests/leave-requests/credits | LeaveRequestController@creditsIndex | leave-requests.credits.index | leave_credits.view_all |
+| GET | /form-requests/leave-requests/credits/{user} | LeaveRequestController@creditsShow | leave-requests.credits.show | leave_credits.view_all |
 
 ---
 
@@ -412,6 +452,23 @@ Routes are organized across multiple files:
 
 ---
 
+## ⚙️ Settings
+
+| Method | URI | Controller | Name | Permission |
+|--------|-----|------------|------|------------|
+| GET | /settings | Redirect to /settings/account | - | - |
+| GET | /settings/account | ProfileController@edit | account.edit | - |
+| PATCH | /settings/account | ProfileController@update | account.update | - |
+| DELETE | /settings/account | ProfileController@destroy | account.destroy | - |
+| GET | /settings/password | PasswordController@edit | password.edit | - |
+| PUT | /settings/password | PasswordController@update | password.update | - |
+| GET | /settings/preferences | PreferencesController@edit | preferences.edit | - |
+| PATCH | /settings/preferences | PreferencesController@update | preferences.update | - |
+| GET | /settings/appearance | Inertia Page | appearance.edit | - |
+| GET | /settings/two-factor | TwoFactorAuthenticationController@show | two-factor.show | - |
+
+---
+
 ## 🔒 Middleware Groups
 
 ### Applied to All Routes
@@ -428,4 +485,4 @@ Checks if user has specific permission based on their role.
 
 ---
 
-*Last updated: November 28, 2025*
+*Last updated: December 15, 2025*

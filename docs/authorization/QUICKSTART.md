@@ -79,7 +79,7 @@ function MyComponent() {
             {can('accounts.edit') && <EditButton />}
             {canAny(['accounts.edit', 'accounts.delete']) && <ManagePanel />}
             {isAdmin() && <AdminSection />}
-            {hasRole('HR') && <HRDashboard />}
+            {hasRole('HR') && <HRDashboard />} {/* Use Title Case database value */}
         </div>
     );
 }
@@ -122,7 +122,7 @@ Route::post('/reports', [ReportController::class, 'generate'])
 php artisan tinker
 
 $user = User::find(1);
-$user->update(['role' => 'Admin']);
+$user->update(['role' => 'Admin']); // Use Title Case: 'Super Admin', 'Team Lead', etc.
 ```
 
 ### Check All User Permissions
@@ -138,15 +138,17 @@ print_r($user->getPermissions());
 
 ### Available Roles
 
-| Role | Description |
-|------|-------------|
-| super_admin | Full system access |
-| admin | Administrative access |
-| team_lead | Supervisor access |
-| agent | Basic user access |
-| hr | HR-focused access |
-| it | IT-focused access |
-| utility | Minimal access |
+| Config Key (snake_case) | Database Value (Title Case) | Description |
+|------------------------|----------------------------|-------------|
+| super_admin | Super Admin | Full system access |
+| admin | Admin | Administrative access |
+| team_lead | Team Lead | Supervisor access |
+| agent | Agent | Basic user access |
+| hr | HR | HR-focused access |
+| it | IT | IT-focused access |
+| utility | Utility | Minimal access |
+
+**Note:** Database stores roles as Title Case with spaces (e.g., "Super Admin"). Config file uses snake_case keys for array access (e.g., 'super_admin').
 
 ### Authorization Components
 

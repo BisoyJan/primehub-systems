@@ -1,6 +1,6 @@
 # Attendance System Documentation
 
-This directory contains detailed documentation for the attendance tracking system, including the universal shift detection algorithm and multi-upload handling.
+This directory contains detailed documentation for the attendance tracking system, including the universal shift detection algorithm, multi-upload handling, and job-based export architecture.
 
 ---
 
@@ -296,4 +296,4 @@ See **[../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)** f
 
 ---
 
-*Last updated: December 14, 2025*
+*Last updated: December 15, 2025*

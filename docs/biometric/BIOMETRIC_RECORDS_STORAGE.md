@@ -57,11 +57,11 @@ biometric_retention_policies
 ├── id (primary key)
 ├── name (string) -- Policy name
 ├── description (text, nullable) -- Policy description
-├── retention_months (integer) -- Months to retain data
-├── applies_to_type (string) -- 'global' or 'site'
-├── applies_to_id (foreign key, nullable) -- site_id if site-specific
-├── priority (integer) -- Higher number = higher priority
-├── is_active (boolean) -- Whether policy is active
+├── retention_months (integer) -- Months to retain data (default: 3)
+├── applies_to_type (string) -- 'global', 'site', or 'department'
+├── applies_to_id (foreign key, nullable) -- site_id or department_id if applicable
+├── priority (integer) -- Higher number = higher priority (default: 0)
+├── is_active (boolean) -- Whether policy is active (default: true)
 └── timestamps (created_at, updated_at)
 
 Indexes:
@@ -92,10 +92,11 @@ Process Attendance (existing logic)
 - Balances audit needs with database performance
 
 **Custom Policies:**
-- Create site-specific retention periods
+- Create site-specific or department-specific retention periods
 - Override global settings with higher priority
-- Support different regulatory requirements per location
+- Support different regulatory requirements per location/department
 - Flexible compliance management
+- Options: 'global', 'site', or 'department'
 
 **Policy Resolution:**
 1. Check for active site-specific policy
@@ -484,4 +485,4 @@ Potential additions:
 
 ---
 
-*Last updated: November 22, 2025*
+*Last updated: December 15, 2025*

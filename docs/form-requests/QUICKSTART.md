@@ -20,8 +20,16 @@
 6. Select team lead and campaign
 7. Submit
 
-### 2. Approve/Deny Leave (HR/Admin)
+### 2. Approve/Deny Leave
 
+**Team Lead (For Agent Leave Requests):**
+1. Navigate to `/form-requests/leave-requests`
+2. Click on pending request from your campaign
+3. Review details
+4. Click "Approve (TL)" or "Deny (TL)"
+5. If denying, enter reason
+
+**HR/Admin (All Leave Requests):**
 1. Navigate to `/form-requests/leave-requests`
 2. Click on pending request
 3. Review details
@@ -55,8 +63,7 @@
 3. Choose category:
    - Hardware
    - Software
-   - Network
-   - Account
+   - Network/Connectivity
    - Other
 4. Select priority
 5. Describe the issue
@@ -85,11 +92,13 @@
 
 1. Navigate to `/form-requests/medication-requests/create`
 2. Select medication type:
-   - Paracetamol
-   - Ibuprofen
-   - Antacid
-   - Antihistamine
-   - Other
+   - Declogen
+   - Biogesic
+   - Mefenamic Acid
+   - Kremil-S
+   - Cetirizine
+   - Saridon
+   - Diatabs
 3. Enter reason
 4. Describe symptoms
 5. Agree to medication policy
@@ -108,13 +117,23 @@
 
 1. Navigate to `/form-requests/retention-policies`
 2. Create new policy:
-   - Select request type
+   - Enter policy name
    - Set retention months
+   - Select scope (global or site-specific)
+   - Select form type (all, leave_request, it_concern, medication_request)
+   - Set priority (higher = takes precedence)
    - Add description
 3. Activate policy
 4. Old records auto-deleted per schedule
 
 ## 🔧 Common Tasks
+
+### Export Leave Credits
+
+1. Navigate to `/form-requests/leave-requests/credits`
+2. Click "Export All Credits"
+3. Background job generates Excel file
+4. Download when ready
 
 ### Check Leave Credits
 
@@ -258,3 +277,5 @@ Form requests appear on dashboard:
 ---
 
 **Need help?** Check the [full documentation](README.md) or [implementation details](IMPLEMENTATION_SUMMARY.md).
+
+*Last updated: December 15, 2025*

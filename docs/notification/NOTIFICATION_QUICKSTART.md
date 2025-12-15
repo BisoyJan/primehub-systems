@@ -206,3 +206,7 @@ If you encounter issues:
 5. Ensure frontend assets are built
 
 Happy notifying! 🔔
+
+---
+
+*Last updated: December 15, 2025*

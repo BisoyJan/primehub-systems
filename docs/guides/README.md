@@ -6,49 +6,7 @@ Welcome to the PrimeHub Systems documentation! This directory contains comprehen
 
 ## 📚 Available Guides
 
-### 🐋 Docker Setup Guides
-
-#### [DOCKER_README.md](./DOCKER_README.md)
-**Quick overview of Docker setup**
-- Prerequisites and requirements
-- Basic Docker commands
-- Quick start guide
-- Container overview
-
-#### [DOCKER_SETUP.md](./DOCKER_SETUP.md)
-**Complete Docker installation & configuration**
-- Step-by-step setup instructions
-- Environment configuration
-- Database setup
-- Troubleshooting tips
-
-#### [DOCKER_ARCHITECTURE.md](./DOCKER_ARCHITECTURE.md)
-**Understanding the Docker architecture**
-- Container structure
-- Service descriptions
-- Network configuration
-- Volume management
-- Inter-service communication
-
-#### [DOCKER_SUMMARY.md](./DOCKER_SUMMARY.md)
-**Quick reference & cheat sheet**
-- Common commands
-- Port mappings
-- Service URLs
-- Maintenance tasks
-
-#### [DOCKER_DEPLOYMENT_GUIDE.md](./DOCKER_DEPLOYMENT_GUIDE.md)
-**Deploying to multiple computers (RECOMMENDED)**
-- Using Docker on multiple PCs
-- Syncing between computers
-- Git-based deployment workflow
-- Database transfer guide
-- Docker Hub alternatives
-- Best practices for multi-PC setup
-
----
-
-### 💻 Local Development Setup
+###  Local Development Setup
 
 #### [LOCAL_SETUP_GUIDE.md](./LOCAL_SETUP_GUIDE.md)
 **Running the project without Docker**
@@ -68,20 +26,56 @@ Welcome to the PrimeHub Systems documentation! This directory contains comprehen
 
 ### 🌐 Remote Access & Deployment
 
-#### [NGROK_GUIDE.md](./NGROK_GUIDE.md)
+#### [NGROK_GUIDE.md](./NGROK_GUIDE.md) / [NGROK_SETUP.md](./NGROK_SETUP.md)
 **Expose your local app to the internet**
 - Ngrok installation & setup
 - HTTPS configuration
 - Laravel integration
+- Vite HMR configuration for ngrok
 - Sharing with clients/teams
 - Security best practices
-- Alternatives to Ngrok
 
 **Use this if:**
 - Need to share work with remote team
 - Testing on mobile devices
 - Client demos
 - Webhook testing
+
+#### [VPS_HOSTING_COMPLETE_GUIDE.md](./VPS_HOSTING_COMPLETE_GUIDE.md)
+**Complete VPS deployment guide (Production)**
+- Hostinger VPS setup with Ubuntu 24.04
+- Automated setup script
+- Manual step-by-step instructions
+- Nginx, PHP 8.4, MySQL, Redis configuration
+- SSL with Let's Encrypt
+- Supervisor queue workers
+- Laravel scheduler setup
+- Domain configuration
+
+**Use this for:**
+- Production deployment
+- Full server control
+- Custom infrastructure needs
+
+#### [DIGITALOCEAN_DEPLOYMENT.md](./DIGITALOCEAN_DEPLOYMENT.md)
+**DigitalOcean deployment options**
+- App Platform deployment (managed, easiest)
+- Droplet with Laravel Forge
+- Manual Droplet setup
+- CI/CD configuration
+- Cost comparisons
+
+**Use this for:**
+- Quick cloud deployment
+- Managed infrastructure
+- Automatic scaling
+
+#### [inactivity-logout.md](./inactivity-logout.md)
+**Automatic logout on inactivity**
+- Security feature documentation
+- Backend middleware configuration
+- Frontend hook implementation
+- Customization options
 
 ---
 
@@ -91,25 +85,27 @@ Welcome to the PrimeHub Systems documentation! This directory contains comprehen
 
 | Method | Best For | Time to Setup | Difficulty |
 |--------|----------|---------------|------------|
-| **Docker** | Production-like environment, team consistency | 15-20 min | ⭐⭐ Easy |
-| **Local** | Direct PHP debugging, lighter resources | 30-45 min | ⭐⭐⭐ Medium |
+| **Local** | Direct PHP debugging, full control | 30-45 min | ⭐⭐⭐ Medium |
 | **Ngrok** | Remote access, quick demos | 5 min | ⭐ Very Easy |
+| **VPS** | Production deployment | 1-2 hours | ⭐⭐⭐⭐ Advanced |
+| **DigitalOcean** | Managed cloud hosting | 30 min | ⭐⭐ Easy |
 
 ### Recommended Path:
 
-1. **Start with Docker** → [DOCKER_SETUP.md](./DOCKER_SETUP.md)
-   - Fastest way to get running
-   - Consistent across all machines
-   - Includes all services (MySQL, Redis, Queue)
+1. **Start with Local Setup** → [LOCAL_SETUP_GUIDE.md](./LOCAL_SETUP_GUIDE.md)
+   - Direct PHP/Laravel debugging
+   - Full control over environment
+   - Includes MySQL, Redis, Queue setup
 
 2. **Add Ngrok for remote access** → [NGROK_GUIDE.md](./NGROK_GUIDE.md)
    - Share your local instance
    - Test on real devices
    - Demo to clients
 
-3. **Optional: Local setup** → [LOCAL_SETUP_GUIDE.md](./LOCAL_SETUP_GUIDE.md)
-   - For advanced debugging
-   - Alternative to Docker
+3. **Deploy to production** → [VPS_HOSTING_COMPLETE_GUIDE.md](./VPS_HOSTING_COMPLETE_GUIDE.md)
+   - Full VPS setup with automated script
+   - Production-ready configuration
+   - SSL, domain, and monitoring
 
 ---
 
@@ -118,22 +114,22 @@ Welcome to the PrimeHub Systems documentation! This directory contains comprehen
 ```
 Are you setting up for the first time?
 │
-├─ YES → Do you have Docker installed?
+├─ YES → Local development or Production?
 │        │
-│        ├─ YES → Follow DOCKER_SETUP.md
-│        │        │
-│        │        └─ Need remote access? → Follow NGROK_GUIDE.md
+│        ├─ Local → Follow LOCAL_SETUP_GUIDE.md
+│        │         │
+│        │         └─ Need remote access? → Follow NGROK_GUIDE.md
 │        │
-│        └─ NO → Want to install Docker?
-│                 │
-│                 ├─ YES → Install Docker, then DOCKER_SETUP.md
-│                 └─ NO → Follow LOCAL_SETUP_GUIDE.md
+│        └─ Production → Choose hosting:
+│                       │
+│                       ├─ Own VPS → VPS_HOSTING_COMPLETE_GUIDE.md
+│                       └─ Cloud Platform → DIGITALOCEAN_DEPLOYMENT.md
 │
 └─ NO → Already running?
          │
-         ├─ Need to troubleshoot? → Check DOCKER_SUMMARY.md
-         ├─ Want to understand architecture? → Read DOCKER_ARCHITECTURE.md
-         └─ Need remote access? → Follow NGROK_GUIDE.md
+         ├─ Need security features? → Check inactivity-logout.md
+         ├─ Need remote access? → Follow NGROK_GUIDE.md
+         └─ Deploying to production? → VPS or DigitalOcean guides
 ```
 
 ---
@@ -142,13 +138,7 @@ Are you setting up for the first time?
 
 ### Starting the Application
 
-**With Docker:**
-```bash
-docker-compose up -d
-```
-[Details in DOCKER_SETUP.md](./DOCKER_SETUP.md)
-
-**Without Docker:**
+**Local Development:**
 ```bash
 php artisan serve         # Terminal 1
 npm run dev               # Terminal 2
@@ -159,66 +149,68 @@ php artisan queue:work    # Terminal 3
 ### Accessing from Other Devices
 
 **Local Network:**
-- Access via: `http://192.168.15.180`
-- [Details in DOCKER_ARCHITECTURE.md](./DOCKER_ARCHITECTURE.md)
+- Find your IP: `ipconfig` (Windows) or `ifconfig` (Linux/Mac)
+- Access via: `http://YOUR_IP:8000`
+- [Details in NGROK_SETUP.md](./NGROK_SETUP.md#option-3-local-network-access-no-ngrok)
 
 **Internet (anywhere):**
-- Use Ngrok: `ngrok http 80`
+- Use Ngrok: `ngrok http 8000`
 - [Full guide in NGROK_GUIDE.md](./NGROK_GUIDE.md)
 
 ### Database Management
 
-**With Docker:**
-```bash
-# HeidiSQL connection
-Host: 127.0.0.1
-Port: 3307
-User: primehub_user
-Password: secret
-```
-
-**Without Docker:**
+**Local MySQL:**
 ```bash
 Host: 127.0.0.1
 Port: 3306
-User: root
+User: root (or your configured user)
 Password: your_mysql_password
+Database: primehub_systems
+```
+
+**Production (VPS):**
+```bash
+Host: localhost (when SSH'd into server)
+User: primehub_user
+Database: primehub_systems
 ```
 
 ### Running Migrations
 
-**With Docker:**
-```bash
-docker exec primehub-app php artisan migrate
-```
-
-**Without Docker:**
+**Local:**
 ```bash
 php artisan migrate
+```
+
+**Production (VPS):**
+```bash
+ssh primehub@your-server-ip
+cd /var/www/primehub-systems
+php artisan migrate --force
 ```
 
 ---
 
 ## 🔧 Troubleshooting
 
-### Docker Issues
-→ See [DOCKER_SUMMARY.md](./DOCKER_SUMMARY.md) troubleshooting section
-
 ### Local Setup Issues
 → See [LOCAL_SETUP_GUIDE.md](./LOCAL_SETUP_GUIDE.md) common issues section
 
 ### Ngrok/Remote Access Issues
-→ See [NGROK_GUIDE.md](./NGROK_GUIDE.md) troubleshooting section
+→ See [NGROK_GUIDE.md](./NGROK_GUIDE.md) and [NGROK_SETUP.md](./NGROK_SETUP.md) troubleshooting sections
+
+### VPS/Production Issues
+→ See [VPS_HOSTING_COMPLETE_GUIDE.md](./VPS_HOSTING_COMPLETE_GUIDE.md) troubleshooting section
 
 ### General Issues
 
 | Problem | Solution | Guide |
 |---------|----------|-------|
-| Port conflicts | Change ports in docker-compose.yml or .env | DOCKER_SETUP.md |
-| Queue not working | Check queue worker is running | DOCKER_ARCHITECTURE.md |
-| HTTPS/SSL errors | Configure ASSET_URL in .env | NGROK_GUIDE.md |
+| Port conflicts | Change ports in .env or server config | LOCAL_SETUP_GUIDE.md |
+| Queue not working | Check queue worker process is running | LOCAL_SETUP_GUIDE.md, VPS guide |
+| HTTPS/SSL errors | Configure APP_URL and ASSET_URL in .env | NGROK_GUIDE.md |
 | Database connection failed | Verify credentials in .env | All guides |
-| Vite not loading | Restart node container/process | DOCKER_SUMMARY.md |
+| Vite not loading | Restart npm run dev | LOCAL_SETUP_GUIDE.md, NGROK_SETUP.md |
 
 ---
 
@@ -227,17 +219,26 @@ php artisan migrate
 ```
 docs/
 ├── guides/
-│   ├── README.md                    ← You are here
-│   ├── DOCKER_README.md             ← Docker overview
-│   ├── DOCKER_SETUP.md              ← Docker installation
-│   ├── DOCKER_ARCHITECTURE.md       ← Docker internals
-│   ├── DOCKER_SUMMARY.md            ← Docker quick reference
-│   ├── DOCKER_DEPLOYMENT_GUIDE.md   ← Multi-PC deployment
-│   ├── LOCAL_SETUP_GUIDE.md         ← Local development
-│   └── NGROK_GUIDE.md               ← Remote access
+│   ├── README.md                         ← You are here
+│   ├── LOCAL_SETUP_GUIDE.md              ← Local development setup
+│   ├── NGROK_GUIDE.md                    ← Remote access (Docker/local)
+│   ├── NGROK_SETUP.md                    ← Ngrok + Vite configuration
+│   ├── VPS_HOSTING_COMPLETE_GUIDE.md     ← Production VPS deployment
+│   ├── DIGITALOCEAN_DEPLOYMENT.md        ← DigitalOcean cloud deployment
+│   └── inactivity-logout.md              ← Security feature docs
 │
-├── PHP_EXTENSIONS_SETUP.md          ← PHP extension configuration
-└── QR_CODE_ZIP_GENERATION_SETUP_GUIDE.md  ← QR feature setup
+├── accounts/                             ← User management docs
+├── api/                                  ← API routes reference
+├── attendance/                           ← Attendance system docs
+├── authorization/                        ← Permissions & roles
+├── biometric/                            ← Biometric records
+├── computer/                             ← PC specs & hardware
+├── database/                             ← Database schema
+├── form-requests/                        ← Leave, IT, Medication requests
+├── leave/                                ← Leave management
+├── QR/                                   ← QR code generation
+├── setup/                                ← Initial setup guides
+└── stations/                             ← Station management
 ```
 
 ---
@@ -278,13 +279,13 @@ When making changes to the project:
 
 | Guide | Last Updated | Maintained By |
 |-------|--------------|---------------|
-| DOCKER_README.md | 2025-11-01 | Development Team |
-| DOCKER_SETUP.md | 2025-11-01 | Development Team |
-| DOCKER_ARCHITECTURE.md | 2025-11-01 | Development Team |
-| DOCKER_SUMMARY.md | 2025-11-01 | Development Team |
-| DOCKER_DEPLOYMENT_GUIDE.md | 2025-11-01 | Development Team |
-| LOCAL_SETUP_GUIDE.md | 2025-11-01 | Development Team |
-| NGROK_GUIDE.md | 2025-11-01 | Development Team |
+| README.md | December 15, 2025 | Development Team |
+| LOCAL_SETUP_GUIDE.md | December 15, 2025 | Development Team |
+| NGROK_GUIDE.md | December 15, 2025 | Development Team |
+| NGROK_SETUP.md | December 15, 2025 | Development Team |
+| VPS_HOSTING_COMPLETE_GUIDE.md | December 15, 2025 | Development Team |
+| DIGITALOCEAN_DEPLOYMENT.md | December 15, 2025 | Development Team |
+| inactivity-logout.md | December 15, 2025 | Development Team |
 
 ---
 

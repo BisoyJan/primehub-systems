@@ -25,7 +25,7 @@ A comprehensive attendance tracking system that processes biometric scanner data
      - Universal shift detection (48 patterns)
      - Time in/out record finding
      - Status calculation (on_time, late, absent, etc.)
-     - Automatic point generation
+     - Prepares data for point generation (triggered after verification)
    - `AttendanceFileParser.php` - Biometric file parsing
 
 4. **Controllers**
@@ -47,7 +47,7 @@ A comprehensive attendance tracking system that processes biometric scanner data
    - `Index.tsx` - Points list with expiration countdown
    - `Show.tsx` - User points detail with violation history
 
-3. **Schedule Pages** (`resources/js/pages/Attendance/Schedule/`)
+3. **Schedule Pages** (`resources/js/pages/Attendance/EmployeeSchedules/`)
    - `Index.tsx` - Schedule management
    - `Create.tsx` / `Edit.tsx` - Schedule forms
 
@@ -63,46 +63,67 @@ A comprehensive attendance tracking system that processes biometric scanner data
 | Status | Description |
 |--------|-------------|
 | `on_time` | Clocked in within grace period |
-| `late` | Clocked in after grace period |
-| `half_day` | Late by more than 4 hours |
-| `absent` | No time in record |
-| `failed_bio_out` | Missing time out (pending) |
+| `tardy` | Clocked in after grace period |
+| `half_day_absence` | Late by more than 4 hours or significant absence |
+| `advised_absence` | Pre-notified absence |
 | `ncns` | No Call No Show |
-| `ftn` | Failure to Notify |
+| `undertime` | Left early |
+| `failed_bio_in` | Missing time in biometric |
+| `failed_bio_out` | Missing time out (pending) |
+| `present_no_bio` | Present but no biometric |
+| `needs_manual_review` | Requires manual review |
+| `non_work_day` | Non-working day |
+| `on_leave` | On approved leave |
 
 ### 3. Points System
-| Violation | Points |
+| Point Type | Points |
 |-----------|--------|
-| Tardy | 0.25 |
-| Half-Day | 0.50 |
-| NCNS | 1.00 |
-| FTN | 1.00 |
+| tardy | 0.25 |
+| undertime | 0.25 |
+| undertime_more_than_hour | 0.50 |
+| half_day_absence | 0.50 |
+| whole_day_absence | 1.00 |
 
 ### 4. Point Expiration Rules
 
 **SRO (Standard Roll Off):**
-- Regular violations: 6 months
-- NCNS/FTN: 1 year (not GBRO eligible)
+- Tardy, Undertime, Half-Day Absence: 6 months
+- Whole Day Absence: 1 year (not GBRO eligible)
 
 **GBRO (Good Behavior Roll Off):**
 - 60 days clean record removes last 2 eligible points
+- Only applies to tardy, undertime, and half_day_absence
 - Encourages good attendance behavior
+
+### 5. Job-Based Exports
+- Large datasets (Biometric Records, Attendance Points) are exported via background jobs
+- Uses Redis queue for processing
+- Progress tracking and status polling
+- Secure download links upon completion
 
 ## Database Schema
 
 ```sql
 attendances
-├── id, user_id, attendance_upload_id
-├── date, time_in, time_out
-├── status, is_verified, verified_by
-├── remarks, timestamps
+├── id, user_id, employee_schedule_id, leave_request_id
+├── shift_date, scheduled_time_in, scheduled_time_out
+├── actual_time_in, actual_time_out
+├── bio_in_site_id, bio_out_site_id
+├── status, secondary_status
+├── tardy_minutes, undertime_minutes, overtime_minutes
+├── overtime_approved, overtime_approved_at, overtime_approved_by
+├── is_advised, admin_verified, is_cross_site_bio
+├── verification_notes, notes, warnings (JSON)
+├── date_from, date_to, timestamps
 
 attendance_points
 ├── id, user_id, attendance_id
-├── points, violation_type
-├── expires_at, expired_at
-├── is_gbro_eligible, gbro_applied_at
-├── violation_details (JSON)
+├── shift_date, point_type, points, status
+├── is_advised, notes, is_excused, is_manual
+├── created_by, excused_by, excused_at, excuse_reason
+├── expires_at, expiration_type, is_expired, expired_at
+├── violation_details, tardy_minutes, undertime_minutes
+├── eligible_for_gbro, gbro_applied_at, gbro_batch_id
 ├── timestamps
 
 employee_schedules
@@ -116,23 +137,53 @@ employee_schedules
 
 ```
 # Attendance
-GET    /attendance                 - List records
-GET    /attendance/import          - Import page
-POST   /attendance/import          - Process upload
-GET    /attendance/{id}            - View record
-POST   /attendance/{id}/verify     - Verify record
-DELETE /attendance/{id}            - Delete record
+GET    /attendance                      - List records
+GET    /attendance/calendar/{user?}     - Calendar view
+GET    /attendance/create               - Create form
+POST   /attendance                      - Store record
+POST   /attendance/bulk                 - Bulk store
+GET    /attendance/import               - Import page
+POST   /attendance/upload               - Process upload
+GET    /attendance/review               - Review page
+POST   /attendance/{id}/verify          - Verify record
+POST   /attendance/batch-verify         - Batch verify
+POST   /attendance/{id}/mark-advised    - Mark as advised
+POST   /attendance/{id}/quick-approve   - Quick approve
+POST   /attendance/bulk-quick-approve   - Bulk approve
+GET    /attendance/statistics           - Statistics
+DELETE /attendance/bulk-delete          - Bulk delete
 
 # Points
-GET    /attendance-points          - List points
-GET    /attendance-points/{userId} - User points detail
-POST   /attendance-points/{id}/excuse - Excuse point
+GET    /attendance-points               - List all points
+POST   /attendance-points               - Create point (manual)
+POST   /attendance-points/rescan        - Rescan calculations
+POST   /attendance-points/start-export-all-excel - Export all (job)
+GET    /attendance-points/export-all-excel/status/{jobId} - Export status
+GET    /attendance-points/export-all-excel/download/{jobId} - Download
+GET    /attendance-points/{user}        - User points detail
+GET    /attendance-points/{user}/statistics - User statistics
+GET    /attendance-points/{user}/export - Export user points
+POST   /attendance-points/{user}/start-export-excel - Export (job)
+GET    /attendance-points/export-excel/status/{jobId} - Status
+GET    /attendance-points/export-excel/download/{jobId} - Download
+PUT    /attendance-points/{point}       - Update point
+DELETE /attendance-points/{point}      - Delete point
+POST   /attendance-points/{point}/excuse - Excuse point
+POST   /attendance-points/{point}/unexcuse - Unexcuse point
 
-# Schedules
-GET    /schedules                  - List schedules
-POST   /schedules                  - Create schedule
-PUT    /schedules/{id}             - Update schedule
-DELETE /schedules/{id}             - Delete schedule
+# Employee Schedules
+GET    /employee-schedules              - List schedules
+GET    /employee-schedules/create       - Create form
+POST   /employee-schedules              - Store schedule
+GET    /employee-schedules/{id}         - View schedule
+GET    /employee-schedules/{id}/edit    - Edit form
+PUT    /employee-schedules/{id}         - Update schedule
+DELETE /employee-schedules/{id}         - Delete schedule
+POST   /employee-schedules/{id}/toggle-active - Toggle active
+GET    /employee-schedules/get-schedule - Get schedule
+GET    /employee-schedules/user/{userId}/schedules - User schedules
+GET    /schedule-setup                  - First-time setup
+POST   /schedule-setup                  - Store first-time setup
 ```
 
 ## Permissions

@@ -554,4 +554,4 @@ const EMPLOYEE_ROLES = ['Agent', 'IT', 'Utility'];
 
 ---
 
-*Last updated: November 15, 2025*
+*Last updated: December 15, 2025*

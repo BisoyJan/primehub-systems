@@ -58,7 +58,7 @@ stations
 ├── site_id (foreign key → sites)
 ├── station_number
 ├── campaign_id (foreign key → campaigns)
-├── status (enum: Active, Vacant, Maintenance)
+├── status (Admin, Occupied, Vacant, No PC)
 ├── monitor_type (enum: single, dual)
 ├── pc_spec_id (foreign key → pc_specs, nullable)
 └── timestamps
@@ -154,7 +154,7 @@ GET    /stations/qrcode/zip/{jobId}/download   - Download generated ZIP
 - **Campaign Tracking**: Associate stations with campaigns/projects
 - **PC Assignment**: Assign PCs to stations (one-to-one)
 - **Monitor Configuration**: Track single/dual monitor setups
-- **Status Tracking**: Active, Vacant, Maintenance states
+- **Status Tracking**: Admin, Occupied, Vacant, No PC states
 
 ### QR Code System
 - **Individual Codes**: Generate QR for single station
@@ -172,7 +172,7 @@ GET    /stations/qrcode/zip/{jobId}/download   - Download generated ZIP
 - **Search by Number**: Find stations by station number
 - **Filter by Site**: Filter stations by location
 - **Filter by Campaign**: Filter stations by campaign
-- **Filter by Status**: Filter by Active/Vacant/Maintenance
+- **Filter by Status**: Filter by Admin/Occupied/Vacant/No PC
 
 ---
 
@@ -232,4 +232,4 @@ The dashboard displays:
 
 ---
 
-*Last updated: November 28, 2025*
+*Last updated: December 15, 2025*

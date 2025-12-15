@@ -370,6 +370,10 @@ sudo systemctl restart apache2    # or nginx
 
 ---
 
-**Last Updated:** January 2025  
+---
+
+**Last Updated:** December 15, 2025  
 **PHP Version Tested:** 8.2+, 8.3, 8.4  
 **Laravel Version:** 11.x
+
+*Last updated: December 15, 2025*

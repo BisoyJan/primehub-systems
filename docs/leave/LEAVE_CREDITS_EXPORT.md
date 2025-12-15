@@ -148,6 +148,10 @@ If `QUEUE_CONNECTION=sync` in `.env`, jobs run immediately without background pr
 ## Future Enhancements
 - [ ] Filter by role or department
 - [ ] Include month-by-month breakdown
+
+---
+
+*Last updated: December 15, 2025*
 - [ ] Export as PDF option
 - [ ] Email export to specific recipients
 - [ ] Schedule automatic monthly exports

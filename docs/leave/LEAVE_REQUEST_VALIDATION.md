@@ -557,4 +557,4 @@ assertContains('absence in the last 30 days', implode(' ', $errors));
 
 ---
 
-*Last updated: November 15, 2025*
+*Last updated: December 15, 2025*

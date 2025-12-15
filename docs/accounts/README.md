@@ -38,7 +38,7 @@ users
 ├── email (unique)
 ├── email_verified_at (timestamp, nullable)
 ├── password (hashed)
-├── role (enum)
+├── role (enum: 'Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility')
 ├── time_format (string)
 ├── hired_date (date, nullable)
 ├── is_approved (boolean, default: false)
@@ -58,13 +58,13 @@ users
 ### User Roles
 | Role | Description |
 |------|-------------|
-| `super_admin` | Super Admin - Full system access |
-| `admin` | Admin - Administrative access |
-| `team_lead` | Team Lead - Supervisor access |
-| `agent` | Agent - Basic user access |
-| `hr` | HR - HR-focused access |
-| `it` | IT - IT-focused access |
-| `utility` | Utility - Minimal access |
+| `Super Admin` | Super Admin - Full system access |
+| `Admin` | Admin - Administrative access |
+| `Team Lead` | Team Lead - Supervisor access |
+| `Agent` | Agent - Basic user access |
+| `HR` | HR - HR-focused access |
+| `IT` | IT - IT-focused access |
+| `Utility` | Utility - Minimal access |
 
 ---
 
@@ -98,8 +98,9 @@ POST   /accounts/{id}/toggle-active   - Toggle employee active status
 POST   /accounts/bulk-approve         - Bulk approve accounts
 POST   /accounts/bulk-unapprove       - Bulk unapprove accounts
 POST   /accounts/{id}/confirm-delete  - Confirm account deletion
-POST   /accounts/{id}/restore         - Restore deleted account
+POST   /accounts/{id}/restore         - Restore soft-deleted account
 DELETE /accounts/{id}/force-delete    - Permanently delete account
+
 
 # Account Reactivation (Guest Routes)
 GET    /account/reactivate            - Reactivation page
@@ -316,7 +317,7 @@ Mail::to($user)->send(new EmployeeAccessRevoked($user));
 - `app/Http/Controllers/Settings/PreferencesController.php` - User preferences
 
 ### Policies
-- `app/Policies/UserPolicy.php` - User authorization rules
+- `app/Policies/AccountPolicy.php` - User authorization rules
 
 ### Middleware
 - `app/Http/Middleware/EnsureUserIsApproved.php` - Check user approval

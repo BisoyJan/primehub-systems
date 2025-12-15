@@ -37,15 +37,13 @@ Roles determine what users can access:
 
 | Role | Access Level |
 |------|--------------|
-| super_admin | Everything |
-| admin | Administrative |
-| team_lead | Supervisory |
-| agent | Basic |
-| hr | HR functions |
-| it | IT functions |
-| utility | Minimal |
-
-### 4. View Activity Logs
+| Super Admin | Everything |
+| Admin | Administrative |
+| Team Lead | Supervisory |
+| Agent | Basic |
+| HR | HR functions |
+| IT | IT functions |
+| Utility | Minimal |
 
 1. Navigate to `/activity-logs`
 2. Filter by:
@@ -95,9 +93,10 @@ Roles determine what users can access:
 
 ### Deactivate User (Unapprove)
 
-1. Go to `/accounts/{id}/edit`
-2. Click "Unapprove"
-3. Optionally send email notification
+1. Go to `/accounts`
+2. Find the user in the list
+3. Click "Revoke" button
+4. Optionally send email notification
 4. User loses access immediately
 
 ### Toggle Employee Active Status
@@ -183,13 +182,13 @@ Roles determine what users can access:
 ### Role Hierarchy
 
 ```
-super_admin (Full Access)
-└── admin (Administrative)
-    ├── team_lead (Supervisory)
-    ├── hr (HR Functions)
-    └── it (IT Functions)
-        └── agent (Basic)
-            └── utility (Minimal)
+Super Admin (Full Access)
+└── Admin (Administrative)
+    ├── Team Lead (Supervisory)
+    ├── HR (HR Functions)
+    └── IT (IT Functions)
+        └── Agent (Basic)
+            └── Utility (Minimal)
 ```
 
 ### Activity Log Events
@@ -208,7 +207,7 @@ super_admin (Full Access)
 php artisan tinker
 
 $user = \App\Models\User::where('email', 'test@example.com')->first();
-$user->role;          // Check role
+$user->role;          // Check role (e.g., 'Super Admin', 'Agent')
 $user->is_approved;   // Check approval
 $user->is_active;     // Check employee active status
 $user->isSoftDeleted();     // Check if deleted

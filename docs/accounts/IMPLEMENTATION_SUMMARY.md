@@ -36,7 +36,7 @@ A comprehensive user account management system with role-based access control, a
    - `CheckRole.php` - Role verification
 
 5. **Policies**
-   - `UserPolicy.php` - User authorization rules
+   - `AccountPolicy.php` - User authorization rules
 
 6. **Mail**
    - `EmployeeAccessRevoked.php` - Email when user is unapproved
@@ -48,9 +48,9 @@ A comprehensive user account management system with role-based access control, a
 ### Frontend (React + TypeScript)
 
 1. **Account Pages** (`resources/js/pages/Account/`)
-   - `Index.tsx` - User list with search, filters, bulk actions
+   - `Index.tsx` - User list with search, filters, bulk actions, approval/revocation, deletion
    - `Create.tsx` - Add new user
-   - `Edit.tsx` - Modify user, approval actions, deletion
+   - `Edit.tsx` - Modify user details, role, and employee status
 
 2. **Activity Log Pages** (`resources/js/pages/Admin/ActivityLogs/`)
    - `Index.tsx` - Audit trail viewer
@@ -88,13 +88,13 @@ A comprehensive user account management system with role-based access control, a
 
 | Role | Description |
 |------|-------------|
-| super_admin | Full system access |
-| admin | Administrative access |
-| team_lead | Supervisor access |
-| agent | Basic user access |
-| hr | HR-focused access |
-| it | IT-focused access |
-| utility | Minimal access |
+| Super Admin | Full system access |
+| Admin | Administrative access |
+| Team Lead | Supervisor access |
+| Agent | Basic user access |
+| HR | HR-focused access |
+| IT | IT-focused access |
+| Utility | Minimal access |
 
 ### 3. Account Lifecycle
 
@@ -152,7 +152,7 @@ users (
     first_name, middle_name, last_name,
     email, email_verified_at,
     password,
-    role,                      -- enum: super_admin, admin, team_lead, agent, hr, it, utility
+    role,                      -- enum: 'Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility'
     time_format,
     hired_date,
     is_approved,               -- boolean (approval status)
@@ -312,7 +312,7 @@ app/
 │       ├── CheckPermission.php
 │       └── CheckRole.php
 ├── Policies/
-│   └── UserPolicy.php
+│   └── AccountPolicy.php
 ├── Mail/
 │   └── EmployeeAccessRevoked.php
 ├── Providers/

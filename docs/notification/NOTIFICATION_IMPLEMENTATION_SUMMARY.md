@@ -183,32 +183,50 @@ class YourController extends Controller
 The system is already integrated with:
 
 ### Leave Requests
-- ✅ Notifies HR/Admin when new leave request is submitted
+- ✅ Notifies HR/Admin/Team Lead when new leave request is submitted
 - ✅ Notifies employee when leave request is approved
 - ✅ Notifies employee when leave request is denied
+- ✅ Notifies Admin when HR approves (dual approval)
+- ✅ Notifies HR when Admin approves (dual approval)
+- ✅ Notifies Team Lead for agent leave requests
+- ✅ Notifies agent when Team Lead approves/rejects
+- ✅ Notifies Admin/HR when Team Lead approves
+- ✅ Notifies about leave request cancellations
+
+### IT Concerns
+- ✅ Notifies IT/Super Admin when new concern is reported
+- ✅ Notifies requester when concern status changes
+- ✅ Notifies IT roles when concern is updated by agent
+- ✅ Notifies IT roles when concern is cancelled
+
+### Medication Requests
+- ✅ Notifies HR/Admin when new medication request is submitted
+- ✅ Notifies employee when request status changes (approved/denied/dispensed)
+- ✅ Notifies HR roles about cancellations
+
+### Attendance
+- ✅ Notifies employee about attendance status verification
+- ✅ Notifies employee about attendance points incurred
+- ✅ Notifies employee about manual attendance point entries
+
+### Account Management
+- ✅ Notifies Super Admin/Admin/IT about account deletion requests
+- ✅ Notifies admin roles about account reactivation
+- ✅ Notifies user when their account is restored by admin
+
+### PC Assignments
+- ✅ Notifies relevant users when PC is assigned to station
 
 ### Ready to Integrate
 The following areas can easily add notifications:
 
-1. **IT Concerns**
-   - Notify IT team when new concern is reported
-   - Notify requester when concern status changes
-
-2. **Medication Requests**
-   - Notify HR when new medication request is submitted
-   - Notify employee when request is processed
-
-3. **PC Maintenance**
+1. **PC Maintenance**
    - Notify relevant staff when maintenance is due
    - Notify when maintenance is completed
 
-4. **Station Assignments**
-   - Notify when PC is assigned to station
-   - Notify when station changes are made
-
-5. **Attendance Issues**
-   - Notify supervisor about attendance violations
-   - Notify employee about attendance points
+2. **Station Management**
+   - Notify when station status changes
+   - Notify about bulk station operations
 
 ## Files Created/Modified
 
@@ -300,3 +318,7 @@ The notification system is fully functional and ready for production use. It pro
 All components are documented, tested, and integrated into the existing codebase with minimal disruption. Developers can easily add new notification types and integrate notifications into additional features as needed.
 
 **Status**: ✅ Complete and Ready for Use
+
+---
+
+*Last updated: December 15, 2025*

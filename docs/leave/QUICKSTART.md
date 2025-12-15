@@ -280,3 +280,5 @@ The create form shows:
 ---
 
 **Need help?** Check the [full documentation](README.md) or [implementation details](IMPLEMENTATION_SUMMARY.md).
+
+*Last updated: December 15, 2025*

@@ -6,7 +6,7 @@ Welcome to the PrimeHub Systems comprehensive documentation! This directory cont
 
 ## 📂 Documentation Structure
 
-### 🖥️ **Computer & Hardware** (`computer/`) ⭐ NEW
+### 🖥️ **Computer & Hardware** (`computer/`) 
 PC specifications, hardware inventory, QR codes, and asset management.
 
 - **[README.md](computer/README.md)** - Computer & hardware system overview
@@ -18,7 +18,7 @@ PC specifications, hardware inventory, QR codes, and asset management.
   - Stock inventory
   - PC transfers and maintenance
 
-### 🏢 **Stations & Sites** (`stations/`) ⭐ NEW
+### 🏢 **Stations & Sites** (`stations/`) 
 Workstation management, physical locations, and campaigns.
 
 - **[README.md](stations/README.md)** - Station management overview
@@ -60,7 +60,7 @@ Complete documentation for the employee leave management system.
 - **[LEAVE_REQUEST_VALIDATION.md](leave/LEAVE_REQUEST_VALIDATION.md)** - Validation rules
 - **[LEAVE_APPROVAL_WORKFLOW.md](leave/LEAVE_APPROVAL_WORKFLOW.md)** - Approval process
 
-### 📝 **Form Requests** (`form-requests/`) ⭐ NEW
+### 📝 **Form Requests** (`form-requests/`) 
 Employee form request systems documentation.
 
 - **[README.md](form-requests/README.md)** - Form requests overview
@@ -70,7 +70,7 @@ Employee form request systems documentation.
   - Medication requests
   - Retention policies
 
-### 👤 **Accounts & Activity** (`accounts/`) ⭐ NEW
+### 👤 **Accounts & Activity** (`accounts/`) 
 User management and activity logging.
 
 - **[README.md](accounts/README.md)** - Account management overview
@@ -91,21 +91,27 @@ Role-Based Access Control (RBAC) system documentation.
 - **[QUICK_REFERENCE.md](authorization/QUICK_REFERENCE.md)** - Quick reference
 - **[ROLE_ACCESS_MATRIX.md](authorization/ROLE_ACCESS_MATRIX.md)** - Permission matrix
 
-### 🔔 **Notifications**
+### 🔔 **Notifications** (`notification/`)
 Notification system documentation.
 
-- **[NOTIFICATION_SYSTEM.md](NOTIFICATION_SYSTEM.md)** - Complete notification system
-- **[NOTIFICATION_QUICKSTART.md](NOTIFICATION_QUICKSTART.md)** - Quick start guide
+- **[NOTIFICATION_SYSTEM.md](notification/NOTIFICATION_SYSTEM.md)** - Complete notification system
+- **[NOTIFICATION_QUICKSTART.md](notification/NOTIFICATION_QUICKSTART.md)** - Quick start guide
+- **[NOTIFICATION_IMPLEMENTATION_SUMMARY.md](notification/NOTIFICATION_IMPLEMENTATION_SUMMARY.md)** - Technical overview
 
-### 📊 **Database** (`database/`) ⭐ NEW
+### 📊 **Database** (`database/`) 
 Database schema and architecture.
 
 - **[SCHEMA.md](database/SCHEMA.md)** - Complete database schema reference
 
-### 🌐 **API Reference** (`api/`) ⭐ NEW
+### 🌐 **API Reference** (`api/`)
 Routes and API documentation.
 
 - **[ROUTES.md](api/ROUTES.md)** - Complete routes reference
+
+### 📱 **QR Code System** (`QR/`)
+QR code generation and management documentation.
+
+- **[IMPLEMENTATION_SUMMARY.md](QR/IMPLEMENTATION_SUMMARY.md)** - QR code technical overview
 
 ### ⚙️ **Setup & Configuration** (`setup/`)
 Technical setup guides for server configuration.
@@ -165,7 +171,7 @@ Environment setup and deployment.
 5. **[BIOMETRIC_ENHANCEMENTS_STATUS.md](../BIOMETRIC_ENHANCEMENTS_STATUS.md)** - Implementation status (in root)
 
 ### For Leave Management
-1. **[leave/README.md](leave/README.md)** ⭐ **NEW** - Complete system documentation
+1. **[leave/README.md](leave/README.md)** - Complete system overview
 2. Database schema (leave_credits, leave_requests tables)
 3. Business rules and validation logic
 4. Console commands (accrual + backfilling)
@@ -242,18 +248,18 @@ These important docs are in the project root directory:
 docs/
 ├── README.md                              ← You are here
 │
-├── accounts/                              ← User Account Management ⭐ NEW
+├── accounts/                              ← User Account Management 
 │   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
-│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
+│   ├── QUICKSTART.md                      
+│   └── IMPLEMENTATION_SUMMARY.md          
 │
-├── api/                                   ← API & Routes Reference ⭐ NEW
+├── api/                                   ← API & Routes Reference 
 │   └── ROUTES.md
 │
 ├── attendance/                            ← Attendance System
 │   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
-│   ├── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
+│   ├── QUICKSTART.md                      
+│   ├── IMPLEMENTATION_SUMMARY.md          
 │   ├── ATTENDANCE_GROUPING_LOGIC.md
 │   ├── AUTOMATIC_POINT_GENERATION.md
 │   ├── CROSS_UPLOAD_TIMEOUT_HANDLING.md
@@ -262,7 +268,7 @@ docs/
 │
 ├── authorization/                         ← RBAC System
 │   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
+│   ├── QUICKSTART.md                      
 │   ├── IMPLEMENTATION_SUMMARY.md
 │   ├── QUICK_REFERENCE.md
 │   ├── RBAC_GUIDE.md
@@ -270,23 +276,23 @@ docs/
 │
 ├── biometric/                             ← Biometric Records
 │   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
+│   ├── QUICKSTART.md                      
 │   ├── BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md
 │   ├── BIOMETRIC_RECORDS_STORAGE.md
 │   └── BIOMETRIC_RECORDS_UI.md
 │
-├── computer/                              ← Computer & Hardware ⭐ NEW
+├── computer/                              ← Computer & Hardware 
 │   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
-│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
+│   ├── QUICKSTART.md                      
+│   └── IMPLEMENTATION_SUMMARY.md          
 │
-├── database/                              ← Database Schema ⭐ NEW
+├── database/                              ← Database Schema 
 │   └── SCHEMA.md
 │
-├── form-requests/                         ← Form Requests ⭐ NEW
+├── form-requests/                         ← Form Requests 
 │   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
-│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
+│   ├── QUICKSTART.md                      
+│   └── IMPLEMENTATION_SUMMARY.md          
 │
 ├── guides/                                ← Deployment & Setup
 │   ├── README.md
@@ -299,8 +305,8 @@ docs/
 │
 ├── leave/                                 ← Leave Management
 │   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
-│   ├── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
+│   ├── QUICKSTART.md                      
+│   ├── IMPLEMENTATION_SUMMARY.md          
 │   ├── LEAVE_APPROVAL_WORKFLOW.md
 │   ├── LEAVE_CREDITS_ACCRUAL.md
 │   └── LEAVE_REQUEST_VALIDATION.md
@@ -310,14 +316,22 @@ docs/
 │   ├── PHP_EXTENSIONS_SETUP.md
 │   └── QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD
 │
-├── stations/                              ← Station Management ⭐ NEW
-│   ├── README.md
-│   ├── QUICKSTART.md                      ⭐ NEW
-│   └── IMPLEMENTATION_SUMMARY.md          ⭐ NEW
+├── notification/                          ← Notification System
+│   ├── NOTIFICATION_SYSTEM.md
+│   ├── NOTIFICATION_QUICKSTART.md
+│   └── NOTIFICATION_IMPLEMENTATION_SUMMARY.md
 │
-├── NOTIFICATION_IMPLEMENTATION_SUMMARY.md
-├── NOTIFICATION_QUICKSTART.md
-└── NOTIFICATION_SYSTEM.md
+├── QR/                                    ← QR Code Documentation
+│
+├── setup/                                 ← Server Setup
+│   ├── README.md
+│   ├── PHP_EXTENSIONS_SETUP.md
+│   └── QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD
+│
+└── stations/                              ← Station Management
+    ├── README.md
+    ├── QUICKSTART.md
+    └── IMPLEMENTATION_SUMMARY.md
 ```
 
 ---
@@ -352,7 +366,7 @@ docs/
    - Request workflow and approval process
    - Console commands and setup
 
-### Path 5: IT Department - Computer & Hardware ⭐ NEW
+### Path 5: IT Department - Computer & Hardware 
 1. **[computer/README.md](computer/README.md)** → Complete hardware system
    - PC spec management and tracking
    - Hardware components (RAM, Disk, Processor, Monitor)
@@ -362,7 +376,7 @@ docs/
 2. **[stations/README.md](stations/README.md)** → Station management
    - Station, site, and campaign hierarchy
 
-### Path 6: HR Department - Form Requests ⭐ NEW
+### Path 6: HR Department - Form Requests 
 1. **[form-requests/README.md](form-requests/README.md)** → Form request system
    - IT concerns workflow
    - Medication requests
@@ -371,7 +385,7 @@ docs/
    - Account creation and management
    - Activity logging and audit trail
 
-### Path 7: Understanding Authorization ⭐ NEW
+### Path 7: Understanding Authorization 
 1. **[authorization/README.md](authorization/README.md)** → RBAC overview
 2. **[authorization/RBAC_GUIDE.md](authorization/RBAC_GUIDE.md)** → Implementation guide
 3. **[authorization/ROLE_ACCESS_MATRIX.md](authorization/ROLE_ACCESS_MATRIX.md)** → Permission matrix
@@ -429,7 +443,7 @@ php artisan leave:backfill-credits --user=123
 ```
 See: [leave/README.md](leave/README.md)
 
-### Managing PC Specs & Hardware ⭐ NEW
+### Managing PC Specs & Hardware 
 1. Navigate to `/computer/pc-specs` → Manage PC specifications
 2. Navigate to `/computer/ram-specs` → Manage RAM inventory
 3. Navigate to `/computer/disk-specs` → Manage disk inventory
@@ -438,14 +452,14 @@ See: [leave/README.md](leave/README.md)
 
 See: [computer/README.md](computer/README.md)
 
-### Managing Stations ⭐ NEW
+### Managing Stations 
 1. Navigate to `/sites` → Manage sites
 2. Navigate to `/campaigns` → Manage campaigns
 3. Navigate to `/stations` → Manage stations
 
 See: [stations/README.md](stations/README.md)
 
-### Managing User Accounts ⭐ NEW
+### Managing User Accounts 
 1. Navigate to `/accounts` → View all users
 2. Navigate to `/accounts/create` → Create new user
 3. Navigate to `/admin/activity-log` → View audit trail
@@ -482,13 +496,13 @@ See: [accounts/README.md](accounts/README.md)
 - **Accrual Schedule:** Last day of month at 11:00 PM
 - **⚠️ Annual Reset:** Credits expire on Dec 31
 
-### Computer & Hardware ⭐ NEW
+### Computer & Hardware 
 - **Hardware Types:** 5 (PC Specs, RAM, Disk, Processor, Monitor)
 - **QR Generation:** Individual and bulk ZIP download
 - **Maintenance Tracking:** Scheduled and reactive
 - **Transfer System:** Full audit trail between stations
 
-### Form Requests ⭐ NEW
+### Form Requests 
 - **Request Types:** IT Concerns, Medication Requests
 - **Retention Policies:** Configurable per request type
 - **Workflow:** Submit → Review → Approve/Reject
@@ -555,20 +569,20 @@ When adding new documentation:
 
 | Category | Last Updated | Status |
 |----------|--------------|--------|
-| Accounts & Activity | Nov 28, 2025 | ⭐ NEW |
-| API Routes Reference | Nov 28, 2025 | ⭐ NEW |
-| Attendance System | Nov 13, 2025 | ✅ Complete |
-| Authorization/RBAC | Nov 15, 2025 | ✅ Complete |
-| Biometric Records | Nov 10, 2025 | ✅ Complete |
-| Computer & Hardware | Nov 28, 2025 | ⭐ NEW |
-| Database Schema | Nov 28, 2025 | ⭐ NEW |
+| Accounts & Activity | Dec 15, 2025 | ✅ Complete |
+| API Routes Reference | Dec 15, 2025 | ✅ Complete |
+| Attendance System | Dec 15, 2025 | ✅ Complete |
+| Authorization/RBAC | Dec 15, 2025 | ✅ Complete |
+| Biometric Records | Dec 15, 2025 | ✅ Complete |
+| Computer & Hardware | Dec 15, 2025 | ✅ Complete |
+| Database Schema | Dec 15, 2025 | ✅ Complete |
 | Deployment Guides | Nov 1, 2025 | ✅ Complete |
-| Form Requests | Nov 28, 2025 | ⭐ NEW |
-| Leave Management | Nov 15, 2025 | ✅ Complete |
-| Notifications | Nov 15, 2025 | ✅ Complete |
-| Point Expiration | Nov 13, 2025 | ✅ Complete |
-| Setup Guides | Nov 10, 2025 | ✅ Complete |
-| Stations & Sites | Nov 28, 2025 | ⭐ NEW |
+| Form Requests | Dec 15, 2025 | ✅ Complete |
+| Leave Management | Dec 15, 2025 | ✅ Complete |
+| Notifications | Dec 15, 2025 | ✅ Complete |
+| Point Expiration | Dec 15, 2025 | ✅ Complete |
+| Setup Guides | Dec 15, 2025 | ✅ Complete |
+| Stations & Sites | Dec 15, 2025 | ✅ Complete |
 | Test Documentation | Nov 10, 2025 | ✅ Complete |
 
 ---
@@ -612,4 +626,4 @@ When adding new documentation:
 
 For questions or documentation requests, please contact the development team.
 
-*Last updated: November 28, 2025*
+*Last updated: December 15, 2025*

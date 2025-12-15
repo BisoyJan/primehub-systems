@@ -211,3 +211,7 @@ APP_URL=http://localhost:8000
 ```
 
 Or just use the defaults without setting them.
+
+---
+
+*Last updated: December 15, 2025*

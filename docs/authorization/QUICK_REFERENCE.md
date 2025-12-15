@@ -178,15 +178,17 @@ return (
 
 ## Roles Overview
 
-| Role | Access Level |
-|------|-------------|
-| **Super Admin** | Full access to everything |
-| **Admin** | Most features, limited system settings |
-| **Team Lead** | Supervisor access, can review/verify |
-| **Agent** | Basic read-only access |
-| **HR** | Attendance, schedules, leave management |
-| **IT** | Hardware, PCs, infrastructure |
-| **Utility** | Minimal access |
+| Role (Database Format) | Config Key | Access Level |
+|----------------------|------------|-------------|
+| **Super Admin** | super_admin | Full access to everything |
+| **Admin** | admin | Most features, limited system settings |
+| **Team Lead** | team_lead | Supervisor access, can review/verify |
+| **Agent** | agent | Basic read-only access |
+| **HR** | hr | Attendance, schedules, leave management |
+| **IT** | it | Hardware, PCs, infrastructure |
+| **Utility** | utility | Minimal access |
+
+**Note:** Database uses Title Case (e.g., "Team Lead"). Config keys use snake_case (e.g., 'team_lead').
 
 ## Common Permissions by Feature
 

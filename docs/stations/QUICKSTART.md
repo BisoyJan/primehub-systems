@@ -128,9 +128,10 @@ When a QR code is scanned:
 
 | Status | Color | Description |
 |--------|-------|-------------|
-| Active | Green | In use |
-| Vacant | Yellow | Available |
-| Maintenance | Red | Under repair |
+| Admin | Purple | Reserved for admin/management |
+| Occupied | Green | In use with PC assigned |
+| Vacant | Yellow | Available but unassigned |
+| No PC | Red | Has no PC assigned |
 
 ### Monitor Types
 
@@ -248,3 +249,7 @@ The dashboard shows station metrics:
 ---
 
 **Need help?** Check the [full documentation](README.md) or [implementation details](IMPLEMENTATION_SUMMARY.md).
+
+---
+
+*Last updated: December 15, 2025*

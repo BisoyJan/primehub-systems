@@ -42,6 +42,11 @@ A comprehensive full-stack Laravel + React (TypeScript) application for IT asset
 - **Sites** - Manage physical locations/offices
 - **Campaigns** - Track projects or campaigns with assigned stations
 
+### 📱 Mobile Compatibility
+- **Responsive Design** - All pages are fully responsive with mobile-optimized views
+- **Mobile Cards** - Tables transform into card views on smaller screens for better usability
+- **Touch Friendly** - UI components are optimized for touch interactions
+
 ## Tech Stack
 
 ### Backend
@@ -407,8 +412,8 @@ All guides are organized in the **[docs/guides/](./docs/guides/)** directory:
 
 ### Additional Documentation
 - **[Notification System](./docs/NOTIFICATION_SYSTEM.md)** - Notification implementation details
-- **[QR Code Setup](./docs/QR_CODE_ZIP_GENERATION_SETUP_GUIDE.md)** - QR code feature configuration
-- **[PHP Extensions](./docs/PHP_EXTENSIONS_SETUP.md)** - Required PHP extensions
+- **[QR Code Setup](./docs/setup/QR_CODE_ZIP_GENERATION_SETUP_GUIDE.MD)** - QR code feature configuration
+- **[PHP Extensions](./docs/setup/PHP_EXTENSIONS_SETUP.md)** - Required PHP extensions
 
 ### Project Guidelines
 - **[Copilot Instructions](./.github/copilot-instructions.md)** - AI coding assistant guidelines

@@ -70,11 +70,13 @@ Find unusual patterns:
 
 ### Export Records
 
-Download records for external analysis:
+Download records for external analysis (processed in background):
 
 1. Navigate to `/biometric-export`
 2. Select filters (date, employee, site)
-3. Click "Download CSV"
+3. Click "Export CSV"
+4. Wait for the background job to complete
+5. Click "Download" when ready
 
 ### Manage Retention Policies
 
@@ -222,3 +224,5 @@ The biometric records page shows:
 ---
 
 **Need help?** Check the [full documentation](README.md) or [implementation details](BIOMETRIC_RECORDS_IMPLEMENTATION_SUMMARY.md).
+
+*Last updated: December 15, 2025*

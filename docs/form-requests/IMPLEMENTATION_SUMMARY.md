@@ -80,7 +80,7 @@ A comprehensive form request system for employee submissions including Leave Req
 
 | Field | Description |
 |-------|-------------|
-| Category | Hardware, Software, Network, Account, Other |
+| Category | Hardware, Software, Network/Connectivity, Other |
 | Priority | Low, Medium, High, Urgent |
 | Status | Pending → In Progress → Resolved/Cancelled |
 | Assignment | Assign to IT staff |
@@ -89,7 +89,7 @@ A comprehensive form request system for employee submissions including Leave Req
 
 | Field | Description |
 |-------|-------------|
-| Medication Type | Paracetamol, Ibuprofen, Antacid, etc. |
+| Medication Type | Declogen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs |
 | Reason | Why medication is needed |
 | Symptoms | Onset of symptoms |
 | Policy | Must agree to medication policy |
@@ -133,8 +133,11 @@ leave_credits (
 -- IT Concerns
 it_concerns (
     id, user_id, site_id,
-    station_number, category, description,
-    status, priority,
+    station_number,
+    category,                -- enum: Hardware, Software, Network/Connectivity, Other
+    description,
+    status,                  -- enum: pending, in_progress, resolved, cancelled
+    priority,                -- enum: low, medium, high, urgent (default: medium)
     resolution_notes, resolved_at, resolved_by,
     timestamps
 )
@@ -142,19 +145,25 @@ it_concerns (
 -- Medication Requests
 medication_requests (
     id, user_id,
-    name, medication_type,
-    reason, onset_of_symptoms,
-    agrees_to_policy,
-    status,
+    name,
+    medication_type,         -- enum: Declogen, Biogesic, etc.
+    reason,
+    onset_of_symptoms,       -- enum: Just today, More than 1 day, More than 1 week
+    agrees_to_policy,        -- default: false
+    status,                  -- enum: pending, approved, dispensed, rejected
     approved_by, approved_at, admin_notes,
     timestamps
 )
 
 -- Retention Policies
 form_request_retention_policies (
-    id, request_type,
-    retention_months, is_active,
-    description,
+    id, name, description,
+    retention_months,
+    applies_to_type,         -- enum: global, site
+    applies_to_id,           -- site_id if site-specific
+    form_type,               -- enum: all, leave_request, it_concern, medication_request
+    priority,                -- default: 100
+    is_active,               -- default: true
     timestamps
 )
 ```
@@ -167,9 +176,23 @@ GET    /form-requests/leave-requests           - List
 GET    /form-requests/leave-requests/create    - Create form
 POST   /form-requests/leave-requests           - Submit
 GET    /form-requests/leave-requests/{id}      - View
-POST   /form-requests/leave-requests/{id}/approve - Approve
-POST   /form-requests/leave-requests/{id}/deny    - Deny
-POST   /form-requests/leave-requests/{id}/cancel  - Cancel
+GET    /form-requests/leave-requests/{id}/edit - Edit
+PUT    /form-requests/leave-requests/{id}      - Update
+POST   /form-requests/leave-requests/{id}/approve    - Approve (HR/Admin)
+POST   /form-requests/leave-requests/{id}/deny       - Deny (HR/Admin)
+POST   /form-requests/leave-requests/{id}/approve-tl - Approve (Team Lead)
+POST   /form-requests/leave-requests/{id}/deny-tl    - Deny (Team Lead)
+POST   /form-requests/leave-requests/{id}/cancel     - Cancel
+DELETE /form-requests/leave-requests/{id}      - Delete
+GET    /form-requests/leave-requests/api/credits-balance - Get balance
+POST   /form-requests/leave-requests/api/calculate-days  - Calculate
+POST   /form-requests/leave-requests/export/credits      - Export job
+GET    /form-requests/leave-requests/export/credits/progress - Check progress
+GET    /form-requests/leave-requests/export/credits/download/{filename} - Download
+
+# Leave Credits
+GET    /form-requests/leave-requests/credits        - List all
+GET    /form-requests/leave-requests/credits/{user} - View user
 
 # IT Concerns
 GET    /form-requests/it-concerns              - List
@@ -206,6 +229,7 @@ DELETE /form-requests/retention-policies/{id}  - Delete
 
 ### Leave Request Flow
 
+**Standard Workflow (Non-Agent):**
 ```
 Employee submits → Status: Pending
 → System validates (points, credits, dates)
@@ -214,6 +238,19 @@ Employee submits → Status: Pending
 → Approve: Credits deducted, Status: Approved
 → Deny: Reason required, Status: Denied
 → Cancel: Credits restored (if approved), Status: Cancelled
+```
+
+**Agent Workflow (With Team Lead Approval):**
+```
+Agent submits → Status: Pending
+→ System validates
+→ Team Lead reviews
+→ TL Approve: Status: tl_approved
+   → HR/Admin reviews
+   → Approve: Credits deducted, Status: Approved
+   → Deny: Status: Denied
+→ TL Deny: Status: tl_rejected
+→ Cancel: Credits restored, Status: Cancelled
 ```
 
 ### IT Concern Flow
@@ -321,3 +358,5 @@ php artisan leave:year-end-reminder
 
 **Implementation Date:** November 2025  
 **Status:** ✅ Complete and Production Ready
+
+*Last updated: December 15, 2025*

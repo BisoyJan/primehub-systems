@@ -27,7 +27,7 @@ EmployeeSchedule::create([
 ]);
 ```
 
-Or navigate to `/schedules` in the application.
+Or navigate to `/employee-schedules` in the application.
 
 ### 2. Import Attendance File
 
@@ -113,33 +113,43 @@ Navigate to `/attendance` and check the statistics panel:
 
 ### Status Types
 
-| Status | Points | Description |
-|--------|--------|-------------|
-| on_time | 0 | On time |
-| late | 0.25 | Tardy |
-| half_day | 0.50 | Late >4 hours |
-| absent | 0 | No record (manual) |
-| ncns | 1.00 | No Call No Show |
-| ftn | 1.00 | Failure to Notify |
+| Status | Description |
+|--------|-------------|
+| on_time | On time |
+| tardy | Tardy (late within threshold) |
+| half_day_absence | Late >4 hours or significant absence |
+| advised_absence | Pre-notified absence |
+| ncns | No Call No Show |
+| undertime | Left early |
+| failed_bio_in | Missing time in biometric |
+| failed_bio_out | Missing time out biometric |
+| present_no_bio | Present but no biometric record |
+| needs_manual_review | Requires manual review |
+| non_work_day | Non-working day |
+| on_leave | Employee on approved leave |
 
-### Expiration Rules
+### Point Types & Expiration Rules
 
-| Type | Duration | GBRO Eligible |
-|------|----------|---------------|
-| Tardy | 6 months | ✅ Yes |
-| Half-Day | 6 months | ✅ Yes |
-| NCNS | 1 year | ❌ No |
-| FTN | 1 year | ❌ No |
+| Point Type | Points | Duration | GBRO Eligible |
+|------------|--------|----------|---------------|
+| tardy | 0.25 | 6 months | ✅ Yes |
+| undertime | 0.25 | 6 months | ✅ Yes |
+| undertime_more_than_hour | 0.50 | 6 months | ✅ Yes |
+| half_day_absence | 0.50 | 6 months | ✅ Yes |
+| whole_day_absence | 1.00 | 1 year | ❌ No |
 
 ### Key URLs
 
 | Page | URL |
 |------|-----|
 | Attendance List | `/attendance` |
+| Attendance Calendar | `/attendance/calendar/{user?}` |
 | Import Attendance | `/attendance/import` |
+| Review Attendance | `/attendance/review` |
+| Attendance Statistics | `/attendance/statistics` |
 | Attendance Points | `/attendance-points` |
-| User Points | `/attendance-points/{userId}` |
-| Schedules | `/schedules` |
+| User Points | `/attendance-points/{user}` |
+| Employee Schedules | `/employee-schedules` |
 
 ## 🧪 Testing
 
@@ -175,8 +185,14 @@ php artisan schedule:list | grep expiration
 
 **Check:**
 ```php
-// Only these statuses generate points
-$pointStatuses = ['late', 'half_day', 'ncns', 'ftn'];
+// Point types and their values
+$pointValues = [
+    'tardy' => 0.25,
+    'undertime' => 0.25,
+    'undertime_more_than_hour' => 0.50,
+    'half_day_absence' => 0.50,
+    'whole_day_absence' => 1.00,
+];
 ```
 
 ### Wrong Shift Date Grouping

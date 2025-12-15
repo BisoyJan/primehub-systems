@@ -1081,3 +1081,7 @@ For deployment issues:
 4. Review this troubleshooting guide
 
 **Need help?** Contact the development team or check DigitalOcean Community Tutorials.
+
+---
+
+*Last updated: December 15, 2025*

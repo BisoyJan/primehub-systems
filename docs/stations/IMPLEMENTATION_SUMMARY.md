@@ -67,7 +67,7 @@ Site (Physical Location)
 | Station Number | Unique identifier within site |
 | Site | Physical location |
 | Campaign | Associated project |
-| Status | Active / Vacant / Maintenance |
+| Status | Admin / Occupied / Vacant / No PC |
 | Monitor Type | Single / Dual |
 | PC Assignment | Linked PC specification |
 
@@ -88,9 +88,10 @@ Site (Physical Location)
 
 | Status | Description |
 |--------|-------------|
-| Active | Station in use |
-| Vacant | Available station |
-| Maintenance | Under maintenance |
+| Admin | Reserved for admin/management use |
+| Occupied | Station in use with PC assigned |
+| Vacant | Available but unassigned |
+| No PC | Has no PC assigned |
 
 ## Database Schema
 
@@ -107,7 +108,7 @@ stations (
     site_id,           -- FK to sites
     station_number,    -- Unique within site
     campaign_id,       -- FK to campaigns
-    status,            -- enum: Active, Vacant, Maintenance
+    status,            -- Admin, Occupied, Vacant, No PC
     monitor_type,      -- enum: single, dual
     pc_spec_id,        -- FK to pc_specs (nullable)
     timestamps
@@ -280,3 +281,7 @@ The main dashboard displays:
 
 **Implementation Date:** November 2025  
 **Status:** ✅ Complete and Production Ready
+
+---
+
+*Last updated: December 15, 2025*

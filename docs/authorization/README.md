@@ -130,15 +130,17 @@ return [
 
 ## 📋 Available Roles
 
-| Role | Description |
-|------|-------------|
-| Super Admin | Full system access |
-| Admin | Administrative access |
-| Team Lead | Supervisor access |
-| Agent | Basic user access |
-| HR | HR-focused access |
-| IT | IT-focused access |
-| Utility | Minimal access |
+| Role (Database) | Config Key | Description |
+|----------------|------------|-------------|
+| Super Admin | super_admin | Full system access |
+| Admin | admin | Administrative access |
+| Team Lead | team_lead | Supervisor access |
+| Agent | agent | Basic user access |
+| HR | hr | HR-focused access |
+| IT | it | IT-focused access |
+| Utility | utility | Minimal access |
+
+**Important:** Database stores roles as Title Case with spaces. Config arrays use snake_case keys.
 
 ## 🎨 Usage Examples
 
@@ -173,6 +175,7 @@ import { HasRole } from '@/components/authorization';
 <nav>
     <Link href="/dashboard">Dashboard</Link>
     
+    {/* Use Title Case database values */}
     <HasRole role={["Admin", "Super Admin"]}>
         <Link href="/accounts">User Management</Link>
     </HasRole>
@@ -298,4 +301,4 @@ This authorization system is part of the PrimeHub Systems application.
 ---
 
 **Version:** 1.0.0  
-**Last Updated:** November 2025
+**Last Updated:** December 15, 2025

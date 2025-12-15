@@ -9,7 +9,9 @@ A comprehensive Role-Based Access Control (RBAC) system has been successfully im
 ### 1. Backend Components ✅
 
 #### Configuration (`config/permissions.php`)
-- 7 user roles defined (Super Admin, Admin, Team Lead, Agent, HR, IT, Utility)
+- 7 user roles defined:
+  - Database: "Super Admin", "Admin", "Team Lead", "Agent", "HR", "IT", "Utility" (Title Case)
+  - Config keys: 'super_admin', 'admin', 'team_lead', 'agent', 'hr', 'it', 'utility' (snake_case)
 - 60+ permissions covering all system features
 - Role-to-permission mapping matrix
 - Easy to extend and modify
@@ -148,6 +150,16 @@ Permissions are organized by feature:
 - **PC Transfers**: `pc_transfers.{view,create,remove,history}`
 - **PC Maintenance**: `pc_maintenance.{view,create,edit,delete}`
 - **Attendance**: `attendance.{view,create,import,review,verify,approve,statistics,delete}`
+- **Employee Schedules**: `schedules.{view,create,edit,delete,toggle}`
+- **Biometric**: `biometric.{view,reprocess,anomalies,export,retention}`
+- **Attendance Points**: `attendance_points.{view,create,edit,delete,excuse,export,rescan}`
+- **Leave**: `leave.{view,create,edit,approve,deny,cancel,delete,view_all}`
+- **Leave Credits**: `leave_credits.{view_all,view_own}`
+- **IT Concerns**: `it_concerns.{view,create,edit,delete,assign,resolve}`
+- **Medication Requests**: `medication_requests.{view,create,update,delete}`
+- **Form Requests Retention**: `form_requests.retention`
+- **Settings**: `settings.{view,account,password}`
+- **Activity Logs**: `activity_logs.view`
 - **Schedules**: `schedules.{view,create,edit,delete,toggle}`
 - **Biometric**: `biometric.{view,reprocess,anomalies,export,retention}`
 - **Attendance Points**: `attendance_points.{view,excuse,export,rescan}`

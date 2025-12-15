@@ -6,10 +6,19 @@ All components for biometric records storage with 3-month auto-deletion have bee
 
 ## What Was Created
 
-### 1. **BiometricRecord Model** (`app/Models/BiometricRecord.php`)
+### 1. **Models**
+
+**BiometricRecord Model** (`app/Models/BiometricRecord.php`)
 - Eloquent model with relationships to User, AttendanceUpload, and Site
 - Scopes for filtering by user, date, date range, site, and age
 - `olderThan()` scope for cleanup operations
+- Activity logging enabled
+
+**BiometricRetentionPolicy Model** (`app/Models/BiometricRetentionPolicy.php`)
+- Manages retention policies (global, site-specific, department-specific)
+- Priority-based policy resolution
+- Active/inactive status
+- Default retention: 3 months
 
 ### 2. **Updated AttendanceProcessor** (`app/Services/AttendanceProcessor.php`)
 - Added `saveBiometricRecords()` method
@@ -203,3 +212,5 @@ php artisan schedule:list
 **Status: Ready for Production** 🚀
 
 All code is implemented, tested, and documented. Just run the migration and ensure the scheduler is active!
+
+*Last updated: December 15, 2025*

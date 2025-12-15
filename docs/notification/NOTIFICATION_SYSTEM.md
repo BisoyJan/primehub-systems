@@ -10,7 +10,7 @@ A comprehensive notification system for the PrimeHub application that allows use
 - **Full Notifications Page**: Dedicated page to view all notifications with filtering and pagination
 - **Mark as Read/Unread**: Users can mark individual or all notifications as read
 - **Delete Notifications**: Users can delete individual notifications they no longer need
-- **Notification Types**: Support for multiple notification types (maintenance, leave requests, IT concerns, etc.)
+- **Notification Types**: Support for 10+ notification types (maintenance, leave requests, IT concerns, medication requests, attendance, account management, etc.)
 - **Background Polling**: Automatic polling for new notifications every 30 seconds
 
 ## Database Schema
@@ -48,6 +48,7 @@ Available endpoints:
 - `GET /notifications/recent` - Get recent notifications for dropdown
 - `POST /notifications/{notification}/read` - Mark notification as read
 - `POST /notifications/mark-all-read` - Mark all notifications as read
+- `DELETE /notifications/all` - Delete all notifications
 - `DELETE /notifications/{notification}` - Delete a notification
 - `DELETE /notifications/read/all` - Delete all read notifications
 
@@ -57,18 +58,56 @@ Available endpoints:
 Helper service for creating notifications easily throughout the application.
 
 Key methods:
+
+**Core Methods:**
 - `create($user, $type, $title, $message, $data)` - Create a notification
 - `createForMultipleUsers($userIds, ...)` - Create notifications for multiple users
-- `notifyMaintenanceDue($user, $stationName, $dueDate)` - Notify about maintenance due
-- `notifyLeaveRequest($user, $requesterName, $leaveType, $requestId)` - Notify about new leave request
-- `notifyLeaveRequestStatusChange($user, $status, $leaveType, $requestId)` - Notify about leave request status change
-- `notifyItConcern($user, $stationName, $category, $concernId)` - Notify about IT concern
-- `notifyItConcernStatusChange($user, $status, $stationName, $concernId)` - Notify about IT concern status change
-- `notifyMedicationRequest($user, $requesterName, $requestId)` - Notify about medication request
-- `notifyPcAssignment($user, $pcNumber, $stationName)` - Notify about PC assignment
-- `notifySystemMessage($user, $title, $message, $data)` - Send system message
 - `notifyAllUsers($title, $message, $data)` - Send notification to all users
 - `notifyUsersByRole($role, $type, $title, $message, $data)` - Send notification to users with specific role
+
+**Maintenance:**
+- `notifyMaintenanceDue($user, $stationName, $dueDate)` - Notify about maintenance due
+
+**Leave Requests (20+ methods):**
+- `notifyLeaveRequest($user, $requesterName, $leaveType, $requestId)` - Notify about new leave request
+- `notifyLeaveRequestStatusChange($user, $status, $leaveType, $requestId)` - Notify about leave request status change
+- `notifyHrRolesAboutNewLeaveRequest(...)` - Notify HR/Admin about new leave request
+- `notifyHrRolesAboutLeaveCancellation(...)` - Notify about cancellation
+- `notifyAdminAboutHrApproval(...)` - Notify Admin when HR approves
+- `notifyHrAboutAdminApproval(...)` - Notify HR when Admin approves
+- `notifyLeaveRequestFullyApproved(...)` - Notify employee when fully approved
+- `notifyTeamLeadAboutNewLeaveRequest(...)` - Notify Team Lead about agent request
+- `notifyAgentAboutTLApproval(...)` - Notify agent about TL approval
+- `notifyAgentAboutTLRejection(...)` - Notify agent about TL rejection
+- `notifyAdminHrAboutTLApproval(...)` - Notify Admin/HR about TL approval
+
+**IT Concerns:**
+- `notifyItConcern($user, $stationName, $category, $concernId)` - Notify about IT concern
+- `notifyItConcernStatusChange($user, $status, $stationName, $concernId)` - Notify about IT concern status change
+- `notifyItRolesAboutNewConcern(...)` - Notify IT roles about new concern
+- `notifyItRolesAboutConcernUpdate(...)` - Notify IT roles about update
+- `notifyItRolesAboutConcernCancellation(...)` - Notify IT roles about cancellation
+
+**Medication Requests:**
+- `notifyMedicationRequest($user, $requesterName, $requestId)` - Notify about medication request
+- `notifyMedicationRequestStatusChange(...)` - Notify about status change
+- `notifyHrRolesAboutNewMedicationRequest(...)` - Notify HR roles about new request
+- `notifyHrRolesAboutMedicationRequestCancellation(...)` - Notify HR about cancellation
+
+**Attendance:**
+- `notifyAttendanceStatus($user, $status, $date, $points)` - Notify about attendance status
+- `notifyManualAttendancePoint($user, $pointType, $date, $points)` - Notify about manual point entry
+
+**Account Management:**
+- `notifyAccountDeletionRequest($accountName, $deletedByName, $accountId)` - Notify about deletion request
+- `notifyAccountReactivated($accountName, $accountId)` - Notify about reactivation
+- `notifyAccountRestored($user)` - Notify user about account restoration
+
+**PC Assignment:**
+- `notifyPcAssignment($user, $pcNumber, $stationName)` - Notify about PC assignment
+
+**System:**
+- `notifySystemMessage($user, $title, $message, $data)` - Send system message
 
 ## Frontend Components
 
@@ -178,9 +217,13 @@ The following notification types are predefined with helper methods:
 1. **maintenance_due** - PC/Station maintenance notifications
 2. **leave_request** - Leave request submissions and status changes
 3. **it_concern** - IT issues and their resolution
-4. **medication_request** - Medication request submissions
+4. **medication_request** - Medication request submissions and status changes
 5. **pc_assignment** - PC assignment to stations
 6. **system** - General system announcements
+7. **attendance_status** - Attendance status verification and point tracking
+8. **account_deletion** - Account deletion requests
+9. **account_reactivation** - Account reactivation notifications
+10. **account_restored** - Account restoration by admin
 
 You can also create custom notification types by using the `create()` method directly.
 
@@ -300,3 +343,7 @@ You can add similar integrations to other controllers like:
 - Verify routes are properly protected with auth middleware
 - Check that users have proper permissions
 - Ensure notification ownership is validated in controller
+
+---
+
+*Last updated: December 15, 2025*

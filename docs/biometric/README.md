@@ -91,13 +91,6 @@ Complete guide to the biometric records management UI.
 - Real-time search
 - Detailed record view
 
----
-
-## 🔗 Related Documentation
-
-### In Project Root
-- **[../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)** - 4 new features (reprocessing, anomalies, export, retention policies)
-- **[../../BIOMETRIC_ENHANCEMENTS_STATUS.md](../../BIOMETRIC_ENHANCEMENTS_STATUS.md)** - Implementation status checklist
 - **[../../BIOMETRIC_UI_FIXES.md](../../BIOMETRIC_UI_FIXES.md)** - UI troubleshooting guide
 
 ### In Attendance Folder
@@ -200,6 +193,8 @@ See **[../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../../BIOMETRIC_ENHANCEME
 ## 🔧 Common Tasks
 
 ### Viewing Biometric Records
+**Permission Required:** `biometric.view`
+
 1. Navigate to `/biometric-records`
 2. Use filters (employee, site, date range)
 3. Click record to see details
@@ -220,6 +215,8 @@ php artisan schedule:list
 ```
 
 ### Reprocessing Attendance
+**Permission Required:** `biometric.reprocess`
+
 1. Navigate to `/biometric-reprocessing`
 2. Select date range
 3. Preview affected records
@@ -228,17 +225,23 @@ php artisan schedule:list
 See **[../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md)** for details.
 
 ### Detecting Anomalies
+**Permission Required:** `biometric.anomalies`
+
 1. Navigate to `/biometric-anomalies`
 2. Select date range and anomaly types
 3. Review detected patterns
 4. Take corrective actions
 
 ### Exporting Records
+**Permission Required:** `biometric.export`
+
 1. Navigate to `/biometric-export`
 2. Select filters (dates, employees, sites)
-3. Download CSV file
+3. Download CSV file (job-based export)
 
 ### Managing Retention Policies
+**Permission Required:** `biometric.retention`
+
 1. Navigate to `/biometric-retention-policies`
 2. Create new policy (global or site-specific)
 3. Set retention period in months
@@ -271,11 +274,12 @@ See **[../../BIOMETRIC_ENHANCEMENTS_IMPLEMENTATION.md](../../BIOMETRIC_ENHANCEME
 - `app/Http/Controllers/BiometricRetentionPolicyController.php` - Policies
 
 ### Frontend Pages
-- `resources/js/pages/BiometricRecords/Index.tsx` - Main listing
-- `resources/js/pages/BiometricRecords/Reprocessing.tsx` - Reprocessing UI
-- `resources/js/pages/BiometricRecords/Anomalies.tsx` - Anomaly detection UI
-- `resources/js/pages/BiometricRecords/Export.tsx` - Export UI
-- `resources/js/pages/BiometricRecords/RetentionPolicies.tsx` - Policies UI
+- `resources/js/pages/Attendance/BiometricRecords/Index.tsx` - Main listing
+- `resources/js/pages/Attendance/BiometricRecords/Show.tsx` - Record details
+- `resources/js/pages/Attendance/BiometricRecords/Reprocessing/Index.tsx` - Reprocessing UI
+- `resources/js/pages/Attendance/BiometricRecords/Anomalies/Index.tsx` - Anomaly detection UI
+- `resources/js/pages/Attendance/BiometricRecords/Export/Index.tsx` - Export UI
+- `resources/js/pages/Attendance/BiometricRecords/RetentionPolicies/Index.tsx` - Policies UI
 
 ### Commands
 - `app/Console/Commands/CleanOldBiometricRecords.php` - Cleanup command
@@ -352,4 +356,4 @@ php artisan test tests/Unit/AttendanceProcessorTest.php
 
 ---
 
-*Last updated: November 22, 2025*
+*Last updated: December 15, 2025*

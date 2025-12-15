@@ -630,4 +630,4 @@ assertEquals($balanceBefore + 5.0, $balanceAfter);
 
 ---
 
-*Last updated: November 15, 2025*
+*Last updated: December 15, 2025*

@@ -56,15 +56,20 @@ Primary user accounts table.
 | email | varchar(255) | Unique email address |
 | email_verified_at | timestamp | Email verification timestamp |
 | password | varchar(255) | Hashed password |
-| role | enum | User role (super_admin, admin, team_lead, agent, hr, it, utility) |
-| time_format | varchar(10) | Preferred time format |
+| role | enum | User role (Super Admin, Admin, Team Lead, Agent, HR, IT, Utility) |
+| is_active | boolean | Account active status (default: true) |
+| is_approved | boolean | Account approval status (default: false) |
+| time_format | enum | Preferred time format (12 or 24, default: 24) |
 | hired_date | date | Employment start date (nullable) |
-| is_approved | boolean | Account approval status |
 | approved_at | timestamp | Approval timestamp |
 | two_factor_secret | text | 2FA secret (nullable) |
 | two_factor_recovery_codes | text | 2FA recovery codes (nullable) |
 | two_factor_confirmed_at | timestamp | 2FA confirmation timestamp |
 | remember_token | varchar(100) | Session remember token |
+| deleted_at | timestamp | Soft delete timestamp (nullable) |
+| deleted_by | bigint | User who deleted (nullable, foreign key) |
+| deletion_confirmed_at | timestamp | Deletion confirmation timestamp (nullable) |
+| deletion_confirmed_by | bigint | User who confirmed deletion (nullable, foreign key) |
 | created_at | timestamp | Created timestamp |
 | updated_at | timestamp | Updated timestamp |
 
@@ -161,6 +166,8 @@ Monitor specifications.
 |--------|------|
 | pc_spec_id | bigint |
 | disk_spec_id | bigint |
+
+**Primary Key**: (pc_spec_id, disk_spec_id)
 
 #### pc_spec_processor_spec
 | Column | Type |
@@ -301,18 +308,22 @@ Attendance records.
 | actual_time_out | datetime | Actual clock out |
 | bio_in_site_id | bigint | Site of clock in |
 | bio_out_site_id | bigint | Site of clock out |
-| status | enum | on_time, tardy, ncns, etc. |
+| status | enum | on_time, tardy, half_day_absence, advised_absence, ncns, undertime, failed_bio_in, failed_bio_out, present_no_bio, needs_manual_review, non_work_day, on_leave |
 | secondary_status | varchar(255) | Additional status |
 | tardy_minutes | integer | Minutes late |
 | undertime_minutes | integer | Minutes early out |
 | overtime_minutes | integer | Overtime minutes |
-| overtime_approved | boolean | OT approved status |
-| is_advised | boolean | Advised absence |
+| overtime_approved | boolean | OT approved status (default: false) |
+| overtime_approved_at | timestamp | OT approval timestamp (nullable) |
+| overtime_approved_by | bigint | User who approved OT (nullable, foreign key) |
+| is_advised | boolean | Advised absence (default: false) |
 | admin_verified | boolean | Admin verification |
 | is_cross_site_bio | boolean | Different sites |
 | verification_notes | text | Verification notes |
 | notes | text | General notes |
 | warnings | json | Warning flags |
+| date_from | date | Range start date (nullable) |
+| date_to | date | Range end date (nullable) |
 | created_at | timestamp | Created timestamp |
 | updated_at | timestamp | Updated timestamp |
 
@@ -357,20 +368,33 @@ Violation points.
 |--------|------|-------------|
 | id | bigint | Primary key |
 | user_id | bigint | Foreign key to users |
-| attendance_id | bigint | Foreign key |
-| violation_type | enum | tardy, half_day, ncns |
-| points | decimal(5,2) | Point value |
-| violation_date | date | Date of violation |
-| is_excused | boolean | Excused status |
-| excused_by | bigint | Who excused |
-| excused_at | timestamp | Excusal timestamp |
-| excuse_reason | text | Reason for excuse |
-| expires_at | date | Expiration date |
-| expired | boolean | Expired status |
-| gbro_applied | boolean | GBRO applied |
-| gbro_applied_at | timestamp | GBRO timestamp |
+| attendance_id | bigint | Foreign key (nullable) |
+| shift_date | date | Date of shift |
+| point_type | enum | whole_day_absence, half_day_absence, undertime, undertime_more_than_hour, tardy |
+| points | decimal(3,2) | Point value (1.00, 0.50, 0.25) |
+| status | varchar(255) | Attendance status reference (nullable) |
+| is_advised | boolean | Advised absence (default: false) |
+| notes | text | General notes (nullable) |
+| is_excused | boolean | Excused status (default: false) |
+| is_manual | boolean | Manual entry flag (default: false) |
+| created_by | bigint | User who created (nullable, foreign key) |
+| excused_by | bigint | Who excused (nullable, foreign key) |
+| excused_at | timestamp | Excusal timestamp (nullable) |
+| excuse_reason | text | Reason for excuse (nullable) |
+| expires_at | date | Expiration date (nullable, indexed) |
+| expiration_type | enum | sro, gbro, none (default: sro) |
+| is_expired | boolean | Expired status (default: false, indexed) |
+| expired_at | date | Expiration date (nullable) |
+| violation_details | text | Violation details (nullable) |
+| tardy_minutes | integer | Minutes late (nullable) |
+| undertime_minutes | integer | Minutes early (nullable) |
+| eligible_for_gbro | boolean | GBRO eligibility (default: true) |
+| gbro_applied_at | date | GBRO application date (nullable) |
+| gbro_batch_id | varchar(255) | GBRO batch identifier (nullable, indexed) |
 | created_at | timestamp | Created timestamp |
 | updated_at | timestamp | Updated timestamp |
+
+**Indexes**: (user_id, shift_date), point_type, expires_at, is_expired, gbro_batch_id
 
 ### biometric_retention_policies
 Data retention rules.
@@ -378,13 +402,17 @@ Data retention rules.
 | Column | Type | Description |
 |--------|------|-------------|
 | id | bigint | Primary key |
-| site_id | bigint | Site-specific (nullable) |
-| retention_months | integer | Months to retain |
-| is_active | boolean | Policy active |
-| priority | integer | Policy priority |
-| description | text | Policy description |
+| name | varchar(255) | Policy name |
+| description | text | Policy description (nullable) |
+| retention_months | integer | Months to retain (default: 3) |
+| applies_to_type | varchar(255) | Policy scope (site, department, global) |
+| applies_to_id | bigint | Site/department ID (nullable) |
+| priority | integer | Policy priority (default: 0) |
+| is_active | boolean | Policy active (default: true) |
 | created_at | timestamp | Created timestamp |
 | updated_at | timestamp | Updated timestamp |
+
+**Indexes**: (applies_to_type, applies_to_id), is_active
 
 ---
 
@@ -564,4 +592,4 @@ Password reset tokens.
 
 ---
 
-*Last updated: November 28, 2025*
+*Last updated: December 15, 2025*

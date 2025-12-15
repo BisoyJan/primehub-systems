@@ -67,8 +67,7 @@ it_concerns
 ### Categories
 - **Hardware** - Physical equipment issues
 - **Software** - Application/OS problems
-- **Network** - Connectivity issues
-- **Account** - Login/access problems
+- **Network/Connectivity** - Network and connectivity issues
 - **Other** - Miscellaneous issues
 
 ### Priority Levels
@@ -131,10 +130,10 @@ medication_requests
 ├── id
 ├── user_id (foreign key → users)
 ├── name (medication name)
-├── medication_type (enum)
+├── medication_type (enum: Declogen, Biogesic, Mefenamic Acid, Kremil-S, Cetirizine, Saridon, Diatabs)
 ├── reason (text)
-├── onset_of_symptoms (string)
-├── agrees_to_policy (boolean)
+├── onset_of_symptoms (enum: Just today, More than 1 day, More than 1 week)
+├── agrees_to_policy (boolean, default: false)
 ├── status (enum: pending, approved, dispensed, rejected)
 ├── approved_by (foreign key → users, nullable)
 ├── approved_at (timestamp, nullable)
@@ -143,11 +142,13 @@ medication_requests
 ```
 
 ### Medication Types
-- **Paracetamol** - Pain/fever relief
-- **Ibuprofen** - Anti-inflammatory
-- **Antacid** - Stomach relief
-- **Antihistamine** - Allergy relief
-- **Other** - Other medications
+- **Declogen** - Pain relief
+- **Biogesic** - Fever/pain relief
+- **Mefenamic Acid** - Anti-inflammatory
+- **Kremil-S** - Antacid
+- **Cetirizine** - Antihistamine
+- **Saridon** - Headache relief
+- **Diatabs** - Anti-diarrheal
 
 ### Status Workflow
 ```
@@ -193,10 +194,14 @@ Manages automatic cleanup of old form request records.
 ```
 form_request_retention_policies
 ├── id
-├── request_type (enum: leave_request, it_concern, medication_request)
-├── retention_months (integer)
-├── is_active (boolean)
+├── name (string)
 ├── description (text, nullable)
+├── retention_months (integer)
+├── applies_to_type (enum: global, site)
+├── applies_to_id (foreign key → sites, nullable)
+├── form_type (enum: all, leave_request, it_concern, medication_request)
+├── priority (integer, default: 100)
+├── is_active (boolean, default: true)
 └── timestamps
 ```
 
@@ -327,4 +332,4 @@ class LeaveRequest extends Model
 
 ---
 
-*Last updated: November 28, 2025*
+*Last updated: December 15, 2025*

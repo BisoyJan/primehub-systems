@@ -173,3 +173,7 @@ Possible improvements:
 - Allow users to extend their session from the warning dialog
 - Track inactivity separately for different user roles
 - Log inactivity logouts for security auditing
+
+---
+
+*Last updated: December 15, 2025*
