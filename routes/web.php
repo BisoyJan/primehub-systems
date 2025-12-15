@@ -298,6 +298,15 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/{policy}/toggle', [BiometricRetentionPolicyController::class, 'toggle'])->name('toggle');
         });
 
+    // Leave Credits routes (separate permission check - handled in controller)
+    // Must be defined BEFORE leave-requests routes to prevent {leaveRequest} from capturing "credits"
+    Route::prefix('form-requests/leave-requests/credits')->name('leave-requests.credits.')
+        ->middleware('permission:leave_credits.view_all,leave_credits.view_own')
+        ->group(function () {
+            Route::get('/', [LeaveRequestController::class, 'creditsIndex'])->name('index');
+            Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');
+        });
+
     // Form Requests - Leave Requests
     Route::prefix('form-requests/leave-requests')->name('leave-requests.')
         ->middleware('permission:leave.view,leave.create,leave.edit,leave.approve,leave.deny,leave.cancel,leave.delete')
@@ -322,14 +331,6 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
         Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download');
     });
-
-    // Leave Credits routes (separate permission check - handled in controller)
-    Route::prefix('form-requests/leave-requests/credits')->name('leave-requests.credits.')
-        ->middleware('permission:leave_credits.view_all,leave_credits.view_own')
-        ->group(function () {
-            Route::get('/', [LeaveRequestController::class, 'creditsIndex'])->name('index');
-            Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');
-        });
 
     // Form Requests - IT Concerns
     Route::prefix('form-requests/it-concerns')->name('it-concerns.')
@@ -378,11 +379,13 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::get('/', [NotificationController::class, 'index'])->name('index');
         Route::get('/unread-count', [NotificationController::class, 'unreadCount'])->name('unread-count');
         Route::get('/recent', [NotificationController::class, 'recent'])->name('recent');
-        Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
         Route::post('/mark-all-read', [NotificationController::class, 'markAllAsRead'])->name('mark-all-read');
+        // Static routes must come BEFORE wildcard {notification} routes
         Route::delete('/all', [NotificationController::class, 'deleteAll'])->name('delete-all');
-        Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
         Route::delete('/read/all', [NotificationController::class, 'deleteAllRead'])->name('delete-all-read');
+        // Wildcard routes last
+        Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
+        Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
     });
 });
 
