@@ -24,10 +24,6 @@ interface DiskSpec {
     manufacturer: string;
     model: string;
     capacity_gb: number;
-    interface: string;
-    drive_type: string;
-    sequential_read_mb: number;
-    sequential_write_mb: number;
 }
 
 interface Props {
@@ -53,10 +49,6 @@ export default function Edit({ diskspec }: Props) {
         manufacturer: diskspec.manufacturer,
         model: diskspec.model,
         capacity_gb: diskspec.capacity_gb,
-        interface: diskspec.interface,
-        drive_type: diskspec.drive_type,
-        sequential_read_mb: diskspec.sequential_read_mb,
-        sequential_write_mb: diskspec.sequential_write_mb,
     });
 
     const handleUpdate = (e: React.FormEvent) => {
@@ -117,9 +109,9 @@ export default function Edit({ diskspec }: Props) {
                         </div>
                     </section>
 
-                    {/* Capacity & Interface */}
+                    {/* Capacity */}
                     <section>
-                        <h2 className="text-lg font-semibold mb-2">Capacity & Interface</h2>
+                        <h2 className="text-lg font-semibold mb-2">Capacity</h2>
                         <div className="grid grid-cols-2 gap-6">
                             <div>
                                 <Label htmlFor="capacity_gb">Capacity (GB)</Label>
@@ -139,77 +131,6 @@ export default function Edit({ diskspec }: Props) {
                                     </SelectContent>
                                 </Select>
                                 {errors.capacity_gb && <p className="text-red-600">{errors.capacity_gb}</p>}
-                            </div>
-                            <div>
-                                <Label htmlFor="interface">Interface</Label>
-                                <Select
-                                    value={data.interface}
-                                    onValueChange={(val) => setData("interface", val)}
-                                >
-                                    <SelectTrigger id="interface" name="interface">
-                                        <SelectValue placeholder="e.g. SATA III" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {["SATA III", "PCIe 3.0 x4 NVMe", "PCIe 4.0 x4 NVMe"].map((iface) => (
-                                            <SelectItem key={iface} value={iface}>
-                                                {iface}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.interface && <p className="text-red-600">{errors.interface}</p>}
-                            </div>
-                            <div>
-                                <Label htmlFor="drive_type">Drive Type</Label>
-                                <Select
-                                    value={data.drive_type}
-                                    onValueChange={(val) => setData("drive_type", val)}
-                                >
-                                    <SelectTrigger id="drive_type" name="drive_type">
-                                        <SelectValue placeholder="e.g. SSD" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {["HDD", "SSD"].map((type) => (
-                                            <SelectItem key={type} value={type}>
-                                                {type}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                                {errors.drive_type && <p className="text-red-600">{errors.drive_type}</p>}
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* Performance */}
-                    <section>
-                        <h2 className="text-lg font-semibold mb-2">Performance</h2>
-                        <div className="grid grid-cols-2 gap-6">
-                            <div>
-                                <Label htmlFor="sequential_read_mb">Read Speed (MB/s)</Label>
-                                <Input
-                                    id="sequential_read_mb"
-                                    name="sequential_read_mb"
-                                    type="number"
-                                    min={1}
-                                    placeholder="e.g. 3500"
-                                    value={String(data.sequential_read_mb)}
-                                    onChange={(e) => setData("sequential_read_mb", Number(e.target.value))}
-                                />
-                                {errors.sequential_read_mb && <p className="text-red-600">{errors.sequential_read_mb}</p>}
-                            </div>
-                            <div>
-                                <Label htmlFor="sequential_write_mb">Write Speed (MB/s)</Label>
-                                <Input
-                                    id="sequential_write_mb"
-                                    name="sequential_write_mb"
-                                    type="number"
-                                    min={1}
-                                    placeholder="e.g. 2500"
-                                    value={String(data.sequential_write_mb)}
-                                    onChange={(e) => setData("sequential_write_mb", Number(e.target.value))}
-                                />
-                                {errors.sequential_write_mb && <p className="text-red-600">{errors.sequential_write_mb}</p>}
                             </div>
                         </div>
                     </section>

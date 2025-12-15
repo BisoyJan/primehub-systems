@@ -25,10 +25,7 @@ class PcSpecTest extends TestCase
             'pc_number' => 'PC-001',
             'manufacturer' => 'Dell',
             'model' => 'OptiPlex 7090',
-            'form_factor' => 'SFF',
             'memory_type' => 'DDR4',
-            'ram_slots' => 4,
-            'max_ram_capacity_gb' => 64,
             'issue' => 'Screen flickering',
         ]);
 
@@ -42,12 +39,12 @@ class PcSpecTest extends TestCase
     public function it_casts_integer_attributes(): void
     {
         $pcSpec = PcSpec::factory()->create([
-            'ram_slots' => '4',
-            'max_ram_capacity_gb' => '64',
+            'm2_slots' => '2',
+            'sata_ports' => '4',
         ]);
 
-        $this->assertIsInt($pcSpec->ram_slots);
-        $this->assertIsInt($pcSpec->max_ram_capacity_gb);
+        $this->assertIsInt($pcSpec->m2_slots);
+        $this->assertIsInt($pcSpec->sata_ports);
     }
 
     #[Test]
@@ -152,7 +149,6 @@ class PcSpecTest extends TestCase
         $diskSpec = DiskSpec::factory()->create([
             'model' => 'Samsung 870 EVO',
             'capacity_gb' => 512,
-            'drive_type' => 'SSD',
         ]);
 
         $pcSpec->diskSpecs()->attach($diskSpec->id);
@@ -162,7 +158,6 @@ class PcSpecTest extends TestCase
         $this->assertEquals('Samsung 870 EVO', $details['disk']);
         $this->assertEquals(512, $details['disk_gb']);
         $this->assertEquals('512 GB', $details['disk_capacities']);
-        $this->assertEquals('SSD', $details['disk_type']);
     }
 
     #[Test]
@@ -182,18 +177,17 @@ class PcSpecTest extends TestCase
     }
 
     #[Test]
-    public function it_handles_multiple_disk_types(): void
+    public function it_handles_multiple_disks(): void
     {
         $pcSpec = PcSpec::factory()->create();
 
-        $ssd = DiskSpec::factory()->create(['drive_type' => 'SSD', 'capacity_gb' => 256]);
-        $hdd = DiskSpec::factory()->create(['drive_type' => 'HDD', 'capacity_gb' => 1000]);
+        $disk1 = DiskSpec::factory()->create(['capacity_gb' => 256]);
+        $disk2 = DiskSpec::factory()->create(['capacity_gb' => 1000]);
 
-        $pcSpec->diskSpecs()->attach([$ssd->id, $hdd->id]);
+        $pcSpec->diskSpecs()->attach([$disk1->id, $disk2->id]);
 
         $details = $pcSpec->getFormattedDetails();
 
-        $this->assertEquals('SSD/HDD', $details['disk_type']);
         $this->assertEquals(1256, $details['disk_gb']);
     }
 

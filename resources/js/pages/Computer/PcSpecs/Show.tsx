@@ -11,7 +11,6 @@ interface PcSpec {
     model: string;
     chipset: string;
     memory_type: string;
-    form_factor: string;
     station?: { id: number; name: string };
     // ...other fields
 }
@@ -51,10 +50,6 @@ export default function Show() {
                 <div className="flex flex-col gap-1">
                     <span className="text-xs text-gray-500 dark:text-gray-400">Memory Type</span>
                     <span className="font-medium">{pcspec.memory_type}</span>
-                </div>
-                <div className="flex flex-col gap-1">
-                    <span className="text-xs text-gray-500 dark:text-gray-400">Form Factor</span>
-                    <span className="font-medium">{pcspec.form_factor}</span>
                 </div>
                 {pcspec.station && (
                     <div className="flex flex-col gap-1">

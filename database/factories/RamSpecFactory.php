@@ -32,8 +32,6 @@ class RamSpecFactory extends Factory
             'DDR5' => [4800, 5200, 5600, 6000],
         ];
         $speed = $this->faker->randomElement($speedMap[$type]);
-        $formFactor = $this->faker->boolean(20) ? 'SO-DIMM' : 'DIMM';
-        $voltage    = $this->faker->randomFloat(2, 1.2, 1.5);
 
         return [
             'manufacturer' =>  $manufacturer,
@@ -41,8 +39,6 @@ class RamSpecFactory extends Factory
             'capacity_gb' => $capacity_gb,
             'type'       => $type,
             'speed'      =>  $speed,
-            'form_factor' => $formFactor,
-            'voltage'    => $voltage,
         ];
     }
 }

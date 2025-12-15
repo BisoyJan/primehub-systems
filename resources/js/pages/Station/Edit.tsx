@@ -28,6 +28,7 @@ interface MonitorSpec {
 }
 interface PcSpec {
     id: number;
+    pc_number?: string;
     model: string;
     ram: string;
     ram_gb?: number;

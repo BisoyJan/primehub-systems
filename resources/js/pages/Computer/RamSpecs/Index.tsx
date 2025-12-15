@@ -34,8 +34,6 @@ interface RamSpec {
     capacity_gb: number;
     type: string;
     speed: string;
-    form_factor: string;
-    voltage: number;
     stock?: { quantity: number } | null;
 }
 

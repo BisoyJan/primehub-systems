@@ -79,18 +79,26 @@ class DashboardService
 
     /**
      * Get PCs with SSD drives
+     * @deprecated Drive type is no longer tracked in disk_specs
      */
     public function getPcsWithSsd(): array
     {
-        return $this->getPcsByDriveType('SSD');
+        return [
+            'total' => 0,
+            'details' => []
+        ];
     }
 
     /**
      * Get PCs with HDD drives
+     * @deprecated Drive type is no longer tracked in disk_specs
      */
     public function getPcsWithHdd(): array
     {
-        return $this->getPcsByDriveType('HDD');
+        return [
+            'total' => 0,
+            'details' => []
+        ];
     }
 
     /**
@@ -272,38 +280,6 @@ class DashboardService
                 'count' => (int) $item->count
             ])
             ->toArray();
-    }
-
-    /**
-     * Get PCs by drive type (SSD/HDD)
-     */
-    private function getPcsByDriveType(string $driveType): array
-    {
-        $pcIds = DB::table('pc_spec_disk_spec')
-            ->join('disk_specs', 'pc_spec_disk_spec.disk_spec_id', '=', 'disk_specs.id')
-            ->where('disk_specs.drive_type', $driveType)
-            ->distinct()
-            ->pluck('pc_spec_disk_spec.pc_spec_id');
-
-        $total = $pcIds->count();
-
-        $details = Station::select('sites.name as site', DB::raw('COUNT(DISTINCT stations.pc_spec_id) as count'))
-            ->join('sites', 'stations.site_id', '=', 'sites.id')
-            ->whereIn('stations.pc_spec_id', $pcIds)
-            ->whereNotNull('stations.pc_spec_id')
-            ->groupBy('sites.name')
-            ->orderBy('sites.name')
-            ->get()
-            ->map(fn($item) => [
-                'site' => $item->site,
-                'count' => (int) $item->count
-            ])
-            ->toArray();
-
-        return [
-            'total' => $total,
-            'details' => $details
-        ];
     }
 
     /**

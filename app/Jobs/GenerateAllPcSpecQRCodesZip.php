@@ -68,7 +68,6 @@ class GenerateAllPcSpecQRCodesZip implements ShouldQueue
                     'pc_number' => $pcspec->pc_number ?? "PC-{$pcspec->id}",
                     'manufacturer' => $pcspec->manufacturer,
                     'model' => $pcspec->model,
-                    'form_factor' => $pcspec->form_factor,
                     'memory_type' => $pcspec->memory_type,
                 ])
                 : route('pcspecs.edit', $pcspec);

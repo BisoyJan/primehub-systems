@@ -39,8 +39,6 @@ export default function Create() {
         capacity_gb: '' as number | '',
         type: '',
         speed: '',
-        form_factor: '',
-        voltage: '',
         stock_quantity: 0,
     });
 
@@ -149,40 +147,6 @@ export default function Create() {
                             onChange={(e) => setData('speed', e.target.value)}
                         />
                         {errors.speed && <p className="text-red-600 text-sm mt-1">{errors.speed}</p>}
-                    </div>
-                    <div>
-                        <Label htmlFor="form_factor">Form Factor</Label>
-                        <Select
-                            value={data.form_factor}
-                            onValueChange={(val) => setData('form_factor', val)}
-                        >
-                            <SelectTrigger id="form_factor" name="form_factor">
-                                <SelectValue placeholder="e.g. SO-DIMM" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {['SO-DIMM', 'DIMM'].map((t) => (
-                                    <SelectItem key={t} value={t}>
-                                        {t}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {errors.form_factor && <p className="text-red-600 text-sm mt-1">{errors.form_factor}</p>}
-                    </div>
-
-                    <div>
-                        <Label htmlFor="voltage">Voltage (V)</Label>
-                        <Input
-                            id="voltage"
-                            name="voltage"
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            placeholder="e.g. 1.35"
-                            value={data.voltage}
-                            onChange={(e) => setData('voltage', e.target.value)}
-                        />
-                        {errors.voltage && <p className="text-red-600 text-sm mt-1">{errors.voltage}</p>}
                     </div>
 
                     <div>

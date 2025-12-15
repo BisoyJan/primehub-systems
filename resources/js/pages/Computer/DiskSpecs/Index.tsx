@@ -32,10 +32,6 @@ interface DiskSpec {
     manufacturer: string;
     model: string;
     capacity_gb: number;
-    interface: string;
-    drive_type: string;
-    sequential_read_mb: number;
-    sequential_write_mb: number;
     stock?: Stock | null;
 }
 
@@ -192,10 +188,6 @@ export default function Index() {
                                     <TableHead>Manufacturer</TableHead>
                                     <TableHead>Model Number</TableHead>
                                     <TableHead>Capacity (GB)</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Interface</TableHead>
-                                    <TableHead>Drive Type</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Read Speed (MB/s)</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Write Speed (MB/s)</TableHead>
                                     <TableHead>Stocks</TableHead>
                                     <TableHead className="text-center">Actions</TableHead>
                                 </TableRow>
@@ -208,10 +200,6 @@ export default function Index() {
                                         <TableCell className="font-medium">{disk.manufacturer}</TableCell>
                                         <TableCell>{disk.model}</TableCell>
                                         <TableCell>{disk.capacity_gb}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{disk.interface}</TableCell>
-                                        <TableCell>{disk.drive_type}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{disk.sequential_read_mb}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{disk.sequential_write_mb}</TableCell>
                                         <TableCell>
                                             {disk.stock ? disk.stock.quantity : 0}
 
@@ -292,22 +280,6 @@ export default function Index() {
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Capacity:</span>
                                     <span className="font-medium">{disk.capacity_gb} GB</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Drive Type:</span>
-                                    <span className="font-medium">{disk.drive_type}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Interface:</span>
-                                    <span className="font-medium">{disk.interface}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Read Speed:</span>
-                                    <span className="font-medium">{disk.sequential_read_mb} MB/s</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Write Speed:</span>
-                                    <span className="font-medium">{disk.sequential_write_mb} MB/s</span>
                                 </div>
                             </div>
 

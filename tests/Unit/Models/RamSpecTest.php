@@ -22,8 +22,6 @@ class RamSpecTest extends TestCase
             'capacity_gb' => 16,
             'type' => 'DDR4',
             'speed' => 3200,
-            'form_factor' => 'DIMM',
-            'voltage' => 1.35,
         ]);
 
         $this->assertEquals('Kingston', $ramSpec->manufacturer);
@@ -47,14 +45,6 @@ class RamSpecTest extends TestCase
 
         $this->assertIsInt($ramSpec->speed);
         $this->assertEquals(2400, $ramSpec->speed);
-    }
-
-    #[Test]
-    public function it_casts_voltage_to_decimal(): void
-    {
-        $ramSpec = RamSpec::factory()->create(['voltage' => '1.5']);
-
-        $this->assertEquals('1.50', $ramSpec->voltage);
     }
 
     #[Test]

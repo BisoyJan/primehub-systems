@@ -38,13 +38,10 @@ class ProcessorSpecsControllerTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i5-12400',
-            'socket_type' => 'LGA1700',
             'core_count' => 6,
             'thread_count' => 12,
             'base_clock_ghz' => 2.50,
             'boost_clock_ghz' => 4.40,
-            'integrated_graphics' => 'Intel UHD 730',
-            'tdp_watts' => 65,
             'stock_quantity' => 5,
         ];
 
@@ -67,13 +64,10 @@ class ProcessorSpecsControllerTest extends TestCase
         $data = [
             'manufacturer' => 'AMD',
             'model' => 'Ryzen 5 5600X',
-            'socket_type' => 'AM4',
             'core_count' => 6,
             'thread_count' => 12,
             'base_clock_ghz' => 3.70,
             'boost_clock_ghz' => 4.60,
-            'integrated_graphics' => null,
-            'tdp_watts' => 65,
         ];
 
         $this->put(route('processorspecs.update', $processorSpec), $data)

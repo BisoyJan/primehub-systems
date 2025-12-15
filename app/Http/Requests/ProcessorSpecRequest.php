@@ -24,13 +24,10 @@ class ProcessorSpecRequest extends FormRequest
         $rules = [
             'manufacturer' => ['required', 'string', 'max:255'],
             'model' => ['required', 'string', 'max:255'],
-            'socket_type' => ['required', 'string', 'max:255'],
             'core_count' => ['required', 'integer', 'min:1'],
             'thread_count' => ['required', 'integer', 'min:1'],
             'base_clock_ghz' => ['required', 'numeric', 'min:0'],
             'boost_clock_ghz' => ['nullable', 'numeric', 'min:0'],
-            'integrated_graphics' => ['nullable', 'string', 'max:255'],
-            'tdp_watts' => ['nullable', 'integer', 'min:1'],
         ];
 
         // Include stock_quantity only on create
@@ -53,7 +50,6 @@ class ProcessorSpecRequest extends FormRequest
             'thread_count' => 'number of threads',
             'base_clock_ghz' => 'base clock speed',
             'boost_clock_ghz' => 'boost clock speed',
-            'tdp_watts' => 'TDP',
             'stock_quantity' => 'initial stock quantity',
         ];
     }

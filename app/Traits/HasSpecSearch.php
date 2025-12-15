@@ -23,15 +23,6 @@ trait HasSpecSearch
             if (in_array('type', $this->getFillable())) {
                 $q->orWhere('type', 'like', "%{$search}%");
             }
-            if (in_array('interface', $this->getFillable())) {
-                $q->orWhere('interface', 'like', "%{$search}%");
-            }
-            if (in_array('drive_type', $this->getFillable())) {
-                $q->orWhere('drive_type', 'like', "%{$search}%");
-            }
-            if (in_array('form_factor', $this->getFillable())) {
-                $q->orWhere('form_factor', 'like', "%{$search}%");
-            }
             if (in_array('capacity_gb', $this->getFillable())) {
                 $q->orWhere('capacity_gb', 'like', "%{$search}%");
             }

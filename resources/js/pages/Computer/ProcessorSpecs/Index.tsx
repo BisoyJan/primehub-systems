@@ -5,7 +5,6 @@ import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 import AppLayout from "@/layouts/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
     Table,
     TableBody,
@@ -31,13 +30,10 @@ interface ProcessorSpec {
     id: number;
     manufacturer: string;
     model: string;
-    socket_type: string;
     core_count: number;
     thread_count: number;
     base_clock_ghz: number;
     boost_clock_ghz: number;
-    integrated_graphics: string;
-    tdp_watts: number;
     stock?: Stock | null;
 }
 
@@ -193,13 +189,10 @@ export default function Index() {
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>Manufacturer</TableHead>
                                     <TableHead>Model</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Socket</TableHead>
                                     <TableHead>Cores</TableHead>
                                     <TableHead>Threads</TableHead>
                                     <TableHead className="hidden xl:table-cell">Base Clock</TableHead>
                                     <TableHead className="hidden xl:table-cell">Boost Clock</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Graphics</TableHead>
-                                    <TableHead className="hidden xl:table-cell">TDP (W)</TableHead>
                                     <TableHead>Stocks</TableHead>
                                     <TableHead className="text-center">Actions</TableHead>
                                 </TableRow>
@@ -211,13 +204,10 @@ export default function Index() {
                                         <TableCell className="hidden lg:table-cell">{cpu.id}</TableCell>
                                         <TableCell className="font-medium">{cpu.manufacturer}</TableCell>
                                         <TableCell>{cpu.model}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{cpu.socket_type}</TableCell>
                                         <TableCell>{cpu.core_count}</TableCell>
                                         <TableCell>{cpu.thread_count}</TableCell>
                                         <TableCell className="hidden xl:table-cell">{cpu.base_clock_ghz} GHz</TableCell>
                                         <TableCell className="hidden xl:table-cell">{cpu.boost_clock_ghz} GHz</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{cpu.integrated_graphics}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{cpu.tdp_watts}</TableCell>
                                         <TableCell>
                                             {cpu.stock ? cpu.stock.quantity : 0}
 
@@ -294,10 +284,6 @@ export default function Index() {
                                     <span className="font-medium break-words text-right">{cpu.model}</span>
                                 </div>
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Socket:</span>
-                                    <span className="font-medium">{cpu.socket_type}</span>
-                                </div>
-                                <div className="flex justify-between">
                                     <span className="text-muted-foreground">Cores/Threads:</span>
                                     <span className="font-medium">{cpu.core_count} / {cpu.thread_count}</span>
                                 </div>
@@ -308,14 +294,6 @@ export default function Index() {
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Boost Clock:</span>
                                     <span className="font-medium">{cpu.boost_clock_ghz} GHz</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Graphics:</span>
-                                    <span className="font-medium">{cpu.integrated_graphics}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                    <span className="text-muted-foreground">TDP:</span>
-                                    <span className="font-medium">{cpu.tdp_watts} W</span>
                                 </div>
                             </div>
 

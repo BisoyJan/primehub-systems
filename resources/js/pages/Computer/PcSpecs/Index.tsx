@@ -61,40 +61,28 @@ interface RamSpec {
     capacity_gb: number;
     type: string;
     speed: string;
-    form_factor: string;
-    voltage: number;
 }
 interface DiskSpec {
     id: number;
     manufacturer: string;
     model: string;
     capacity_gb: number;
-    interface: string;
-    drive_type: string;
-    sequential_read_mb: number;
-    sequential_write_mb: number;
 }
 interface ProcessorSpec {
     id: number;
     manufacturer: string;
     model: string;
-    socket_type: string;
     core_count: number;
     thread_count: number;
     base_clock_ghz: number;
     boost_clock_ghz: number;
-    integrated_graphics: string;
-    tdp_watts: number;
 }
 interface PcSpec {
     id: number;
     pc_number?: string | null;
     manufacturer: string;
     model: string;
-    chipset: string;
     memory_type: string;
-    form_factor: string;
-    socket_type: string;
     issue?: string | null;
     ramSpecs: RamSpec[];
     diskSpecs: DiskSpec[];
@@ -652,15 +640,8 @@ export default function Index() {
                                     // Total RAM GB
                                     const totalRamGb = pc.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
 
-                                    // Storage Type: show SSD if any disk is SSD, else HDD if any disk is HDD, else —
-                                    let storageType = '—';
-                                    if (pc.diskSpecs?.length) {
-                                        const hasSSD = pc.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('SSD'));
-                                        const hasHDD = pc.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('HDD'));
-                                        if (hasSSD && hasHDD) storageType = 'SSD + HDD';
-                                        else if (hasSSD) storageType = 'SSD';
-                                        else if (hasHDD) storageType = 'HDD';
-                                    }
+                                    // Storage: show disk count
+                                    const diskCount = pc.diskSpecs?.length || 0;
 
                                     return (
                                         <TableRow key={pc.id}>
@@ -679,7 +660,7 @@ export default function Index() {
                                             <TableCell>{pc.model}</TableCell>
                                             <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
                                             <TableCell>{totalRamGb || 0}</TableCell>
-                                            <TableCell className="hidden xl:table-cell">{storageType}</TableCell>
+                                            <TableCell className="hidden xl:table-cell">{diskCount > 0 ? `${diskCount} disk(s)` : '—'}</TableCell>
                                             <TableCell>
                                                 <div className="flex items-center gap-2">
                                                     {pc.issue ? (
@@ -732,7 +713,6 @@ export default function Index() {
                                                                     <p><span className="font-medium">Manufacturer:</span> {pc.manufacturer}</p>
                                                                     <p><span className="font-medium">Model:</span> {pc.model}</p>
                                                                     <p><span className="font-medium">Memory Type:</span> {pc.memory_type}</p>
-                                                                    <p><span className="font-medium">Form Factor:</span> {pc.form_factor ?? "—"}</p>
                                                                 </div>
                                                             </section>
 
@@ -777,10 +757,6 @@ export default function Index() {
                                                                                 <TableHead>Manufacturer</TableHead>
                                                                                 <TableHead>Model</TableHead>
                                                                                 <TableHead>Capacity</TableHead>
-                                                                                <TableHead>Type</TableHead>
-                                                                                <TableHead>Interface</TableHead>
-                                                                                <TableHead>Read</TableHead>
-                                                                                <TableHead>Write</TableHead>
                                                                             </TableRow>
                                                                         </TableHeader>
                                                                         <TableBody>
@@ -789,10 +765,6 @@ export default function Index() {
                                                                                     <TableCell>{d.manufacturer}</TableCell>
                                                                                     <TableCell>{d.model}</TableCell>
                                                                                     <TableCell>{d.capacity_gb} GB</TableCell>
-                                                                                    <TableCell>{d.drive_type}</TableCell>
-                                                                                    <TableCell>{d.interface}</TableCell>
-                                                                                    <TableCell>{d.sequential_read_mb} MB/s</TableCell>
-                                                                                    <TableCell>{d.sequential_write_mb} MB/s</TableCell>
                                                                                 </TableRow>
                                                                             ))}
                                                                         </TableBody>
@@ -809,14 +781,12 @@ export default function Index() {
                                                                     <Table>
                                                                         <TableHeader>
                                                                             <TableRow>
-                                                                                <TableHead>manufacturer</TableHead>
-                                                                                <TableHead>model</TableHead>
-                                                                                <TableHead>Socket</TableHead>
+                                                                                <TableHead>Manufacturer</TableHead>
+                                                                                <TableHead>Model</TableHead>
                                                                                 <TableHead>Cores</TableHead>
                                                                                 <TableHead>Threads</TableHead>
                                                                                 <TableHead>Base Clock</TableHead>
                                                                                 <TableHead>Boost Clock</TableHead>
-                                                                                <TableHead>TDP</TableHead>
                                                                             </TableRow>
                                                                         </TableHeader>
                                                                         <TableBody>
@@ -824,12 +794,10 @@ export default function Index() {
                                                                                 <TableRow key={p.id}>
                                                                                     <TableCell>{p.manufacturer}</TableCell>
                                                                                     <TableCell>{p.model}</TableCell>
-                                                                                    <TableCell>{p.socket_type}</TableCell>
                                                                                     <TableCell>{p.core_count}</TableCell>
                                                                                     <TableCell>{p.thread_count}</TableCell>
                                                                                     <TableCell>{p.base_clock_ghz} GHz</TableCell>
                                                                                     <TableCell>{p.boost_clock_ghz} GHz</TableCell>
-                                                                                    <TableCell>{p.tdp_watts} W</TableCell>
                                                                                 </TableRow>
                                                                             ))}
                                                                         </TableBody>
@@ -898,14 +866,7 @@ export default function Index() {
                         const proc = pc.processorSpecs?.[0];
                         const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
                         const totalRamGb = pc.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
-                        let storageType = '—';
-                        if (pc.diskSpecs?.length) {
-                            const hasSSD = pc.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('SSD'));
-                            const hasHDD = pc.diskSpecs.some(d => (d.drive_type || '').toUpperCase().includes('HDD'));
-                            if (hasSSD && hasHDD) storageType = 'SSD + HDD';
-                            else if (hasSSD) storageType = 'SSD';
-                            else if (hasHDD) storageType = 'HDD';
-                        }
+                        const diskCount = pc.diskSpecs?.length || 0;
 
                         return (
                             <div key={pc.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
@@ -952,7 +913,7 @@ export default function Index() {
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Storage:</span>
-                                        <span className="font-medium">{storageType}</span>
+                                        <span className="font-medium">{diskCount > 0 ? `${diskCount} disk(s)` : '—'}</span>
                                     </div>
                                     <div className="pt-2 border-t">
                                         <div className="flex justify-between items-start gap-2">
@@ -1007,7 +968,6 @@ export default function Index() {
                                                             <p><span className="font-medium">Manufacturer:</span> {pc.manufacturer}</p>
                                                             <p><span className="font-medium">Model:</span> {pc.model}</p>
                                                             <p><span className="font-medium">Memory Type:</span> {pc.memory_type}</p>
-                                                            <p><span className="font-medium">Form Factor:</span> {pc.form_factor ?? "—"}</p>
                                                         </div>
                                                     </section>
 
@@ -1037,10 +997,7 @@ export default function Index() {
                                                                     <div key={d.id} className="border p-3 rounded text-sm">
                                                                         <div className="font-medium">{d.manufacturer} {d.model}</div>
                                                                         <div className="text-muted-foreground">
-                                                                            {d.capacity_gb} GB • {d.drive_type} • {d.interface}
-                                                                        </div>
-                                                                        <div className="text-muted-foreground text-xs">
-                                                                            Read: {d.sequential_read_mb} MB/s • Write: {d.sequential_write_mb} MB/s
+                                                                            {d.capacity_gb} GB
                                                                         </div>
                                                                     </div>
                                                                 ))}
@@ -1058,10 +1015,10 @@ export default function Index() {
                                                                     <div key={p.id} className="border p-3 rounded text-sm">
                                                                         <div className="font-medium">{p.manufacturer} {p.model}</div>
                                                                         <div className="text-muted-foreground">
-                                                                            {p.socket_type} • {p.core_count} cores / {p.thread_count} threads
+                                                                            {p.core_count} cores / {p.thread_count} threads
                                                                         </div>
                                                                         <div className="text-muted-foreground text-xs">
-                                                                            {p.base_clock_ghz} GHz - {p.boost_clock_ghz} GHz • TDP: {p.tdp_watts}W
+                                                                            {p.base_clock_ghz} GHz - {p.boost_clock_ghz} GHz
                                                                         </div>
                                                                     </div>
                                                                 ))}

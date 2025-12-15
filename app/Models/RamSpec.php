@@ -26,8 +26,6 @@ class RamSpec extends Model
         'capacity_gb',
         'type',
         'speed',
-        'form_factor',
-        'voltage',
     ];
 
     protected function casts(): array
@@ -35,7 +33,6 @@ class RamSpec extends Model
         return [
             'capacity_gb' => 'integer',
             'speed' => 'integer',
-            'voltage' => 'decimal:2',
         ];
     }
 

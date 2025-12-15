@@ -23,11 +23,7 @@ class PcSpec extends Model
         'pc_number',
         'manufacturer',
         'model',
-        'form_factor',
         'memory_type',
-        'ram_slots',
-        'max_ram_capacity_gb',
-        'max_ram_speed',
         'm2_slots',
         'sata_ports',
         'issue',
@@ -36,9 +32,6 @@ class PcSpec extends Model
     protected function casts(): array
     {
         return [
-            'ram_slots' => 'integer',
-            'max_ram_capacity_gb' => 'integer',
-            'max_ram_speed' => 'integer',
             'm2_slots' => 'integer',
             'sata_ports' => 'integer',
         ];
@@ -128,13 +121,11 @@ class PcSpec extends Model
         ];
     }
 
-    // Get formatted disk type (handles multiple types)
+    // Get formatted disk type (based on disk count)
     private function getFormattedDiskType(): string
     {
-        $diskTypes = $this->diskSpecs->pluck('drive_type')->unique()->values();
-        return $diskTypes->count() > 1
-            ? $diskTypes->implode('/')
-            : ($diskTypes->first() ?? 'N/A');
+        $diskCount = $this->diskSpecs->count();
+        return $diskCount > 0 ? "{$diskCount} disk(s)" : 'N/A';
     }
 
     // Format for form selection (used in Create/Edit forms)

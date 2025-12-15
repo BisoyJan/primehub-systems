@@ -39,10 +39,6 @@ class DiskSpecsControllerTest extends TestCase
             'manufacturer' => 'Samsung',
             'model' => '970 EVO Plus',
             'capacity_gb' => 1000,
-            'interface' => 'NVMe',
-            'drive_type' => 'SSD',
-            'sequential_read_mb' => 3500,
-            'sequential_write_mb' => 3300,
             'stock_quantity' => 10,
         ];
 
@@ -63,10 +59,6 @@ class DiskSpecsControllerTest extends TestCase
             'manufacturer' => 'Western Digital',
             'model' => 'WD Blue',
             'capacity_gb' => 2000,
-            'interface' => 'SATA',
-            'drive_type' => 'HDD',
-            'sequential_read_mb' => 150,
-            'sequential_write_mb' => 130,
         ];
 
         $this->put(route('diskspecs.update', $diskSpec), $data)

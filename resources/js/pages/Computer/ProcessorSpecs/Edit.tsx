@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 
@@ -22,20 +22,14 @@ import {
     edit as processorSpecsEditRoute,
 } from '@/routes/processorspecs';
 
-const intelSockets = ['LGA1151', 'LGA1200', 'LGA1700'];
-const amdSockets = ['AM3+', 'AM4', 'AM5', 'TR4', 'sTRX4'];
-
 interface ProcessorSpec {
     id: number;
     manufacturer: string;
     model: string;
-    socket_type: string;
     core_count: number;
     thread_count: number;
     base_clock_ghz: number;
     boost_clock_ghz: number;
-    integrated_graphics: string;
-    tdp_watts: number;
 }
 
 interface Props {
@@ -56,21 +50,11 @@ export default function Edit({ processorspec }: Props) {
     const { data, setData, put, errors, processing } = useForm({
         manufacturer: processorspec.manufacturer,
         model: processorspec.model,
-        socket_type: processorspec.socket_type,
         core_count: processorspec.core_count,
         thread_count: processorspec.thread_count,
         base_clock_ghz: processorspec.base_clock_ghz,
         boost_clock_ghz: processorspec.boost_clock_ghz,
-        integrated_graphics: processorspec.integrated_graphics,
-        tdp_watts: processorspec.tdp_watts,
     });
-
-    // dynamically choose sockets based on manufacturer
-    const availableSockets = useMemo(() => {
-        if (data.manufacturer === 'Intel') return intelSockets;
-        if (data.manufacturer === 'AMD') return amdSockets;
-        return [...intelSockets, ...amdSockets];
-    }, [data.manufacturer]);
 
     const handleUpdate = (e: React.FormEvent) => {
         e.preventDefault();
@@ -110,10 +94,7 @@ export default function Edit({ processorspec }: Props) {
                         <Label htmlFor="manufacturer">Manufacturer</Label>
                         <Select
                             value={data.manufacturer}
-                            onValueChange={(val) => {
-                                setData('manufacturer', val);
-                                setData('socket_type', ''); // reset socket when manufacturer changes
-                            }}
+                            onValueChange={(val) => setData('manufacturer', val)}
                         >
                             <SelectTrigger id="manufacturer" name="manufacturer">
                                 <SelectValue placeholder="Select manufacturer" />
@@ -138,24 +119,7 @@ export default function Edit({ processorspec }: Props) {
                         {errors.model && <p className="mt-1 text-sm text-red-600">{errors.model}</p>}
                     </div>
 
-                    {/* Row 2: Socket & Cores */}
-                    <div>
-                        <Label htmlFor="socket_type">Socket Type</Label>
-                        <Select
-                            value={data.socket_type}
-                            onValueChange={(val) => setData('socket_type', val)}
-                        >
-                            <SelectTrigger id="socket_type" name="socket_type">
-                                <SelectValue placeholder="Select socket" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableSockets.map((sock) => (
-                                    <SelectItem key={sock} value={sock}>{sock}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {errors.socket_type && <p className="mt-1 text-sm text-red-600">{errors.socket_type}</p>}
-                    </div>
+                    {/* Row 2: Cores */}
                     <div>
                         <Label htmlFor="core_count">Core Count</Label>
                         <Input
@@ -214,34 +178,7 @@ export default function Edit({ processorspec }: Props) {
                         />
                         {errors.boost_clock_ghz && <p className="mt-1 text-sm text-red-600">{errors.boost_clock_ghz}</p>}
                     </div>
-                    <div>
-                        <Label htmlFor="integrated_graphics">Integrated Graphics</Label>
-                        <Input
-                            id="integrated_graphics"
-                            name="integrated_graphics"
-                            placeholder="e.g. Intel UHD 730"
-                            value={data.integrated_graphics}
-                            onChange={(e) => setData('integrated_graphics', e.target.value)}
-                        />
-                        {errors.integrated_graphics && (
-                            <p className="mt-1 text-sm text-red-600">{errors.integrated_graphics}</p>
-                        )}
-                    </div>
 
-                    {/* Row 5: TDP */}
-                    <div>
-                        <Label htmlFor="tdp_watts">TDP (W)</Label>
-                        <Input
-                            id="tdp_watts"
-                            name="tdp_watts"
-                            type="number"
-                            min={1}
-                            placeholder="e.g. 65"
-                            value={data.tdp_watts}
-                            onChange={(e) => setData('tdp_watts', Number(e.target.value))}
-                        />
-                        {errors.tdp_watts && <p className="mt-1 text-sm text-red-600">{errors.tdp_watts}</p>}
-                    </div>
                     <div className="md:col-span-2 flex justify-end">
                         <Button type="submit" disabled={processing}>
                             {processing ? 'Saving...' : 'Update Processor Spec'}

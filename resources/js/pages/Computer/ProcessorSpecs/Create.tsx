@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React from 'react';
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ArrowLeft } from 'lucide-react';
 
@@ -22,9 +22,6 @@ import {
     index as processorSpecsIndexRoute,
 } from '@/routes/processorspecs';
 
-const intelSockets = ['LGA1151', 'LGA1200', 'LGA1700'];
-const amdSockets = ['AM3+', 'AM4', 'AM5', 'TR4', 'sTRX4'];
-
 export default function Create() {
     useFlashMessage();
 
@@ -39,23 +36,12 @@ export default function Create() {
     const { data, setData, post, errors, processing } = useForm({
         manufacturer: '' as string,
         model: '',
-        socket_type: '',
         core_count: '' as number | '',
         thread_count: '' as number | '',
         base_clock_ghz: '' as number | '',
         boost_clock_ghz: '' as number | '',
-        integrated_graphics: '',
-        tdp_watts: '' as number | '',
         stock_quantity: '' as number | '',
     });
-
-    const availableSockets = useMemo(() => {
-        return data.manufacturer === 'Intel'
-            ? intelSockets
-            : data.manufacturer === 'AMD'
-                ? amdSockets
-                : [...intelSockets, ...amdSockets];
-    }, [data.manufacturer]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -93,10 +79,7 @@ export default function Create() {
                         <Label htmlFor="manufacturer">Manufacturer</Label>
                         <Select
                             value={data.manufacturer}
-                            onValueChange={(val) => {
-                                setData('manufacturer', val)
-                                setData('socket_type', '') // reset socket when manufacturer changes
-                            }}
+                            onValueChange={(val) => setData('manufacturer', val)}
                         >
                             <SelectTrigger id="manufacturer" name="manufacturer">
                                 <SelectValue placeholder="Select manufacturer" />
@@ -121,25 +104,6 @@ export default function Create() {
                             onChange={(e) => setData('model', e.target.value)}
                         />
                         {errors.model && <p className="mt-1 text-sm text-red-600">{errors.model}</p>}
-                    </div>
-
-                    {/* Socket Type (dependent) */}
-                    <div>
-                        <Label htmlFor="socket_type">Socket Type</Label>
-                        <Select
-                            value={data.socket_type}
-                            onValueChange={(val) => setData('socket_type', val)}
-                        >
-                            <SelectTrigger id="socket_type" name="socket_type">
-                                <SelectValue placeholder="Select socket" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {availableSockets.map((sock) => (
-                                    <SelectItem key={sock} value={sock}>{sock}</SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {errors.socket_type && <p className="mt-1 text-sm text-red-600">{errors.socket_type}</p>}
                     </div>
 
                     <div>
@@ -200,37 +164,8 @@ export default function Create() {
                         />
                         {errors.boost_clock_ghz && <p className="mt-1 text-sm text-red-600">{errors.boost_clock_ghz}</p>}
                     </div>
-                    <div>
-                        <Label htmlFor="integrated_graphics">Integrated Graphics</Label>
-                        <Input
-                            id="integrated_graphics"
-                            name="integrated_graphics"
-                            placeholder="e.g. Intel UHD 730"
-                            value={data.integrated_graphics}
-                            onChange={(e) => setData('integrated_graphics', e.target.value)}
-                        />
-                        {errors.integrated_graphics && (
-                            <p className="mt-1 text-sm text-red-600">{errors.integrated_graphics}</p>
-                        )}
-                    </div>
 
-                    {/* Row 5 */}
                     <div>
-                        <Label htmlFor="tdp_watts">TDP (W)</Label>
-                        <Input
-                            id="tdp_watts"
-                            name="tdp_watts"
-                            type="number"
-                            min={1}
-                            placeholder="e.g. 65"
-                            value={data.tdp_watts}
-                            onChange={(e) => setData('tdp_watts', Number(e.target.value))}
-                        />
-                        {errors.tdp_watts && <p className="mt-1 text-sm text-red-600">{errors.tdp_watts}</p>}
-                    </div>
-
-                    {/* Add this input field for stock quantity */}
-                    <div className="mb-4">
                         <Label htmlFor="stock_quantity">Initial Stock Quantity</Label>
                         <Input
                             id="stock_quantity"

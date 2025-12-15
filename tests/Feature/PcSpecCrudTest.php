@@ -87,11 +87,7 @@ class PcSpecCrudTest extends TestCase
         $data = [
             'manufacturer' => 'ASUS',
             'model' => 'PRIME B450M-A',
-            'form_factor' => 'Micro-ATX',
             'memory_type' => 'DDR4',
-            'ram_slots' => 4,
-            'max_ram_capacity_gb' => 64,
-            'max_ram_speed' => '3200MHz',
             'm2_slots' => 2,
             'sata_ports' => 4,
             'ram_specs' => [$this->ram->id => 2], // 2 RAM sticks
@@ -124,11 +120,7 @@ class PcSpecCrudTest extends TestCase
         $data = [
             'manufacturer' => 'Gigabyte',
             'model' => 'B550M DS3H',
-            'form_factor' => 'Micro-ATX',
             'memory_type' => 'DDR4',
-            'ram_slots' => 4,
-            'max_ram_capacity_gb' => 128,
-            'max_ram_speed' => '4400MHz',
             'm2_slots' => 2,
             'sata_ports' => 4,
             'ram_specs' => [$this->ram->id => 2],
@@ -156,67 +148,8 @@ class PcSpecCrudTest extends TestCase
         $response->assertSessionHasErrors([
             'manufacturer',
             'model',
-            'form_factor',
             'memory_type',
-            'ram_slots',
         ]);
-    }
-
-    #[Test]
-    public function it_validates_ram_capacity_exceeds_max()
-    {
-        // Create large capacity RAM
-        $largeRam = RamSpec::factory()->create([
-            'type' => 'DDR4',
-            'capacity_gb' => 32, // 32GB sticks
-        ]);
-        $largeRam->stock()->create(['quantity' => 10]);
-
-        $data = [
-            'manufacturer' => 'MSI',
-            'model' => 'B450 TOMAHAWK',
-            'form_factor' => 'ATX',
-            'memory_type' => 'DDR4',
-            'ram_slots' => 4,
-            'max_ram_capacity_gb' => 64, // Max 64GB
-            'max_ram_speed' => '3200MHz',
-            'm2_slots' => 2,
-            'sata_ports' => 6,
-            'ram_specs' => [$largeRam->id => 4], // 4 x 32GB = 128GB (exceeds 64GB max)
-            'disk_specs' => [$this->disk->id => 1],
-            'processor_spec_id' => $this->processor->id,
-            'quantity' => 1,
-        ];
-
-        $response = $this->actingAs($this->admin)
-            ->post(route('pcspecs.store'), $data);
-
-        $response->assertSessionHasErrors('ram_specs');
-    }
-
-    #[Test]
-    public function it_validates_ram_slots_capacity()
-    {
-        $data = [
-            'manufacturer' => 'ASUS',
-            'model' => 'ROG STRIX B550-F',
-            'form_factor' => 'ATX',
-            'memory_type' => 'DDR4',
-            'ram_slots' => 2, // Only 2 slots
-            'max_ram_capacity_gb' => 32,
-            'max_ram_speed' => '3600MHz',
-            'm2_slots' => 2,
-            'sata_ports' => 4,
-            'ram_specs' => [$this->ram->id => 4], // Trying to use 4 sticks (exceeds slots)
-            'disk_specs' => [$this->disk->id => 1],
-            'processor_spec_id' => $this->processor->id,
-            'quantity' => 1,
-        ];
-
-        $response = $this->actingAs($this->admin)
-            ->post(route('pcspecs.store'), $data);
-
-        $response->assertSessionHasErrors('ram_specs');
     }
 
     #[Test]
@@ -253,11 +186,7 @@ class PcSpecCrudTest extends TestCase
             ->put(route('pcspecs.update', $pcSpec), [
                 'manufacturer' => 'ASUS',
                 'model' => 'NEW-MODEL',
-                'form_factor' => $pcSpec->form_factor,
                 'memory_type' => $pcSpec->memory_type,
-                'ram_slots' => $pcSpec->ram_slots,
-                'max_ram_capacity_gb' => $pcSpec->max_ram_capacity_gb,
-                'max_ram_speed' => (string) $pcSpec->max_ram_speed,
                 'm2_slots' => $pcSpec->m2_slots,
                 'sata_ports' => $pcSpec->sata_ports,
                 'ram_specs' => [],
@@ -290,11 +219,7 @@ class PcSpecCrudTest extends TestCase
             ->put(route('pcspecs.update', $pcSpec), [
                 'manufacturer' => $pcSpec->manufacturer,
                 'model' => $pcSpec->model,
-                'form_factor' => $pcSpec->form_factor,
                 'memory_type' => $pcSpec->memory_type,
-                'ram_slots' => $pcSpec->ram_slots,
-                'max_ram_capacity_gb' => $pcSpec->max_ram_capacity_gb,
-                'max_ram_speed' => (string) $pcSpec->max_ram_speed,
                 'm2_slots' => $pcSpec->m2_slots,
                 'sata_ports' => $pcSpec->sata_ports,
                 'ram_specs' => [$newRam->id => 2], // Switch to new RAM
@@ -388,11 +313,7 @@ class PcSpecCrudTest extends TestCase
             ->post(route('pcspecs.store'), [
                 'manufacturer' => 'ASUS',
                 'model' => 'TEST',
-                'form_factor' => 'ATX',
                 'memory_type' => 'DDR4',
-                'ram_slots' => 4,
-                'max_ram_capacity_gb' => 64,
-                'max_ram_speed' => '3200MHz',
                 'm2_slots' => 2,
                 'sata_ports' => 4,
                 'processor_spec_id' => $this->processor->id,

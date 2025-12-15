@@ -27,8 +27,6 @@ class RamSpecRequest extends FormRequest
             'capacity_gb' => ['required', 'integer', 'min:1'],
             'type' => ['required', 'string', 'max:255'],
             'speed' => ['required', 'integer', 'min:1'],
-            'form_factor' => ['required', 'string', 'max:255'],
-            'voltage' => ['required', 'numeric', 'min:0'],
         ];
 
         // Include stock_quantity only on create
@@ -48,7 +46,6 @@ class RamSpecRequest extends FormRequest
     {
         return [
             'capacity_gb' => 'capacity',
-            'form_factor' => 'form factor',
             'stock_quantity' => 'initial stock quantity',
         ];
     }
@@ -63,7 +60,6 @@ class RamSpecRequest extends FormRequest
         return [
             'capacity_gb.min' => 'The capacity must be at least 1 GB.',
             'speed.min' => 'The speed must be at least 1 MHz.',
-            'voltage.min' => 'The voltage must be greater than 0.',
         ];
     }
 }

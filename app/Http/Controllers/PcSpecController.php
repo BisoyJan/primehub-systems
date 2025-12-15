@@ -60,7 +60,6 @@ class PcSpecController extends Controller
                 'manufacturer'    => $pc->manufacturer,
                 'model'           => $pc->model,
                 'memory_type'     => $pc->memory_type,
-                'form_factor'     => $pc->form_factor,
                 'issue'           => $pc->issue,
                 'ramSpecs'        => $pc->ramSpecs->map(fn($r) => [
                     'id'           => $r->id,
@@ -76,21 +75,15 @@ class PcSpecController extends Controller
                     'manufacturer'         => $d->manufacturer,
                     'model'                => $d->model,
                     'capacity_gb'          => $d->capacity_gb,
-                    'drive_type'           => $d->drive_type ?? null,
-                    'interface'            => $d->interface ?? null,
-                    'sequential_read_mb'   => $d->sequential_read_mb ?? null,
-                    'sequential_write_mb'  => $d->sequential_write_mb ?? null,
                 ])->toArray(),
                 'processorSpecs'  => $pc->processorSpecs->map(fn($p) => [
                     'id'             => $p->id,
                     'manufacturer'   => $p->manufacturer,
                     'model'          => $p->model,
-                    'socket_type'    => $p->socket_type,
                     'core_count'     => $p->core_count ?? null,
                     'thread_count'   => $p->thread_count ?? null,
                     'base_clock_ghz' => $p->base_clock_ghz ?? null,
                     'boost_clock_ghz' => $p->boost_clock_ghz ?? null,
-                    'tdp_watts'      => $p->tdp_watts ?? null,
                 ])->toArray(),
             ]);
 
@@ -118,15 +111,14 @@ class PcSpecController extends Controller
             'diskOptions' => DiskSpec::with('stock')->get()
                 ->map(fn($d) => [
                     'id'             => $d->id,
-                    'label'          => "{$d->manufacturer} {$d->model} - {$d->interface} {$d->capacity_gb}GB",
+                    'label'          => "{$d->manufacturer} {$d->model} {$d->capacity_gb}GB",
                     'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
 
             'processorOptions' => ProcessorSpec::with('stock')->get()
                 ->map(fn($p) => [
                     'id'             => $p->id,
-                    'label'       => "{$p->manufacturer} {$p->model}",
-                    'socket_type'    => $p->socket_type,
+                    'label'          => "{$p->manufacturer} {$p->model}",
                     'stock_quantity' => $p->stock?->quantity ?? 0,
                 ]),
         ]);
@@ -287,11 +279,7 @@ class PcSpecController extends Controller
             'pc_number'                   => 'nullable|string|max:100|unique:pc_specs,pc_number',
             'manufacturer'                => 'required|string|max:255',
             'model'                       => 'required|string|max:255',
-            'form_factor'                 => 'required|string|max:50',
             'memory_type'                 => 'required|string|max:10',
-            'ram_slots'                   => 'required|integer|min:1',
-            'max_ram_capacity_gb'         => 'required|integer|min:1',
-            'max_ram_speed'               => 'required|string|max:50',
             'm2_slots'                    => 'required|integer|min:0',
             'sata_ports'                  => 'required|integer|min:0',
             'ram_mode'                    => 'nullable|in:same,different',
@@ -304,24 +292,6 @@ class PcSpecController extends Controller
 
         $ramSpecs = $this->validateAndNormalizeSpecs($request->input('ram_specs', []));
         $diskSpecs = $this->validateAndNormalizeSpecs($request->input('disk_specs', []));
-
-        // allow unused slots: total sticks must be <= ram_slots
-        $totalRamSticks = array_sum($ramSpecs);
-        $ramSlots = (int) $request->input('ram_slots');
-        if ($totalRamSticks > $ramSlots) {
-            throw ValidationException::withMessages([
-                'ram_specs' => "You selected {$totalRamSticks} RAM sticks, but the motherboard only supports {$ramSlots} slots.",
-            ]);
-        }
-
-        // capacity check: ensure total installed capacity does not exceed motherboard max
-        $totalCapacityGb = $this->computeTotalRamCapacity($ramSpecs);
-        $maxCapacityGb = (int) ($request->input('max_ram_capacity_gb') ?? 0);
-        if ($maxCapacityGb > 0 && $totalCapacityGb > $maxCapacityGb) {
-            throw ValidationException::withMessages([
-                'ram_specs' => "Selected modules total {$totalCapacityGb} GB which exceeds motherboard max capacity of {$maxCapacityGb} GB.",
-            ]);
-        }
 
         // Get quantity (default to 1)
         $quantity = max(1, (int) ($data['quantity'] ?? 1));
@@ -413,11 +383,7 @@ class PcSpecController extends Controller
                 'pc_number'           => $pcspec->pc_number,
                 'manufacturer'        => $pcspec->manufacturer,
                 'model'               => $pcspec->model,
-                'form_factor'         => $pcspec->form_factor,
                 'memory_type'         => $pcspec->memory_type,
-                'ram_slots'           => $pcspec->ram_slots,
-                'max_ram_capacity_gb' => $pcspec->max_ram_capacity_gb,
-                'max_ram_speed'       => $pcspec->max_ram_speed,
                 'm2_slots'            => $pcspec->m2_slots,
                 'sata_ports'          => $pcspec->sata_ports,
                 'ramSpecs'            => $pcspec->ramSpecs()->get()->map(fn($r) => [
@@ -438,14 +404,13 @@ class PcSpecController extends Controller
             'diskOptions' => DiskSpec::with('stock')->get()
                 ->map(fn($d) => [
                     'id'    => $d->id,
-                    'label' => "{$d->manufacturer} {$d->model} {$d->interface} {$d->capacity_gb}GB",
+                    'label' => "{$d->manufacturer} {$d->model} {$d->capacity_gb}GB",
                     'stock_quantity' => $d->stock?->quantity ?? 0,
                 ]),
             'processorOptions' => ProcessorSpec::with('stock')->get()
                 ->map(fn($p) => [
                     'id'          => $p->id,
                     'label'       => "{$p->manufacturer} {$p->model}",
-                    'socket_type' => $p->socket_type,
                     'stock_quantity' => $p->stock?->quantity ?? 0,
                 ]),
         ]);
@@ -460,11 +425,7 @@ class PcSpecController extends Controller
             'pc_number'                   => 'nullable|string|max:100|unique:pc_specs,pc_number,' . $pcspec->id,
             'manufacturer'                => 'required|string|max:255',
             'model'                       => 'required|string|max:255',
-            'form_factor'                 => 'required|string|max:50',
             'memory_type'                 => 'required|string|max:10',
-            'ram_slots'                   => 'required|integer|min:1',
-            'max_ram_capacity_gb'         => 'required|integer|min:1',
-            'max_ram_speed'               => 'required|string|max:50',
             'm2_slots'                    => 'required|integer|min:0',
             'sata_ports'                  => 'required|integer|min:0',
             'ram_mode'                    => 'nullable|in:same,different',
@@ -476,22 +437,6 @@ class PcSpecController extends Controller
 
         $newRamSpecs = $this->validateAndNormalizeSpecs($request->input('ram_specs', []));
         $newDiskSpecs = $this->validateAndNormalizeSpecs($request->input('disk_specs', []));
-
-        // allow unused slots: total sticks must be <= ram_slots
-        $totalRamSticks = array_sum($newRamSpecs);
-        $ramSlots = (int) $request->input('ram_slots');
-        if ($totalRamSticks > $ramSlots) {
-            throw ValidationException::withMessages([
-                'ram_specs' => "You selected {$totalRamSticks} RAM sticks, but the motherboard only supports {$ramSlots} slots.",
-            ]);
-        }
-
-        // capacity check: ensure total installed capacity does not exceed motherboard max
-        $totalCapacityGb = $this->computeTotalRamCapacity($newRamSpecs);
-        $maxCapacityGb = (int) ($request->input('max_ram_capacity_gb') ?? $motherboard->max_ram_capacity_gb ?? 0);
-        if ($maxCapacityGb > 0 && $totalCapacityGb > $maxCapacityGb) {
-            throw ValidationException::withMessages(['ram_specs' => "Selected modules total {$totalCapacityGb} GB which exceeds motherboard max capacity of {$maxCapacityGb} GB."]);
-        }
 
         // Perform update inside transaction with retry attempts
         DB::transaction(function () use ($pcspec, $data, $newRamSpecs, $newDiskSpecs) {

@@ -30,8 +30,6 @@ interface RamSpec {
     capacity_gb: number;
     type: string;
     speed: number;
-    form_factor: string;
-    voltage: number;
 }
 
 interface Props {
@@ -55,8 +53,6 @@ export default function Edit({ ramspec }: Props) {
         capacity_gb: ramspec.capacity_gb,
         type: ramspec.type,
         speed: ramspec.speed,
-        form_factor: ramspec.form_factor,
-        voltage: ramspec.voltage,
     });
 
     const isPageLoading = usePageLoading();
@@ -188,43 +184,6 @@ export default function Edit({ ramspec }: Props) {
                             onChange={(e) => setData('speed', Number(e.target.value))}
                         />
                         {errors.speed && <p className="mt-1 text-sm text-red-600">{errors.speed}</p>}
-                    </div>
-
-                    <div>
-                        <Label htmlFor="form_factor">Form Factor</Label>
-                        <Select
-                            value={data.form_factor}
-                            onValueChange={(value) => setData('form_factor', value)}
-                        >
-                            <SelectTrigger id="form_factor" name="form_factor">
-                                <SelectValue placeholder="e.g. SO-DIMM" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                {['SO-DIMM', 'DIMM'].map((formFactor) => (
-                                    <SelectItem key={formFactor} value={formFactor}>
-                                        {formFactor}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
-                        {errors.form_factor && (
-                            <p className="mt-1 text-sm text-red-600">{errors.form_factor}</p>
-                        )}
-                    </div>
-
-                    <div>
-                        <Label htmlFor="voltage">Voltage (V)</Label>
-                        <Input
-                            id="voltage"
-                            name="voltage"
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            placeholder="e.g. 1.35"
-                            value={data.voltage}
-                            onChange={(e) => setData('voltage', Number(e.target.value))}
-                        />
-                        {errors.voltage && <p className="mt-1 text-sm text-red-600">{errors.voltage}</p>}
                     </div>
 
                     <div className="md:col-span-2 flex justify-end">

@@ -23,13 +23,10 @@ class ProcessorSpec extends Model
     protected $fillable = [
         'manufacturer',
         'model',
-        'socket_type',
         'core_count',
         'thread_count',
         'base_clock_ghz',
         'boost_clock_ghz',
-        'integrated_graphics',
-        'tdp_watts',
     ];
 
     protected function casts(): array
@@ -39,7 +36,6 @@ class ProcessorSpec extends Model
             'thread_count' => 'integer',
             'base_clock_ghz' => 'decimal:2',
             'boost_clock_ghz' => 'decimal:2',
-            'tdp_watts' => 'integer',
         ];
     }
 

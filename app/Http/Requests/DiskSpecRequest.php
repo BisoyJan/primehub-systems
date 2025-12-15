@@ -25,10 +25,6 @@ class DiskSpecRequest extends FormRequest
             'manufacturer' => ['required', 'string', 'max:255'],
             'model' => ['required', 'string', 'max:255'],
             'capacity_gb' => ['required', 'integer', 'min:1'],
-            'interface' => ['required', 'string', 'max:255'],
-            'drive_type' => ['required', 'string', 'max:255'],
-            'sequential_read_mb' => ['required', 'integer', 'min:1'],
-            'sequential_write_mb' => ['required', 'integer', 'min:1'],
         ];
 
         // Include stock_quantity only on create
@@ -48,8 +44,6 @@ class DiskSpecRequest extends FormRequest
     {
         return [
             'capacity_gb' => 'capacity',
-            'sequential_read_mb' => 'sequential read speed',
-            'sequential_write_mb' => 'sequential write speed',
             'stock_quantity' => 'initial stock quantity',
         ];
     }
@@ -63,8 +57,6 @@ class DiskSpecRequest extends FormRequest
     {
         return [
             'capacity_gb.min' => 'The capacity must be at least 1 GB.',
-            'sequential_read_mb.min' => 'The sequential read speed must be at least 1 MB/s.',
-            'sequential_write_mb.min' => 'The sequential write speed must be at least 1 MB/s.',
         ];
     }
 }

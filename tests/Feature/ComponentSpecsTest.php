@@ -15,13 +15,13 @@ use Tests\TestCase;
 
 /**
  * Tests for Component Specs (RAM, Disk, Processor, Monitor) functionality.
- * 
+ *
  * Note: These tests are marked as duplicates because comprehensive tests exist in:
  * - tests/Feature/Controllers/Hardware/RamSpecsControllerTest.php
  * - tests/Feature/Controllers/Hardware/DiskSpecsControllerTest.php
  * - tests/Feature/Controllers/Hardware/ProcessorSpecsControllerTest.php
  * - tests/Feature/Controllers/Hardware/MonitorSpecsControllerTest.php
- * 
+ *
  * Those tests are more complete and match the actual implementation.
  */
 #[Group('duplicate')]
@@ -69,8 +69,6 @@ class ComponentSpecsTest extends TestCase
             'capacity_gb' => 16,
             'type' => 'DDR4',
             'speed' => 3200, // Must be integer, not string
-            'form_factor' => 'DIMM',
-            'voltage' => 1.35,
             'stock_quantity' => 10, // Required field
         ];
 
@@ -102,8 +100,6 @@ class ComponentSpecsTest extends TestCase
                 'capacity_gb' => 16,
                 'type' => $ramSpec->type,
                 'speed' => $ramSpec->speed,
-                'form_factor' => $ramSpec->form_factor,
-                'voltage' => $ramSpec->voltage,
             ]);
 
         $response->assertRedirect(route('ramspecs.index'));
@@ -152,10 +148,6 @@ class ComponentSpecsTest extends TestCase
             'manufacturer' => 'Samsung',
             'model' => '980 PRO',
             'capacity_gb' => 1024,
-            'interface' => 'NVMe',
-            'drive_type' => 'SSD',
-            'sequential_read_mb' => 7000,
-            'sequential_write_mb' => 5000,
             'stock_quantity' => 5, // Required field
         ];
 
@@ -168,7 +160,6 @@ class ComponentSpecsTest extends TestCase
             'manufacturer' => 'Samsung',
             'model' => '980 PRO',
             'capacity_gb' => 1024,
-            'drive_type' => 'SSD',
         ]);
     }
 
@@ -185,10 +176,6 @@ class ComponentSpecsTest extends TestCase
                 'manufacturer' => $diskSpec->manufacturer,
                 'model' => 'NEW-DISK',
                 'capacity_gb' => 1024,
-                'interface' => $diskSpec->interface,
-                'drive_type' => $diskSpec->drive_type,
-                'sequential_read_mb' => $diskSpec->sequential_read_mb,
-                'sequential_write_mb' => $diskSpec->sequential_write_mb,
             ]);
 
         $response->assertRedirect(route('diskspecs.index'));
@@ -236,12 +223,10 @@ class ComponentSpecsTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
             'boost_clock_ghz' => 5.0,
-            'tdp_watts' => 125,
             'stock_quantity' => 3, // Required field
         ];
 
@@ -269,12 +254,10 @@ class ComponentSpecsTest extends TestCase
             ->put(route('processorspecs.update', $processorSpec), [
                 'manufacturer' => $processorSpec->manufacturer,
                 'model' => 'NEW-CPU',
-                'socket_type' => $processorSpec->socket_type,
                 'core_count' => 8,
                 'thread_count' => $processorSpec->thread_count,
                 'base_clock_ghz' => $processorSpec->base_clock_ghz,
                 'boost_clock_ghz' => $processorSpec->boost_clock_ghz,
-                'tdp_watts' => $processorSpec->tdp_watts,
             ]);
 
         $response->assertRedirect(route('processorspecs.index'));
@@ -401,8 +384,6 @@ class ComponentSpecsTest extends TestCase
                 'capacity_gb' => 16,
                 'type' => 'DDR4',
                 'speed' => 3200,
-                'form_factor' => 'DIMM',
-                'voltage' => 1.35,
                 'stock_quantity' => 1,
             ]);
         $response->assertForbidden();
@@ -413,10 +394,6 @@ class ComponentSpecsTest extends TestCase
                 'manufacturer' => 'Test',
                 'model' => 'Test',
                 'capacity_gb' => 512,
-                'interface' => 'NVMe',
-                'drive_type' => 'SSD',
-                'sequential_read_mb' => 3500,
-                'sequential_write_mb' => 3000,
                 'stock_quantity' => 1,
             ]);
         $response->assertForbidden();
@@ -426,12 +403,10 @@ class ComponentSpecsTest extends TestCase
             ->post(route('processorspecs.store'), [
                 'manufacturer' => 'Test',
                 'model' => 'Test',
-                'socket_type' => 'LGA1700',
                 'core_count' => 8,
                 'thread_count' => 16,
                 'base_clock_ghz' => 3.0,
                 'boost_clock_ghz' => 4.5,
-                'tdp_watts' => 65,
                 'stock_quantity' => 1,
             ]);
         $response->assertForbidden();

@@ -24,18 +24,12 @@ class DiskSpec extends Model
         'manufacturer',
         'model',
         'capacity_gb',
-        'interface',
-        'drive_type',
-        'sequential_read_mb',
-        'sequential_write_mb',
     ];
 
     protected function casts(): array
     {
         return [
             'capacity_gb' => 'integer',
-            'sequential_read_mb' => 'integer',
-            'sequential_write_mb' => 'integer',
         ];
     }
 

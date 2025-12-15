@@ -71,11 +71,7 @@ class PcSpecControllerTest extends TestCase
             'pc_number' => 'PC-TEST-001',
             'manufacturer' => 'Dell',
             'model' => 'OptiPlex',
-            'form_factor' => 'SFF',
             'memory_type' => 'DDR4',
-            'ram_slots' => 4,
-            'max_ram_capacity_gb' => 64,
-            'max_ram_speed' => '3200',
             'm2_slots' => 1,
             'sata_ports' => 2,
             'ram_specs' => [$ramSpec->id => 2], // 2 sticks
@@ -139,11 +135,7 @@ class PcSpecControllerTest extends TestCase
         $data = [
             'manufacturer' => 'Updated Manufacturer',
             'model' => 'Updated Model',
-            'form_factor' => 'Tower',
             'memory_type' => 'DDR5',
-            'ram_slots' => 4,
-            'max_ram_capacity_gb' => 128,
-            'max_ram_speed' => '4800',
             'm2_slots' => 2,
             'sata_ports' => 4,
             'ram_specs' => [$ramSpec2->id => 1], // Switch to new RAM

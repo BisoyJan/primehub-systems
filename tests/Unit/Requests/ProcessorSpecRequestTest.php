@@ -27,13 +27,10 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
             'boost_clock_ghz' => 5.0,
-            'integrated_graphics' => 'Intel UHD Graphics 770',
-            'tdp_watts' => 125,
             'stock_quantity' => 25,
         ];
 
@@ -50,7 +47,6 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
@@ -70,7 +66,6 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
@@ -89,13 +84,10 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'AMD',
             'model' => 'Ryzen 5 5600X',
-            'socket_type' => 'AM4',
             'core_count' => 6,
             'thread_count' => 12,
             'base_clock_ghz' => 3.7,
             'boost_clock_ghz' => null,
-            'integrated_graphics' => null,
-            'tdp_watts' => null,
             'stock_quantity' => 30,
         ];
 
@@ -112,7 +104,6 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 0,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
@@ -133,7 +124,6 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 12,
             'thread_count' => 0,
             'base_clock_ghz' => 3.6,
@@ -154,7 +144,6 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => -1,
@@ -175,7 +164,6 @@ class ProcessorSpecRequestTest extends TestCase
         $data = [
             'manufacturer' => 'Intel',
             'model' => 'Core i7-12700K',
-            'socket_type' => 'LGA1700',
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
@@ -199,7 +187,6 @@ class ProcessorSpecRequestTest extends TestCase
         $this->assertEquals('number of threads', $attributes['thread_count']);
         $this->assertEquals('base clock speed', $attributes['base_clock_ghz']);
         $this->assertEquals('boost clock speed', $attributes['boost_clock_ghz']);
-        $this->assertEquals('TDP', $attributes['tdp_watts']);
         $this->assertEquals('initial stock quantity', $attributes['stock_quantity']);
     }
 

@@ -19,6 +19,7 @@ import {
 
 export interface PcSpec {
     id: number;
+    pc_number?: string;
     model: string;
     ram?: string;
     ram_gb?: number;
@@ -43,6 +44,7 @@ interface PcSpecTableProps {
 }
 
 const columns: DataTableColumn<PcSpec>[] = [
+    { accessor: "pc_number", header: "PC Number" },
     { accessor: "model", header: "Model" },
     { accessor: "processor", header: "Processor" },
     { accessor: "ram", header: "RAM", cell: (value, row) => `${row.ram} (${row.ram_gb ?? ''} GB)` },
@@ -72,6 +74,7 @@ export default function PcSpecTable({
         const isNotUsed = !usedPcSpecIds || !usedPcSpecIds.includes(spec.id);
 
         const matchesSearch =
+            (spec.pc_number?.toLowerCase().includes(search.toLowerCase()) ?? false) ||
             spec.model.toLowerCase().includes(search.toLowerCase()) ||
             (spec.processor?.toLowerCase().includes(search.toLowerCase()) ?? false);
         const matchesRam = filterRam ? (spec.ram?.toLowerCase().includes(filterRam.toLowerCase()) ?? false) : true;
@@ -129,8 +132,8 @@ export default function PcSpecTable({
                     type="search"
                     value={search}
                     onChange={e => { setSearch(e.target.value); setPage(1); }}
-                    placeholder="Search model or processor..."
-                    className="border rounded px-2 py-1 w-full sm:w-48"
+                    placeholder="Search PC#, model, processor..."
+                    className="border rounded px-2 py-1 w-full sm:w-56"
                 />
                 <Input
                     type="search"
@@ -211,7 +214,8 @@ export default function PcSpecTable({
                                         />
                                     )}
                                     <div className="flex-1">
-                                        <div className={`font-semibold text-base mb-2 ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
+                                        <div className={`font-semibold text-base mb-1 ${isSelected ? 'text-blue-900 dark:text-blue-100' : ''}`}>
+                                            {spec.pc_number && <span className="text-primary">{spec.pc_number} - </span>}
                                             {spec.model}
                                         </div>
                                         <div className="space-y-1.5 text-sm">
@@ -264,6 +268,13 @@ export default function PcSpecTable({
                             {dialogRow && (
                                 <div className="space-y-4 text-left mt-4">
                                     <div className="space-y-3">
+                                        {dialogRow.pc_number && (
+                                            <div>
+                                                <div className="font-semibold text-foreground mb-1">PC Number:</div>
+                                                <div className="text-foreground pl-2 break-words">{dialogRow.pc_number}</div>
+                                            </div>
+                                        )}
+
                                         <div>
                                             <div className="font-semibold text-foreground mb-1">Model:</div>
                                             <div className="text-foreground pl-2 break-words">{dialogRow.model}</div>

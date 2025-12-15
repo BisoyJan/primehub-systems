@@ -29,10 +29,6 @@ class DiskSpecRequestTest extends TestCase
             'manufacturer' => 'Samsung',
             'model' => '870 EVO',
             'capacity_gb' => 500,
-            'interface' => 'SATA III',
-            'drive_type' => 'SSD',
-            'sequential_read_mb' => 560,
-            'sequential_write_mb' => 530,
             'stock_quantity' => 10,
         ];
 
@@ -50,10 +46,6 @@ class DiskSpecRequestTest extends TestCase
             'manufacturer' => 'Samsung',
             'model' => '870 EVO',
             'capacity_gb' => 500,
-            'interface' => 'SATA III',
-            'drive_type' => 'SSD',
-            'sequential_read_mb' => 560,
-            'sequential_write_mb' => 530,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -71,10 +63,6 @@ class DiskSpecRequestTest extends TestCase
             'manufacturer' => 'Samsung',
             'model' => '870 EVO',
             'capacity_gb' => 500,
-            'interface' => 'SATA III',
-            'drive_type' => 'SSD',
-            'sequential_read_mb' => 560,
-            'sequential_write_mb' => 530,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -95,10 +83,6 @@ class DiskSpecRequestTest extends TestCase
         $this->assertArrayHasKey('manufacturer', $errors);
         $this->assertArrayHasKey('model', $errors);
         $this->assertArrayHasKey('capacity_gb', $errors);
-        $this->assertArrayHasKey('interface', $errors);
-        $this->assertArrayHasKey('drive_type', $errors);
-        $this->assertArrayHasKey('sequential_read_mb', $errors);
-        $this->assertArrayHasKey('sequential_write_mb', $errors);
     }
 
     #[Test]
@@ -110,10 +94,6 @@ class DiskSpecRequestTest extends TestCase
             'manufacturer' => 'Samsung',
             'model' => '870 EVO',
             'capacity_gb' => 0,
-            'interface' => 'SATA III',
-            'drive_type' => 'SSD',
-            'sequential_read_mb' => 560,
-            'sequential_write_mb' => 530,
             'stock_quantity' => 10,
         ];
 
@@ -124,30 +104,6 @@ class DiskSpecRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_speeds_to_be_at_least_1(): void
-    {
-        $request = DiskSpecRequest::create('/test', 'POST');
-
-        $data = [
-            'manufacturer' => 'Samsung',
-            'model' => '870 EVO',
-            'capacity_gb' => 500,
-            'interface' => 'SATA III',
-            'drive_type' => 'SSD',
-            'sequential_read_mb' => 0,
-            'sequential_write_mb' => 0,
-            'stock_quantity' => 10,
-        ];
-
-        $validator = Validator::make($data, $request->rules());
-
-        $this->assertTrue($validator->fails());
-        $errors = $validator->errors()->toArray();
-        $this->assertArrayHasKey('sequential_read_mb', $errors);
-        $this->assertArrayHasKey('sequential_write_mb', $errors);
-    }
-
-    #[Test]
     public function it_has_custom_attributes(): void
     {
         $request = new DiskSpecRequest();
@@ -155,8 +111,6 @@ class DiskSpecRequestTest extends TestCase
         $attributes = $request->attributes();
 
         $this->assertEquals('capacity', $attributes['capacity_gb']);
-        $this->assertEquals('sequential read speed', $attributes['sequential_read_mb']);
-        $this->assertEquals('sequential write speed', $attributes['sequential_write_mb']);
         $this->assertEquals('initial stock quantity', $attributes['stock_quantity']);
     }
 
@@ -168,7 +122,5 @@ class DiskSpecRequestTest extends TestCase
         $messages = $request->messages();
 
         $this->assertStringContainsString('at least 1 GB', $messages['capacity_gb.min']);
-        $this->assertStringContainsString('at least 1 MB/s', $messages['sequential_read_mb.min']);
-        $this->assertStringContainsString('at least 1 MB/s', $messages['sequential_write_mb.min']);
     }
 }
