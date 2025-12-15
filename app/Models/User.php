@@ -37,6 +37,7 @@ class User extends Authenticatable
         'password',
         'role',
         'time_format',
+        'inactivity_timeout',
         'hired_date',
         'is_approved',
         'is_active',

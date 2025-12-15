@@ -550,6 +550,12 @@ MAIL_FROM_ADDRESS=noreply@example.com
 
 This project is proprietary software. All rights reserved.
 
+## Author
+
+**Jan Ramil P. Intong (BisoyJan)** - Lead Developer
+- Email: bisoyjan@gmail.com
+- GitHub: [@BisoyJan](https://github.com/BisoyJan)
+
 ## Support
 
 For issues or questions:
@@ -560,4 +566,4 @@ For issues or questions:
 
 ---
 
-**Built with ❤️ using Laravel & React**
+**Built with ❤️ using Laravel & React by Jan Ramil P. Intong**

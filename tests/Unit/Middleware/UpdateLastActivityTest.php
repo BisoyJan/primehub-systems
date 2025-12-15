@@ -7,7 +7,6 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Config;
 use Illuminate\Support\Facades\Route;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -30,7 +29,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_updates_last_activity_time_for_authenticated_user(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 15]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -64,9 +63,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_logs_out_inactive_user_after_timeout(): void
     {
-        Config::set('session.inactivity_timeout', 1); // 1 minute timeout
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 1]); // 1 minute timeout
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -86,9 +83,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_allows_user_within_activity_timeout(): void
     {
-        Config::set('session.inactivity_timeout', 15); // 15 minute timeout
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 15]); // 15 minute timeout
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -105,32 +100,51 @@ class UpdateLastActivityTest extends TestCase
     }
 
     #[Test]
-    public function it_uses_default_timeout_of_15_minutes(): void
+    public function it_skips_timeout_check_when_user_has_null_inactivity_timeout(): void
     {
-        Config::set('session.inactivity_timeout', null);
-
-        $user = User::factory()->create();
+        // User with null inactivity_timeout (disabled auto-logout)
+        $user = User::factory()->create(['inactivity_timeout' => null]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
         $request->setLaravelSession(app("session.store"));
 
-        // Set last activity to 16 minutes ago (beyond default 15 min timeout)
+        // Set last activity to 16 minutes ago (would normally trigger logout)
         $sixteenMinutesAgo = time() - (16 * 60);
         $request->session()->put('last_activity_time', $sixteenMinutesAgo);
 
         $response = $this->middleware->handle($request, fn($req) => response('OK'));
 
-        $this->assertFalse(Auth::check());
-        $this->assertEquals(302, $response->getStatusCode());
+        // User should still be logged in because timeout is disabled
+        $this->assertTrue(Auth::check());
+        $this->assertEquals('OK', $response->getContent());
+    }
+
+    #[Test]
+    public function it_still_tracks_activity_when_timeout_disabled(): void
+    {
+        // User with null inactivity_timeout (disabled auto-logout)
+        $user = User::factory()->create(['inactivity_timeout' => null]);
+        Auth::login($user);
+
+        $request = Request::create('/test', 'GET');
+        $request->setLaravelSession(app("session.store"));
+
+        $beforeTime = time();
+
+        $this->middleware->handle($request, fn($req) => response('OK'));
+
+        $lastActivity = $request->session()->get('last_activity_time');
+
+        // Activity should still be tracked even when timeout is disabled
+        $this->assertNotNull($lastActivity);
+        $this->assertGreaterThanOrEqual($beforeTime, $lastActivity);
     }
 
     #[Test]
     public function it_invalidates_session_on_timeout(): void
     {
-        Config::set('session.inactivity_timeout', 1);
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 1]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -150,9 +164,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_regenerates_csrf_token_on_timeout(): void
     {
-        Config::set('session.inactivity_timeout', 1);
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 1]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -170,9 +182,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_shows_inactivity_message_on_logout(): void
     {
-        Config::set('session.inactivity_timeout', 1);
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 1]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -191,9 +201,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_sets_warning_flash_type(): void
     {
-        Config::set('session.inactivity_timeout', 1);
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 1]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -208,7 +216,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_passes_request_to_next_middleware_when_active(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 15]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -229,9 +237,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_does_not_call_next_middleware_on_timeout(): void
     {
-        Config::set('session.inactivity_timeout', 1);
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 1]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -252,7 +258,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_handles_first_request_without_last_activity(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 15]);
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');
@@ -269,9 +275,7 @@ class UpdateLastActivityTest extends TestCase
     #[Test]
     public function it_converts_minutes_to_seconds_for_timeout(): void
     {
-        Config::set('session.inactivity_timeout', 2); // 2 minutes
-
-        $user = User::factory()->create();
+        $user = User::factory()->create(['inactivity_timeout' => 2]); // 2 minutes
         Auth::login($user);
 
         $request = Request::create('/test', 'GET');

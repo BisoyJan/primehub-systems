@@ -1,6 +1,11 @@
 {
     "private": true,
     "type": "module",
+    "author": {
+        "name": "Jan Ramil P. Intong",
+        "email": "bisoyjan@gmail.com",
+        "url": "https://github.com/BisoyJan"
+    },
     "scripts": {
         "build": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" vite build",
         "build:ssr": "cross-env NODE_OPTIONS=\"--max-old-space-size=8192\" vite build && vite build --ssr",

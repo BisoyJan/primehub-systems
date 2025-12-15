@@ -622,6 +622,15 @@ When adding new documentation:
 
 ---
 
+## 👨‍💻 Credits & Developer
+
+**Developer:** Jan Ramil P. Intong (BisoyJan)  
+**Email:** bisoyjan@gmail.com  
+**GitHub:** [@BisoyJan](https://github.com/BisoyJan)  
+**Role:** Developer
+
+---
+
 **Happy coding! 🚀**
 
 For questions or documentation requests, please contact the development team.

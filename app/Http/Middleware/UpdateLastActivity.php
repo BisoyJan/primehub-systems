@@ -17,7 +17,19 @@ class UpdateLastActivity
     public function handle(Request $request, Closure $next): Response
     {
         if (Auth::check()) {
-            $timeout = config('session.inactivity_timeout', 15) * 60; // Convert minutes to seconds
+            $user = Auth::user();
+
+            // Get user's preferred timeout, null means disabled (no auto-logout)
+            $userTimeout = $user->inactivity_timeout;
+
+            // If user has disabled inactivity timeout (null), skip the check
+            if ($userTimeout === null) {
+                // Still update last activity time for tracking purposes
+                $request->session()->put('last_activity_time', time());
+                return $next($request);
+            }
+
+            $timeout = $userTimeout * 60; // Convert minutes to seconds
             $lastActivity = $request->session()->get('last_activity_time');
 
             // Check if user has been inactive for too long

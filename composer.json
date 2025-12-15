@@ -8,6 +8,14 @@
         "framework"
     ],
     "license": "MIT",
+    "authors": [
+        {
+            "name": "Jan Ramil P. Intong",
+            "email": "bisoyjan@gmail.com",
+            "homepage": "https://github.com/BisoyJan",
+            "role": "Lead Developer"
+        }
+    ],
     "require": {
         "php": "^8.2",
         "endroid/qr-code": "^6.0",
