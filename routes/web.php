@@ -176,23 +176,23 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
 
     // Attendance Management
     Route::prefix('attendance')->name('attendance.')
-        ->middleware('permission:attendance.view,attendance.create,attendance.import,attendance.review,attendance.verify,attendance.approve,attendance.statistics,attendance.delete')
+        ->middleware('permission:attendance.view')
         ->group(function () {
             Route::get('/', [AttendanceController::class, 'index'])->name('index');
             Route::get('/calendar/{user?}', [AttendanceController::class, 'calendar'])->name('calendar');
-            Route::get('/create', [AttendanceController::class, 'create'])->name('create');
-            Route::post('/', [AttendanceController::class, 'store'])->name('store');
-            Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore');
-            Route::get('import', [AttendanceController::class, 'import'])->name('import');
-            Route::post('upload', [AttendanceController::class, 'upload'])->name('upload');
-            Route::get('review', [AttendanceController::class, 'review'])->name('review');
-            Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify');
-            Route::post('batch-verify', [AttendanceController::class, 'batchVerify'])->name('batchVerify');
-            Route::post('{attendance}/mark-advised', [AttendanceController::class, 'markAdvised'])->name('markAdvised');
-            Route::post('{attendance}/quick-approve', [AttendanceController::class, 'quickApprove'])->name('quickApprove');
-            Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove');
-            Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics');
-            Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete');
+            Route::get('/create', [AttendanceController::class, 'create'])->name('create')->middleware('permission:attendance.create');
+            Route::post('/', [AttendanceController::class, 'store'])->name('store')->middleware('permission:attendance.create');
+            Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore')->middleware('permission:attendance.create');
+            Route::get('import', [AttendanceController::class, 'import'])->name('import')->middleware('permission:attendance.import');
+            Route::post('upload', [AttendanceController::class, 'upload'])->name('upload')->middleware('permission:attendance.import');
+            Route::get('review', [AttendanceController::class, 'review'])->name('review')->middleware('permission:attendance.review');
+            Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify')->middleware('permission:attendance.verify');
+            Route::post('batch-verify', [AttendanceController::class, 'batchVerify'])->name('batchVerify')->middleware('permission:attendance.verify');
+            Route::post('{attendance}/mark-advised', [AttendanceController::class, 'markAdvised'])->name('markAdvised')->middleware('permission:attendance.approve');
+            Route::post('{attendance}/quick-approve', [AttendanceController::class, 'quickApprove'])->name('quickApprove')->middleware('permission:attendance.approve');
+            Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove')->middleware('permission:attendance.approve');
+            Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics')->middleware('permission:attendance.statistics');
+            Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete')->middleware('permission:attendance.delete');
         });
 
     // First-time schedule setup for Agent/Team Lead (no permission check, just auth)
@@ -253,7 +253,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
 
     // Attendance Uploads
     Route::prefix('attendance-uploads')->name('attendance-uploads.')
-        ->middleware('permission:attendance.view')
+        ->middleware('permission:attendance.import')
         ->group(function () {
             Route::get('/', [AttendanceUploadController::class, 'index'])->name('index');
             Route::get('/{upload}', [AttendanceUploadController::class, 'show'])->name('show');
