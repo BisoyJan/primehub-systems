@@ -76,12 +76,13 @@ class LeaveCredit extends Model
 
     /**
      * Get total balance for a user in a specific year.
+     * Balance = Total Earned - Total Used
      */
     public static function getTotalBalance(int $userId, int $year): float
     {
-        return static::forUser($userId)
-            ->forYear($year)
-            ->sum('credits_balance');
+        $earned = static::getTotalEarned($userId, $year);
+        $used = static::getTotalUsed($userId, $year);
+        return $earned - $used;
     }
 
     /**

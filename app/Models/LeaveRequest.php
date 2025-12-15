@@ -45,6 +45,12 @@ class LeaveRequest extends Model
         'hr_approved_by',
         'hr_approved_at',
         'hr_review_notes',
+        // Team Lead approval fields (for Agent leave requests)
+        'requires_tl_approval',
+        'tl_approved_by',
+        'tl_approved_at',
+        'tl_review_notes',
+        'tl_rejected',
     ];
 
     protected function casts(): array
@@ -61,6 +67,9 @@ class LeaveRequest extends Model
             'auto_rejected' => 'boolean',
             'admin_approved_at' => 'datetime',
             'hr_approved_at' => 'datetime',
+            'requires_tl_approval' => 'boolean',
+            'tl_approved_at' => 'datetime',
+            'tl_rejected' => 'boolean',
         ];
     }
 
@@ -104,6 +113,14 @@ class LeaveRequest extends Model
     public function hrApprover(): BelongsTo
     {
         return $this->belongsTo(User::class, 'hr_approved_by');
+    }
+
+    /**
+     * Get the Team Lead who approved the request.
+     */
+    public function tlApprover(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'tl_approved_by');
     }
 
     /**
@@ -267,6 +284,16 @@ class LeaveRequest extends Model
             return ucfirst($this->status);
         }
 
+        // Check Team Lead approval first for agent requests
+        if ($this->requires_tl_approval) {
+            if ($this->tl_rejected) {
+                return 'Rejected by Team Lead';
+            }
+            if (!$this->isTlApproved()) {
+                return 'Pending Team Lead Approval';
+            }
+        }
+
         if ($this->isFullyApproved()) {
             return 'Fully Approved';
         }
@@ -280,5 +307,53 @@ class LeaveRequest extends Model
         }
 
         return 'Pending Both Approvals';
+    }
+
+    /**
+     * Check if Team Lead has approved.
+     */
+    public function isTlApproved(): bool
+    {
+        return $this->tl_approved_by !== null;
+    }
+
+    /**
+     * Check if Team Lead has rejected.
+     */
+    public function isTlRejected(): bool
+    {
+        return $this->tl_rejected === true;
+    }
+
+    /**
+     * Check if this request requires Team Lead approval.
+     */
+    public function requiresTlApproval(): bool
+    {
+        return $this->requires_tl_approval === true;
+    }
+
+    /**
+     * Check if request is ready for Admin/HR approval (TL approved or not required).
+     */
+    public function isReadyForAdminHrApproval(): bool
+    {
+        if (!$this->requiresTlApproval()) {
+            return true;
+        }
+
+        return $this->isTlApproved() && !$this->isTlRejected();
+    }
+
+    /**
+     * Check if the request is fully approved including TL approval if required.
+     */
+    public function isCompletelyApproved(): bool
+    {
+        if ($this->requiresTlApproval() && !$this->isTlApproved()) {
+            return false;
+        }
+
+        return $this->isFullyApproved();
     }
 }

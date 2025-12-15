@@ -142,12 +142,14 @@ class AttendancePointController extends Controller
                 'whole_day_absence' => $points->where('point_type', 'whole_day_absence')->where('is_excused', false)->where('is_expired', false)->sum('points'),
                 'half_day_absence' => $points->where('point_type', 'half_day_absence')->where('is_excused', false)->where('is_expired', false)->sum('points'),
                 'undertime' => $points->where('point_type', 'undertime')->where('is_excused', false)->where('is_expired', false)->sum('points'),
+                'undertime_more_than_hour' => $points->where('point_type', 'undertime_more_than_hour')->where('is_excused', false)->where('is_expired', false)->sum('points'),
                 'tardy' => $points->where('point_type', 'tardy')->where('is_excused', false)->where('is_expired', false)->sum('points'),
             ],
             'count_by_type' => [
                 'whole_day_absence' => $points->where('point_type', 'whole_day_absence')->where('is_excused', false)->where('is_expired', false)->count(),
                 'half_day_absence' => $points->where('point_type', 'half_day_absence')->where('is_excused', false)->where('is_expired', false)->count(),
                 'undertime' => $points->where('point_type', 'undertime')->where('is_excused', false)->where('is_expired', false)->count(),
+                'undertime_more_than_hour' => $points->where('point_type', 'undertime_more_than_hour')->where('is_excused', false)->where('is_expired', false)->count(),
                 'tardy' => $points->where('point_type', 'tardy')->where('is_excused', false)->where('is_expired', false)->count(),
             ],
         ];
@@ -398,7 +400,8 @@ class AttendancePointController extends Controller
                 : 'Manual Entry: No Call, No Show (NCNS) - Did not report for work without prior notice',
             'half_day_absence' => 'Manual Entry: Half-day absence recorded',
             'tardy' => sprintf('Manual Entry: Late arrival by %d minutes', $tardyMinutes ?? 0),
-            'undertime' => sprintf('Manual Entry: Early departure by %d minutes', $undertimeMinutes ?? 0),
+            'undertime' => sprintf('Manual Entry: Early departure by %d minutes (up to 1 hour)', $undertimeMinutes ?? 0),
+            'undertime_more_than_hour' => sprintf('Manual Entry: Early departure by %d minutes (more than 1 hour)', $undertimeMinutes ?? 0),
             default => 'Manual Entry: Attendance violation',
         };
     }
@@ -420,7 +423,7 @@ class AttendancePointController extends Controller
         // ONLY process verified attendance records
         $attendances = Attendance::with('user')
             ->whereBetween('shift_date', [$startDate, $endDate])
-            ->whereIn('status', ['ncns', 'advised_absence', 'half_day_absence', 'tardy', 'undertime'])
+            ->whereIn('status', ['ncns', 'advised_absence', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour'])
             ->where('admin_verified', true)
             ->get();
 
@@ -477,6 +480,7 @@ class AttendancePointController extends Controller
             'ncns', 'advised_absence' => 'whole_day_absence',
             'half_day_absence' => 'half_day_absence',
             'undertime' => 'undertime',
+            'undertime_more_than_hour' => 'undertime_more_than_hour',
             'tardy' => 'tardy',
             default => null,
         };
@@ -525,7 +529,14 @@ class AttendancePointController extends Controller
             ),
 
             'undertime' => sprintf(
-                "Undertime: Left %d minutes early (more than 1 hour before scheduled end). Scheduled: %s, Actual: %s.",
+                "Undertime: Left %d minutes early (up to 1 hour before scheduled end). Scheduled: %s, Actual: %s.",
+                $attendance->undertime_minutes ?? 0,
+                $scheduledOut,
+                $actualOut
+            ),
+
+            'undertime_more_than_hour' => sprintf(
+                "Undertime (>1 Hour): Left %d minutes early (more than 1 hour before scheduled end). Scheduled: %s, Actual: %s.",
                 $attendance->undertime_minutes ?? 0,
                 $scheduledOut,
                 $actualOut
@@ -561,9 +572,62 @@ class AttendancePointController extends Controller
                 'whole_day_absence' => $allPoints->where('point_type', 'whole_day_absence')->where('is_excused', false)->where('is_expired', false)->sum('points'),
                 'half_day_absence' => $allPoints->where('point_type', 'half_day_absence')->where('is_excused', false)->where('is_expired', false)->sum('points'),
                 'undertime' => $allPoints->where('point_type', 'undertime')->where('is_excused', false)->where('is_expired', false)->sum('points'),
+                'undertime_more_than_hour' => $allPoints->where('point_type', 'undertime_more_than_hour')->where('is_excused', false)->where('is_expired', false)->sum('points'),
                 'tardy' => $allPoints->where('point_type', 'tardy')->where('is_excused', false)->where('is_expired', false)->sum('points'),
             ],
+            'high_points_employees' => $this->getHighPointsEmployees(),
         ];
+    }
+
+    /**
+     * Get employees with 6 or more active attendance points
+     */
+    private function getHighPointsEmployees(): array
+    {
+        // Get user IDs with 6+ points
+        $highPointsUserIds = AttendancePoint::where('is_excused', false)
+            ->where('is_expired', false)
+            ->selectRaw('user_id, SUM(points) as total_points, COUNT(*) as violations_count')
+            ->groupBy('user_id')
+            ->havingRaw('SUM(points) >= 6')
+            ->orderByDesc('total_points')
+            ->pluck('user_id')
+            ->toArray();
+
+        if (empty($highPointsUserIds)) {
+            return [];
+        }
+
+        // Get all active points for these users
+        $allPoints = AttendancePoint::with('user')
+            ->whereIn('user_id', $highPointsUserIds)
+            ->where('is_excused', false)
+            ->where('is_expired', false)
+            ->orderBy('shift_date', 'desc')
+            ->get();
+
+        // Group by user and format
+        return collect($highPointsUserIds)->map(function ($userId) use ($allPoints) {
+            $userPoints = $allPoints->where('user_id', $userId);
+            $user = $userPoints->first()?->user;
+
+            return [
+                'user_id' => $userId,
+                'user_name' => $user ? ($user->last_name . ', ' . $user->first_name) : 'Unknown',
+                'total_points' => round($userPoints->sum('points'), 2),
+                'violations_count' => $userPoints->count(),
+                'points' => $userPoints->map(function ($point) {
+                    return [
+                        'id' => $point->id,
+                        'shift_date' => $point->shift_date,
+                        'point_type' => $point->point_type,
+                        'points' => $point->points,
+                        'violation_details' => $point->violation_details,
+                        'expires_at' => $point->expires_at,
+                    ];
+                })->values()->toArray(),
+            ];
+        })->sortByDesc('total_points')->values()->toArray();
     }
 
     /**

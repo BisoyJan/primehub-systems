@@ -33,6 +33,12 @@ class EmployeeScheduleController extends Controller
             $query->where('user_id', $request->user_id);
         }
 
+        if ($request->has('role') && $request->role !== 'all') {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('role', $request->role);
+            });
+        }
+
         if ($request->has('campaign_id') && $request->campaign_id !== 'all') {
             $query->where('campaign_id', $request->campaign_id);
         }
@@ -58,6 +64,16 @@ class EmployeeScheduleController extends Controller
         $campaigns = Campaign::orderBy('name')->get();
         $sites = Site::orderBy('name')->get();
 
+        // Available roles for filtering
+        $roles = [
+            'Agent',
+            'Team Lead',
+            'IT',
+            'HR',
+            'Admin',
+            'Utility',
+        ];
+
         // Get users without any schedules
         $usersWithoutSchedules = User::doesntHave('employeeSchedules')
             ->orderBy('first_name')
@@ -81,9 +97,10 @@ class EmployeeScheduleController extends Controller
             'users' => $users,
             'campaigns' => $campaigns,
             'sites' => $sites,
+            'roles' => $roles,
             'usersWithoutSchedules' => $usersWithoutSchedules,
             'usersWithInactiveSchedules' => $usersWithInactiveSchedules,
-            'filters' => $request->only(['search', 'user_id', 'campaign_id', 'is_active', 'active_only']),
+            'filters' => $request->only(['search', 'user_id', 'role', 'campaign_id', 'is_active', 'active_only']),
         ]);
     }
 

@@ -140,7 +140,7 @@ class Attendance extends Model
     public function scopeNeedsVerification($query)
     {
         return $query->where(function ($q) {
-            $q->whereIn('status', ['failed_bio_in', 'failed_bio_out', 'ncns', 'half_day_absence', 'tardy', 'undertime', 'needs_manual_review', 'non_work_day'])
+            $q->whereIn('status', ['failed_bio_in', 'failed_bio_out', 'ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'needs_manual_review', 'non_work_day'])
               ->orWhere('is_cross_site_bio', true)
               ->orWhereNotNull('warnings')
               ->orWhere(function ($subQ) {
@@ -182,6 +182,7 @@ class Attendance extends Model
             'half_day_absence',
             'ncns',
             'undertime',
+            'undertime_more_than_hour',
             'failed_bio_in',
             'failed_bio_out',
             'needs_manual_review'
@@ -201,6 +202,7 @@ class Attendance extends Model
             'on_leave' => 'blue',
             'ncns' => 'red',
             'undertime' => 'orange',
+            'undertime_more_than_hour' => 'red',
             'failed_bio_in', 'failed_bio_out' => 'purple',
             'needs_manual_review' => 'amber',
             'present_no_bio' => 'gray',

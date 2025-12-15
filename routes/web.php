@@ -311,10 +311,25 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
         Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
         Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
+        // Team Lead approval routes
+        Route::post('/{leaveRequest}/approve-tl', [LeaveRequestController::class, 'approveTL'])->name('approve-tl');
+        Route::post('/{leaveRequest}/deny-tl', [LeaveRequestController::class, 'denyTL'])->name('deny-tl');
         Route::delete('/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->name('destroy');
         Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
         Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
+        // Export leave credits
+        Route::post('/export/credits', [LeaveRequestController::class, 'exportCredits'])->name('export.credits');
+        Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
+        Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download');
     });
+
+    // Leave Credits routes (separate permission check - handled in controller)
+    Route::prefix('form-requests/leave-requests/credits')->name('leave-requests.credits.')
+        ->middleware('permission:leave_credits.view_all,leave_credits.view_own')
+        ->group(function () {
+            Route::get('/', [LeaveRequestController::class, 'creditsIndex'])->name('index');
+            Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');
+        });
 
     // Form Requests - IT Concerns
     Route::prefix('form-requests/it-concerns')->name('it-concerns.')

@@ -25,7 +25,7 @@ import {
     bulkUnapprove as accountsBulkUnapprove,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck, Mail, AlertTriangle } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -105,6 +105,10 @@ export default function AccountIndex() {
     const [selectedRevokeIds, setSelectedRevokeIds] = useState<number[]>([]);
     const [toggleActiveDialogOpen, setToggleActiveDialogOpen] = useState(false);
     const [userToToggle, setUserToToggle] = useState<User | null>(null);
+    // Revoke dialog state
+    const [revokeDialogOpen, setRevokeDialogOpen] = useState(false);
+    const [userToRevoke, setUserToRevoke] = useState<User | null>(null);
+    const [bulkRevokeDialogOpen, setBulkRevokeDialogOpen] = useState(false);
     const auth = usePage().props.auth as { user?: { id: number } };
     const currentUserId = auth?.user?.id;
 
@@ -224,12 +228,29 @@ export default function AccountIndex() {
         });
     };
 
-    const handleUnapprove = (userId: number) => {
+    const handleUnapprove = (user: User) => {
+        // If user has a hired date (employee), show dialog with email option
+        if (user.hired_date) {
+            setUserToRevoke(user);
+            setRevokeDialogOpen(true);
+        } else {
+            // No hired date, just revoke directly
+            confirmUnapprove(user.id, false);
+        }
+    };
+
+    const confirmUnapprove = (userId: number, sendEmail: boolean) => {
         setLoading(true);
-        router.post(accountsUnapprove(userId).url, {}, {
+        router.post(accountsUnapprove(userId).url, { send_email: sendEmail }, {
             preserveScroll: true,
-            onFinish: () => setLoading(false),
-            onSuccess: () => toast.success("User account approval revoked successfully"),
+            onFinish: () => {
+                setLoading(false);
+                setRevokeDialogOpen(false);
+                setUserToRevoke(null);
+            },
+            onSuccess: () => toast.success(sendEmail
+                ? "User account approval revoked and notification sent"
+                : "User account approval revoked successfully"),
             onError: () => toast.error("Failed to revoke user approval"),
         });
     };
@@ -343,14 +364,32 @@ export default function AccountIndex() {
             return;
         }
 
+        // Check if any selected users have hired dates (are employees)
+        const selectedUsersWithHiredDates = users.data.filter(
+            user => selectedRevokeIds.includes(user.id) && user.hired_date
+        );
+
+        if (selectedUsersWithHiredDates.length > 0) {
+            // Show dialog with email option
+            setBulkRevokeDialogOpen(true);
+        } else {
+            // No employees with hired dates, just revoke directly
+            confirmBulkRevoke(false);
+        }
+    };
+
+    const confirmBulkRevoke = (sendEmail: boolean) => {
         setLoading(true);
-        router.post(accountsBulkUnapprove().url, { ids: selectedRevokeIds }, {
+        router.post(accountsBulkUnapprove().url, { ids: selectedRevokeIds, send_email: sendEmail }, {
             preserveScroll: true,
             onFinish: () => {
                 setLoading(false);
                 setSelectedRevokeIds([]);
+                setBulkRevokeDialogOpen(false);
             },
-            onSuccess: () => toast.success(`${selectedRevokeIds.length} account(s) approval revoked successfully`),
+            onSuccess: () => toast.success(sendEmail
+                ? `${selectedRevokeIds.length} account(s) approval revoked and notifications sent`
+                : `${selectedRevokeIds.length} account(s) approval revoked successfully`),
             onError: () => toast.error("Failed to revoke approval for selected accounts"),
         });
     };
@@ -530,9 +569,11 @@ export default function AccountIndex() {
                                 <SelectItem value="all">All Roles</SelectItem>
                                 <SelectItem value="Super Admin">Super Admin</SelectItem>
                                 <SelectItem value="Admin">Admin</SelectItem>
+                                <SelectItem value="Team Lead">Team Lead</SelectItem>
                                 <SelectItem value="Agent">Agent</SelectItem>
                                 <SelectItem value="HR">HR</SelectItem>
                                 <SelectItem value="IT">IT</SelectItem>
+                                <SelectItem value="Utility">Utility</SelectItem>
                             </SelectContent>
                         </Select>
 
@@ -850,7 +891,7 @@ export default function AccountIndex() {
                                                                     <Button
                                                                         variant="outline"
                                                                         size="sm"
-                                                                        onClick={() => handleUnapprove(user.id)}
+                                                                        onClick={() => handleUnapprove(user)}
                                                                         disabled={loading || user.id === currentUserId}
                                                                         className="text-yellow-600 hover:text-yellow-700 border-yellow-300"
                                                                     >
@@ -1055,7 +1096,7 @@ export default function AccountIndex() {
                                                     <Button
                                                         variant="outline"
                                                         size="sm"
-                                                        onClick={() => handleUnapprove(user.id)}
+                                                        onClick={() => handleUnapprove(user)}
                                                         disabled={loading || user.id === currentUserId}
                                                         className="w-full text-yellow-600 hover:text-yellow-700 border-yellow-300"
                                                     >
@@ -1124,6 +1165,133 @@ export default function AccountIndex() {
                             >
                                 Deactivate
                             </AlertDialogAction>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Single User Revoke Confirmation Dialog with Email Option */}
+                <AlertDialog open={revokeDialogOpen} onOpenChange={setRevokeDialogOpen}>
+                    <AlertDialogContent className="max-w-md">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                                Revoke Employee Access
+                            </AlertDialogTitle>
+                            <AlertDialogDescription asChild>
+                                <div className="space-y-3">
+                                    {userToRevoke && (
+                                        <>
+                                            <p>
+                                                You are about to revoke access for <strong>{userToRevoke.first_name} {userToRevoke.middle_name ? userToRevoke.middle_name + '. ' : ''}{userToRevoke.last_name}</strong>.
+                                            </p>
+                                            <p className="text-sm">
+                                                This employee has a hire date of <strong>{userToRevoke.hired_date ? new Date(userToRevoke.hired_date).toLocaleDateString() : 'N/A'}</strong>, indicating they may be resigning from the company.
+                                            </p>
+                                            <div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                                <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                                                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                                    <span>
+                                                        This action will also <strong>deactivate the employee status</strong> and <strong>all active schedules</strong> for this employee.
+                                                    </span>
+                                                </p>
+                                            </div>
+                                            <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                                <p className="text-sm text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                                                    <Mail className="h-4 w-4 mt-0.5 shrink-0" />
+                                                    <span>
+                                                        Would you like to send an automated notification email to the management team (Super Admin, Admin, Team Leads, HR, IT) about this access revocation?
+                                                    </span>
+                                                </p>
+                                            </div>
+                                        </>
+                                    )}
+                                </div>
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                            <AlertDialogCancel className="mt-0">Cancel</AlertDialogCancel>
+                            <Button
+                                variant="outline"
+                                onClick={() => userToRevoke && confirmUnapprove(userToRevoke.id, false)}
+                                disabled={loading}
+                                className="border-yellow-300 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-700 dark:text-yellow-400 dark:hover:bg-yellow-950"
+                            >
+                                Revoke Only
+                            </Button>
+                            <Button
+                                onClick={() => userToRevoke && confirmUnapprove(userToRevoke.id, true)}
+                                disabled={loading}
+                                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                            >
+                                <Mail className="mr-2 h-4 w-4" />
+                                Revoke & Send Email
+                            </Button>
+                        </AlertDialogFooter>
+                    </AlertDialogContent>
+                </AlertDialog>
+
+                {/* Bulk Revoke Confirmation Dialog with Email Option */}
+                <AlertDialog open={bulkRevokeDialogOpen} onOpenChange={setBulkRevokeDialogOpen}>
+                    <AlertDialogContent className="max-w-md">
+                        <AlertDialogHeader>
+                            <AlertDialogTitle className="flex items-center gap-2">
+                                <AlertTriangle className="h-5 w-5 text-yellow-500" />
+                                Revoke Multiple Employee Access
+                            </AlertDialogTitle>
+                            <AlertDialogDescription asChild>
+                                <div className="space-y-3">
+                                    <p>
+                                        You are about to revoke access for <strong>{selectedRevokeIds.length} employee(s)</strong>.
+                                    </p>
+                                    <div className="bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                                        <p className="text-sm text-amber-800 dark:text-amber-300 flex items-start gap-2">
+                                            <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                            <span>
+                                                This action will also <strong>deactivate employee status</strong> and <strong>all active schedules</strong> for these employees.
+                                            </span>
+                                        </p>
+                                    </div>
+                                    {(() => {
+                                        const employeesWithHiredDates = users.data.filter(
+                                            user => selectedRevokeIds.includes(user.id) && user.hired_date
+                                        );
+                                        return employeesWithHiredDates.length > 0 ? (
+                                            <>
+                                                <p className="text-sm">
+                                                    <strong>{employeesWithHiredDates.length}</strong> of these employees have hire dates, indicating they may be resigning.
+                                                </p>
+                                                <div className="bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                                                    <p className="text-sm text-blue-800 dark:text-blue-300 flex items-start gap-2">
+                                                        <Mail className="h-4 w-4 mt-0.5 shrink-0" />
+                                                        <span>
+                                                            Would you like to send automated notification emails to the management team for employees with hire dates?
+                                                        </span>
+                                                    </p>
+                                                </div>
+                                            </>
+                                        ) : null;
+                                    })()}
+                                </div>
+                            </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                            <AlertDialogCancel className="mt-0">Cancel</AlertDialogCancel>
+                            <Button
+                                variant="outline"
+                                onClick={() => confirmBulkRevoke(false)}
+                                disabled={loading}
+                                className="border-yellow-300 text-yellow-700 hover:bg-yellow-50 dark:border-yellow-700 dark:text-yellow-400 dark:hover:bg-yellow-950"
+                            >
+                                Revoke Only
+                            </Button>
+                            <Button
+                                onClick={() => confirmBulkRevoke(true)}
+                                disabled={loading}
+                                className="bg-yellow-600 hover:bg-yellow-700 text-white"
+                            >
+                                <Mail className="mr-2 h-4 w-4" />
+                                Revoke & Send Emails
+                            </Button>
                         </AlertDialogFooter>
                     </AlertDialogContent>
                 </AlertDialog>

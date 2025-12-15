@@ -82,8 +82,8 @@ export default function Edit({
 }: Props) {
     const { data, setData, put, processing, errors } = useForm({
         leave_type: leaveRequest.leave_type,
-        start_date: leaveRequest.start_date.split('T')[0],
-        end_date: leaveRequest.end_date.split('T')[0],
+        start_date: leaveRequest.start_date,
+        end_date: leaveRequest.end_date,
         reason: leaveRequest.reason,
         campaign_department: leaveRequest.campaign_department,
         medical_cert_submitted: leaveRequest.medical_cert_submitted,
@@ -91,6 +91,53 @@ export default function Edit({
 
     const [calculatedDays, setCalculatedDays] = useState<number>(leaveRequest.days_requested);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
+    const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
+
+    // Helper function to check if a date is a weekend
+    const isWeekend = (dateString: string): boolean => {
+        if (!dateString) return false;
+        const date = new Date(dateString);
+        const day = date.getDay();
+        return day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
+    };
+
+    // Helper function to get the day name
+    const getDayName = (dateString: string): string => {
+        const date = new Date(dateString);
+        return date.toLocaleDateString('en-US', { weekday: 'long' });
+    };
+
+    // Get date constraints for Sick Leave (7 days back to today)
+    const getSlMinDate = (): string => {
+        const date = new Date();
+        date.setDate(date.getDate() - 7);
+        return date.toISOString().split('T')[0];
+    };
+
+    const getTodayDate = (): string => {
+        return new Date().toISOString().split('T')[0];
+    };
+
+    // Handle start date change with weekend validation
+    const handleStartDateChange = (value: string) => {
+        if (isWeekend(value)) {
+            setWeekendError(prev => ({ ...prev, start: `${getDayName(value)} is a weekend. Please select a weekday.` }));
+        } else {
+            setWeekendError(prev => ({ ...prev, start: null }));
+        }
+        setData('start_date', value);
+    };
+
+    // Handle end date change with weekend validation
+    const handleEndDateChange = (value: string) => {
+        if (isWeekend(value)) {
+            setWeekendError(prev => ({ ...prev, end: `${getDayName(value)} is a weekend. Please select a weekday.` }));
+        } else {
+            setWeekendError(prev => ({ ...prev, end: null }));
+        }
+        setData('end_date', value);
+    };
 
     // Calculate working days when dates change (excluding weekends)
     useEffect(() => {
@@ -126,8 +173,8 @@ export default function Edit({
     useEffect(() => {
         const warnings: string[] = [];
 
-        // Check eligibility
-        if (!creditsSummary.is_eligible && ['VL', 'SL', 'BL'].includes(data.leave_type)) {
+        // Check eligibility (skip for SL - allow without credits)
+        if (!creditsSummary.is_eligible && ['VL', 'BL'].includes(data.leave_type)) {
             const eligibilityDateStr = creditsSummary.eligibility_date
                 ? format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')
                 : 'N/A';
@@ -163,8 +210,8 @@ export default function Edit({
             );
         }
 
-        // Check leave credits balance (excluding the original request's days since they weren't deducted yet)
-        if (['VL', 'SL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
+        // Check leave credits balance (only block for VL/BL, SL can proceed)
+        if (['VL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
             if (creditsSummary.balance < calculatedDays) {
                 warnings.push(
                     `Insufficient leave credits. Available: ${creditsSummary.balance} days, Requested: ${calculatedDays} days`
@@ -183,6 +230,24 @@ export default function Edit({
         calculatedDays,
         twoWeeksFromNow,
     ]);
+
+    // Update SL credit info message
+    useEffect(() => {
+        if (data.leave_type !== 'SL') {
+            setSlCreditInfo(null);
+            return;
+        }
+
+        if (!creditsSummary.is_eligible) {
+            setSlCreditInfo('Leave credits will NOT be deducted - You are not yet eligible for leave credits');
+        } else if (creditsSummary.balance < calculatedDays && calculatedDays > 0) {
+            setSlCreditInfo('Leave credits will NOT be deducted - Insufficient balance');
+        } else if (!data.medical_cert_submitted) {
+            setSlCreditInfo('Leave credits will NOT be deducted - No medical certificate');
+        } else {
+            setSlCreditInfo(null);
+        }
+    }, [data.leave_type, data.medical_cert_submitted, creditsSummary, calculatedDays]);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -441,12 +506,21 @@ export default function Edit({
                                         id="start_date"
                                         type="date"
                                         value={data.start_date}
-                                        onChange={(e) => setData('start_date', e.target.value)}
-                                        min={new Date().toISOString().split('T')[0]}
-                                        className="[&::-webkit-calendar-picker-indicator]:dark:invert"
+                                        onChange={(e) => handleStartDateChange(e.target.value)}
+                                        min={data.leave_type === 'SL' ? getSlMinDate() : new Date().toISOString().split('T')[0]}
+                                        max={data.leave_type === 'SL' ? getTodayDate() : undefined}
+                                        className={`[&::-webkit-calendar-picker-indicator]:dark:invert ${weekendError.start ? 'border-red-500' : ''}`}
                                     />
+                                    {weekendError.start && (
+                                        <p className="text-sm text-red-500">{weekendError.start}</p>
+                                    )}
                                     {errors.start_date && (
                                         <p className="text-sm text-red-500">{errors.start_date}</p>
+                                    )}
+                                    {data.leave_type === 'SL' ? (
+                                        <p className="text-xs text-muted-foreground">Sick Leave: Select from last 7 days to today</p>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
                                 </div>
 
@@ -458,12 +532,21 @@ export default function Edit({
                                         id="end_date"
                                         type="date"
                                         value={data.end_date}
-                                        onChange={(e) => setData('end_date', e.target.value)}
-                                        min={data.start_date || new Date().toISOString().split('T')[0]}
-                                        className="[&::-webkit-calendar-picker-indicator]:dark:invert"
+                                        onChange={(e) => handleEndDateChange(e.target.value)}
+                                        min={data.leave_type === 'SL' ? (data.start_date || getSlMinDate()) : (data.start_date || new Date().toISOString().split('T')[0])}
+                                        max={data.leave_type === 'SL' ? getTodayDate() : undefined}
+                                        className={`[&::-webkit-calendar-picker-indicator]:dark:invert ${weekendError.end ? 'border-red-500' : ''}`}
                                     />
+                                    {weekendError.end && (
+                                        <p className="text-sm text-red-500">{weekendError.end}</p>
+                                    )}
                                     {errors.end_date && (
                                         <p className="text-sm text-red-500">{errors.end_date}</p>
+                                    )}
+                                    {data.leave_type === 'SL' ? (
+                                        <p className="text-xs text-muted-foreground">Sick Leave: Cannot exceed today</p>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
                                 </div>
                             </div>
@@ -507,17 +590,27 @@ export default function Edit({
 
                             {/* Medical Certificate (for SL) */}
                             {data.leave_type === 'SL' && (
-                                <div className="flex items-center space-x-2">
-                                    <Checkbox
-                                        id="medical_cert_submitted"
-                                        checked={data.medical_cert_submitted}
-                                        onCheckedChange={(checked) =>
-                                            setData('medical_cert_submitted', checked as boolean)
-                                        }
-                                    />
-                                    <Label htmlFor="medical_cert_submitted" className="font-normal">
-                                        I will submit a medical certificate
-                                    </Label>
+                                <div className="space-y-3">
+                                    <div className="flex items-center space-x-2">
+                                        <Checkbox
+                                            id="medical_cert_submitted"
+                                            checked={data.medical_cert_submitted}
+                                            onCheckedChange={(checked) =>
+                                                setData('medical_cert_submitted', checked as boolean)
+                                            }
+                                        />
+                                        <Label htmlFor="medical_cert_submitted" className="font-normal">
+                                            I will submit a medical certificate
+                                        </Label>
+                                    </div>
+                                    {slCreditInfo && (
+                                        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                                            <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                                {slCreditInfo}
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
                                 </div>
                             )}
 
@@ -571,7 +664,7 @@ export default function Edit({
 
                             {/* Submit Button */}
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <Button type="submit" disabled={processing || validationWarnings.length > 0}>
+                                <Button type="submit" disabled={processing || validationWarnings.length > 0 || !!weekendError.start || !!weekendError.end}>
                                     {processing ? 'Updating...' : 'Update Leave Request'}
                                 </Button>
                                 <Button

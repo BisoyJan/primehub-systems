@@ -35,6 +35,13 @@ import {
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
+import {
     index as attendanceIndex,
     calendar as attendanceCalendar,
     create as attendanceCreate,
@@ -302,6 +309,29 @@ export default function AttendanceIndex() {
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+    const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+    const [selectedNote, setSelectedNote] = useState<string>("");
+
+    // Helper to display notes - truncate if longer than 10 characters
+    const NotesDisplay = ({ notes }: { notes: string | undefined }) => {
+        if (!notes) return <span className="text-muted-foreground">-</span>;
+
+        if (notes.length <= 10) {
+            return <span className="text-sm">{notes}</span>;
+        }
+
+        return (
+            <button
+                onClick={() => {
+                    setSelectedNote(notes);
+                    setNoteDialogOpen(true);
+                }}
+                className="text-sm text-primary hover:underline cursor-pointer text-left"
+            >
+                {notes.substring(0, 10)}...
+            </button>
+        );
+    };
 
     // Save selectedRecords to localStorage on change
     useEffect(() => {
@@ -814,6 +844,7 @@ export default function AttendanceIndex() {
                                     <TableHead>Time Out</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Tardy/UT/OT</TableHead>
+                                    <TableHead>Notes</TableHead>
                                     <TableHead>Verified</TableHead>
                                     {can('attendance.approve') && <TableHead>Actions</TableHead>}
                                 </TableRow>
@@ -895,6 +926,9 @@ export default function AttendanceIndex() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
+                                            <NotesDisplay notes={record.notes} />
+                                        </TableCell>
+                                        <TableCell>
                                             {record.admin_verified ? (
                                                 <CheckCircle className="h-4 w-4 text-green-500" />
                                             ) : (
@@ -932,7 +966,7 @@ export default function AttendanceIndex() {
                                 ))}
                                 {attendanceData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={11} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
                                             No attendance records found
                                         </TableCell>
                                     </TableRow>
@@ -1029,6 +1063,12 @@ export default function AttendanceIndex() {
                                                 <span className="text-muted-foreground">Pending</span>
                                             )}
                                         </div>
+                                        {record.notes && (
+                                            <div>
+                                                <span className="font-medium">Notes:</span>{" "}
+                                                <NotesDisplay notes={record.notes} />
+                                            </div>
+                                        )}
                                     </div>
 
                                     <Can permission="attendance.approve">
@@ -1094,6 +1134,18 @@ export default function AttendanceIndex() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Attendance Notes</DialogTitle>
+                        <DialogDescription>Full notes for this attendance record</DialogDescription>
+                    </DialogHeader>
+                    <div className="p-4 bg-muted rounded-md">
+                        <p className="text-sm whitespace-pre-wrap">{selectedNote}</p>
+                    </div>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

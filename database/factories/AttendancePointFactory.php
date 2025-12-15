@@ -69,16 +69,33 @@ class AttendancePointFactory extends Factory
     }
 
     /**
-     * Indicate that the point is for undertime violation.
+     * Indicate that the point is for undertime violation (1-60 minutes early).
      */
-    public function undertime(int $minutes = 90): static
+    public function undertime(int $minutes = 45): static
     {
         return $this->state(function (array $attributes) use ($minutes) {
             return [
                 'point_type' => 'undertime',
                 'points' => 0.25,
                 'status' => 'undertime',
-                'violation_details' => "Undertime: Left {$minutes} minutes early.",
+                'violation_details' => "Undertime: Left {$minutes} minutes early (up to 1 hour).",
+                'undertime_minutes' => $minutes,
+                'eligible_for_gbro' => true,
+            ];
+        });
+    }
+
+    /**
+     * Indicate that the point is for undertime more than hour violation (61+ minutes early).
+     */
+    public function undertimeMoreThanHour(int $minutes = 90): static
+    {
+        return $this->state(function (array $attributes) use ($minutes) {
+            return [
+                'point_type' => 'undertime_more_than_hour',
+                'points' => 0.50,
+                'status' => 'undertime_more_than_hour',
+                'violation_details' => "Undertime (>1 Hour): Left {$minutes} minutes early (more than 1 hour).",
                 'undertime_minutes' => $minutes,
                 'eligible_for_gbro' => true,
             ];

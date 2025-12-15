@@ -3,18 +3,25 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\LeaveRequestRequest;
+use App\Jobs\GenerateLeaveCreditsExportExcel;
+use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
+use App\Models\LeaveCredit;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
 use App\Mail\LeaveRequestStatusUpdated;
 use App\Mail\LeaveRequestSubmitted;
+use App\Mail\LeaveRequestTLStatusUpdated;
 use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 
 class LeaveRequestController extends Controller
@@ -37,11 +44,35 @@ class LeaveRequestController extends Controller
 
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+        $isTeamLead = $user->role === 'Team Lead';
 
-        $query = LeaveRequest::with(['user', 'reviewer', 'adminApprover', 'hrApprover']);
+        $query = LeaveRequest::with(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover']);
 
-        // Admins see all requests, employees see only their own
-        if (!$isAdmin) {
+        // Admins see all requests
+        if ($isAdmin) {
+            // No filter - see all
+        } elseif ($isTeamLead) {
+            // Team Leads see their own requests + requests from agents in their campaign
+            $teamLeadSchedule = $user->activeSchedule;
+            $campaignAgentIds = [];
+
+            if ($teamLeadSchedule && $teamLeadSchedule->campaign_id) {
+                // Get all agents in the same campaign
+                $campaignAgentIds = EmployeeSchedule::where('campaign_id', $teamLeadSchedule->campaign_id)
+                    ->where('is_active', true)
+                    ->whereHas('user', function ($q) {
+                        $q->where('role', 'Agent')->where('is_approved', true);
+                    })
+                    ->pluck('user_id')
+                    ->toArray();
+            }
+
+            $query->where(function ($q) use ($user, $campaignAgentIds) {
+                $q->where('user_id', $user->id) // Own requests
+                    ->orWhereIn('user_id', $campaignAgentIds); // Requests from campaign agents
+            });
+        } else {
+            // Regular employees see only their own
             $query->forUser($user->id);
         }
 
@@ -78,6 +109,7 @@ class LeaveRequestController extends Controller
             'leaveRequests' => $leaveRequests,
             'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id']),
             'isAdmin' => $isAdmin,
+            'isTeamLead' => $isTeamLead,
             'hasPendingRequests' => $hasPendingRequests,
         ]);
     }
@@ -228,6 +260,30 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
+            // Determine if this request requires Team Lead approval
+            // Agents need TL approval if they have a Team Lead in their campaign
+            $requiresTlApproval = false;
+            $teamLeadToNotify = null;
+
+            if ($targetUser->role === 'Agent') {
+                $agentSchedule = $targetUser->activeSchedule;
+                if ($agentSchedule && $agentSchedule->campaign_id) {
+                    // Find Team Lead in the same campaign
+                    $teamLeadSchedule = EmployeeSchedule::where('campaign_id', $agentSchedule->campaign_id)
+                        ->where('is_active', true)
+                        ->whereHas('user', function ($q) {
+                            $q->where('role', 'Team Lead')->where('is_approved', true);
+                        })
+                        ->with('user')
+                        ->first();
+
+                    if ($teamLeadSchedule && $teamLeadSchedule->user) {
+                        $requiresTlApproval = true;
+                        $teamLeadToNotify = $teamLeadSchedule->user;
+                    }
+                }
+            }
+
             // Create leave request
             $leaveRequest = LeaveRequest::create([
                 'user_id' => $targetUser->id,
@@ -240,26 +296,40 @@ class LeaveRequestController extends Controller
                 'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
                 'status' => 'pending',
                 'attendance_points_at_request' => $attendancePoints,
+                'requires_tl_approval' => $requiresTlApproval,
             ]);
 
-            // Notify HR/Admin users about new leave request
-            $this->notificationService->notifyHrRolesAboutNewLeaveRequest(
-                $targetUser->name,
-                $request->leave_type,
-                $startDate->format('Y-m-d'),
-                $endDate->format('Y-m-d'),
-                $leaveRequest->id
-            );
-
-            // Notify HR/Admin users about new leave request (alternative method)
-            $hrAdminUsers = User::whereIn('role', ['Super Admin', 'Admin', 'HR'])->get();
-            foreach ($hrAdminUsers as $admin) {
-                $this->notificationService->notifyLeaveRequest(
-                    $admin->id,
+            // Notify based on whether TL approval is required
+            if ($requiresTlApproval && $teamLeadToNotify) {
+                // Notify the Team Lead first
+                $this->notificationService->notifyTeamLeadAboutNewLeaveRequest(
+                    $teamLeadToNotify->id,
                     $targetUser->name,
                     $request->leave_type,
+                    $startDate->format('Y-m-d'),
+                    $endDate->format('Y-m-d'),
                     $leaveRequest->id
                 );
+            } else {
+                // Notify HR/Admin users about new leave request (non-agent or no TL in campaign)
+                $this->notificationService->notifyHrRolesAboutNewLeaveRequest(
+                    $targetUser->name,
+                    $request->leave_type,
+                    $startDate->format('Y-m-d'),
+                    $endDate->format('Y-m-d'),
+                    $leaveRequest->id
+                );
+
+                // Notify HR/Admin users about new leave request (alternative method)
+                $hrAdminUsers = User::whereIn('role', ['Super Admin', 'Admin', 'HR'])->get();
+                foreach ($hrAdminUsers as $admin) {
+                    $this->notificationService->notifyLeaveRequest(
+                        $admin->id,
+                        $targetUser->name,
+                        $request->leave_type,
+                        $leaveRequest->id
+                    );
+                }
             }
 
             DB::commit();
@@ -305,8 +375,9 @@ class LeaveRequestController extends Controller
 
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+        $isTeamLead = $user->role === 'Team Lead';
 
-        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover']);
 
         // Check if current user has already approved
         $hasUserApproved = false;
@@ -316,11 +387,30 @@ class LeaveRequestController extends Controller
             $hasUserApproved = true;
         }
 
+        // Check if Team Lead can approve this request
+        $canTlApprove = false;
+        if ($isTeamLead && $leaveRequest->requiresTlApproval() && !$leaveRequest->isTlApproved() && !$leaveRequest->isTlRejected()) {
+            // Check if TL is in the same campaign
+            $teamLeadSchedule = $user->activeSchedule;
+            $agentSchedule = $leaveRequest->user->activeSchedule;
+
+            if ($teamLeadSchedule && $agentSchedule && $teamLeadSchedule->campaign_id === $agentSchedule->campaign_id) {
+                $canTlApprove = true;
+            }
+        }
+
+        // Format dates to prevent timezone issues
+        $leaveRequestData = $leaveRequest->toArray();
+        $leaveRequestData['start_date'] = $leaveRequest->start_date->format('Y-m-d');
+        $leaveRequestData['end_date'] = $leaveRequest->end_date->format('Y-m-d');
+
         return Inertia::render('FormRequest/Leave/Show', [
-            'leaveRequest' => $leaveRequest,
+            'leaveRequest' => $leaveRequestData,
             'isAdmin' => $isAdmin,
+            'isTeamLead' => $isTeamLead,
             'canCancel' => $leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id,
             'hasUserApproved' => $hasUserApproved,
+            'canTlApprove' => $canTlApprove,
             'userRole' => $user->role,
         ]);
     }
@@ -385,8 +475,13 @@ class LeaveRequestController extends Controller
 
         $leaveRequest->load('user');
 
+        // Format dates to prevent timezone issues
+        $leaveRequestData = $leaveRequest->toArray();
+        $leaveRequestData['start_date'] = $leaveRequest->start_date->format('Y-m-d');
+        $leaveRequestData['end_date'] = $leaveRequest->end_date->format('Y-m-d');
+
         return Inertia::render('FormRequest/Leave/Edit', [
-            'leaveRequest' => $leaveRequest,
+            'leaveRequest' => $leaveRequestData,
             'creditsSummary' => $creditsSummary,
             'attendancePoints' => $attendancePoints,
             'attendanceViolations' => $attendanceViolations,
@@ -464,6 +559,151 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Team Lead approves a leave request from their campaign agent.
+     */
+    public function approveTL(Request $request, LeaveRequest $leaveRequest)
+    {
+        $this->authorize('tlApprove', $leaveRequest);
+
+        $user = auth()->user();
+
+        if ($leaveRequest->status !== 'pending') {
+            return back()->withErrors(['error' => 'Only pending requests can be approved.']);
+        }
+
+        if (!$leaveRequest->requiresTlApproval()) {
+            return back()->withErrors(['error' => 'This request does not require Team Lead approval.']);
+        }
+
+        if ($leaveRequest->isTlApproved() || $leaveRequest->isTlRejected()) {
+            return back()->withErrors(['error' => 'This request has already been reviewed by Team Lead.']);
+        }
+
+        DB::beginTransaction();
+        try {
+            $leaveRequest->update([
+                'tl_approved_by' => $user->id,
+                'tl_approved_at' => now(),
+                'tl_review_notes' => $request->review_notes,
+            ]);
+
+            // Notify the agent about TL approval
+            $this->notificationService->notifyAgentAboutTLApproval(
+                $leaveRequest->user_id,
+                $leaveRequest->leave_type,
+                $user->name,
+                $leaveRequest->id
+            );
+
+            // Notify Admin/HR that TL has approved
+            $this->notificationService->notifyAdminHrAboutTLApproval(
+                $leaveRequest->user->name,
+                $leaveRequest->leave_type,
+                $user->name,
+                $leaveRequest->id
+            );
+
+            DB::commit();
+
+            // Send email to agent
+            try {
+                $agent = $leaveRequest->user;
+                if ($agent && $agent->email && filter_var($agent->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($agent->email)->send(new LeaveRequestTLStatusUpdated($leaveRequest, $agent, $user, true));
+                }
+            } catch (\Exception $mailException) {
+                \Log::warning('Failed to send TL approval email', [
+                    'error' => $mailException->getMessage(),
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', 'Leave request approved. It is now pending Admin/HR approval.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Team Lead leave request approval failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+            return back()->withErrors(['error' => 'Failed to approve leave request. Please try again.']);
+        }
+    }
+
+    /**
+     * Team Lead denies a leave request from their campaign agent.
+     */
+    public function denyTL(Request $request, LeaveRequest $leaveRequest)
+    {
+        $this->authorize('tlApprove', $leaveRequest);
+
+        $user = auth()->user();
+
+        if ($leaveRequest->status !== 'pending') {
+            return back()->withErrors(['error' => 'Only pending requests can be denied.']);
+        }
+
+        if (!$leaveRequest->requiresTlApproval()) {
+            return back()->withErrors(['error' => 'This request does not require Team Lead approval.']);
+        }
+
+        if ($leaveRequest->isTlApproved() || $leaveRequest->isTlRejected()) {
+            return back()->withErrors(['error' => 'This request has already been reviewed by Team Lead.']);
+        }
+
+        $request->validate([
+            'review_notes' => 'required|string|min:10',
+        ]);
+
+        DB::beginTransaction();
+        try {
+            $leaveRequest->update([
+                'tl_approved_by' => $user->id,
+                'tl_approved_at' => now(),
+                'tl_review_notes' => $request->review_notes,
+                'tl_rejected' => true,
+                'status' => 'denied',
+                'reviewed_by' => $user->id,
+                'reviewed_at' => now(),
+                'review_notes' => 'Rejected by Team Lead: ' . $request->review_notes,
+            ]);
+
+            // Notify the agent about TL rejection
+            $this->notificationService->notifyAgentAboutTLRejection(
+                $leaveRequest->user_id,
+                $leaveRequest->leave_type,
+                $user->name,
+                $leaveRequest->id
+            );
+
+            DB::commit();
+
+            // Send email to agent
+            try {
+                $agent = $leaveRequest->user;
+                if ($agent && $agent->email && filter_var($agent->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($agent->email)->send(new LeaveRequestTLStatusUpdated($leaveRequest, $agent, $user, false));
+                }
+            } catch (\Exception $mailException) {
+                \Log::warning('Failed to send TL rejection email', [
+                    'error' => $mailException->getMessage(),
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', 'Leave request has been rejected.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Team Lead leave request denial failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+            return back()->withErrors(['error' => 'Failed to deny leave request. Please try again.']);
+        }
+    }
+
+    /**
      * Approve a leave request (Admin/HR only).
      * Requires both Admin and HR approval before final approval.
      */
@@ -476,6 +716,11 @@ class LeaveRequestController extends Controller
 
         if ($leaveRequest->status !== 'pending') {
             return back()->withErrors(['error' => 'Only pending requests can be approved.']);
+        }
+
+        // Check if this request requires TL approval first
+        if ($leaveRequest->requiresTlApproval() && !$leaveRequest->isTlApproved()) {
+            return back()->withErrors(['error' => 'This request must be approved by Team Lead first.']);
         }
 
         // Determine if user is Admin or HR
@@ -522,10 +767,17 @@ class LeaveRequestController extends Controller
                     'review_notes' => $request->review_notes,
                 ]);
 
-                // Deduct leave credits if applicable
-                if ($leaveRequest->requiresCredits()) {
+                // Handle leave credit deduction based on leave type
+                if ($leaveRequest->leave_type === 'SL') {
+                    // Sick Leave - special handling with attendance check
+                    $this->handleSlApproval($leaveRequest, $leaveCreditService);
+                } elseif ($leaveRequest->requiresCredits()) {
+                    // Other credited leave types (VL, BL) - normal deduction
                     $year = $request->input('credits_year', now()->year);
                     $leaveCreditService->deductCredits($leaveRequest, $year);
+
+                    // Update attendance records to on_leave status
+                    $this->updateAttendanceForApprovedLeave($leaveRequest);
                 }
 
                 // Notify the employee about full approval
@@ -755,5 +1007,455 @@ class LeaveRequestController extends Controller
         $days = $leaveCreditService->calculateDays($startDate, $endDate);
 
         return response()->json(['days' => $days]);
+    }
+
+    /**
+     * Start export job for leave credits.
+     */
+    public function exportCredits(Request $request)
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $request->validate([
+            'year' => 'required|integer|min:2020|max:' . (now()->year + 1),
+        ]);
+
+        $year = $request->input('year');
+        $jobId = Str::uuid()->toString();
+
+        // Initialize cache for progress tracking
+        Cache::put("leave_credits_export_job:{$jobId}", [
+            'percent' => 0,
+            'status' => 'Starting export...',
+            'finished' => false,
+            'error' => false,
+        ], 3600);
+
+        // Dispatch job
+        dispatch(new GenerateLeaveCreditsExportExcel($jobId, $year));
+
+        return response()->json([
+            'success' => true,
+            'job_id' => $jobId,
+        ]);
+    }
+
+    /**
+     * Check export job progress.
+     */
+    public function exportCreditsProgress(Request $request)
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $request->validate([
+            'job_id' => 'required|string',
+        ]);
+
+        $jobId = $request->input('job_id');
+        $cacheKey = "leave_credits_export_job:{$jobId}";
+
+        $progress = Cache::get($cacheKey, [
+            'percent' => 0,
+            'status' => 'Unknown',
+            'finished' => false,
+            'error' => true,
+        ]);
+
+        return response()->json($progress);
+    }
+
+    /**
+     * Download exported leave credits file.
+     */
+    public function exportCreditsDownload(Request $request)
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $filename = $request->route('filename');
+        $filePath = storage_path('app/temp/' . $filename);
+
+        if (!file_exists($filePath)) {
+            abort(404, 'File not found or has expired.');
+        }
+
+        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
+    }
+
+    /**
+     * Handle Sick Leave approval with special credit deduction logic.
+     * Credits are only deducted if:
+     * - Employee is eligible (6+ months)
+     * - Has sufficient credits
+     * - Medical certificate submitted
+     * - Attendance status is NOT ncns (NCNS days keep their status)
+     */
+    protected function handleSlApproval(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+
+        // Check if we should deduct credits at all
+        $shouldDeduct = $leaveCreditService->shouldDeductSlCredits($user, $leaveRequest);
+
+        if (!$shouldDeduct) {
+            // No credits to deduct - just update attendance notes
+            $this->updateSlAttendanceWithoutDeduction($leaveRequest);
+            return;
+        }
+
+        // Get attendance records for the leave period
+        $attendances = Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->get();
+
+        // Count days that are NOT ncns (these will have credits deducted)
+        $daysToDeduct = 0;
+        $leaveNote = "Covered by approved Sick Leave (SL) - Leave Request #{$leaveRequest->id}";
+
+        foreach ($attendances as $attendance) {
+            if ($attendance->status === 'ncns') {
+                // NCNS stays unchanged - no credit deduction for this day
+                // Just add a note that SL was applied but NCNS status preserved
+                $existingNotes = $attendance->notes ? $attendance->notes . "\n" : '';
+                $attendance->update([
+                    'notes' => $existingNotes . "SL applied but NCNS status preserved - Leave Request #{$leaveRequest->id}",
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            } else {
+                // Non-NCNS: update status to advised_absence and deduct credit
+                $daysToDeduct++;
+                $attendance->update([
+                    'status' => 'advised_absence',
+                    'notes' => $leaveNote,
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+        }
+
+        // Also handle days with no attendance record yet (create advised_absence records)
+        $existingDates = $attendances->pluck('shift_date')->map(fn($d) => $d->format('Y-m-d'))->toArray();
+        $currentDate = $startDate->copy();
+
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if (!in_array($dateStr, $existingDates)) {
+                // No attendance record exists - create one with advised_absence
+                Attendance::create([
+                    'user_id' => $user->id,
+                    'shift_date' => $dateStr,
+                    'status' => 'advised_absence',
+                    'notes' => $leaveNote,
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+                $daysToDeduct++;
+            }
+            $currentDate->addDay();
+        }
+
+        // Deduct only the non-NCNS days
+        if ($daysToDeduct > 0) {
+            $year = $startDate->year;
+
+            // Temporarily adjust the leave request days for deduction
+            $originalDays = $leaveRequest->days_requested;
+            $leaveRequest->days_requested = $daysToDeduct;
+            $leaveCreditService->deductCredits($leaveRequest, $year);
+            $leaveRequest->days_requested = $originalDays;
+
+            // Update credits_deducted to reflect actual deduction
+            $leaveRequest->update(['credits_deducted' => $daysToDeduct]);
+        }
+    }
+
+    /**
+     * Update attendance for Sick Leave when no credits are being deducted.
+     * Still updates status and notes for tracking purposes.
+     */
+    protected function updateSlAttendanceWithoutDeduction(LeaveRequest $leaveRequest): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $leaveNote = "Covered by approved Sick Leave (SL) - No credits deducted - Leave Request #{$leaveRequest->id}";
+
+        // Update existing attendance records
+        $attendances = Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->get();
+
+        foreach ($attendances as $attendance) {
+            if ($attendance->status === 'ncns') {
+                // Keep NCNS status but add note
+                $existingNotes = $attendance->notes ? $attendance->notes . "\n" : '';
+                $attendance->update([
+                    'notes' => $existingNotes . "SL applied (no credits) - NCNS status preserved - Leave Request #{$leaveRequest->id}",
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            } else {
+                // Update to advised_absence
+                $attendance->update([
+                    'status' => 'advised_absence',
+                    'notes' => $leaveNote,
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+        }
+
+        // Create attendance records for days without existing records
+        $existingDates = $attendances->pluck('shift_date')->map(fn($d) => $d->format('Y-m-d'))->toArray();
+        $currentDate = $startDate->copy();
+
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if (!in_array($dateStr, $existingDates)) {
+                Attendance::create([
+                    'user_id' => $user->id,
+                    'shift_date' => $dateStr,
+                    'status' => 'advised_absence',
+                    'notes' => $leaveNote,
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+            $currentDate->addDay();
+        }
+
+        // Mark that no credits were deducted
+        $leaveRequest->update(['credits_deducted' => 0]);
+    }
+
+    /**
+     * Update attendance records for approved leave (VL, BL, etc.) to on_leave status.
+     */
+    protected function updateAttendanceForApprovedLeave(LeaveRequest $leaveRequest): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $leaveNote = "On approved {$leaveRequest->leave_type} - Leave Request #{$leaveRequest->id}";
+
+        // Update existing attendance records
+        Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->update([
+                'status' => 'on_leave',
+                'notes' => $leaveNote,
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+
+        // Create attendance records for days without existing records
+        $existingDates = Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->pluck('shift_date')
+            ->map(fn($d) => $d->format('Y-m-d'))
+            ->toArray();
+
+        $currentDate = $startDate->copy();
+
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if (!in_array($dateStr, $existingDates)) {
+                Attendance::create([
+                    'user_id' => $user->id,
+                    'shift_date' => $dateStr,
+                    'status' => 'on_leave',
+                    'notes' => $leaveNote,
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+            $currentDate->addDay();
+        }
+    }
+
+    /**
+     * Display all employees' leave credits balances.
+     * Only accessible by Super Admin, Admin, HR, and Team Lead.
+     */
+    public function creditsIndex(Request $request)
+    {
+        $user = auth()->user();
+
+        // Check if user has permission to view all leave credits
+        if (!app(\App\Services\PermissionService::class)->userHasPermission($user, 'leave_credits.view_all')) {
+            // Redirect to their own credits page if they have view_own permission
+            if (app(\App\Services\PermissionService::class)->userHasPermission($user, 'leave_credits.view_own')) {
+                return redirect()->route('leave-requests.credits.show', $user->id);
+            }
+            abort(403, 'Unauthorized action.');
+        }
+
+        $year = $request->input('year', now()->year);
+        $search = $request->input('search', '');
+        $roleFilter = $request->input('role', '');
+        $eligibilityFilter = $request->input('eligibility', '');
+
+        // Get all users with hire dates
+        $query = User::whereNotNull('hired_date')
+            ->where('is_approved', true);
+
+        // Apply search filter - check if it's an ID (numeric) or name/email search
+        if ($search) {
+            if (is_numeric($search)) {
+                // Search by user ID
+                $query->where('id', $search);
+            } else {
+                // Search by name or email
+                $query->where(function ($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%");
+                });
+            }
+        }
+
+        // Apply role filter
+        if ($roleFilter) {
+            $query->where('role', $roleFilter);
+        }
+
+        $users = $query->orderBy('first_name')->orderBy('last_name')->paginate(20);
+
+        // Get leave credits data for each user
+        $creditsData = $users->through(function ($user) use ($year) {
+            $summary = $this->leaveCreditService->getSummary($user, $year);
+            $hireDate = Carbon::parse($user->hired_date);
+            $eligibilityDate = $hireDate->copy()->addMonths(6);
+
+            return [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'hired_date' => $user->hired_date->format('Y-m-d'),
+                'is_eligible' => $summary['is_eligible'],
+                'eligibility_date' => $eligibilityDate->format('Y-m-d'),
+                'monthly_rate' => $summary['monthly_rate'],
+                'total_earned' => $summary['total_earned'],
+                'total_used' => $summary['total_used'],
+                'balance' => $summary['balance'],
+            ];
+        });
+
+        // Apply eligibility filter after transformation
+        if ($eligibilityFilter === 'eligible') {
+            $creditsData = $creditsData->filter(fn($item) => $item['is_eligible']);
+        } elseif ($eligibilityFilter === 'not_eligible') {
+            $creditsData = $creditsData->filter(fn($item) => !$item['is_eligible']);
+        }
+
+        // Get all employees for search popover
+        $allEmployees = User::whereNotNull('hired_date')
+            ->where('is_approved', true)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(fn($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ]);
+
+        return Inertia::render('FormRequest/Leave/Credits/Index', [
+            'creditsData' => $creditsData,
+            'allEmployees' => $allEmployees,
+            'filters' => [
+                'year' => (int) $year,
+                'search' => $search,
+                'role' => $roleFilter,
+                'eligibility' => $eligibilityFilter,
+            ],
+            'availableYears' => range(now()->year, 2024, -1),
+        ]);
+    }
+
+    /**
+     * Show leave credits history page for a specific user.
+     * All roles can view their own credits.
+     * Super Admin, Admin, HR, Team Lead can view any user's credits.
+     */
+    public function creditsShow(Request $request, User $user)
+    {
+        $authUser = auth()->user();
+        $permissionService = app(\App\Services\PermissionService::class);
+
+        // Check permissions
+        $canViewAll = $permissionService->userHasPermission($authUser, 'leave_credits.view_all');
+        $canViewOwn = $permissionService->userHasPermission($authUser, 'leave_credits.view_own');
+        $isViewingOwnCredits = $authUser->id === $user->id;
+
+        // If viewing someone else's credits, must have view_all permission
+        if (!$isViewingOwnCredits && !$canViewAll) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        // If viewing own credits, must have at least view_own permission
+        if ($isViewingOwnCredits && !$canViewOwn && !$canViewAll) {
+            abort(403, 'Unauthorized action.');
+        }
+
+        $year = $request->input('year', now()->year);
+
+        // Get monthly credits
+        $monthlyCredits = LeaveCredit::forUser($user->id)
+            ->forYear($year)
+            ->orderBy('month')
+            ->get()
+            ->map(function ($credit) {
+                return [
+                    'id' => $credit->id,
+                    'month' => $credit->month,
+                    'month_name' => Carbon::create(null, $credit->month)->format('F'),
+                    'credits_earned' => (float) $credit->credits_earned,
+                    'credits_used' => (float) $credit->credits_used,
+                    'credits_balance' => (float) $credit->credits_balance,
+                    'accrued_at' => $credit->accrued_at->format('Y-m-d'),
+                ];
+            });
+
+        // Get leave requests that used credits this year
+        $leaveRequests = LeaveRequest::where('user_id', $user->id)
+            ->where('credits_year', $year)
+            ->where('status', 'approved')
+            ->whereNotNull('credits_deducted')
+            ->where('credits_deducted', '>', 0)
+            ->orderBy('start_date', 'desc')
+            ->get()
+            ->map(function ($request) {
+                return [
+                    'id' => $request->id,
+                    'leave_type' => $request->leave_type,
+                    'start_date' => $request->start_date->format('Y-m-d'),
+                    'end_date' => $request->end_date->format('Y-m-d'),
+                    'days_requested' => (float) $request->days_requested,
+                    'credits_deducted' => (float) $request->credits_deducted,
+                    'approved_at' => $request->reviewed_at?->format('Y-m-d'),
+                ];
+            });
+
+        // Get summary
+        $summary = $this->leaveCreditService->getSummary($user, $year);
+
+        return Inertia::render('FormRequest/Leave/Credits/Show', [
+            'user' => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+                'hired_date' => $user->hired_date->format('Y-m-d'),
+            ],
+            'year' => (int) $year,
+            'summary' => [
+                'is_eligible' => $summary['is_eligible'],
+                'eligibility_date' => $summary['eligibility_date']?->format('Y-m-d'),
+                'monthly_rate' => $summary['monthly_rate'],
+                'total_earned' => $summary['total_earned'],
+                'total_used' => $summary['total_used'],
+                'balance' => $summary['balance'],
+            ],
+            'monthlyCredits' => $monthlyCredits,
+            'leaveRequests' => $leaveRequests,
+            'availableYears' => range(now()->year, 2024, -1),
+            'canViewAll' => $canViewAll,
+        ]);
     }
 }

@@ -56,7 +56,7 @@ interface ExcusedBy {
 interface AttendancePoint {
     id: number;
     shift_date: string;
-    point_type: 'whole_day_absence' | 'half_day_absence' | 'undertime' | 'tardy';
+    point_type: 'whole_day_absence' | 'half_day_absence' | 'undertime' | 'undertime_more_than_hour' | 'tardy';
     points: number;
     status: string | null;
     is_advised: boolean;
@@ -87,12 +87,14 @@ interface Totals {
         whole_day_absence: number;
         half_day_absence: number;
         undertime: number;
+        undertime_more_than_hour: number;
         tardy: number;
     };
     count_by_type: {
         whole_day_absence: number;
         half_day_absence: number;
         undertime: number;
+        undertime_more_than_hour: number;
         tardy: number;
     };
 }
@@ -149,7 +151,8 @@ const getPointTypeBadge = (type: string) => {
     const variants = {
         whole_day_absence: { className: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100', label: 'Whole Day Absence' },
         half_day_absence: { className: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100', label: 'Half-Day Absence' },
-        undertime: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Undertime' },
+        undertime: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Undertime (Hour)' },
+        undertime_more_than_hour: { className: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100', label: 'Undertime (>Hour)' },
         tardy: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Tardy' },
     };
 

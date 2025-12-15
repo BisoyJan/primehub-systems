@@ -418,7 +418,8 @@ export default function AttendanceImport() {
                                         <li><strong>On Time:</strong> Arrived within 14 minutes of scheduled time</li>
                                         <li><strong>Tardy:</strong> 15 minutes late (up to grace period limit)</li>
                                         <li><strong>Half-Day Absence:</strong> More than grace period late (default 15+ minutes)</li>
-                                        <li><strong>Undertime:</strong> Left more than 1 hour early</li>
+                                        <li><strong>Undertime:</strong> Left 1-60 minutes early (0.25 pts)</li>
+                                        <li><strong>Undertime (&gt;1 Hour):</strong> Left 61+ minutes early (0.50 pts)</li>
                                         <li><strong>NCNS:</strong> No bio record found</li>
                                         <li><strong>Failed to Bio Out:</strong> No time out record found</li>
                                         <li><strong>Failed to Bio In:</strong> Has time out but no time in</li>

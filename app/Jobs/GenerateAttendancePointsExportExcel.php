@@ -75,6 +75,10 @@ class GenerateAttendancePointsExportExcel implements ShouldQueue
                         'count' => $activePoints->where('point_type', 'undertime')->count(),
                         'points' => $activePoints->where('point_type', 'undertime')->sum('points'),
                     ],
+                    'undertime_more_than_hour' => [
+                        'count' => $activePoints->where('point_type', 'undertime_more_than_hour')->count(),
+                        'points' => $activePoints->where('point_type', 'undertime_more_than_hour')->sum('points'),
+                    ],
                 ],
                 'gbro_eligible_count' => $activePoints->where('eligible_for_gbro', true)->count(),
             ];
@@ -165,7 +169,8 @@ class GenerateAttendancePointsExportExcel implements ShouldQueue
                     'whole_day_absence' => 'Whole Day Absence',
                     'half_day_absence' => 'Half-Day Absence',
                     'tardy' => 'Tardy',
-                    'undertime' => 'Undertime',
+                    'undertime' => 'Undertime (Hour)',
+                    'undertime_more_than_hour' => 'Undertime (>Hour)',
                     default => $point->point_type,
                 };
 
@@ -301,7 +306,8 @@ class GenerateAttendancePointsExportExcel implements ShouldQueue
                 ['Whole Day Absence', $stats['by_type']['whole_day_absence']['count'], number_format($stats['by_type']['whole_day_absence']['points'], 2), '1.00'],
                 ['Half-Day Absence', $stats['by_type']['half_day_absence']['count'], number_format($stats['by_type']['half_day_absence']['points'], 2), '0.50'],
                 ['Tardy', $stats['by_type']['tardy']['count'], number_format($stats['by_type']['tardy']['points'], 2), '0.25'],
-                ['Undertime', $stats['by_type']['undertime']['count'], number_format($stats['by_type']['undertime']['points'], 2), '0.25'],
+                ['Undertime (Hour)', $stats['by_type']['undertime']['count'], number_format($stats['by_type']['undertime']['points'], 2), '0.25'],
+                ['Undertime (>Hour)', $stats['by_type']['undertime_more_than_hour']['count'] ?? 0, number_format($stats['by_type']['undertime_more_than_hour']['points'] ?? 0, 2), '0.50'],
             ];
 
             $sheet2->fromArray($typeData, null, 'A14');
@@ -310,7 +316,7 @@ class GenerateAttendancePointsExportExcel implements ShouldQueue
                 'fill' => ['fillType' => Fill::FILL_SOLID, 'startColor' => ['rgb' => 'FEE2E2']],
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'FECACA']]],
             ]);
-            $sheet2->getStyle('A15:D18')->applyFromArray([
+            $sheet2->getStyle('A15:D19')->applyFromArray([
                 'borders' => ['allBorders' => ['borderStyle' => Border::BORDER_THIN, 'color' => ['rgb' => 'E5E7EB']]],
             ]);
 
@@ -319,7 +325,8 @@ class GenerateAttendancePointsExportExcel implements ShouldQueue
                 15 => 'FEF2F2', // Whole Day - Red tint
                 16 => 'FFF7ED', // Half Day - Orange tint
                 17 => 'FEFCE8', // Tardy - Yellow tint
-                18 => 'FEFCE8', // Undertime - Yellow tint
+                18 => 'FEFCE8', // Undertime (Hour) - Yellow tint
+                19 => 'FFF7ED', // Undertime (>Hour) - Orange tint
             ];
             foreach ($typeColors as $rowNum => $color) {
                 $sheet2->getStyle("A{$rowNum}:D{$rowNum}")->applyFromArray([

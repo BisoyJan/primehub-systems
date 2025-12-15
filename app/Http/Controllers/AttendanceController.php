@@ -408,7 +408,7 @@ class AttendanceController extends Controller
             'notes' => $validated['notes'],
         ]);
 
-        return redirect()->back()->with('success', 'Attendance record created successfully.');
+        return redirect()->route('attendance.index')->with('success', 'Attendance record created successfully.');
     }
 
     /**
@@ -595,10 +595,10 @@ class AttendanceController extends Controller
             if (count($errors) > 0) {
                 $message .= " However, " . count($errors) . " record(s) failed.";
             }
-            return redirect()->back()->with('success', $message);
+            return redirect()->route('attendance.index')->with('success', $message);
         }
 
-        return redirect()->back()->withErrors(['error' => 'Failed to create any attendance records.']);
+        return redirect()->route('attendance.index')->withErrors(['error' => 'Failed to create any attendance records.']);
     }
 
     public function import()
@@ -792,6 +792,7 @@ class AttendanceController extends Controller
             'actual_time_out' => 'nullable|date',
             'verification_notes' => 'required|string|max:1000',
             'overtime_approved' => 'nullable|boolean',
+            'notes' => 'nullable|string|max:500',
         ]);
 
         // Note: Allow re-verification of already verified records
@@ -805,6 +806,7 @@ class AttendanceController extends Controller
             'actual_time_out' => $request->actual_time_out,
             'admin_verified' => true,
             'verification_notes' => $request->verification_notes,
+            'notes' => $request->notes,
         ];
 
         // Set is_advised flag for advised_absence status

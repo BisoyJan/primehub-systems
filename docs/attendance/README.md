@@ -231,6 +231,30 @@ See **[../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)** f
 
 ---
 
+## ✨ Recent Updates
+
+### Notes Field Enhancement (December 2025)
+- **Added `notes` field** to attendance records for additional context
+- Visible in:
+  - Attendance index table with truncation (shows first 50 chars)
+  - Review page verification dialog
+  - Manual attendance creation form
+- **Display behavior**: 
+  - Notes >50 chars show "..." with dialog to view full text
+  - Notes column shows "N/A" if empty
+- **Usage**: Store context like reasons, explanations, or special circumstances
+- **Backend**: Saved in both `verify()` and `store()` methods
+- **Validation**: Max 500 characters
+
+### Sick Leave (SL) Updates (December 2025)
+- **Date restrictions**: SL can only be applied for dates within the last 7 days up to today
+- **Conditional credit deduction**: Credits deducted ONLY for NCNS status, not regular SL
+- **Frontend improvements**: Info message explaining credit deduction policy
+- **Backend logic**: `LeaveCreditService` skips eligibility/balance checks for SL
+- **Approval handling**: Special NCNS handling updates attendance records automatically
+
+---
+
 ## 🔧 Common Use Cases
 
 ### Adding a New Shift Pattern
@@ -272,4 +296,4 @@ See **[../../ATTENDANCE_TESTS_SUMMARY.md](../../ATTENDANCE_TESTS_SUMMARY.md)** f
 
 ---
 
-*Last updated: November 13, 2025*
+*Last updated: December 14, 2025*

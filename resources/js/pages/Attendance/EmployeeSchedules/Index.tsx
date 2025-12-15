@@ -96,11 +96,13 @@ interface PageProps extends SharedData {
     users: Array<{ id: number; name: string }>;
     sites: Array<{ id: number; name: string }>;
     campaigns: Array<{ id: number; name: string }>;
+    roles: string[];
     usersWithoutSchedules: Array<{ id: number; first_name: string; last_name: string }>;
     usersWithInactiveSchedules: Array<{ id: number; first_name: string; last_name: string }>;
     filters?: {
         search?: string;
         user_id?: string;
+        role?: string;
         campaign_id?: string;
         site_id?: string;
         shift_type?: string;
@@ -123,6 +125,15 @@ const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
     const ampm = hour >= 12 ? 'PM' : 'AM';
     const hour12 = hour % 12 || 12;
     return `${hour12}:${minutes} ${ampm}`;
+};
+
+const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric'
+    });
 };
 
 const getShiftTypeBadge = (shiftType: string) => {
@@ -162,7 +173,7 @@ const groupSchedulesByUser = (schedules: Schedule[]) => {
 };
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns = [], filters, auth, usersWithoutSchedules = [], usersWithInactiveSchedules = [] } = usePage<PageProps>().props;
+    const { schedules, users, campaigns = [], roles = [], filters, auth, usersWithoutSchedules = [], usersWithInactiveSchedules = [] } = usePage<PageProps>().props;
     const timeFormat = (auth.user as { time_format?: '12' | '24' })?.time_format || '24';
     const scheduleData = {
         data: schedules?.data ?? [],
@@ -195,6 +206,7 @@ export default function EmployeeSchedulesIndex() {
     const [userFilter, setUserFilter] = useState(appliedFilters.user_id || "all");
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
+    const [roleFilter, setRoleFilter] = useState(appliedFilters.role || "all");
     const [campaignFilter, setCampaignFilter] = useState(appliedFilters.campaign_id || "all");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
     const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
@@ -205,10 +217,11 @@ export default function EmployeeSchedulesIndex() {
     useEffect(() => {
         setSearch(appliedFilters.search || "");
         setUserFilter(appliedFilters.user_id || "all");
+        setRoleFilter(appliedFilters.role || "all");
         setCampaignFilter(appliedFilters.campaign_id || "all");
         setStatusFilter(appliedFilters.is_active || "all");
         setActiveOnly(appliedFilters.active_only || false);
-    }, [appliedFilters.search, appliedFilters.user_id, appliedFilters.campaign_id, appliedFilters.is_active, appliedFilters.active_only]);
+    }, [appliedFilters.search, appliedFilters.user_id, appliedFilters.role, appliedFilters.campaign_id, appliedFilters.is_active, appliedFilters.active_only]);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [scheduleToDelete, setScheduleToDelete] = useState<number | null>(null);
@@ -224,6 +237,7 @@ export default function EmployeeSchedulesIndex() {
         const params: Record<string, string> = {};
         if (search) params.search = search;
         if (userFilter !== "all") params.user_id = userFilter;
+        if (roleFilter !== "all") params.role = roleFilter;
         if (campaignFilter !== "all") params.campaign_id = campaignFilter;
         if (statusFilter !== "all") params.is_active = statusFilter;
         if (activeOnly) params.active_only = "1";
@@ -249,6 +263,7 @@ export default function EmployeeSchedulesIndex() {
             const params: Record<string, string> = {};
             if (search) params.search = search;
             if (userFilter !== "all") params.user_id = userFilter;
+            if (roleFilter !== "all") params.role = roleFilter;
             if (campaignFilter !== "all") params.campaign_id = campaignFilter;
             if (statusFilter !== "all") params.is_active = statusFilter;
             if (activeOnly) params.active_only = "1";
@@ -263,10 +278,11 @@ export default function EmployeeSchedulesIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, userFilter, campaignFilter, statusFilter, activeOnly]);
+    }, [autoRefreshEnabled, search, userFilter, roleFilter, campaignFilter, statusFilter, activeOnly]);
 
     const showClearFilters =
         userFilter !== "all" ||
+        roleFilter !== "all" ||
         campaignFilter !== "all" ||
         statusFilter !== "all" ||
         activeOnly ||
@@ -275,6 +291,7 @@ export default function EmployeeSchedulesIndex() {
     const clearFilters = () => {
         setSearch("");
         setUserFilter("all");
+        setRoleFilter("all");
         setCampaignFilter("all");
         setStatusFilter("all");
         setActiveOnly(false);
@@ -408,7 +425,7 @@ export default function EmployeeSchedulesIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                         <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                             <PopoverTrigger asChild>
                                 <Button
@@ -482,6 +499,20 @@ export default function EmployeeSchedulesIndex() {
                                 </Command>
                             </PopoverContent>
                         </Popover>
+
+                        <Select value={roleFilter} onValueChange={setRoleFilter}>
+                            <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Filter by Role" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Roles</SelectItem>
+                                {roles.map(role => (
+                                    <SelectItem key={role} value={role}>
+                                        {role}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
 
                         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
                             <SelectTrigger className="w-full">
@@ -1159,11 +1190,11 @@ export default function EmployeeSchedulesIndex() {
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Effective Date:</span>
-                                                <p className="mt-1">{schedule.effective_date}</p>
+                                                <p className="mt-1">{formatDate(schedule.effective_date)}</p>
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">End Date:</span>
-                                                <p className="mt-1">{schedule.end_date || "Indefinite"}</p>
+                                                <p className="mt-1">{schedule.end_date ? formatDate(schedule.end_date) : "Indefinite"}</p>
                                             </div>
                                         </div>
                                     </div>

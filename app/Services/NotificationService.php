@@ -221,6 +221,7 @@ class NotificationService
             'half_day_absence' => 'Half-Day Absence',
             'tardy' => 'Tardy',
             'undertime' => 'Undertime',
+            'undertime_more_than_hour' => 'Undertime (>1 Hour)',
             default => ucfirst(str_replace('_', ' ', $pointType))
         };
 
@@ -405,6 +406,89 @@ class NotificationService
                 'link' => route('leave-requests.show', $requestId)
             ]
         );
+    }
+
+    /**
+     * Notify Team Lead about a new leave request from their campaign agent.
+     */
+    public function notifyTeamLeadAboutNewLeaveRequest(int $teamLeadId, string $agentName, string $leaveType, string $startDate, string $endDate, int $requestId): Notification
+    {
+        return $this->create(
+            $teamLeadId,
+            'leave_request',
+            'New Leave Request - Requires Your Approval',
+            "{$agentName} from your campaign has submitted a {$leaveType} request from {$startDate} to {$endDate}. Please review and approve.",
+            [
+                'agent_name' => $agentName,
+                'type' => $leaveType,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'request_id' => $requestId,
+                'requires_tl_approval' => true,
+                'link' => route('leave-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
+     * Notify agent that their leave request has been approved by Team Lead.
+     */
+    public function notifyAgentAboutTLApproval(int $userId, string $leaveType, string $teamLeadName, int $requestId): Notification
+    {
+        return $this->create(
+            $userId,
+            'leave_request',
+            'Leave Request Approved by Team Lead',
+            "Your {$leaveType} request has been approved by {$teamLeadName}. It is now pending Admin/HR approval.",
+            [
+                'status' => 'tl_approved',
+                'type' => $leaveType,
+                'team_lead' => $teamLeadName,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
+     * Notify agent that their leave request has been rejected by Team Lead.
+     */
+    public function notifyAgentAboutTLRejection(int $userId, string $leaveType, string $teamLeadName, int $requestId): Notification
+    {
+        return $this->create(
+            $userId,
+            'leave_request',
+            'Leave Request Rejected by Team Lead',
+            "Your {$leaveType} request has been rejected by {$teamLeadName}.",
+            [
+                'status' => 'tl_rejected',
+                'type' => $leaveType,
+                'team_lead' => $teamLeadName,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
+     * Notify Admin/HR that Team Lead has approved an agent's leave request.
+     */
+    public function notifyAdminHrAboutTLApproval(string $agentName, string $leaveType, string $teamLeadName, int $requestId): void
+    {
+        $title = 'Leave Request - Team Lead Approved';
+        $message = "{$teamLeadName} (Team Lead) has approved {$agentName}'s {$leaveType} request. Awaiting your approval.";
+
+        $data = [
+            'agent_name' => $agentName,
+            'type' => $leaveType,
+            'team_lead' => $teamLeadName,
+            'request_id' => $requestId,
+            'link' => route('leave-requests.show', $requestId)
+        ];
+
+        $this->notifyUsersByRole('Admin', 'leave_request', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'leave_request', $title, $message, $data);
+        $this->notifyUsersByRole('HR', 'leave_request', $title, $message, $data);
     }
 
     /**

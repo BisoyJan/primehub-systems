@@ -30,13 +30,24 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import PaginationNav from '@/components/pagination-nav';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
 import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
 
 interface User {
@@ -54,6 +65,9 @@ interface LeaveRequest {
     status: string;
     admin_approved_at: string | null;
     hr_approved_at: string | null;
+    requires_tl_approval: boolean;
+    tl_approved_at: string | null;
+    tl_rejected: boolean;
     created_at: string;
 }
 
@@ -83,6 +97,7 @@ interface Props {
         end_date?: string;
     };
     isAdmin: boolean;
+    isTeamLead?: boolean;
     hasPendingRequests: boolean;
     auth: {
         user: {
@@ -113,6 +128,12 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
+    // Export dialog state
+    const [showExportDialog, setShowExportDialog] = useState(false);
+    const [exportYear, setExportYear] = useState(new Date().getFullYear() - 1);
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportProgress, setExportProgress] = useState({ percent: 0, status: '' });
+
     const paginationMeta: PaginationMeta = leaveRequests.meta || {
         current_page: 1,
         last_page: 1,
@@ -123,7 +144,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
 
     const showClearFilters = filterStatus !== 'all' || filterType !== 'all';
 
-    const buildFilterParams = () => {
+    const buildFilterParams = React.useCallback(() => {
         const params: Record<string, string> = {};
         if (filterStatus !== 'all') {
             params.status = filterStatus;
@@ -132,7 +153,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
             params.type = filterType;
         }
         return params;
-    };
+    }, [filterStatus, filterType]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         router.get(leaveIndexRoute().url, params, {
@@ -165,7 +186,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, filterStatus, filterType]);
+    }, [autoRefreshEnabled, buildFilterParams]);
 
     const clearFilters = () => {
         setFilterStatus('all');
@@ -220,12 +241,70 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
         );
     };
 
-    const getStatusBadge = (status: string, adminApprovedAt: string | null, hrApprovedAt: string | null) => {
+    const getStatusBadge = (
+        status: string,
+        adminApprovedAt: string | null,
+        hrApprovedAt: string | null,
+        requiresTlApproval: boolean = false,
+        tlApprovedAt: string | null = null,
+        tlRejected: boolean = false
+    ) => {
         const isAdminApproved = !!adminApprovedAt;
         const isHrApproved = !!hrApprovedAt;
+        const isTlApproved = !!tlApprovedAt;
 
         // For pending status, show partial approval info
         if (status === 'pending') {
+            // Check TL approval first for agent requests
+            if (requiresTlApproval && !isTlApproved && !tlRejected) {
+                return (
+                    <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-300">
+                        PENDING TL
+                    </Badge>
+                );
+            }
+
+            if (requiresTlApproval && isTlApproved) {
+                // TL approved, now waiting for Admin/HR
+                if (isAdminApproved && !isHrApproved) {
+                    return (
+                        <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                                PENDING HR
+                            </Badge>
+                            <span className="text-xs text-green-600 flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" /> TL & Admin ✓
+                            </span>
+                        </div>
+                    );
+                }
+                if (!isAdminApproved && isHrApproved) {
+                    return (
+                        <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                                PENDING ADMIN
+                            </Badge>
+                            <span className="text-xs text-green-600 flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" /> TL & HR ✓
+                            </span>
+                        </div>
+                    );
+                }
+                if (!isAdminApproved && !isHrApproved) {
+                    return (
+                        <div className="flex flex-col gap-1">
+                            <Badge variant="outline" className="bg-yellow-100 text-yellow-800 border-yellow-300">
+                                PENDING ADMIN/HR
+                            </Badge>
+                            <span className="text-xs text-green-600 flex items-center gap-1">
+                                <CheckCircle className="h-3 w-3" /> TL ✓
+                            </span>
+                        </div>
+                    );
+                }
+            }
+
+            // Non-TL required or regular flow
             if (isAdminApproved && !isHrApproved) {
                 return (
                     <div className="flex flex-col gap-1">
@@ -280,6 +359,88 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
             toast.warning('Cannot create new leave request', {
                 description: 'You have a pending leave request. Please wait for approval or cancel your existing pending request before creating a new one.',
                 duration: 6000,
+            });
+        }
+    };
+
+    const handleExportCredits = async () => {
+        if (!exportYear || exportYear < 2020 || exportYear > new Date().getFullYear() + 1) {
+            toast.error('Invalid year', {
+                description: 'Please enter a valid year between 2020 and ' + (new Date().getFullYear() + 1),
+            });
+            return;
+        }
+
+        setIsExporting(true);
+        setExportProgress({ percent: 0, status: 'Starting export...' });
+
+        try {
+            // Start export job
+            const response = await fetch('/form-requests/leave-requests/export/credits', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ year: exportYear }),
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to start export');
+            }
+
+            const { job_id } = await response.json();
+
+            // Poll for progress
+            const pollInterval = setInterval(async () => {
+                try {
+                    const progressResponse = await fetch(`/form-requests/leave-requests/export/credits/progress?job_id=${job_id}`);
+                    if (!progressResponse.ok) {
+                        throw new Error('Failed to fetch progress');
+                    }
+
+                    const progress = await progressResponse.json();
+                    setExportProgress({ percent: progress.percent, status: progress.status });
+
+                    if (progress.finished) {
+                        clearInterval(pollInterval);
+                        setIsExporting(false);
+                        setShowExportDialog(false);
+
+                        if (progress.downloadUrl) {
+                            toast.success('Export completed!', {
+                                description: 'Your file is ready. Download will start automatically.',
+                            });
+                            window.location.href = progress.downloadUrl;
+                        }
+                    }
+
+                    if (progress.error) {
+                        clearInterval(pollInterval);
+                        setIsExporting(false);
+                        toast.error('Export failed', {
+                            description: progress.status,
+                        });
+                    }
+                } catch {
+                    clearInterval(pollInterval);
+                    setIsExporting(false);
+                    toast.error('Error checking export progress');
+                }
+            }, 2000);
+
+            // Timeout after 5 minutes
+            setTimeout(() => {
+                clearInterval(pollInterval);
+                setIsExporting(false);
+                toast.error('Export timeout', {
+                    description: 'The export is taking longer than expected. Please try again.',
+                });
+            }, 300000);
+        } catch {
+            setIsExporting(false);
+            toast.error('Failed to export leave credits', {
+                description: 'An error occurred while starting the export.',
             });
         }
     };
@@ -342,6 +503,18 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                             )}
 
                             <div className="flex gap-2">
+                                {isAdmin && (
+                                    <Button
+                                        variant="outline"
+                                        onClick={() => setShowExportDialog(true)}
+                                        className="flex-1 sm:flex-none"
+                                        title="Export Leave Credits"
+                                    >
+                                        <Download className="mr-2 h-4 w-4" />
+                                        Export Credits
+                                    </Button>
+                                )}
+
                                 <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
                                     <RefreshCw className="h-4 w-4" />
                                 </Button>
@@ -417,7 +590,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                                 {format(parseISO(request.end_date), 'MMM d, yyyy')}
                                             </TableCell>
                                             <TableCell>{request.days_requested}</TableCell>
-                                            <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at)}</TableCell>
+                                            <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {format(parseISO(request.created_at), 'MMM d, yyyy')}
                                             </TableCell>
@@ -487,7 +660,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                             {getLeaveTypeBadge(request.leave_type)}
                                         </div>
                                     </div>
-                                    {getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at)}
+                                    {getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}
                                 </div>
 
                                 <div className="space-y-2 text-sm">
@@ -593,6 +766,67 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Export Credits Dialog */}
+            <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Export Leave Credits Summary</DialogTitle>
+                        <DialogDescription>
+                            Export a summary of all employee leave credits for a specific year. This will generate an Excel file with total earned, used, and balance for each employee.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {!isExporting ? (
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <Label htmlFor="exportYear">Year</Label>
+                                <Input
+                                    id="exportYear"
+                                    type="number"
+                                    min={2020}
+                                    max={new Date().getFullYear() + 1}
+                                    value={exportYear}
+                                    onChange={(e) => setExportYear(parseInt(e.target.value))}
+                                    placeholder="Enter year (e.g., 2024)"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Default is last year ({new Date().getFullYear() - 1}). Credits reset annually and don't carry over.
+                                </p>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 py-6">
+                            <div className="space-y-2">
+                                <div className="flex justify-between text-sm">
+                                    <span className="text-muted-foreground">Progress</span>
+                                    <span className="font-medium">{exportProgress.percent}%</span>
+                                </div>
+                                <Progress value={exportProgress.percent} className="h-2" />
+                                <p className="text-sm text-muted-foreground">{exportProgress.status}</p>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter>
+                        {!isExporting ? (
+                            <>
+                                <Button variant="outline" onClick={() => setShowExportDialog(false)}>
+                                    Cancel
+                                </Button>
+                                <Button onClick={handleExportCredits}>
+                                    <Download className="mr-2 h-4 w-4" />
+                                    Export
+                                </Button>
+                            </>
+                        ) : (
+                            <Button variant="outline" disabled>
+                                Exporting...
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

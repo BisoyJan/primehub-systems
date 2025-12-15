@@ -16,7 +16,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute } from '@/routes/leave-requests';
@@ -33,6 +33,7 @@ interface LeaveRequest {
     reviewer?: User;
     admin_approver?: User;
     hr_approver?: User;
+    tl_approver?: User;
     leave_type: string;
     start_date: string;
     end_date: string;
@@ -47,6 +48,10 @@ interface LeaveRequest {
     admin_review_notes: string | null;
     hr_approved_at: string | null;
     hr_review_notes: string | null;
+    requires_tl_approval: boolean;
+    tl_approved_at: string | null;
+    tl_review_notes: string | null;
+    tl_rejected: boolean;
     credits_deducted: number | null;
     attendance_points_at_request: number;
     created_at: string;
@@ -55,28 +60,36 @@ interface LeaveRequest {
 interface Props {
     leaveRequest: LeaveRequest;
     isAdmin: boolean;
+    isTeamLead?: boolean;
     canCancel: boolean;
     hasUserApproved: boolean;
+    canTlApprove?: boolean;
     userRole: string;
 }
 
-export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved }: Props) {
+export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved, canTlApprove = false }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+    const [showTLApproveDialog, setShowTLApproveDialog] = useState(false);
+    const [showTLDenyDialog, setShowTLDenyDialog] = useState(false);
     const { can } = usePermission();
 
     const approveForm = useForm({ review_notes: '' });
     const denyForm = useForm({ review_notes: '' });
+    const tlApproveForm = useForm({ tl_review_notes: '' });
+    const tlDenyForm = useForm({ tl_review_notes: '' });
 
     // Check if Admin/HR has approved
     const isAdminApproved = !!leaveRequest.admin_approved_at;
     const isHrApproved = !!leaveRequest.hr_approved_at;
+    const isTlApproved = !!leaveRequest.tl_approved_at;
     const isFullyApproved = isAdminApproved && isHrApproved;
 
     // Determine if user can approve (not already approved by their role)
-    const canUserApprove = isAdmin && leaveRequest.status === 'pending' && !hasUserApproved;
+    const canUserApprove = isAdmin && leaveRequest.status === 'pending' && !hasUserApproved &&
+        (!leaveRequest.requires_tl_approval || isTlApproved);
 
     const handleApprove = () => {
         approveForm.post(leaveApproveRoute(leaveRequest.id).url, {
@@ -92,6 +105,24 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
             onSuccess: () => {
                 setShowDenyDialog(false);
                 toast.success('Leave request denied');
+            },
+        });
+    };
+
+    const handleTLApprove = () => {
+        tlApproveForm.post(`/form-requests/leave-requests/${leaveRequest.id}/approve-tl`, {
+            onSuccess: () => {
+                setShowTLApproveDialog(false);
+                toast.success('Leave request approved. Now pending Admin/HR approval.');
+            },
+        });
+    };
+
+    const handleTLDeny = () => {
+        tlDenyForm.post(`/form-requests/leave-requests/${leaveRequest.id}/deny-tl`, {
+            onSuccess: () => {
+                setShowTLDenyDialog(false);
+                toast.success('Leave request has been rejected.');
             },
         });
     };
@@ -149,6 +180,20 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                     </Link>
 
                     <div className="flex flex-wrap gap-2">
+                        {/* Team Lead Approval Buttons */}
+                        {canTlApprove && leaveRequest.status === 'pending' && (
+                            <>
+                                <Button variant="default" size="sm" onClick={() => setShowTLApproveDialog(true)}>
+                                    <UserCheck className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">Approve (TL)</span>
+                                </Button>
+                                <Button variant="destructive" size="sm" onClick={() => setShowTLDenyDialog(true)}>
+                                    <X className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">Reject (TL)</span>
+                                </Button>
+                            </>
+                        )}
+                        {/* Admin/HR Approval Buttons */}
                         {canUserApprove && (
                             <>
                                 <Can permission="leave.approve">
@@ -289,8 +334,40 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                             </Alert>
                         </div>
 
+                        {/* TL Approval Status (for requests requiring TL approval) */}
+                        {leaveRequest.requires_tl_approval && leaveRequest.status === 'pending' && !leaveRequest.tl_rejected && (
+                            <div className="border-t pt-4">
+                                <h3 className="font-semibold mb-4">Team Lead Approval</h3>
+                                <div className={`p-4 rounded-lg border ${isTlApproved ? 'bg-green-500/10 border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40' : 'bg-yellow-500/10 border-yellow-500/30 dark:bg-yellow-500/20 dark:border-yellow-500/40'}`}>
+                                    <div className="flex items-center gap-2 mb-2">
+                                        {isTlApproved ? (
+                                            <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
+                                        ) : (
+                                            <Clock className="h-5 w-5 text-yellow-600 dark:text-yellow-400" />
+                                        )}
+                                        <span className="font-medium">Team Lead Approval</span>
+                                    </div>
+                                    {isTlApproved ? (
+                                        <>
+                                            <p className="text-sm text-muted-foreground">
+                                                Approved by {leaveRequest.tl_approver?.name || 'Team Lead'}
+                                            </p>
+                                            <p className="text-xs text-muted-foreground mt-1">
+                                                {leaveRequest.tl_approved_at && format(parseISO(leaveRequest.tl_approved_at), 'MMM d, yyyy h:mm a')}
+                                            </p>
+                                            {leaveRequest.tl_review_notes && (
+                                                <p className="text-sm mt-2 italic text-muted-foreground">"{leaveRequest.tl_review_notes}"</p>
+                                            )}
+                                        </>
+                                    ) : (
+                                        <p className="text-sm text-yellow-700 dark:text-yellow-400">Awaiting Team Lead approval</p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         {/* Dual Approval Status */}
-                        {leaveRequest.status === 'pending' && (isAdminApproved || isHrApproved) && (
+                        {leaveRequest.status === 'pending' && (isAdminApproved || isHrApproved || (leaveRequest.requires_tl_approval && isTlApproved)) && (
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold mb-4">Approval Progress</h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -356,9 +433,28 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                             <div className="border-t pt-4">
                                 <h3 className="font-semibold mb-4">Final Review Information</h3>
 
-                                {/* Show both approval info when fully approved */}
+                                {/* Show all approval info when fully approved */}
                                 {leaveRequest.status === 'approved' && (
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-4">
+                                        {/* TL Approval (if required) */}
+                                        {leaveRequest.requires_tl_approval && isTlApproved && (
+                                            <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40">
+                                                <div className="flex items-center gap-2 mb-1">
+                                                    <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                                                    <span className="font-medium text-sm">Team Lead Approved</span>
+                                                </div>
+                                                <p className="text-sm text-muted-foreground">
+                                                    {leaveRequest.tl_approver?.name || 'Team Lead'}
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                    {leaveRequest.tl_approved_at && format(parseISO(leaveRequest.tl_approved_at), 'MMM d, yyyy h:mm a')}
+                                                </p>
+                                                {leaveRequest.tl_review_notes && (
+                                                    <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.tl_review_notes}"</p>
+                                                )}
+                                            </div>
+                                        )}
+
                                         {/* Admin Approval */}
                                         {isAdminApproved && (
                                             <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30 dark:bg-green-500/20 dark:border-green-500/40">
@@ -396,6 +492,24 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                                                 )}
                                             </div>
                                         )}
+                                    </div>
+                                )}
+
+                                {/* TL Rejection Info */}
+                                {leaveRequest.status === 'denied' && leaveRequest.tl_rejected && (
+                                    <div className="mb-4">
+                                        <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 dark:bg-red-500/20 dark:border-red-500/40">
+                                            <div className="flex items-center gap-2 mb-1">
+                                                <XCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                                                <span className="font-medium text-sm">Rejected by Team Lead</span>
+                                            </div>
+                                            <p className="text-sm text-muted-foreground">
+                                                {leaveRequest.tl_approver?.name || 'Team Lead'}
+                                            </p>
+                                            {leaveRequest.tl_review_notes && (
+                                                <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.tl_review_notes}"</p>
+                                            )}
+                                        </div>
                                     </div>
                                 )}
 
@@ -504,6 +618,77 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                             disabled={denyForm.processing}
                         >
                             Deny Request
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* TL Approve Dialog */}
+            <Dialog open={showTLApproveDialog} onOpenChange={setShowTLApproveDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Team Lead Approval</DialogTitle>
+                        <DialogDescription>
+                            Approve this leave request as Team Lead. It will then proceed to Admin and HR for final approval.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-sm font-medium">Review Notes (Optional)</label>
+                            <Textarea
+                                value={tlApproveForm.data.tl_review_notes}
+                                onChange={(e) => tlApproveForm.setData('tl_review_notes', e.target.value)}
+                                placeholder="Add any comments..."
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowTLApproveDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button onClick={handleTLApprove} disabled={tlApproveForm.processing}>
+                            Approve as Team Lead
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* TL Deny Dialog */}
+            <Dialog open={showTLDenyDialog} onOpenChange={setShowTLDenyDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Reject Leave Request</DialogTitle>
+                        <DialogDescription>
+                            Rejecting this request as Team Lead will deny the leave request. Provide a reason for the rejection.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-sm font-medium">
+                                Review Notes <span className="text-red-500">*</span>
+                            </label>
+                            <Textarea
+                                value={tlDenyForm.data.tl_review_notes}
+                                onChange={(e) => tlDenyForm.setData('tl_review_notes', e.target.value)}
+                                placeholder="Reason for rejection (required, minimum 10 characters)..."
+                                rows={3}
+                            />
+                            {tlDenyForm.errors.tl_review_notes && (
+                                <p className="text-sm text-red-500 mt-1">{tlDenyForm.errors.tl_review_notes}</p>
+                            )}
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowTLDenyDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleTLDeny}
+                            disabled={tlDenyForm.processing}
+                        >
+                            Reject Request
                         </Button>
                     </DialogFooter>
                 </DialogContent>

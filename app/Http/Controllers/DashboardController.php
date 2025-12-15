@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Attendance;
 use App\Services\DashboardService;
+use App\Services\LeaveCreditService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
@@ -15,7 +16,8 @@ class DashboardController extends Controller
      * Dashboard service instance
      */
     public function __construct(
-        private readonly DashboardService $dashboardService
+        private readonly DashboardService $dashboardService,
+        private readonly LeaveCreditService $leaveCreditService
     ) {}
 
     /**
@@ -32,14 +34,15 @@ class DashboardController extends Controller
         $endDate = $request->input('end_date', now()->endOfMonth()->format('Y-m-d'));
         $campaignId = $request->input('campaign_id');
         $verificationFilter = $request->input('verification_filter', 'verified'); // all, verified, non_verified
+        $presenceDate = $request->input('presence_date', now()->format('Y-m-d'));
 
         $user = $request->user();
         $isRestrictedRole = in_array($user->role, ['Agent', 'Utility']);
 
         $dashboardData = Cache::remember(
-            key: 'dashboard_stats',
+            key: 'dashboard_stats_' . $presenceDate,
             ttl: 150,
-            callback: fn() => $this->dashboardService->getAllStats()
+            callback: fn() => $this->dashboardService->getAllStats($presenceDate)
         );
 
         // Build attendance query with filters
@@ -140,6 +143,21 @@ class DashboardController extends Controller
                 ->get();
         }
 
+        // Get user's personal leave credits summary
+        $leaveCredits = null;
+        if ($user->hired_date) {
+            $summary = $this->leaveCreditService->getSummary($user);
+            $leaveCredits = [
+                'year' => $summary['year'],
+                'is_eligible' => $summary['is_eligible'],
+                'eligibility_date' => $summary['eligibility_date']?->format('Y-m-d'),
+                'monthly_rate' => $summary['monthly_rate'],
+                'total_earned' => $summary['total_earned'],
+                'total_used' => $summary['total_used'],
+                'balance' => $summary['balance'],
+            ];
+        }
+
         return Inertia::render('dashboard', array_merge($dashboardData, [
             'attendanceStatistics' => $attendanceStats,
             'verificationFilter' => $verificationFilter,
@@ -150,6 +168,7 @@ class DashboardController extends Controller
             'campaignId' => $campaignId,
             'campaigns' => $campaigns,
             'isRestrictedRole' => $isRestrictedRole,
+            'leaveCredits' => $leaveCredits,
         ]));
     }
 }

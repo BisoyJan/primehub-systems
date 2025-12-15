@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\EmployeeAccessRevoked;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -9,6 +10,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
 
@@ -466,7 +468,7 @@ class AccountController extends Controller
     /**
      * Unapprove a user account.
      */
-    public function unapprove(User $account)
+    public function unapprove(Request $request, User $account)
     {
         $this->authorize('update', $account);
 
@@ -485,13 +487,32 @@ class AccountController extends Controller
             ]);
         }
 
-        $account->update([
-            'is_approved' => false,
-            'approved_at' => null,
-        ]);
+        $sendEmail = $request->boolean('send_email', false);
+
+        DB::transaction(function () use ($account) {
+            // Revoke approval
+            $account->update([
+                'is_approved' => false,
+                'approved_at' => null,
+                'is_active' => false,
+            ]);
+
+            // Deactivate all employee schedules for this user
+            $account->employeeSchedules()->update(['is_active' => false]);
+        });
+
+        // Send notification email if requested and employee has a hired date
+        if ($sendEmail && $account->hired_date) {
+            $this->sendAccessRevokedEmail($account);
+        }
+
+        $message = 'User account approval revoked, employee and schedules deactivated';
+        if ($sendEmail && $account->hired_date) {
+            $message .= '. Notification email has been sent.';
+        }
 
         return back()->with('flash', [
-            'message' => 'User account approval revoked successfully',
+            'message' => $message,
             'type' => 'success'
         ]);
     }
@@ -594,9 +615,11 @@ class AccountController extends Controller
         $validated = $request->validate([
             'ids' => 'required|array|min:1',
             'ids.*' => 'required|integer|exists:users,id',
+            'send_email' => 'boolean',
         ]);
 
         $ids = $validated['ids'];
+        $sendEmail = $request->boolean('send_email', false);
 
         // Filter out current user's ID and already unapproved accounts
         $usersToUnapprove = User::whereIn('id', $ids)
@@ -618,15 +641,41 @@ class AccountController extends Controller
             }
 
             $count = $usersToUnapprove->count();
+            $emailsSent = 0;
 
-            User::whereIn('id', $usersToUnapprove->pluck('id'))
-                ->update([
-                    'is_approved' => false,
-                    'approved_at' => null,
-                ]);
+            DB::transaction(function () use ($usersToUnapprove) {
+                $userIds = $usersToUnapprove->pluck('id');
+
+                // Revoke approval and deactivate employees
+                User::whereIn('id', $userIds)
+                    ->update([
+                        'is_approved' => false,
+                        'approved_at' => null,
+                        'is_active' => false,
+                    ]);
+
+                // Deactivate all employee schedules for these users
+                \App\Models\EmployeeSchedule::whereIn('user_id', $userIds)
+                    ->update(['is_active' => false]);
+            });
+
+            // Send notification emails if requested
+            if ($sendEmail) {
+                foreach ($usersToUnapprove as $user) {
+                    if ($user->hired_date) {
+                        $this->sendAccessRevokedEmail($user);
+                        $emailsSent++;
+                    }
+                }
+            }
+
+            $message = "{$count} user account(s) revoked, employees and schedules deactivated";
+            if ($sendEmail && $emailsSent > 0) {
+                $message .= ". {$emailsSent} notification email(s) sent.";
+            }
 
             return back()->with('flash', [
-                'message' => "{$count} user account(s) approval revoked successfully",
+                'message' => $message,
                 'type' => 'success'
             ]);
         } catch (\Exception $e) {
@@ -635,6 +684,24 @@ class AccountController extends Controller
                 'message' => 'Failed to revoke approval for selected accounts',
                 'type' => 'error'
             ]);
+        }
+    }
+
+    /**
+     * Send access revoked notification email to the employee.
+     */
+    protected function sendAccessRevokedEmail(User $employee): void
+    {
+        try {
+            $revokedBy = auth()->user()->name ?? 'System';
+            $department = $employee->role;
+
+            Mail::to($employee->email)
+                ->queue(new EmployeeAccessRevoked($employee, $department, $revokedBy));
+
+            Log::info('Access revoked email queued for employee: ' . $employee->name);
+        } catch (\Exception $e) {
+            Log::error('Failed to send access revoked email: ' . $e->getMessage());
         }
     }
 }

@@ -1,0 +1,590 @@
+import React, { useState, useCallback, useMemo } from 'react';
+import { Head, Link, router } from '@inertiajs/react';
+import AppLayout from '@/layouts/app-layout';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import {
+    Table,
+    TableBody,
+    TableCell,
+    TableHead,
+    TableHeader,
+    TableRow,
+} from '@/components/ui/table';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Separator } from '@/components/ui/separator';
+import { Search, Download, Eye, Filter, X, ChevronsUpDown, Check } from 'lucide-react';
+import { toast } from 'sonner';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
+import { PageHeader } from '@/components/PageHeader';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import PaginationNav from '@/components/pagination-nav';
+import { index as leaveIndexRoute } from '@/routes/leave-requests';
+import { format } from 'date-fns';
+import { Progress } from '@/components/ui/progress';
+
+interface CreditData {
+    id: number;
+    name: string;
+    email: string;
+    role: string;
+    hired_date: string;
+    is_eligible: boolean;
+    eligibility_date: string;
+    monthly_rate: number;
+    total_earned: number;
+    total_used: number;
+    balance: number;
+}
+
+interface PaginationLink {
+    url: string | null;
+    label: string;
+    active: boolean;
+}
+
+interface PaginationMeta {
+    current_page: number;
+    last_page: number;
+    per_page: number;
+    total: number;
+}
+
+interface Employee {
+    id: number;
+    name: string;
+    email: string;
+}
+
+interface Props {
+    creditsData: {
+        data: CreditData[];
+        links?: PaginationLink[];
+        meta?: PaginationMeta;
+    };
+    allEmployees: Employee[];
+    filters: {
+        year: number;
+        search: string;
+        role: string;
+        eligibility: string;
+    };
+    availableYears: number[];
+}
+
+export default function Index({ creditsData, allEmployees, filters, availableYears }: Props) {
+    const { title, breadcrumbs } = usePageMeta({
+        title: 'Leave Credits',
+        breadcrumbs: [
+            { title: 'Form Requests', href: '/form-requests' },
+            { title: 'Leave Requests', href: leaveIndexRoute().url },
+            { title: 'Leave Credits', href: '/form-requests/leave-requests/credits' },
+        ],
+    });
+
+    useFlashMessage();
+    const isPageLoading = usePageLoading();
+
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState(filters.search || '');
+    const [yearFilter, setYearFilter] = useState(filters.year.toString());
+    const [roleFilter, setRoleFilter] = useState(filters.role || 'all');
+    const [eligibilityFilter, setEligibilityFilter] = useState(filters.eligibility || 'all');
+
+    // Popover search state
+    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+
+    // Export dialog state
+    const [showExportDialog, setShowExportDialog] = useState(false);
+    const [exportYear, setExportYear] = useState(new Date().getFullYear());
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportProgress, setExportProgress] = useState({ percent: 0, status: '' });
+
+    // Filter employees based on search query (from all employees list)
+    const filteredEmployees = useMemo(() => {
+        if (!employeeSearchQuery) return allEmployees.slice(0, 20);
+        return allEmployees.filter(emp =>
+            emp.name.toLowerCase().includes(employeeSearchQuery.toLowerCase()) ||
+            emp.email.toLowerCase().includes(employeeSearchQuery.toLowerCase())
+        ).slice(0, 20);
+    }, [allEmployees, employeeSearchQuery]);
+
+    // Get selected employee name
+    const selectedEmployee = useMemo(() => {
+        if (!selectedEmployeeId) return null;
+        return allEmployees.find(emp => emp.id.toString() === selectedEmployeeId);
+    }, [allEmployees, selectedEmployeeId]);
+
+    const showClearFilters = selectedEmployeeId || roleFilter !== 'all' || eligibilityFilter !== 'all' || yearFilter !== new Date().getFullYear().toString();
+
+    const buildFilterParams = useCallback(() => {
+        const params: Record<string, string> = {};
+        if (selectedEmployeeId) params.search = selectedEmployeeId;
+        if (yearFilter) params.year = yearFilter;
+        if (roleFilter !== 'all') params.role = roleFilter;
+        if (eligibilityFilter !== 'all') params.eligibility = eligibilityFilter;
+        return params;
+    }, [selectedEmployeeId, yearFilter, roleFilter, eligibilityFilter]);
+
+    const applyFilters = useCallback(() => {
+        router.get('/form-requests/leave-requests/credits', buildFilterParams(), {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    }, [buildFilterParams]);
+
+    const clearFilters = () => {
+        setSelectedEmployeeId('');
+        setYearFilter(new Date().getFullYear().toString());
+        setRoleFilter('all');
+        setEligibilityFilter('all');
+        router.get('/form-requests/leave-requests/credits', {}, {
+            preserveState: true,
+            preserveScroll: true,
+        });
+    };
+
+    // Export handlers
+    const startExport = async () => {
+        setIsExporting(true);
+        setExportProgress({ percent: 0, status: 'Starting export...' });
+
+        try {
+            const response = await fetch('/form-requests/leave-requests/export/credits', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                body: JSON.stringify({ year: exportYear }),
+            });
+
+            if (!response.ok) throw new Error('Failed to start export');
+
+            const { job_id } = await response.json();
+            pollExportProgress(job_id);
+        } catch {
+            toast.error('Failed to start export');
+            setIsExporting(false);
+        }
+    };
+
+    const pollExportProgress = async (jobId: string) => {
+        const checkProgress = async () => {
+            try {
+                const response = await fetch(`/form-requests/leave-requests/export/credits/progress?job_id=${jobId}`);
+                const progress = await response.json();
+
+                setExportProgress({ percent: progress.percent, status: progress.status });
+
+                if (progress.finished) {
+                    if (progress.error) {
+                        toast.error('Export failed: ' + progress.status);
+                        setIsExporting(false);
+                    } else if (progress.downloadUrl) {
+                        window.location.href = progress.downloadUrl;
+                        toast.success('Export completed! Download started.');
+                        setIsExporting(false);
+                        setShowExportDialog(false);
+                    }
+                } else {
+                    setTimeout(checkProgress, 1000);
+                }
+            } catch {
+                toast.error('Error checking export progress');
+                setIsExporting(false);
+            }
+        };
+
+        checkProgress();
+    };
+
+    const getRoleBadgeVariant = (role: string) => {
+        const variants: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
+            'Super Admin': 'destructive',
+            'Admin': 'destructive',
+            'HR': 'default',
+            'Team Lead': 'default',
+            'Agent': 'secondary',
+            'IT': 'outline',
+            'Utility': 'outline',
+        };
+        return variants[role] || 'secondary';
+    };
+
+    return (
+        <AppLayout breadcrumbs={breadcrumbs}>
+            <Head title={title} />
+            <LoadingOverlay isLoading={isPageLoading} />
+
+            <div className="flex flex-col gap-6 p-4 md:p-6">
+                <PageHeader
+                    title="Leave Credits"
+                    description="View all employees' leave credit balances and history"
+                />
+
+                {/* Filters */}
+                <Card>
+                    <CardHeader className="pb-3">
+                        <CardTitle className="text-lg flex items-center gap-2">
+                            <Filter className="h-4 w-4" />
+                            Filters
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div className="flex flex-col sm:flex-row gap-4">
+                            <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={isEmployeePopoverOpen}
+                                        className="w-full sm:w-64 justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedEmployee
+                                                ? selectedEmployee.name
+                                                : "All Employees"}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full sm:w-64 p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search employee..."
+                                            value={employeeSearchQuery}
+                                            onValueChange={setEmployeeSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No employee found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="all"
+                                                    onSelect={() => {
+                                                        setSelectedEmployeeId('');
+                                                        setIsEmployeePopoverOpen(false);
+                                                        setEmployeeSearchQuery('');
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${!selectedEmployeeId ? "opacity-100" : "opacity-0"}`}
+                                                    />
+                                                    All Employees
+                                                </CommandItem>
+                                                {filteredEmployees.map((employee) => (
+                                                    <CommandItem
+                                                        key={employee.id}
+                                                        value={employee.name}
+                                                        onSelect={() => {
+                                                            setSelectedEmployeeId(employee.id.toString());
+                                                            setIsEmployeePopoverOpen(false);
+                                                            setEmployeeSearchQuery('');
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedEmployeeId === employee.id.toString()
+                                                                ? "opacity-100"
+                                                                : "opacity-0"
+                                                                }`}
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span>{employee.name}</span>
+                                                            <span className="text-xs text-muted-foreground">{employee.email}</span>
+                                                        </div>
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+
+                            <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v); }}>
+                                <SelectTrigger className="w-full sm:w-32">
+                                    <SelectValue placeholder="Year" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {availableYears.map((year) => (
+                                        <SelectItem key={year} value={year.toString()}>
+                                            {year}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={roleFilter} onValueChange={setRoleFilter}>
+                                <SelectTrigger className="w-full sm:w-40">
+                                    <SelectValue placeholder="Role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Roles</SelectItem>
+                                    <SelectItem value="Super Admin">Super Admin</SelectItem>
+                                    <SelectItem value="Admin">Admin</SelectItem>
+                                    <SelectItem value="HR">HR</SelectItem>
+                                    <SelectItem value="Team Lead">Team Lead</SelectItem>
+                                    <SelectItem value="Agent">Agent</SelectItem>
+                                    <SelectItem value="IT">IT</SelectItem>
+                                    <SelectItem value="Utility">Utility</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={eligibilityFilter} onValueChange={setEligibilityFilter}>
+                                <SelectTrigger className="w-full sm:w-40">
+                                    <SelectValue placeholder="Eligibility" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All</SelectItem>
+                                    <SelectItem value="eligible">Eligible</SelectItem>
+                                    <SelectItem value="not_eligible">Not Eligible</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Button onClick={applyFilters}>
+                                <Search className="h-4 w-4 mr-2" />
+                                Search
+                            </Button>
+
+                            {showClearFilters && (
+                                <Button variant="outline" onClick={clearFilters}>
+                                    <X className="h-4 w-4 mr-2" />
+                                    Clear
+                                </Button>
+                            )}
+                        </div>
+
+                        <div className="flex justify-end mt-4">
+                            <Button variant="outline" onClick={() => setShowExportDialog(true)}>
+                                <Download className="h-4 w-4 mr-2" />
+                                Export to Excel
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+
+                {/* Desktop Table */}
+                <div className="hidden md:block">
+                    <Card>
+                        <Table>
+                            <TableHeader>
+                                <TableRow>
+                                    <TableHead>Employee</TableHead>
+                                    <TableHead>Role</TableHead>
+                                    <TableHead>Hire Date</TableHead>
+                                    <TableHead className="text-center">Eligibility</TableHead>
+                                    <TableHead className="text-right">Rate/Month</TableHead>
+                                    <TableHead className="text-right">Earned</TableHead>
+                                    <TableHead className="text-right">Used</TableHead>
+                                    <TableHead className="text-right">Balance</TableHead>
+                                    <TableHead className="text-center">Actions</TableHead>
+                                </TableRow>
+                            </TableHeader>
+                            <TableBody>
+                                {creditsData.data.length === 0 ? (
+                                    <TableRow>
+                                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                                            No employees found
+                                        </TableCell>
+                                    </TableRow>
+                                ) : (
+                                    creditsData.data.map((employee) => (
+                                        <TableRow key={employee.id}>
+                                            <TableCell>
+                                                <div>
+                                                    <p className="font-medium">{employee.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{employee.email}</p>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={getRoleBadgeVariant(employee.role)}>
+                                                    {employee.role}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>{format(new Date(employee.hired_date), 'MMM d, yyyy')}</TableCell>
+                                            <TableCell className="text-center">
+                                                {employee.is_eligible ? (
+                                                    <Badge variant="default" className="bg-green-600">Eligible</Badge>
+                                                ) : (
+                                                    <Badge variant="secondary">
+                                                        {format(new Date(employee.eligibility_date), 'MMM d, yyyy')}
+                                                    </Badge>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right">{employee.monthly_rate}</TableCell>
+                                            <TableCell className="text-right font-medium text-green-600">
+                                                +{employee.total_earned.toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="text-right font-medium text-orange-600">
+                                                -{employee.total_used.toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="text-right font-bold">
+                                                {employee.balance.toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
+                                                    <Button variant="ghost" size="sm">
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                </Link>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                )}
+                            </TableBody>
+                        </Table>
+                    </Card>
+                </div>
+
+                {/* Mobile Cards */}
+                <div className="md:hidden space-y-4">
+                    {creditsData.data.length === 0 ? (
+                        <Card>
+                            <CardContent className="py-8 text-center text-muted-foreground">
+                                No employees found
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        creditsData.data.map((employee) => (
+                            <Card key={employee.id}>
+                                <CardContent className="p-4 space-y-3">
+                                    <div className="flex justify-between items-start">
+                                        <div>
+                                            <p className="font-medium">{employee.name}</p>
+                                            <p className="text-xs text-muted-foreground">{employee.email}</p>
+                                        </div>
+                                        <Badge variant={getRoleBadgeVariant(employee.role)}>
+                                            {employee.role}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-2 text-sm">
+                                        <div>
+                                            <p className="text-muted-foreground">Hired</p>
+                                            <p>{format(new Date(employee.hired_date), 'MMM d, yyyy')}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-muted-foreground">Status</p>
+                                            {employee.is_eligible ? (
+                                                <Badge variant="default" className="bg-green-600">Eligible</Badge>
+                                            ) : (
+                                                <Badge variant="secondary">Not Eligible</Badge>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <Separator />
+
+                                    <div className="grid grid-cols-4 gap-2 text-center">
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Rate</p>
+                                            <p className="font-medium">{employee.monthly_rate}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Earned</p>
+                                            <p className="font-medium text-green-600">+{employee.total_earned.toFixed(1)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Used</p>
+                                            <p className="font-medium text-orange-600">-{employee.total_used.toFixed(1)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-xs text-muted-foreground">Balance</p>
+                                            <p className="font-bold">{employee.balance.toFixed(2)}</p>
+                                        </div>
+                                    </div>
+
+                                    <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
+                                        <Button variant="outline" size="sm" className="w-full">
+                                            <Eye className="h-4 w-4 mr-2" />
+                                            View History
+                                        </Button>
+                                    </Link>
+                                </CardContent>
+                            </Card>
+                        ))
+                    )}
+                </div>
+
+                {/* Pagination */}
+                <div className="flex justify-center mt-4">
+                    {creditsData.links && creditsData.links.length > 0 && (
+                        <PaginationNav links={creditsData.links} only={["creditsData"]} />
+                    )}
+                </div>
+            </div>
+
+            {/* Export Dialog */}
+            <Dialog open={showExportDialog} onOpenChange={setShowExportDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Export Leave Credits Summary</DialogTitle>
+                        <DialogDescription>
+                            Export a summary of all employee leave credits for a specific year to Excel.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {!isExporting ? (
+                        <div className="space-y-4 py-4">
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Select Year</label>
+                                <Select value={exportYear.toString()} onValueChange={(v) => setExportYear(parseInt(v))}>
+                                    <SelectTrigger>
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {availableYears.map((year) => (
+                                            <SelectItem key={year} value={year.toString()}>
+                                                {year}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+
+                            <Button onClick={startExport} className="w-full">
+                                <Download className="h-4 w-4 mr-2" />
+                                Start Export
+                            </Button>
+                        </div>
+                    ) : (
+                        <div className="space-y-4 py-4">
+                            <Progress value={exportProgress.percent} />
+                            <p className="text-sm text-center text-muted-foreground">
+                                {exportProgress.status}
+                            </p>
+                        </div>
+                    )}
+                </DialogContent>
+            </Dialog>
+        </AppLayout>
+    );
+}

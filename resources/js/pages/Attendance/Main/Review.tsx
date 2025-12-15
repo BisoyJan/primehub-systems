@@ -379,6 +379,29 @@ export default function AttendanceReview() {
     const [isWarningsDialogOpen, setIsWarningsDialogOpen] = useState(false);
     const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(null);
     const highlightedRowRef = React.useRef<HTMLTableRowElement | HTMLDivElement>(null);
+    const [noteDialogOpen, setNoteDialogOpen] = useState(false);
+    const [selectedNote, setSelectedNote] = useState<string>("");
+
+    // Helper to display notes - truncate if longer than 10 characters
+    const NotesDisplay = ({ notes }: { notes: string | undefined }) => {
+        if (!notes) return <span className="text-muted-foreground">-</span>;
+
+        if (notes.length <= 10) {
+            return <span className="text-sm">{notes}</span>;
+        }
+
+        return (
+            <button
+                onClick={() => {
+                    setSelectedNote(notes);
+                    setNoteDialogOpen(true);
+                }}
+                className="text-sm text-primary hover:underline cursor-pointer text-left"
+            >
+                {notes.substring(0, 10)}...
+            </button>
+        );
+    };
 
     // Auto status suggestion state
     const [suggestedStatus, setSuggestedStatus] = useState<{
@@ -408,6 +431,7 @@ export default function AttendanceReview() {
         status: "",
         actual_time_in: "",
         actual_time_out: "",
+        notes: "",
         verification_notes: "",
         overtime_approved: false,
     });
@@ -485,6 +509,7 @@ export default function AttendanceReview() {
             status: suggestion.status, // Start with suggested status
             actual_time_in: timeIn,
             actual_time_out: timeOut,
+            notes: record.notes || "",
             verification_notes: record.verification_notes || "",
             overtime_approved: record.overtime_approved || false,
         });
@@ -915,6 +940,7 @@ export default function AttendanceReview() {
                                             <TableHead>Time Out</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Tardy/UT/OT</TableHead>
+                                            <TableHead>Notes</TableHead>
                                             <TableHead>Issue</TableHead>
                                             <TableHead>Actions</TableHead>
                                         </TableRow>
@@ -989,6 +1015,9 @@ export default function AttendanceReview() {
                                                             </div>
                                                         )}
                                                     </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <NotesDisplay notes={record.notes} />
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="space-y-1">
@@ -1142,6 +1171,12 @@ export default function AttendanceReview() {
                                                         </span>
                                                     )}
                                                 </div>
+                                            </div>
+                                        )}
+                                        {record.notes && (
+                                            <div>
+                                                <span className="font-medium">Notes:</span>{" "}
+                                                <NotesDisplay notes={record.notes} />
                                             </div>
                                         )}
                                     </div>
@@ -1368,6 +1403,12 @@ export default function AttendanceReview() {
                                                 {selectedRecord.bio_out_site?.name || "-"}
                                             </div>
                                         </>
+                                    )}
+                                    {selectedRecord.notes && (
+                                        <div className="col-span-2">
+                                            <span className="text-muted-foreground">Current Notes:</span>{" "}
+                                            <span className="text-foreground">{selectedRecord.notes}</span>
+                                        </div>
                                     )}
                                 </div>
                                 {selectedRecord.is_cross_site_bio && (
@@ -1726,6 +1767,27 @@ export default function AttendanceReview() {
                             </div>
                         )}
 
+                        {/* Notes */}
+                        <div className="space-y-2">
+                            <Label htmlFor="notes">
+                                Notes (Optional)
+                            </Label>
+                            <Textarea
+                                id="notes"
+                                value={data.notes}
+                                onChange={e => setData("notes", e.target.value)}
+                                placeholder="Add notes about this attendance record (e.g., reason for absence, special circumstances)..."
+                                rows={3}
+                                maxLength={500}
+                            />
+                            {errors.notes && (
+                                <p className="text-sm text-red-500">{errors.notes}</p>
+                            )}
+                            <p className="text-xs text-muted-foreground">
+                                {data.notes.length}/500 characters
+                            </p>
+                        </div>
+
                         {/* Verification Notes */}
                         <div className="space-y-2">
                             <Label htmlFor="verification_notes">
@@ -1876,6 +1938,19 @@ export default function AttendanceReview() {
                             </Button>
                         )}
                     </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Notes Dialog */}
+            <Dialog open={noteDialogOpen} onOpenChange={setNoteDialogOpen}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Attendance Notes</DialogTitle>
+                        <DialogDescription>Full notes for this attendance record</DialogDescription>
+                    </DialogHeader>
+                    <div className="p-4 bg-muted rounded-md">
+                        <p className="text-sm whitespace-pre-wrap">{selectedNote}</p>
+                    </div>
                 </DialogContent>
             </Dialog>
         </AppLayout>

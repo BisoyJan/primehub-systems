@@ -16,7 +16,7 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
             $table->foreignId('attendance_id')->nullable()->constrained()->onDelete('cascade');
             $table->date('shift_date');
-            $table->enum('point_type', ['whole_day_absence', 'half_day_absence', 'undertime', 'tardy']);
+            $table->enum('point_type', ['whole_day_absence', 'half_day_absence', 'undertime', 'undertime_more_than_hour', 'tardy']);
             $table->decimal('points', 3, 2); // 1.00, 0.50, 0.25
             $table->string('status')->nullable(); // attendance status reference
             $table->boolean('is_advised')->default(false);

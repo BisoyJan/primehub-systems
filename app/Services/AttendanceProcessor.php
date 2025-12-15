@@ -988,15 +988,18 @@ class AttendanceProcessor
             $attendance->bio_out_site_id = $biometricSiteId;
             $attendance->is_cross_site_bio = $isCrossSite;
 
-            // Check for undertime (> 60 minutes early)
-            if ($timeDiffMinutes < -60) {
+            // Check for undertime (any early departure)
+            // 1-60 minutes early = undertime (0.25 pts)
+            // 61+ minutes early = undertime_more_than_hour (0.50 pts)
+            if ($timeDiffMinutes < 0) {
                 $attendance->undertime_minutes = abs($timeDiffMinutes);
+                $undertimeStatus = abs($timeDiffMinutes) > 60 ? 'undertime_more_than_hour' : 'undertime';
                 if ($attendance->status === 'on_time') {
-                    $attendance->status = 'undertime';
+                    $attendance->status = $undertimeStatus;
                 }
                 // If primary status is tardy or half_day_absence, add undertime as secondary
                 elseif (in_array($attendance->status, ['tardy', 'half_day_absence'])) {
-                    $attendance->secondary_status = 'undertime';
+                    $attendance->secondary_status = $undertimeStatus;
                 }
             } else {
                 // Not enough undertime, clear it
@@ -1460,7 +1463,7 @@ class AttendanceProcessor
         // Get attendance records for this shift date that need points
         // ONLY process records that are admin verified
         $attendances = Attendance::where('shift_date', $shiftDate)
-            ->whereIn('status', ['ncns', 'half_day_absence', 'tardy', 'undertime'])
+            ->whereIn('status', ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour'])
             ->where('admin_verified', true)
             ->get();
 
@@ -1548,6 +1551,7 @@ class AttendanceProcessor
             'half_day_absence' => 'half_day_absence',
             'tardy' => 'tardy',
             'undertime' => 'undertime',
+            'undertime_more_than_hour' => 'undertime_more_than_hour',
             default => 'whole_day_absence',
         };
     }
@@ -1589,7 +1593,14 @@ class AttendanceProcessor
             ),
 
             'undertime' => sprintf(
-                "Undertime: Left %d minutes early (more than 1 hour before scheduled end). Scheduled: %s, Actual: %s.",
+                "Undertime: Left %d minutes early (up to 1 hour before scheduled end). Scheduled: %s, Actual: %s.",
+                $attendance->undertime_minutes ?? 0,
+                $scheduledOut,
+                $actualOut
+            ),
+
+            'undertime_more_than_hour' => sprintf(
+                "Undertime (>1 Hour): Left %d minutes early (more than 1 hour before scheduled end). Scheduled: %s, Actual: %s.",
                 $attendance->undertime_minutes ?? 0,
                 $scheduledOut,
                 $actualOut
@@ -1616,7 +1627,7 @@ class AttendanceProcessor
         ]);
 
         // Only generate points for statuses that require them
-        if (!in_array($attendance->status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'advised_absence'])) {
+        if (!in_array($attendance->status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'])) {
             \Log::info('Status does not require points', ['status' => $attendance->status]);
             return;
         }

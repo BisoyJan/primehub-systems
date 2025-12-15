@@ -13,11 +13,12 @@ import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Label, RadialBar, RadialBarChart, PolarGrid, Area, AreaChart, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
 
-import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList, Building2, Users } from 'lucide-react';
+import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList, Building2, Users, UserCheck, UserX, UserMinus, AlertTriangle, TrendingUp, Award } from 'lucide-react';
 import type { SharedData, UserRole } from '@/types';
 
 //
 import { dashboard } from '@/routes';
+import { show as attendancePointsShow } from '@/routes/attendance-points';
 import type { BreadcrumbItem } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -133,6 +134,68 @@ interface DashboardProps {
     campaignId?: string;
     verificationFilter: string;
     isRestrictedRole: boolean;
+    presenceInsights?: {
+        todayPresence: {
+            total_scheduled: number;
+            present: number;
+            absent: number;
+            on_leave: number;
+            unaccounted: number;
+        };
+        leaveCalendar: Array<{
+            id: number;
+            user_id: number;
+            user_name: string;
+            user_role: string;
+            leave_type: string;
+            start_date: string;
+            end_date: string;
+            days_requested: number;
+            reason: string;
+        }>;
+        attendancePoints: {
+            total_active_points: number;
+            total_violations: number;
+            high_risk_count: number;
+            high_risk_employees: Array<{
+                user_id: number;
+                user_name: string;
+                user_role: string;
+                total_points: number;
+                violations_count: number;
+                points: Array<{
+                    id: number;
+                    shift_date: string;
+                    point_type: string;
+                    points: number;
+                    violation_details: string;
+                    expires_at: string;
+                }>;
+            }>;
+            by_type: {
+                whole_day_absence: number;
+                half_day_absence: number;
+                tardy: number;
+                undertime: number;
+                undertime_more_than_hour: number;
+            };
+            trend: Array<{
+                month: string;
+                label: string;
+                total_points: number;
+                violations_count: number;
+            }>;
+        };
+    };
+    leaveCredits?: {
+        year: number;
+        is_eligible: boolean;
+        eligibility_date: string | null;
+        monthly_rate: number;
+        total_earned: number;
+        total_used: number;
+        balance: number;
+    };
 }
 
 interface StatCardProps {
@@ -217,15 +280,15 @@ declare global {
 }
 
 // Define available tabs for each role
-type TabType = 'infrastructure' | 'attendance' | 'it-concerns';
+type TabType = 'infrastructure' | 'attendance' | 'it-concerns' | 'presence-insights';
 
 const ROLE_TABS: Record<UserRole, TabType[]> = {
-    'Super Admin': ['infrastructure', 'attendance', 'it-concerns'],
-    'Admin': ['attendance', 'infrastructure'],
+    'Super Admin': ['infrastructure', 'attendance', 'presence-insights', 'it-concerns'],
+    'Admin': ['attendance', 'presence-insights', 'infrastructure'],
     'IT': ['infrastructure', 'it-concerns', 'attendance'],
-    'Team Lead': ['attendance'],
+    'Team Lead': ['attendance', 'presence-insights'],
     'Agent': ['attendance'],
-    'HR': ['attendance'],
+    'HR': ['attendance', 'presence-insights'],
     'Utility': ['attendance'],
 };
 
@@ -233,6 +296,7 @@ const TAB_CONFIG: Record<TabType, { label: string; icon: React.ComponentType<{ c
     'infrastructure': { label: 'Infrastructure', icon: Building2 },
     'attendance': { label: 'Attendance', icon: Users },
     'it-concerns': { label: 'IT Concerns', icon: ClipboardList },
+    'presence-insights': { label: 'Presence Insights', icon: UserCheck },
 };
 
 export default function Dashboard({
@@ -255,6 +319,8 @@ export default function Dashboard({
     verificationFilter: initialVerificationFilter,
     campaigns,
     isRestrictedRole,
+    presenceInsights,
+    leaveCredits,
 }: DashboardProps) {
     // Get user role from shared data
     const { auth } = usePage<SharedData>().props;
@@ -457,6 +523,8 @@ export default function Dashboard({
     //
     const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(null);
     const [selectedNoPcSite, setSelectedNoPcSite] = useState<string | null>(null);
+    const [calendarDate, setCalendarDate] = useState(new Date());
+    const [presenceDate, setPresenceDate] = useState(new Date().toISOString().split('T')[0]);
 
     const closeDialog = () => {
         setActiveDialog(null);
@@ -471,6 +539,45 @@ export default function Dashboard({
     const handleTrendNext = () => {
         setItTrendSlideIndex((prev) => (prev === itTrendSlides.length - 1 ? 0 : prev + 1));
     };
+
+    const handlePrevMonth = () => {
+        setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
+    };
+
+    const handleNextMonth = () => {
+        setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
+    };
+
+    const handleToday = () => {
+        setCalendarDate(new Date());
+    };
+
+    const handlePresenceDateChange = (newDate: string) => {
+        setPresenceDate(newDate);
+        router.reload({
+            data: {
+                presence_date: newDate,
+            },
+            only: ["presenceInsights"],
+        });
+    };
+
+    // Filter leaves by selected calendar month
+    const filteredLeaves = useMemo(() => {
+        if (!presenceInsights?.leaveCalendar) return [];
+
+        const year = calendarDate.getFullYear();
+        const month = calendarDate.getMonth();
+        const firstDay = new Date(year, month, 1);
+        const lastDay = new Date(year, month + 1, 0);
+
+        return presenceInsights.leaveCalendar.filter(leave => {
+            const start = new Date(leave.start_date);
+            const end = new Date(leave.end_date);
+            // Check if leave overlaps with selected month
+            return start <= lastDay && end >= firstDay;
+        });
+    }, [presenceInsights?.leaveCalendar, calendarDate]);
 
     // Calculate attendance trend data
     const attendanceTrendData = (() => {
@@ -657,7 +764,7 @@ export default function Dashboard({
                         animate={{ opacity: 1, y: 0 }}
                         transition={{ duration: 0.3, delay: 0.2 }}
                     >
-                        <TabsList className="grid w-full max-w-md" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
+                        <TabsList className="grid w-full max-w-3xl" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
                             {availableTabs.map((tab) => {
                                 const config = TAB_CONFIG[tab];
                                 const Icon = config.icon;
@@ -914,6 +1021,349 @@ export default function Dashboard({
                         </TabsContent>
                     )}
 
+                    {/* Presence Insights Tab */}
+                    {availableTabs.includes('presence-insights') && (
+                        <TabsContent value="presence-insights" className="space-y-6">
+                            <motion.div
+                                initial={{ opacity: 0, y: 20 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                transition={{ duration: 0.3 }}
+                            >
+                                {/* Today's Presence Overview */}
+                                <Card className="mb-6">
+                                    <CardHeader>
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                            <div>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <UserCheck className="h-5 w-5" />
+                                                    Presence Overview
+                                                </CardTitle>
+                                                <CardDescription>Employee presence status for {new Date(presenceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</CardDescription>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => handlePresenceDateChange(new Date().toISOString().split('T')[0])}
+                                                >
+                                                    Today
+                                                </Button>
+                                                <input
+                                                    type="date"
+                                                    value={presenceDate}
+                                                    onChange={(e) => handlePresenceDateChange(e.target.value)}
+                                                    className="h-9 px-3 border rounded-md text-sm"
+                                                    title="Select date"
+                                                />
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                                            <StatCard
+                                                title="Total Scheduled"
+                                                value={presenceInsights?.todayPresence.total_scheduled || 0}
+                                                icon={Users}
+                                                description="Active employees"
+                                                onClick={() => { }}
+                                                delay={0}
+                                            />
+                                            <StatCard
+                                                title="Present"
+                                                value={presenceInsights?.todayPresence.present || 0}
+                                                icon={UserCheck}
+                                                description="Currently at work"
+                                                onClick={() => setActiveDialog('presentEmployees')}
+                                                variant="success"
+                                                delay={0.05}
+                                            />
+                                            <StatCard
+                                                title="Absent"
+                                                value={presenceInsights?.todayPresence.absent || 0}
+                                                icon={UserX}
+                                                description="Not reported"
+                                                onClick={() => setActiveDialog('absentEmployees')}
+                                                variant="danger"
+                                                delay={0.1}
+                                            />
+                                            <StatCard
+                                                title="On Leave"
+                                                value={presenceInsights?.todayPresence.on_leave || 0}
+                                                icon={UserMinus}
+                                                description="Approved leaves"
+                                                onClick={() => { }}
+                                                variant="warning"
+                                                delay={0.15}
+                                            />
+                                            <StatCard
+                                                title="Unaccounted"
+                                                value={presenceInsights?.todayPresence.unaccounted || 0}
+                                                icon={AlertCircle}
+                                                description="No record yet"
+                                                onClick={() => { }}
+                                                variant={presenceInsights?.todayPresence.unaccounted ? "warning" : "default"}
+                                                delay={0.2}
+                                            />
+                                        </div>
+                                    </CardContent>
+                                </Card>
+
+                                {/* Leave Calendar Section */}
+                                <Card className="mb-6">
+                                    <CardHeader>
+                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                            <div>
+                                                <CardTitle className="flex items-center gap-2">
+                                                    <Calendar className="h-5 w-5" />
+                                                    Leave Calendar
+                                                </CardTitle>
+                                                <CardDescription>Employees on approved leave</CardDescription>
+                                            </div>
+                                            <div className="flex items-center gap-2">
+                                                <Button variant="outline" size="sm" onClick={handleToday}>
+                                                    Today
+                                                </Button>
+                                                <Button variant="outline" size="icon" onClick={handlePrevMonth}>
+                                                    <ChevronLeft className="h-4 w-4" />
+                                                </Button>
+                                                <div className="text-sm font-semibold min-w-[140px] text-center">
+                                                    {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                                                </div>
+                                                <Button variant="outline" size="icon" onClick={handleNextMonth}>
+                                                    <ChevronRight className="h-4 w-4" />
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        {(!filteredLeaves || filteredLeaves.length === 0) ? (
+                                            <div className="text-center text-muted-foreground py-8">
+                                                No employees on leave this month
+                                            </div>
+                                        ) : (
+                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                {/* Calendar Grid - Left Side */}
+                                                <div className="border rounded-lg p-4">
+                                                    {(() => {
+                                                        const today = new Date();
+                                                        const year = calendarDate.getFullYear();
+                                                        const month = calendarDate.getMonth();
+                                                        const firstDay = new Date(year, month, 1);
+                                                        const lastDay = new Date(year, month + 1, 0);
+                                                        const daysInMonth = lastDay.getDate();
+                                                        const startingDayOfWeek = firstDay.getDay();
+
+                                                        // Get leaves by date
+                                                        const leavesByDate: Record<string, typeof filteredLeaves> = {};
+                                                        filteredLeaves.forEach(leave => {
+                                                            const start = new Date(leave.start_date);
+                                                            const end = new Date(leave.end_date);
+                                                            const currentDate = new Date(start);
+
+                                                            while (currentDate <= end) {
+                                                                const dateKey = currentDate.toISOString().split('T')[0];
+                                                                if (!leavesByDate[dateKey]) {
+                                                                    leavesByDate[dateKey] = [];
+                                                                }
+                                                                leavesByDate[dateKey].push(leave);
+                                                                currentDate.setDate(currentDate.getDate() + 1);
+                                                            }
+                                                        });
+
+                                                        const dayNames = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+
+                                                        return (
+                                                            <div className="space-y-3">
+                                                                {/* Day names */}
+                                                                <div className="grid grid-cols-7 gap-1">
+                                                                    {dayNames.map((day, idx) => (
+                                                                        <div key={idx} className="text-center text-xs font-medium text-muted-foreground p-1">
+                                                                            {day}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                {/* Calendar days */}
+                                                                <div className="grid grid-cols-7 gap-1">
+                                                                    {/* Empty cells for days before month starts */}
+                                                                    {Array.from({ length: startingDayOfWeek }).map((_, i) => (
+                                                                        <div key={`empty-${i}`} className="aspect-square" />
+                                                                    ))}
+                                                                    {/* Actual days */}
+                                                                    {Array.from({ length: daysInMonth }).map((_, i) => {
+                                                                        const day = i + 1;
+                                                                        const dateObj = new Date(year, month, day);
+                                                                        const dateKey = dateObj.toISOString().split('T')[0];
+                                                                        const leavesOnDay = leavesByDate[dateKey] || [];
+                                                                        const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
+                                                                        const hasLeaves = leavesOnDay.length > 0;
+
+                                                                        return (
+                                                                            <div
+                                                                                key={day}
+                                                                                className={`
+                                                                                    aspect-square p-1 rounded flex items-center justify-center text-sm relative
+                                                                                    ${hasLeaves ? 'bg-orange-500/30 font-semibold text-orange-900 dark:text-orange-100' : 'text-muted-foreground'}
+                                                                                    ${isToday ? 'ring-2 ring-primary' : ''}
+                                                                                `}
+                                                                            >
+                                                                                {day}
+                                                                                {hasLeaves && leavesOnDay.length > 1 && (
+                                                                                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-orange-600 rounded-full text-[8px] text-white flex items-center justify-center">
+                                                                                        {leavesOnDay.length}
+                                                                                    </div>
+                                                                                )}
+                                                                            </div>
+                                                                        );
+                                                                    })}
+                                                                </div>
+                                                                {/* Legend */}
+                                                                <div className="flex flex-row gap-2 text-xs pt-2 border-t">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-4 h-4 rounded bg-orange-500/30" />
+                                                                        <span>On leave</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-4 h-4 rounded ring-2 ring-primary" />
+                                                                        <span>Today</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })()}
+                                                </div>
+
+                                                {/* Employee List - Right Side */}
+                                                <div className="border rounded-lg p-4 flex flex-col">
+                                                    <h4 className="text-sm font-semibold mb-3">All Leaves ({filteredLeaves.length})</h4>
+                                                    <div className="space-y-2 flex-1 overflow-y-auto pr-2">
+                                                        {filteredLeaves.map((leave) => (
+                                                            <div
+                                                                key={leave.id}
+                                                                className="p-3 border rounded-lg hover:bg-accent/50 cursor-pointer transition-colors text-sm"
+                                                                onClick={() => {
+                                                                    setActiveDialog('leaveDetail');
+                                                                    setSelectedVacantSite(leave.id.toString());
+                                                                }}
+                                                            >
+                                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                                    <span className="font-medium">{leave.user_name}</span>
+                                                                    <Badge variant="outline" className="text-xs shrink-0">{leave.leave_type}</Badge>
+                                                                </div>
+                                                                <div className="text-xs text-muted-foreground">
+                                                                    {Number(leave.days_requested) === 1
+                                                                        ? `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (1 day)`
+                                                                        : `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(Number(leave.days_requested))} days)`
+                                                                    }
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+
+                                {/* Attendance Points Section */}
+                                <Card>
+                                    <CardHeader>
+                                        <CardTitle className="flex items-center gap-2">
+                                            <AlertTriangle className="h-5 w-5" />
+                                            Attendance Points Overview
+                                        </CardTitle>
+                                        <CardDescription>Active attendance violations and high-risk employees</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="space-y-6">
+                                        {/* Summary Cards */}
+                                        <div className="grid gap-4 md:grid-cols-4">
+                                            <StatCard
+                                                title="Total Active Points"
+                                                value={presenceInsights?.attendancePoints.total_active_points.toFixed(1) || '0.0'}
+                                                icon={AlertTriangle}
+                                                description="All active violations"
+                                                onClick={() => setActiveDialog('pointsBreakdown')}
+                                                variant="warning"
+                                            />
+                                            <StatCard
+                                                title="Total Violations"
+                                                value={presenceInsights?.attendancePoints.total_violations || 0}
+                                                icon={XCircle}
+                                                description="Count of infractions"
+                                                onClick={() => setActiveDialog('pointsBreakdown')}
+                                            />
+                                            <StatCard
+                                                title="High Risk Employees"
+                                                value={presenceInsights?.attendancePoints.high_risk_count || 0}
+                                                icon={AlertCircle}
+                                                description="6+ points"
+                                                onClick={() => setActiveDialog('highRiskEmployees')}
+                                                variant={(presenceInsights?.attendancePoints.high_risk_count || 0) > 0 ? "danger" : "default"}
+                                            />
+                                            <StatCard
+                                                title="Points Trend"
+                                                value={
+                                                    <TrendingUp className="h-6 w-6 text-orange-500" />
+                                                }
+                                                icon={TrendingUp}
+                                                description="Last 6 months"
+                                                onClick={() => setActiveDialog('pointsTrend')}
+                                            />
+                                        </div>
+
+                                        {/* High Risk Employees Preview */}
+                                        {presenceInsights?.attendancePoints.high_risk_employees && presenceInsights.attendancePoints.high_risk_employees.length > 0 && (
+                                            <div className="space-y-3">
+                                                <div className="flex items-center justify-between">
+                                                    <h3 className="text-lg font-semibold">High Risk Employees (6+ Points)</h3>
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => setActiveDialog('highRiskEmployees')}
+                                                    >
+                                                        View All
+                                                    </Button>
+                                                </div>
+                                                <div className="grid gap-3 md:grid-cols-2">
+                                                    {presenceInsights.attendancePoints.high_risk_employees.slice(0, 4).map((emp) => (
+                                                        <Card key={emp.user_id} className="border-red-500/30">
+                                                            <CardHeader className="pb-3">
+                                                                <div className="flex items-start justify-between">
+                                                                    <div>
+                                                                        <CardTitle className="text-base">{emp.user_name}</CardTitle>
+                                                                        <CardDescription>{emp.user_role}</CardDescription>
+                                                                    </div>
+                                                                    <Badge variant="destructive" className="text-lg font-bold">
+                                                                        {emp.total_points} pts
+                                                                    </Badge>
+                                                                </div>
+                                                            </CardHeader>
+                                                            <CardContent>
+                                                                <div className="text-sm text-muted-foreground">
+                                                                    {emp.violations_count} violations
+                                                                </div>
+                                                                <Button
+                                                                    variant="link"
+                                                                    size="sm"
+                                                                    className="px-0 h-auto"
+                                                                    onClick={() => {
+                                                                        setActiveDialog('highRiskDetail');
+                                                                        setSelectedVacantSite(emp.user_id.toString());
+                                                                    }}
+                                                                >
+                                                                    View Details →
+                                                                </Button>
+                                                            </CardContent>
+                                                        </Card>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        </TabsContent>
+                    )}
+
                     {/* Attendance Tab */}
                     {availableTabs.includes('attendance') && (
                         <TabsContent value="attendance" className="space-y-6">
@@ -1091,6 +1541,59 @@ export default function Dashboard({
                                         </CardContent>
                                     </Card>
                                 </div>
+
+                                {/* Leave Credits Widget */}
+                                {leaveCredits && (
+                                    <Card>
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <CardTitle className="text-lg flex items-center gap-2">
+                                                        <Award className="h-5 w-5" />
+                                                        My Leave Credits
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        Year {leaveCredits.year} • Credits reset annually
+                                                    </CardDescription>
+                                                </div>
+                                                <a href="/form-requests/leave-requests/create" className="text-sm text-primary hover:underline">
+                                                    Request Leave →
+                                                </a>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            {!leaveCredits.is_eligible ? (
+                                                <div className="text-center py-4">
+                                                    <p className="text-muted-foreground">
+                                                        You will be eligible on <span className="font-medium">{leaveCredits.eligibility_date}</span>
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        (6 months after hire date)
+                                                    </p>
+                                                </div>
+                                            ) : (
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-muted-foreground uppercase">Rate/Month</p>
+                                                        <p className="text-2xl font-bold">{leaveCredits.monthly_rate}</p>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-muted-foreground uppercase">Earned</p>
+                                                        <p className="text-2xl font-bold text-green-600">+{leaveCredits.total_earned.toFixed(1)}</p>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-muted-foreground uppercase">Used</p>
+                                                        <p className="text-2xl font-bold text-orange-600">-{leaveCredits.total_used.toFixed(1)}</p>
+                                                    </div>
+                                                    <div className="text-center">
+                                                        <p className="text-xs text-muted-foreground uppercase">Balance</p>
+                                                        <p className="text-2xl font-bold text-primary">{leaveCredits.balance.toFixed(2)}</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                )}
 
                                 {/* Attendance Charts Section */}
                                 <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
@@ -1800,7 +2303,259 @@ export default function Dashboard({
                     </div>
                 </DetailDialog>
 
-                {/* DetailDialogs removed as requested */}
+                {/* Presence Insights Dialogs */}
+                <DetailDialog
+                    open={activeDialog === 'leaveDetail'}
+                    onClose={closeDialog}
+                    title="Leave Request Details"
+                >
+                    {(() => {
+                        const leave = filteredLeaves?.find(l => l.id.toString() === selectedVacantSite);
+                        if (!leave) return <div className="text-center text-muted-foreground py-4">Leave not found</div>;
+                        return (
+                            <div className="space-y-4">
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">Employee</div>
+                                    <div className="text-lg font-semibold">{leave.user_name}</div>
+                                    <div className="text-sm text-muted-foreground">{leave.user_role}</div>
+                                </div>
+                                <Separator />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <div className="text-sm font-medium text-muted-foreground">Leave Type</div>
+                                        <Badge variant="outline" className="mt-1">{leave.leave_type}</Badge>
+                                    </div>
+                                    <div>
+                                        <div className="text-sm font-medium text-muted-foreground">Duration</div>
+                                        <div className="mt-1">{leave.days_requested} day{leave.days_requested !== 1 ? 's' : ''}</div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="text-sm font-medium text-muted-foreground">Date Range</div>
+                                    <div className="flex items-center gap-2 mt-1">
+                                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                                        <span>{new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                        <span>→</span>
+                                        <span>{new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                    </div>
+                                </div>
+                                {leave.reason && (
+                                    <div>
+                                        <div className="text-sm font-medium text-muted-foreground">Reason</div>
+                                        <div className="mt-1 p-3 bg-muted rounded-md text-sm">
+                                            {leave.reason}
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })()}
+                </DetailDialog>
+
+                <DetailDialog
+                    open={activeDialog === 'highRiskEmployees'}
+                    onClose={closeDialog}
+                    title="High Risk Employees"
+                    description="Employees with 6 or more active attendance points"
+                >
+                    <div className="space-y-3">
+                        {(!presenceInsights?.attendancePoints.high_risk_employees || presenceInsights.attendancePoints.high_risk_employees.length === 0) ? (
+                            <div className="text-center text-muted-foreground py-8">
+                                <CheckCircle2 className="h-12 w-12 mx-auto mb-3 text-green-500" />
+                                <p>No high-risk employees at this time</p>
+                            </div>
+                        ) : (
+                            presenceInsights.attendancePoints.high_risk_employees.map((emp) => (
+                                <Card key={emp.user_id} className="border-red-500/30 cursor-pointer hover:bg-accent/50 transition-colors" onClick={() => {
+                                    setActiveDialog('highRiskDetail');
+                                    setSelectedVacantSite(emp.user_id.toString());
+                                }}>
+                                    <CardHeader className="pb-3">
+                                        <div className="flex items-start justify-between">
+                                            <div>
+                                                <CardTitle className="text-base">{emp.user_name}</CardTitle>
+                                                <CardDescription>{emp.user_role}</CardDescription>
+                                            </div>
+                                            <Badge variant="destructive" className="text-lg font-bold">
+                                                {emp.total_points} pts
+                                            </Badge>
+                                        </div>
+                                    </CardHeader>
+                                    <CardContent>
+                                        <div className="text-sm text-muted-foreground">
+                                            {emp.violations_count} active violations
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            ))
+                        )}
+                    </div>
+                </DetailDialog>
+
+                <DetailDialog
+                    open={activeDialog === 'highRiskDetail'}
+                    onClose={() => {
+                        setActiveDialog('highRiskEmployees');
+                        setSelectedVacantSite(null);
+                    }}
+                    title="Employee Violation Details"
+                >
+                    {(() => {
+                        const emp = presenceInsights?.attendancePoints.high_risk_employees.find(e => e.user_id.toString() === selectedVacantSite);
+                        if (!emp) return <div>Employee not found</div>;
+                        return (
+                            <div className="space-y-4">
+                                <div className="flex items-start justify-between">
+                                    <div>
+                                        <div className="text-lg font-semibold">{emp.user_name}</div>
+                                        <div className="text-sm text-muted-foreground">{emp.user_role}</div>
+                                    </div>
+                                    <Badge variant="destructive" className="text-xl font-bold px-4 py-2">
+                                        {emp.total_points} points
+                                    </Badge>
+                                </div>
+                                <Separator />
+                                <div>
+                                    <div className="text-sm font-medium mb-2">Total Violations: {emp.violations_count}</div>
+                                    <div className="text-sm text-muted-foreground mb-3">Recent violations (up to 5 shown):</div>
+                                    <div className="space-y-2">
+                                        {emp.points.map((point) => (
+                                            <div key={point.id} className="p-3 border rounded-lg space-y-1">
+                                                <div className="flex items-start justify-between">
+                                                    <div className="font-medium text-sm">
+                                                        {point.point_type.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                                                    </div>
+                                                    <Badge variant="outline">{point.points} pts</Badge>
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {new Date(point.shift_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {point.violation_details}
+                                                </div>
+                                                <div className="text-xs text-muted-foreground">
+                                                    Expires: {new Date(point.expires_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => router.get(attendancePointsShow({ user: emp.user_id }, { query: { show_all: 1 } }).url)}
+                                >
+                                    View Full History
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="w-full"
+                                    onClick={() => {
+                                        setActiveDialog('highRiskEmployees');
+                                        setSelectedVacantSite(null);
+                                    }}
+                                >
+                                    ← Back to List
+                                </Button>
+                            </div>
+                        );
+                    })()}
+                </DetailDialog>
+
+                <DetailDialog
+                    open={activeDialog === 'pointsBreakdown'}
+                    onClose={closeDialog}
+                    title="Points Breakdown by Type"
+                    description="Distribution of attendance points across violation types"
+                >
+                    <div className="space-y-3">
+                        {presenceInsights?.attendancePoints.by_type && (
+                            <>
+                                <div className="grid gap-3">
+                                    {[
+                                        { key: 'whole_day_absence', label: 'Whole Day Absence (NCNS/FTN)', color: 'bg-red-500' },
+                                        { key: 'half_day_absence', label: 'Half Day Absence', color: 'bg-orange-500' },
+                                        { key: 'tardy', label: 'Tardy', color: 'bg-yellow-500' },
+                                        { key: 'undertime', label: 'Undertime (≤1 hour)', color: 'bg-blue-500' },
+                                        { key: 'undertime_more_than_hour', label: 'Undertime (>1 hour)', color: 'bg-purple-500' },
+                                    ].map(({ key, label, color }) => {
+                                        const value = presenceInsights.attendancePoints.by_type[key as keyof typeof presenceInsights.attendancePoints.by_type];
+                                        const percentage = presenceInsights.attendancePoints.total_active_points > 0
+                                            ? ((value / presenceInsights.attendancePoints.total_active_points) * 100).toFixed(1)
+                                            : '0.0';
+                                        return (
+                                            <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`h-3 w-3 rounded-full ${color}`} />
+                                                    <span className="text-sm font-medium">{label}</span>
+                                                </div>
+                                                <div className="text-right">
+                                                    <div className="font-bold">{value.toFixed(1)} pts</div>
+                                                    <div className="text-xs text-muted-foreground">{percentage}%</div>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <Separator />
+                                <div className="flex items-center justify-between p-3 bg-muted rounded-lg font-semibold">
+                                    <span>Total Active Points</span>
+                                    <span className="text-lg">{presenceInsights.attendancePoints.total_active_points.toFixed(1)}</span>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                </DetailDialog>
+
+                <DetailDialog
+                    open={activeDialog === 'pointsTrend'}
+                    onClose={closeDialog}
+                    title="Attendance Points Trend"
+                    description="Monthly trend of attendance points over the last 6 months"
+                >
+                    <div className="space-y-4 max-h-[calc(80vh-200px)] overflow-y-auto">
+                        <ChartContainer
+                            config={{
+                                total_points: {
+                                    label: "Total Points",
+                                    color: "hsl(25, 95%, 53%)",
+                                },
+                                violations_count: {
+                                    label: "Violations",
+                                    color: "hsl(221, 83%, 53%)",
+                                },
+                            }}
+                            className="h-[250px] w-full"
+                        >
+                            <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={presenceInsights?.attendancePoints.trend || []} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
+                                    <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                                    <XAxis
+                                        dataKey="label"
+                                        tick={{ fontSize: 11 }}
+                                        className="text-muted-foreground"
+                                    />
+                                    <YAxis tick={{ fontSize: 11 }} className="text-muted-foreground" width={40} />
+                                    <ChartTooltip content={<ChartTooltipContent />} />
+                                    <Bar dataKey="total_points" fill="hsl(25, 95%, 53%)" radius={[4, 4, 0, 0]} />
+                                </BarChart>
+                            </ResponsiveContainer>
+                        </ChartContainer>
+                        <Separator />
+                        <div>
+                            <h4 className="text-sm font-semibold mb-3">Monthly Breakdown</h4>
+                            <div className="grid grid-cols-2 gap-3">
+                                {presenceInsights?.attendancePoints.trend?.map((item) => (
+                                    <div key={item.month} className="p-3 border rounded-lg">
+                                        <div className="text-sm font-medium">{item.label}</div>
+                                        <div className="text-2xl font-bold text-orange-600">{item.total_points}</div>
+                                        <div className="text-xs text-muted-foreground">{item.violations_count} violations</div>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </DetailDialog>
             </motion.div>
         </AppLayout>
     );

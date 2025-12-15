@@ -2,57 +2,72 @@
 
 ## Overview
 
-A comprehensive user account management system with role-based access control, approval workflow, activity logging, and profile management.
+A comprehensive user account management system with role-based access control, approval workflow, two-stage deletion process, activity logging, and profile management.
 
 ## What Was Implemented
 
 ### Backend (Laravel)
 
 1. **Database**
-   - `users` table with role, approval status, hired_date
+   - `users` table with role, approval status, employee active status, soft delete fields
    - `activity_log` table (via Spatie)
    - Two-factor authentication fields
 
 2. **Model (`app/Models/User.php`)**
    - Role-based access control methods
    - Permission checking methods
-   - Relationships (schedules, attendance, leaves, notifications)
+   - Soft delete methods: `isSoftDeleted()`, `isDeletionPending()`, `isDeletionConfirmed()`
+   - Scopes: `scopeActive()`, `scopeOnlyDeleted()`, `scopePendingDeletion()`
+   - Relationships (schedules, attendance, leaves, notifications, deletedBy, deletionConfirmedBy)
    - Activity logging trait
    - Two-factor authentication support
+   - Automatic name capitalization
 
 3. **Controllers**
-   - `AccountController.php` - User CRUD and approval
+   - `AccountController.php` - User CRUD, approval, bulk operations, deletion workflow, restoration
    - `ActivityLogController.php` - Audit trail viewing
-   - `Settings/ProfileController.php` - Profile management
+   - `Settings/AccountController.php` - Profile management
    - `Settings/PasswordController.php` - Password management
+   - `Settings/PreferencesController.php` - User preferences
 
 4. **Middleware**
-   - `CheckApproved.php` - Block unapproved users
+   - `EnsureUserIsApproved.php` - Block unapproved/deleted users
    - `CheckPermission.php` - Permission verification
    - `CheckRole.php` - Role verification
 
-5. **Services**
+5. **Policies**
+   - `UserPolicy.php` - User authorization rules
+
+6. **Mail**
+   - `EmployeeAccessRevoked.php` - Email when user is unapproved
+
+7. **Services**
    - `PermissionService.php` - Authorization logic
+   - `NotificationService.php` - In-app notifications for account events
 
 ### Frontend (React + TypeScript)
 
 1. **Account Pages** (`resources/js/pages/Account/`)
-   - `Index.tsx` - User list with search
+   - `Index.tsx` - User list with search, filters, bulk actions
    - `Create.tsx` - Add new user
-   - `Edit.tsx` - Modify user
+   - `Edit.tsx` - Modify user, approval actions, deletion
 
 2. **Activity Log Pages** (`resources/js/pages/Admin/ActivityLogs/`)
    - `Index.tsx` - Audit trail viewer
 
 3. **Settings Pages** (`resources/js/pages/settings/`)
-   - `profile.tsx` - Profile editor
+   - `account.tsx` - Profile editor
    - `password.tsx` - Password change
-   - `appearance.tsx` - UI preferences
+   - `preferences.tsx` - User preferences
+   - `appearance.tsx` - UI theme
+   - `two-factor.tsx` - 2FA management
 
 4. **Auth Pages** (`resources/js/pages/auth/`)
    - Login, Register, Password Reset
    - Two-Factor Authentication
    - Email Verification
+   - `pending-approval.tsx` - Pending approval message
+   - `account-deleted.tsx` - Deleted account with reactivation option
 
 ## Key Features
 
@@ -62,9 +77,12 @@ A comprehensive user account management system with role-based access control, a
 |---------|-------------|
 | Create | Add new users with role assignment |
 | Edit | Modify user details and role |
-| Delete | Remove user accounts |
+| Delete | Two-stage deletion (soft → confirm) |
+| Restore | Restore soft-deleted accounts |
+| Force Delete | Permanently remove confirmed-deleted accounts |
 | Search | Find users by name/email |
-| List | View all users with pagination |
+| Filter | By role, status, employee status |
+| Bulk Actions | Approve/unapprove multiple users |
 
 ### 2. Role System
 
@@ -78,16 +96,27 @@ A comprehensive user account management system with role-based access control, a
 | it | IT-focused access |
 | utility | Minimal access |
 
-### 3. Approval Workflow
+### 3. Account Lifecycle
 
 ```
-User Registers → Status: Pending
-→ Admin Reviews → Approve/Reject
-→ If Approved: Full Access
-→ If Rejected: Blocked
+User Registers → Status: Pending Approval
+→ Admin Approves → Full Access
+→ Admin Unapproves → Access Blocked (+ optional email)
+→ Admin Deletes → Status: Pending Deletion
+    → User Self-Reactivates (via /account/reactivate) → Restored
+    → Admin Restores → Restored
+    → Admin Confirms Delete → Status: Deleted (Confirmed)
+        → Admin Force Deletes → Permanently Removed
 ```
 
-### 4. Activity Logging
+### 4. Employee Active Status
+
+Separate from approval:
+- `is_active = true` - Employee can work normally
+- `is_active = false` - Employee schedules deactivated
+- Auto-set to false when unapproved or deletion confirmed
+
+### 5. Activity Logging
 
 All model changes are logged:
 - Created events
@@ -96,19 +125,24 @@ All model changes are logged:
 - Before/after values
 - User attribution
 
-### 5. Two-Factor Authentication
+### 6. Two-Factor Authentication
 
 - TOTP-based (Time-based One-Time Password)
 - Recovery codes
 - Configurable per user
 - Via Laravel Fortify
 
-### 6. Profile Management
+### 7. Profile Management
 
-- Update name and email
+- Update name and email (auto-capitalization)
 - Change password
 - Configure 2FA
 - Set time format preference
+- Theme preference
+
+### 8. Email Notifications
+
+- `EmployeeAccessRevoked` - Sent when admin unapproves user (optional)
 
 ## Database Schema
 
@@ -118,11 +152,16 @@ users (
     first_name, middle_name, last_name,
     email, email_verified_at,
     password,
-    role,                      -- enum: super_admin, admin, etc.
+    role,                      -- enum: super_admin, admin, team_lead, agent, hr, it, utility
     time_format,
     hired_date,
-    is_approved,               -- boolean
+    is_approved,               -- boolean (approval status)
+    is_active,                 -- boolean (employee active status)
     approved_at,
+    deleted_at,                -- timestamp (soft delete marker)
+    deleted_by,                -- foreignId (user who initiated deletion)
+    deletion_confirmed_at,     -- timestamp (when deletion was confirmed)
+    deletion_confirmed_by,     -- foreignId (user who confirmed deletion)
     remember_token,
     two_factor_secret,
     two_factor_recovery_codes,
@@ -146,33 +185,49 @@ activity_log (
 
 ```
 # Account Management
-GET    /accounts              - List users
-GET    /accounts/create       - Create form
-POST   /accounts              - Store user
-GET    /accounts/{id}/edit    - Edit form
-PUT    /accounts/{id}         - Update user
-DELETE /accounts/{id}         - Delete user
-POST   /accounts/{id}/approve - Approve user
-POST   /accounts/{id}/unapprove - Unapprove user
+GET    /accounts                     - List users
+GET    /accounts/create              - Create form
+POST   /accounts                     - Store user
+GET    /accounts/{id}/edit           - Edit form
+PUT    /accounts/{id}                - Update user
+DELETE /accounts/{id}                - Soft delete user
+POST   /accounts/{id}/approve        - Approve user
+POST   /accounts/{id}/unapprove      - Unapprove user (+ optional email)
+POST   /accounts/{id}/toggle-active  - Toggle employee active status
+POST   /accounts/bulk-approve        - Bulk approve users
+POST   /accounts/bulk-unapprove      - Bulk unapprove users
+POST   /accounts/{id}/confirm-delete - Confirm account deletion
+POST   /accounts/{id}/restore        - Restore deleted account
+DELETE /accounts/{id}/force-delete   - Permanently delete account
+
+# Account Reactivation (Guest)
+GET    /account/reactivate           - Reactivation page
+POST   /account/reactivate           - Process reactivation
 
 # Activity Logs
-GET    /activity-logs         - View logs
+GET    /activity-logs                - View logs
 
 # Settings
-GET    /settings              - Settings page
-PUT    /settings/profile      - Update profile
-PUT    /settings/password     - Update password
+GET    /settings                     - Redirect to /settings/account
+GET    /settings/account             - Account settings
+PATCH  /settings/account             - Update profile
+GET    /settings/password            - Password settings
+PUT    /settings/password            - Update password
+GET    /settings/preferences         - User preferences
+PATCH  /settings/preferences         - Update preferences
+GET    /settings/appearance          - Appearance settings
+GET    /settings/two-factor          - 2FA settings
 
 # Authentication
-GET    /login                 - Login page
-POST   /login                 - Authenticate
-POST   /logout                - Logout
-GET    /register              - Register page
-POST   /register              - Create account
-GET    /forgot-password       - Reset request
-POST   /forgot-password       - Send reset email
-GET    /reset-password/{token} - Reset form
-POST   /reset-password        - Update password
+GET    /login                        - Login page
+POST   /login                        - Authenticate
+POST   /logout                       - Logout
+GET    /register                     - Register page
+POST   /register                     - Create account
+GET    /forgot-password              - Reset request
+POST   /forgot-password              - Send reset email
+GET    /reset-password/{token}       - Reset form
+POST   /reset-password               - Update password
 ```
 
 ## Permissions
@@ -194,14 +249,31 @@ POST   /reset-password        - Update password
 
 ```
 User submits registration
-→ Account created (is_approved = false)
+→ Account created (is_approved = false, is_active = true)
 → User sees "Pending Approval" page
-→ Admin receives notification
+→ Admin receives notification (optional)
 → Admin approves user
 → User gains full access
 ```
 
-### 2. Activity Logging Flow
+### 2. Account Deletion Flow
+
+```
+Admin clicks "Delete"
+→ Account soft-deleted (deleted_at set, deleted_by recorded)
+→ User sees "Account Deleted" page with reactivation option
+→ User can self-reactivate via /account/reactivate
+    → Password reset required
+    → Account restored (deleted_at cleared)
+→ OR Admin confirms deletion
+    → deletion_confirmed_at set
+    → is_active set to false
+    → Schedules deactivated
+→ Admin can force-delete confirmed accounts
+    → Permanent removal from database
+```
+
+### 3. Activity Logging Flow
 
 ```
 Model change occurs
@@ -211,7 +283,7 @@ Model change occurs
 → Viewable in /activity-logs
 ```
 
-### 3. Permission Check Flow
+### 4. Permission Check Flow
 
 ```
 Request to protected route
@@ -232,16 +304,22 @@ app/
 │   │   ├── AccountController.php
 │   │   ├── ActivityLogController.php
 │   │   └── Settings/
-│   │       ├── ProfileController.php
-│   │       └── PasswordController.php
+│   │       ├── AccountController.php
+│   │       ├── PasswordController.php
+│   │       └── PreferencesController.php
 │   └── Middleware/
-│       ├── CheckApproved.php
+│       ├── EnsureUserIsApproved.php
 │       ├── CheckPermission.php
 │       └── CheckRole.php
+├── Policies/
+│   └── UserPolicy.php
+├── Mail/
+│   └── EmployeeAccessRevoked.php
 ├── Providers/
 │   └── FortifyServiceProvider.php
 └── Services/
-    └── PermissionService.php
+    ├── PermissionService.php
+    └── NotificationService.php
 ```
 
 ### Frontend
@@ -255,9 +333,11 @@ resources/js/pages/
 │   └── ActivityLogs/
 │       └── Index.tsx
 ├── settings/
-│   ├── profile.tsx
+│   ├── account.tsx
 │   ├── password.tsx
-│   └── appearance.tsx
+│   ├── preferences.tsx
+│   ├── appearance.tsx
+│   └── two-factor.tsx
 └── auth/
     ├── login.tsx
     ├── register.tsx
@@ -265,7 +345,9 @@ resources/js/pages/
     ├── reset-password.tsx
     ├── verify-email.tsx
     ├── confirm-password.tsx
-    └── two-factor-challenge.tsx
+    ├── two-factor-challenge.tsx
+    ├── pending-approval.tsx
+    └── account-deleted.tsx
 ```
 
 ### Configuration
@@ -276,19 +358,30 @@ config/
 └── activitylog.php       - Logging settings
 ```
 
-## User Relationships
+## User Model Methods
 
 ```php
-// One-to-Many
-$user->employeeSchedules  // Work schedules
-$user->attendances        // Attendance records
-$user->attendancePoints   // Violation points
-$user->leaveCredits       // Leave balances
-$user->leaveRequests      // Leave submissions
-$user->notifications      // User notifications
+// Soft Delete Status
+$user->isSoftDeleted();        // Is deleted_at set?
+$user->isDeletionPending();    // Deleted but not confirmed
+$user->isDeletionConfirmed();  // Deletion confirmed
 
-// Through Relationships
-$user->reviewedLeaveRequests  // Leaves reviewed by user
+// Scopes
+User::active()->get();          // Only is_active = true
+User::onlyDeleted()->get();     // Only soft-deleted
+User::pendingDeletion()->get(); // Only pending deletion
+
+// Relationships
+$user->employeeSchedules;       // Work schedules
+$user->activeSchedule;          // Currently active schedule
+$user->attendances;             // Attendance records
+$user->attendancePoints;        // Violation points
+$user->leaveCredits;            // Leave balances
+$user->leaveRequests;           // Leave submissions
+$user->notifications;           // User notifications
+$user->reviewedLeaveRequests;   // Leaves reviewed by user
+$user->deletedBy;               // User who deleted
+$user->deletionConfirmedBy;     // User who confirmed deletion
 ```
 
 ## Related Documentation
@@ -296,8 +389,10 @@ $user->reviewedLeaveRequests  // Leaves reviewed by user
 - [Authorization System](../authorization/README.md) - RBAC details
 - [Notification System](../NOTIFICATION_SYSTEM.md) - Notifications
 - [Leave Management](../leave/README.md) - Leave system
+- [API Routes](../api/ROUTES.md) - Complete routes reference
 
 ---
 
 **Implementation Date:** November 2025  
+**Last Updated:** December 2025  
 **Status:** ✅ Complete and Production Ready

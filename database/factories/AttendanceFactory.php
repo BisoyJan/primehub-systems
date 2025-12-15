@@ -133,14 +133,14 @@ class AttendanceFactory extends Factory
     }
 
     /**
-     * Indicate that the attendance has undertime.
+     * Indicate that the attendance has undertime (1-60 minutes early).
      */
     public function undertime(): static
     {
         return $this->state(function (array $attributes) {
             $shiftDate = Carbon::parse($attributes['shift_date']);
             $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attributes['scheduled_time_out']);
-            $undertimeMinutes = fake()->numberBetween(61, 120);
+            $undertimeMinutes = fake()->numberBetween(1, 60); // 1-60 minutes early = undertime
             $actualTimeOut = $scheduledTimeOut->copy()->subMinutes($undertimeMinutes);
 
             return [

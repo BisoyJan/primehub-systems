@@ -94,6 +94,43 @@ class LeaveRequestPolicy
     }
 
     /**
+     * Determine whether the Team Lead can approve/deny a leave request from their campaign agent.
+     */
+    public function tlApprove(User $user, LeaveRequest $leaveRequest): bool
+    {
+        // Only Team Leads can use this method
+        if ($user->role !== 'Team Lead') {
+            return false;
+        }
+
+        // The leave request must require TL approval
+        if (!$leaveRequest->requiresTlApproval()) {
+            return false;
+        }
+
+        // The leave request must not already be processed by TL
+        if ($leaveRequest->isTlApproved() || $leaveRequest->isTlRejected()) {
+            return false;
+        }
+
+        // The leave request must be pending
+        if ($leaveRequest->status !== 'pending') {
+            return false;
+        }
+
+        // Check if Team Lead is in the same campaign as the agent
+        $teamLeadSchedule = $user->activeSchedule;
+        $agentSchedule = $leaveRequest->user->activeSchedule;
+
+        if (!$teamLeadSchedule || !$agentSchedule) {
+            return false;
+        }
+
+        // Team Lead must be in the same campaign as the agent
+        return $teamLeadSchedule->campaign_id === $agentSchedule->campaign_id;
+    }
+
+    /**
      * Determine whether the user can cancel the leave request.
      */
     public function cancel(User $user, LeaveRequest $leaveRequest): bool

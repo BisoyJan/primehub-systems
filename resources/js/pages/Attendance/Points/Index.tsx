@@ -88,7 +88,7 @@ interface AttendancePoint {
     id: number;
     user: User;
     shift_date: string;
-    point_type: 'whole_day_absence' | 'half_day_absence' | 'undertime' | 'tardy';
+    point_type: 'whole_day_absence' | 'half_day_absence' | 'undertime' | 'undertime_more_than_hour' | 'tardy';
     points: number;
     status: string | null;
     is_advised: boolean;
@@ -130,8 +130,25 @@ interface Stats {
         whole_day_absence: number;
         half_day_absence: number;
         undertime: number;
+        undertime_more_than_hour: number;
         tardy: number;
     };
+    high_points_employees?: HighPointsEmployee[];
+}
+
+interface HighPointsEmployee {
+    user_id: number;
+    user_name: string;
+    total_points: number;
+    violations_count: number;
+    points: {
+        id: number;
+        shift_date: string;
+        point_type: string;
+        points: number;
+        violation_details: string | null;
+        expires_at: string | null;
+    }[];
 }
 
 interface Filters {
@@ -179,7 +196,8 @@ const getPointTypeBadge = (type: string) => {
     const variants = {
         whole_day_absence: { className: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100', label: 'Whole Day Absence' },
         half_day_absence: { className: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100', label: 'Half-Day Absence' },
-        undertime: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Undertime' },
+        undertime: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Undertime (Hour)' },
+        undertime_more_than_hour: { className: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900 dark:text-orange-100', label: 'Undertime (>Hour)' },
         tardy: { className: 'bg-yellow-100 text-yellow-800 border-yellow-200 dark:bg-yellow-900 dark:text-yellow-100', label: 'Tardy' },
     };
 
@@ -247,6 +265,10 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const [isManualSubmitting, setIsManualSubmitting] = useState(false);
     const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
     const [pointToDelete, setPointToDelete] = useState<AttendancePoint | null>(null);
+
+    // High points employees dialog state
+    const [isHighPointsDialogOpen, setIsHighPointsDialogOpen] = useState(false);
+    const [selectedHighPointsEmployee, setSelectedHighPointsEmployee] = useState<HighPointsEmployee | null>(null);
 
     // Export progress state
     const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -626,6 +648,19 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
             return;
         }
 
+        // Validate undertime minutes based on selected type
+        const undertimeMinutesValue = manualUndertimeMinutes ? parseInt(manualUndertimeMinutes) : 0;
+
+        if (manualPointType === 'undertime' && undertimeMinutesValue > 60) {
+            toast.error("Undertime (Hour) should be 60 minutes or less. Use 'Undertime - More Than Hour' for 61+ minutes.");
+            return;
+        }
+
+        if (manualPointType === 'undertime_more_than_hour' && undertimeMinutesValue < 61) {
+            toast.error("Undertime (More Than Hour) should be at least 61 minutes. Use 'Undertime - Hour' for 60 minutes or less.");
+            return;
+        }
+
         setIsManualSubmitting(true);
 
         const payload = {
@@ -705,6 +740,12 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         );
     };
 
+    // Handle viewing high points employee's attendance points
+    const handleViewHighPointsEmployee = (employee: HighPointsEmployee) => {
+        setSelectedHighPointsEmployee(employee);
+        // Points are already loaded from the backend, no need to fetch
+    };
+
     const showClearFilters = selectedUserId || selectedPointType || selectedStatus || dateFrom || dateTo || userSearchQuery || filterExpiringSoon || filterGbroEligible;
 
     return (
@@ -718,7 +759,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                 />
 
                 {/* Statistics Cards */}
-                <div className="grid gap-4 md:grid-cols-4">
+                <div className="grid gap-4 md:grid-cols-3 lg:grid-cols-4">
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Active Points</CardTitle>
@@ -762,16 +803,63 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
 
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Tardy & Undertime</CardTitle>
+                            <CardTitle className="text-sm font-medium">Tardy</CardTitle>
                             <TrendingUp className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
                             <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
-                                {(Number(stats?.by_type.tardy || 0) + Number(stats?.by_type.undertime || 0)).toFixed(2)}
+                                {Number(stats?.by_type.tardy || 0).toFixed(2)}
                             </div>
                             <p className="text-xs text-muted-foreground">0.25 pt each</p>
                         </CardContent>
                     </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Undertime (Hour)</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                                {Number(stats?.by_type.undertime || 0).toFixed(2)}
+                            </div>
+                            <p className="text-xs text-muted-foreground">0.25 pt each</p>
+                        </CardContent>
+                    </Card>
+
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                            <CardTitle className="text-sm font-medium">Undertime (&gt;Hour)</CardTitle>
+                            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                        </CardHeader>
+                        <CardContent>
+                            <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
+                                {Number(stats?.by_type.undertime_more_than_hour || 0).toFixed(2)}
+                            </div>
+                            <p className="text-xs text-muted-foreground">0.5 pt each</p>
+                        </CardContent>
+                    </Card>
+
+                    {/* High Points Employees Card - Only show for non-restricted users */}
+                    {!isRestrictedUser && (
+                        <Card
+                            className="cursor-pointer hover:bg-accent/50 transition-colors border-red-200 dark:border-red-800"
+                            onClick={() => setIsHighPointsDialogOpen(true)}
+                        >
+                            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                <CardTitle className="text-sm font-medium">High Risk Employees</CardTitle>
+                                <Users className="h-4 w-4 text-red-500" />
+                            </CardHeader>
+                            <CardContent>
+                                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
+                                    {stats?.high_points_employees?.length || 0}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Employees with 6+ points
+                                </p>
+                            </CardContent>
+                        </Card>
+                    )}
                 </div>
 
                 {/* Filters */}
@@ -899,7 +987,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             <SelectContent>
                                 <SelectItem value="whole_day_absence">Whole Day Absence</SelectItem>
                                 <SelectItem value="half_day_absence">Half-Day Absence</SelectItem>
-                                <SelectItem value="undertime">Undertime</SelectItem>
+                                <SelectItem value="undertime">Undertime (Hour)</SelectItem>
+                                <SelectItem value="undertime_more_than_hour">Undertime (More than Hour)</SelectItem>
                                 <SelectItem value="tardy">Tardy</SelectItem>
                             </SelectContent>
                         </Select>
@@ -1831,7 +1920,8 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     <SelectItem value="whole_day_absence">Whole Day Absence (1.0 pt)</SelectItem>
                                     <SelectItem value="half_day_absence">Half-Day Absence (0.5 pt)</SelectItem>
                                     <SelectItem value="tardy">Tardy (0.25 pt)</SelectItem>
-                                    <SelectItem value="undertime">Undertime (0.25 pt)</SelectItem>
+                                    <SelectItem value="undertime">Undertime - Hour (0.25 pt)</SelectItem>
+                                    <SelectItem value="undertime_more_than_hour">Undertime - More Than Hour (0.5 pt)</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -1870,19 +1960,30 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             </div>
                         )}
 
-                        {/* Undertime Minutes (only for undertime type) */}
-                        {manualPointType === 'undertime' && (
+                        {/* Undertime Minutes (for undertime types) */}
+                        {(manualPointType === 'undertime' || manualPointType === 'undertime_more_than_hour') && (
                             <div className="grid gap-2">
-                                <Label htmlFor="manual_undertime_minutes">Undertime Minutes</Label>
+                                <Label htmlFor="manual_undertime_minutes">
+                                    Undertime Minutes
+                                    <span className="text-xs text-muted-foreground ml-2">
+                                        ({manualPointType === 'undertime' ? '1-60 mins' : '61+ mins'})
+                                    </span>
+                                </Label>
                                 <Input
                                     id="manual_undertime_minutes"
                                     type="number"
-                                    min="0"
-                                    placeholder="Enter minutes early"
+                                    min={manualPointType === 'undertime_more_than_hour' ? "61" : "1"}
+                                    max={manualPointType === 'undertime' ? "60" : undefined}
+                                    placeholder={manualPointType === 'undertime' ? "Enter minutes (1-60)" : "Enter minutes (61+)"}
                                     value={manualUndertimeMinutes}
                                     onChange={(e) => setManualUndertimeMinutes(e.target.value)}
                                     disabled={isManualSubmitting}
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    {manualPointType === 'undertime'
+                                        ? 'For early departures up to 1 hour (1-60 minutes)'
+                                        : 'For early departures more than 1 hour (61+ minutes)'}
+                                </p>
                             </div>
                         )}
 
@@ -1921,7 +2022,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     <span className="text-sm text-muted-foreground">Point Value:</span>
                                     <span className="text-lg font-bold text-red-600 dark:text-red-400">
                                         {manualPointType === 'whole_day_absence' ? '1.00' :
-                                            manualPointType === 'half_day_absence' ? '0.50' : '0.25'} pts
+                                            (manualPointType === 'half_day_absence' || manualPointType === 'undertime_more_than_hour') ? '0.50' : '0.25'} pts
                                     </span>
                                 </div>
                                 <div className="flex items-center justify-between mt-2">
@@ -2078,6 +2179,142 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                 Cancel
                             </Button>
                         )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* High Points Employees Dialog */}
+            <Dialog open={isHighPointsDialogOpen} onOpenChange={(open) => {
+                setIsHighPointsDialogOpen(open);
+                if (!open) {
+                    setSelectedHighPointsEmployee(null);
+                }
+            }}>
+                <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-hidden flex flex-col">
+                    <DialogHeader>
+                        <DialogTitle>
+                            {selectedHighPointsEmployee
+                                ? `Attendance Points - ${selectedHighPointsEmployee.user_name}`
+                                : 'High Risk Employees'}
+                        </DialogTitle>
+                        <DialogDescription>
+                            {selectedHighPointsEmployee
+                                ? `Active attendance points (${selectedHighPointsEmployee.total_points} total points)`
+                                : 'Employees with 6 or more active attendance points'}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex-1 overflow-y-auto">
+                        {selectedHighPointsEmployee ? (
+                            // Show employee's attendance points
+                            <div className="space-y-3">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                        setSelectedHighPointsEmployee(null);
+                                    }}
+                                    className="mb-2"
+                                >
+                                    ← Back to list
+                                </Button>
+
+                                {selectedHighPointsEmployee.points.length === 0 ? (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        No active attendance points found
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        {selectedHighPointsEmployee.points.map((point) => (
+                                            <div
+                                                key={point.id}
+                                                className="p-3 border rounded-lg bg-card hover:bg-accent/50 transition-colors"
+                                            >
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex items-center gap-3">
+                                                        <Badge className={getPointTypeBadge(point.point_type).props.className}>
+                                                            {getPointTypeBadge(point.point_type).props.children}
+                                                        </Badge>
+                                                        <span className="text-sm text-muted-foreground">
+                                                            {formatDate(point.shift_date)}
+                                                        </span>
+                                                    </div>
+                                                    <span className="font-bold text-red-600 dark:text-red-400">
+                                                        {Number(point.points).toFixed(2)} pts
+                                                    </span>
+                                                </div>
+                                                {point.violation_details && (
+                                                    <p className="text-xs text-muted-foreground mt-2 line-clamp-2">
+                                                        {point.violation_details}
+                                                    </p>
+                                                )}
+                                                {point.expires_at && (
+                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                        Expires: {formatDate(point.expires_at)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                <div className="pt-4 border-t">
+                                    <Button
+                                        variant="outline"
+                                        className="w-full"
+                                        onClick={() => {
+                                            router.visit(attendancePointsShow({ user: selectedHighPointsEmployee.user_id }).url);
+                                        }}
+                                    >
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View Full Details
+                                    </Button>
+                                </div>
+                            </div>
+                        ) : (
+                            // Show list of high points employees
+                            <div className="space-y-2">
+                                {!stats?.high_points_employees || stats.high_points_employees.length === 0 ? (
+                                    <div className="text-center py-8 text-muted-foreground">
+                                        <CheckCircle className="h-12 w-12 mx-auto mb-3 text-green-500" />
+                                        <p>No employees with 6 or more points</p>
+                                        <p className="text-sm mt-1">All employees are within acceptable limits</p>
+                                    </div>
+                                ) : (
+                                    stats.high_points_employees.map((employee) => (
+                                        <div
+                                            key={employee.user_id}
+                                            className="p-4 border rounded-lg hover:bg-accent cursor-pointer transition-colors"
+                                            onClick={() => handleViewHighPointsEmployee(employee)}
+                                        >
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <p className="font-medium">{employee.user_name}</p>
+                                                    <p className="text-sm text-muted-foreground">
+                                                        {employee.violations_count} violation{employee.violations_count !== 1 ? 's' : ''}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-xl font-bold text-red-600 dark:text-red-400">
+                                                        {employee.total_points.toFixed(2)}
+                                                    </p>
+                                                    <p className="text-xs text-muted-foreground">points</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="mt-4">
+                        <Button variant="outline" onClick={() => {
+                            setIsHighPointsDialogOpen(false);
+                            setSelectedHighPointsEmployee(null);
+                        }}>
+                            Close
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

@@ -29,6 +29,8 @@ class AttendancePointModelTest extends TestCase
             'is_advised',
             'notes',
             'is_excused',
+            'is_manual',
+            'created_by',
             'excused_by',
             'excused_at',
             'excuse_reason',
@@ -360,6 +362,7 @@ class AttendancePointModelTest extends TestCase
             'whole_day_absence' => 1.00,
             'half_day_absence' => 0.50,
             'undertime' => 0.25,
+            'undertime_more_than_hour' => 0.50,
             'tardy' => 0.25,
         ];
 
@@ -374,6 +377,9 @@ class AttendancePointModelTest extends TestCase
 
         $undertime = AttendancePoint::factory()->undertime()->create();
         $this->assertEquals(0.25, $undertime->points);
+
+        $undertimeMoreThanHour = AttendancePoint::factory()->undertimeMoreThanHour()->create();
+        $this->assertEquals(0.50, $undertimeMoreThanHour->points);
 
         $halfDay = AttendancePoint::factory()->halfDayAbsence()->create();
         $this->assertEquals(0.50, $halfDay->points);

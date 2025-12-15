@@ -395,7 +395,7 @@ composer test        # Run tests with config clear
 
 ## Documentation
 
-### 📚 Available Guides
+### � Available Guides
 All guides are organized in the **[docs/guides/](./docs/guides/)** directory:
 
 | Guide | Description |

@@ -170,7 +170,7 @@ class LeaveCreditService
         }
 
         // Loop through each month from start date to last completed month (current year only)
-        while ($currentDate->endOfMonth()->lt($today) && $currentDate->year === $currentYear) {
+        while ($currentDate->copy()->endOfMonth()->lt($today) && $currentDate->year === $currentYear) {
             $year = $currentDate->year;
             $month = $currentDate->month;
 
@@ -353,6 +353,8 @@ class LeaveCreditService
 
     /**
      * Validate if a leave request can be submitted based on all business rules.
+     * Note: Sick Leave (SL) can be submitted without credits - credits are only deducted
+     * if employee is eligible, has sufficient balance, AND submits a medical certificate.
      */
     public function validateLeaveRequest(User $user, array $data): array
     {
@@ -362,8 +364,8 @@ class LeaveCreditService
         $endDate = Carbon::parse($data['end_date']);
         $year = $data['credits_year'] ?? now()->year;
 
-        // Check eligibility (6 months rule) for credited leave types
-        if (in_array($leaveType, LeaveRequest::CREDITED_LEAVE_TYPES)) {
+        // Check eligibility (6 months rule) for VL and BL only (SL can proceed without eligibility)
+        if (in_array($leaveType, ['VL', 'BL'])) {
             if (!$this->isEligible($user)) {
                 $eligibilityDate = $this->getEligibilityDate($user);
                 $errors[] = "You are not eligible to use leave credits yet. You will be eligible on {$eligibilityDate->format('F j, Y')}.";
@@ -375,6 +377,19 @@ class LeaveCreditService
             $twoWeeksFromNow = now()->addWeeks(2)->startOfDay();
             if ($startDate->startOfDay()->lt($twoWeeksFromNow)) {
                 $errors[] = "Leave requests must be submitted at least 2 weeks in advance. Earliest date you can apply for is {$twoWeeksFromNow->format('F j, Y')}.";
+            }
+        }
+
+        // Validate SL date constraints (last 7 days to today)
+        if ($leaveType === 'SL') {
+            $sevenDaysAgo = now()->subDays(7)->startOfDay();
+            $today = now()->endOfDay();
+
+            if ($startDate->lt($sevenDaysAgo)) {
+                $errors[] = "Sick Leave start date must be within the last 7 days.";
+            }
+            if ($endDate->gt($today)) {
+                $errors[] = "Sick Leave end date cannot be in the future.";
             }
         }
 
@@ -394,8 +409,8 @@ class LeaveCreditService
             }
         }
 
-        // Check leave credits balance for credited leave types
-        if (in_array($leaveType, LeaveRequest::CREDITED_LEAVE_TYPES)) {
+        // Check leave credits balance for VL and BL only (SL can proceed without credits)
+        if (in_array($leaveType, ['VL', 'BL'])) {
             $balance = $this->getBalance($user, $year);
             $daysRequested = $this->calculateDays($startDate, $endDate);
 
@@ -408,5 +423,38 @@ class LeaveCreditService
             'valid' => empty($errors),
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Determine if credits should be deducted for a Sick Leave request.
+     * Credits are deducted only if:
+     * 1. Employee is eligible (6+ months)
+     * 2. Has sufficient credits
+     * 3. Medical certificate is submitted
+     */
+    public function shouldDeductSlCredits(User $user, LeaveRequest $leaveRequest): bool
+    {
+        if ($leaveRequest->leave_type !== 'SL') {
+            return true; // Non-SL follows normal rules
+        }
+
+        // Must have medical certificate
+        if (!$leaveRequest->medical_cert_submitted) {
+            return false;
+        }
+
+        // Must be eligible
+        if (!$this->isEligible($user)) {
+            return false;
+        }
+
+        // Must have sufficient credits
+        $year = Carbon::parse($leaveRequest->start_date)->year;
+        $balance = $this->getBalance($user, $year);
+        if ($balance < $leaveRequest->days_requested) {
+            return false;
+        }
+
+        return true;
     }
 }

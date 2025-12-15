@@ -68,6 +68,7 @@ class AttendancePoint extends Model
         'whole_day_absence' => 1.00,
         'half_day_absence' => 0.50,
         'undertime' => 0.25,
+        'undertime_more_than_hour' => 0.50,
         'tardy' => 0.25,
     ];
 
@@ -152,6 +153,7 @@ class AttendancePoint extends Model
             'whole_day_absence' => 'Whole Day Absence (NCNS)',
             'half_day_absence' => 'Half-Day Absence',
             'undertime' => 'Undertime',
+            'undertime_more_than_hour' => 'Undertime (>1 Hour)',
             'tardy' => 'Tardy',
             default => $this->point_type,
         };
@@ -166,6 +168,7 @@ class AttendancePoint extends Model
             'whole_day_absence' => 'red',
             'half_day_absence' => 'orange',
             'undertime' => 'yellow',
+            'undertime_more_than_hour' => 'orange',
             'tardy' => 'yellow',
             default => 'gray',
         };

@@ -7,6 +7,10 @@ use App\Models\PcSpec;
 use App\Models\PcMaintenance;
 use App\Models\ItConcern;
 use App\Models\Site;
+use App\Models\Attendance;
+use App\Models\LeaveRequest;
+use App\Models\AttendancePoint;
+use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
@@ -180,7 +184,7 @@ class DashboardService
     /**
      * Get all dashboard statistics
      */
-    public function getAllStats(): array
+    public function getAllStats(?string $presenceDate = null): array
     {
         return [
             'totalStations' => $this->getTotalStations(),
@@ -193,6 +197,7 @@ class DashboardService
             'unassignedPcSpecs' => $this->getUnassignedPcSpecs(),
             'itConcernStats' => $this->getItConcernStats(),
             'itConcernTrends' => $this->getItConcernTrends(),
+            'presenceInsights' => $this->getPresenceInsights($presenceDate),
         ];
     }
 
@@ -351,5 +356,161 @@ class DashboardService
                 ];
             })
             ->toArray();
+    }
+
+    /**
+     * Get presence insights statistics
+     */
+    public function getPresenceInsights(?string $date = null): array
+    {
+        $today = $date ?? now()->toDateString();
+
+        // Get today's attendance stats
+        $todayAttendance = Attendance::whereDate('shift_date', $today)
+            ->where('admin_verified', true)
+            ->get();
+
+        $totalScheduled = User::whereIn('role', ['Agent', 'Team Lead', 'IT', 'Utility'])
+            ->where('is_approved', true)
+            ->whereHas('employeeSchedules', function ($query) {
+                $query->where('is_active', true);
+            })
+            ->count();
+
+        $present = $todayAttendance->whereIn('status', ['on_time', 'tardy', 'undertime', 'undertime_more_than_hour'])->count();
+        $absent = $todayAttendance->whereIn('status', ['ncns', 'advised_absence', 'half_day_absence'])->count();
+
+        // Get employees currently on leave (approved leaves for today)
+        $onLeaveToday = LeaveRequest::where('status', 'approved')
+            ->whereDate('start_date', '<=', $today)
+            ->whereDate('end_date', '>=', $today)
+            ->count();
+
+        // Get leave calendar data for the current month
+        $startOfMonth = now()->startOfMonth()->toDateString();
+        $endOfMonth = now()->endOfMonth()->toDateString();
+
+        $leaveCalendarData = LeaveRequest::with(['user:id,first_name,last_name,role'])
+            ->where('status', 'approved')
+            ->where(function ($query) use ($startOfMonth, $endOfMonth) {
+                $query->whereBetween('start_date', [$startOfMonth, $endOfMonth])
+                    ->orWhereBetween('end_date', [$startOfMonth, $endOfMonth])
+                    ->orWhere(function ($q) use ($startOfMonth, $endOfMonth) {
+                        $q->where('start_date', '<=', $startOfMonth)
+                          ->where('end_date', '>=', $endOfMonth);
+                    });
+            })
+            ->orderBy('start_date')
+            ->get()
+            ->map(fn($leave) => [
+                'id' => $leave->id,
+                'user_id' => $leave->user_id,
+                'user_name' => $leave->user->last_name . ', ' . $leave->user->first_name,
+                'user_role' => $leave->user->role,
+                'leave_type' => $leave->leave_type,
+                'start_date' => $leave->start_date,
+                'end_date' => $leave->end_date,
+                'days_requested' => $leave->days_requested,
+                'reason' => $leave->reason,
+            ])
+            ->toArray();
+
+        // Get attendance points statistics
+        $allPoints = AttendancePoint::with('user:id,first_name,last_name,role')
+            ->where('is_excused', false)
+            ->where('is_expired', false)
+            ->get();
+
+        $totalActivePoints = $allPoints->sum('points');
+        $totalViolations = $allPoints->count();
+
+        // Get high risk employees (6+ points)
+        $highRiskEmployees = $allPoints->groupBy('user_id')
+            ->map(function ($userPoints) {
+                $user = $userPoints->first()->user;
+                $totalPoints = $userPoints->sum('points');
+
+                if ($totalPoints >= 6) {
+                    return [
+                        'user_id' => $user->id,
+                        'user_name' => $user->last_name . ', ' . $user->first_name,
+                        'user_role' => $user->role,
+                        'total_points' => round($totalPoints, 2),
+                        'violations_count' => $userPoints->count(),
+                        'points' => $userPoints->sortByDesc('shift_date')->take(5)->map(fn($point) => [
+                            'id' => $point->id,
+                            'shift_date' => $point->shift_date,
+                            'point_type' => $point->point_type,
+                            'points' => $point->points,
+                            'violation_details' => $point->violation_details,
+                            'expires_at' => $point->expires_at,
+                        ])->values()->toArray(),
+                    ];
+                }
+                return null;
+            })
+            ->filter()
+            ->sortByDesc('total_points')
+            ->values()
+            ->toArray();
+
+        // Points by type breakdown
+        $pointsByType = [
+            'whole_day_absence' => $allPoints->where('point_type', 'whole_day_absence')->sum('points'),
+            'half_day_absence' => $allPoints->where('point_type', 'half_day_absence')->sum('points'),
+            'tardy' => $allPoints->where('point_type', 'tardy')->sum('points'),
+            'undertime' => $allPoints->where('point_type', 'undertime')->sum('points'),
+            'undertime_more_than_hour' => $allPoints->where('point_type', 'undertime_more_than_hour')->sum('points'),
+        ];
+
+        // Monthly attendance points trend (last 6 months)
+        $startDate = now()->subMonths(5)->startOfMonth();
+        $driver = config('database.default');
+        $connection = config("database.connections.{$driver}.driver");
+
+        if ($connection === 'sqlite') {
+            $monthKeyExpr = "strftime('%Y-%m', shift_date)";
+        } else {
+            $monthKeyExpr = 'DATE_FORMAT(shift_date, "%Y-%m")';
+        }
+
+        $pointsTrend = AttendancePoint::selectRaw("
+                {$monthKeyExpr} as month,
+                SUM(CASE WHEN is_excused = 0 AND is_expired = 0 THEN points ELSE 0 END) as total_points,
+                COUNT(CASE WHEN is_excused = 0 AND is_expired = 0 THEN 1 END) as violations_count
+            ")
+            ->where('shift_date', '>=', $startDate)
+            ->groupBy('month')
+            ->orderBy('month')
+            ->get()
+            ->map(function ($row) {
+                $date = Carbon::createFromFormat('Y-m', $row->month);
+                return [
+                    'month' => $row->month,
+                    'label' => $date->format('M Y'),
+                    'total_points' => round((float) $row->total_points, 2),
+                    'violations_count' => (int) $row->violations_count,
+                ];
+            })
+            ->toArray();
+
+        return [
+            'todayPresence' => [
+                'total_scheduled' => $totalScheduled,
+                'present' => $present,
+                'absent' => $absent,
+                'on_leave' => $onLeaveToday,
+                'unaccounted' => max(0, $totalScheduled - $present - $absent - $onLeaveToday),
+            ],
+            'leaveCalendar' => $leaveCalendarData,
+            'attendancePoints' => [
+                'total_active_points' => round($totalActivePoints, 2),
+                'total_violations' => $totalViolations,
+                'high_risk_count' => count($highRiskEmployees),
+                'high_risk_employees' => $highRiskEmployees,
+                'by_type' => $pointsByType,
+                'trend' => $pointsTrend,
+            ],
+        ];
     }
 }

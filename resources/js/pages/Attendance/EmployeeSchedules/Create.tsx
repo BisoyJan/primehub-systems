@@ -101,11 +101,6 @@ const formatTime = (time: string, format: string): string => {
     return time;
 };
 
-// Helper function to format time range based on user preference
-const formatTimeRange = (start: string, end: string, format: string): string => {
-    return `${formatTime(start, format)} - ${formatTime(end, format)}`;
-};
-
 // Generate hour options based on format
 const getHourOptions = (format: string) => {
     if (format === '12') {
@@ -156,9 +151,31 @@ const buildTime = (hour: string, minute: string, period: string, format: string)
     return `${String(h).padStart(2, '0')}:${minute}`;
 };
 
+// Define shift type expected time ranges
+const SHIFT_TIME_RANGES: Record<string, { timeIn: string; timeOut: string; label: string }> = {
+    morning_shift: { timeIn: '05:00', timeOut: '14:00', label: 'Morning Shift (05:00 - 14:00)' },
+    afternoon_shift: { timeIn: '14:00', timeOut: '23:00', label: 'Afternoon Shift (14:00 - 23:00)' },
+    night_shift: { timeIn: '22:00', timeOut: '07:00', label: 'Night Shift (22:00 - 07:00)' },
+    graveyard_shift: { timeIn: '00:00', timeOut: '09:00', label: 'Graveyard Shift (00:00 - 09:00)' },
+};
+
+// Validate if time matches shift type range
+const validateShiftTimeRange = (shiftType: string, timeIn: string, timeOut: string): { isValid: boolean; message: string } => {
+    const range = SHIFT_TIME_RANGES[shiftType];
+    if (!range) return { isValid: true, message: '' }; // utility_24h has no range restriction
+
+    if (timeIn !== range.timeIn || timeOut !== range.timeOut) {
+        return {
+            isValid: false,
+            message: `Time does not match ${range.label}. Expected Time In: ${range.timeIn}, Time Out: ${range.timeOut}`
+        };
+    }
+    return { isValid: true, message: '' };
+};
+
 export default function EmployeeScheduleCreate() {
     const { users, campaigns, sites, auth, currentUser, isRestrictedRole, isFirstTimeSetup } = usePage<PageProps>().props;
-    const timeFormat = auth.user.time_format || '24';
+    const timeFormat = (auth?.user?.time_format as '12' | '24') || '24';
 
     // State for confirmation dialog
     const [showConfirmDialog, setShowConfirmDialog] = useState(false);
@@ -208,8 +225,29 @@ export default function EmployeeScheduleCreate() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [isRestrictedRole, currentUser]);
 
+    // Auto-fill times when shift type changes
+    const handleShiftTypeChange = (shiftType: string) => {
+        setData("shift_type", shiftType);
+        const range = SHIFT_TIME_RANGES[shiftType];
+        if (range) {
+            setData(prev => ({
+                ...prev,
+                shift_type: shiftType,
+                scheduled_time_in: range.timeIn,
+                scheduled_time_out: range.timeOut,
+            }));
+        }
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
+
+        // Validate shift type time range
+        const validation = validateShiftTimeRange(data.shift_type, data.scheduled_time_in, data.scheduled_time_out);
+        if (!validation.isValid) {
+            toast.warning(validation.message);
+            return;
+        }
 
         // For first-time setup, show confirmation dialog
         if (isFirstTimeSetup) {
@@ -453,23 +491,23 @@ export default function EmployeeScheduleCreate() {
                                     </Label>
                                     <Select
                                         value={data.shift_type}
-                                        onValueChange={value => setData("shift_type", value)}
+                                        onValueChange={handleShiftTypeChange}
                                     >
                                         <SelectTrigger>
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            <SelectItem value="graveyard_shift">
-                                                Graveyard Shift ({formatTimeRange('00:00', '09:00', timeFormat)})
-                                            </SelectItem>
                                             <SelectItem value="morning_shift">
-                                                Morning Shift ({formatTimeRange('05:00', '14:00', timeFormat)})
+                                                Morning Shift (05:00 - 14:00) 5:00 AM - 2:00 PM
                                             </SelectItem>
                                             <SelectItem value="afternoon_shift">
-                                                Afternoon Shift ({formatTimeRange('14:00', '23:00', timeFormat)})
+                                                Afternoon Shift (14:00 - 23:00) 2:00 PM - 11:00 PM
                                             </SelectItem>
                                             <SelectItem value="night_shift">
-                                                Night Shift ({formatTimeRange('22:00', '07:00', timeFormat)})
+                                                Night Shift (22:00 - 07:00) 10:00 PM - 7:00 AM
+                                            </SelectItem>
+                                            <SelectItem value="graveyard_shift">
+                                                Graveyard Shift (00:00 - 09:00) 12:00 AM - 9:00 AM
                                             </SelectItem>
                                             <SelectItem value="utility_24h">24H Utility</SelectItem>
                                         </SelectContent>
