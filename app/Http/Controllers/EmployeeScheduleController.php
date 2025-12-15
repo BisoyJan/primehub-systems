@@ -92,6 +92,21 @@ class EmployeeScheduleController extends Controller
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'last_name']);
 
+        // Get users with multiple schedules
+        $usersWithMultipleSchedules = User::withCount('employeeSchedules')
+            ->having('employee_schedules_count', '>', 1)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name'])
+            ->map(function ($user) {
+                return [
+                    'id' => $user->id,
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name,
+                    'schedule_count' => $user->employee_schedules_count,
+                ];
+            });
+
         return Inertia::render('Attendance/EmployeeSchedules/Index', [
             'schedules' => $schedules,
             'users' => $users,
@@ -100,6 +115,7 @@ class EmployeeScheduleController extends Controller
             'roles' => $roles,
             'usersWithoutSchedules' => $usersWithoutSchedules,
             'usersWithInactiveSchedules' => $usersWithInactiveSchedules,
+            'usersWithMultipleSchedules' => $usersWithMultipleSchedules,
             'filters' => $request->only(['search', 'user_id', 'role', 'campaign_id', 'is_active', 'active_only']),
         ]);
     }

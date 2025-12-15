@@ -99,6 +99,7 @@ interface PageProps extends SharedData {
     roles: string[];
     usersWithoutSchedules: Array<{ id: number; first_name: string; last_name: string }>;
     usersWithInactiveSchedules: Array<{ id: number; first_name: string; last_name: string }>;
+    usersWithMultipleSchedules: Array<{ id: number; first_name: string; last_name: string; schedule_count: number }>;
     filters?: {
         search?: string;
         user_id?: string;
@@ -173,7 +174,7 @@ const groupSchedulesByUser = (schedules: Schedule[]) => {
 };
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns = [], roles = [], filters, auth, usersWithoutSchedules = [], usersWithInactiveSchedules = [] } = usePage<PageProps>().props;
+    const { schedules, users, campaigns = [], roles = [], filters, auth, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [] } = usePage<PageProps>().props;
     const timeFormat = (auth.user as { time_format?: '12' | '24' })?.time_format || '24';
     const scheduleData = {
         data: schedules?.data ?? [],
@@ -229,7 +230,7 @@ export default function EmployeeSchedulesIndex() {
     const [scheduleToToggle, setScheduleToToggle] = useState<Schedule | null>(null);
     const [noScheduleDialogOpen, setNoScheduleDialogOpen] = useState(false);
     const [noScheduleSearch, setNoScheduleSearch] = useState("");
-    const [scheduleDialogTab, setScheduleDialogTab] = useState<'no-schedule' | 'inactive'>('no-schedule');
+    const [scheduleDialogTab, setScheduleDialogTab] = useState<'no-schedule' | 'inactive' | 'multiple'>('no-schedule');
     const [scheduleDetailsDialogOpen, setScheduleDetailsDialogOpen] = useState(false);
     const [selectedUserSchedules, setSelectedUserSchedules] = useState<Schedule[]>([]);
 
@@ -378,6 +379,24 @@ export default function EmployeeSchedulesIndex() {
             user.name.toLowerCase().includes(query)
         );
     }, [employeesWithInactiveSchedules, noScheduleSearch]);
+
+    // Get employees with multiple schedules
+    const employeesWithMultipleSchedules = useMemo(() => {
+        return usersWithMultipleSchedules.map(user => ({
+            id: user.id,
+            name: `${user.first_name} ${user.last_name}`,
+            schedule_count: user.schedule_count
+        }));
+    }, [usersWithMultipleSchedules]);
+
+    // Filter employees with multiple schedules based on search
+    const filteredEmployeesWithMultipleSchedules = useMemo(() => {
+        if (!noScheduleSearch) return employeesWithMultipleSchedules;
+        const query = noScheduleSearch.toLowerCase();
+        return employeesWithMultipleSchedules.filter(user =>
+            user.name.toLowerCase().includes(query)
+        );
+    }, [employeesWithMultipleSchedules, noScheduleSearch]);
 
     const handleViewEmployeeSchedules = async (userId: number) => {
         // Check if user has schedules in current page data
@@ -893,25 +912,25 @@ export default function EmployeeSchedulesIndex() {
                                 <span>Employee Schedule Status</span>
                             </AlertDialogTitle>
                             <AlertDialogDescription>
-                                View employees without schedules or with only inactive schedules.
+                                View employees without schedules, with only inactive schedules, or with multiple schedules.
                             </AlertDialogDescription>
                         </AlertDialogHeader>
 
                         {/* Tabs */}
-                        <div className="flex gap-1 px-3 sm:px-6 border-b">
+                        {/* Tabs */}
+                        <div className="grid grid-cols-3 border-b">
                             <button
                                 onClick={() => {
                                     setScheduleDialogTab('no-schedule');
                                     setNoScheduleSearch("");
                                 }}
-                                className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'no-schedule'
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                                className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'no-schedule'
+                                    ? 'border-primary text-primary bg-primary/5'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
                                     }`}
                             >
-                                <span className="hidden sm:inline">No Schedule</span>
-                                <span className="sm:hidden">No Sched</span>
-                                <Badge variant={scheduleDialogTab === 'no-schedule' ? 'default' : 'secondary'}>
+                                <span>No Schedule</span>
+                                <Badge variant={scheduleDialogTab === 'no-schedule' ? 'default' : 'secondary'} className="h-5 min-w-5 px-1.5 text-xs">
                                     {employeesWithoutSchedules.length}
                                 </Badge>
                             </button>
@@ -920,15 +939,29 @@ export default function EmployeeSchedulesIndex() {
                                     setScheduleDialogTab('inactive');
                                     setNoScheduleSearch("");
                                 }}
-                                className={`flex items-center gap-2 px-3 sm:px-4 py-2 text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'inactive'
-                                    ? 'border-primary text-primary'
-                                    : 'border-transparent text-muted-foreground hover:text-foreground'
+                                className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'inactive'
+                                    ? 'border-primary text-primary bg-primary/5'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
                                     }`}
                             >
-                                <span className="hidden sm:inline">Inactive Only</span>
-                                <span className="sm:hidden">Inactive</span>
-                                <Badge variant={scheduleDialogTab === 'inactive' ? 'default' : 'secondary'}>
+                                <span>Inactive</span>
+                                <Badge variant={scheduleDialogTab === 'inactive' ? 'default' : 'secondary'} className="h-5 min-w-5 px-1.5 text-xs">
                                     {employeesWithInactiveSchedules.length}
+                                </Badge>
+                            </button>
+                            <button
+                                onClick={() => {
+                                    setScheduleDialogTab('multiple');
+                                    setNoScheduleSearch("");
+                                }}
+                                className={`flex items-center justify-center gap-1.5 px-2 py-2.5 text-xs sm:text-sm font-medium border-b-2 transition-colors ${scheduleDialogTab === 'multiple'
+                                    ? 'border-primary text-primary bg-primary/5'
+                                    : 'border-transparent text-muted-foreground hover:text-foreground hover:bg-muted/50'
+                                    }`}
+                            >
+                                <span>Multiple</span>
+                                <Badge variant={scheduleDialogTab === 'multiple' ? 'default' : 'secondary'} className="h-5 min-w-5 px-1.5 text-xs">
+                                    {employeesWithMultipleSchedules.length}
                                 </Badge>
                             </button>
                         </div>
@@ -1072,6 +1105,88 @@ export default function EmployeeSchedulesIndex() {
                         {scheduleDialogTab === 'inactive' && employeesWithInactiveSchedules.length === 0 && (
                             <div className="px-3 sm:px-6 pb-4 text-center py-8 text-muted-foreground">
                                 All employees with schedules have at least one active schedule.
+                            </div>
+                        )}
+
+                        {scheduleDialogTab === 'multiple' && employeesWithMultipleSchedules.length > 0 && (
+                            <>
+                                {employeesWithMultipleSchedules.length > 15 && (
+                                    <div className="px-3 sm:px-6 mt-3">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                                            <Input
+                                                type="text"
+                                                placeholder="Search employees..."
+                                                value={noScheduleSearch}
+                                                onChange={(e) => setNoScheduleSearch(e.target.value)}
+                                                className="pl-9"
+                                            />
+                                        </div>
+                                    </div>
+                                )}
+
+                                <div className="px-3 sm:px-6 pb-4 overflow-y-auto flex-1 mt-3">
+                                    <div className="space-y-2">
+                                        {filteredEmployeesWithMultipleSchedules.length > 0 ? (
+                                            filteredEmployeesWithMultipleSchedules.map((user, index) => (
+                                                <div
+                                                    key={user.id}
+                                                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 p-3 border rounded-lg hover:bg-muted/50 transition-colors"
+                                                >
+                                                    <div className="flex items-center gap-3">
+                                                        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-500/10 text-sm font-medium text-blue-700 dark:text-blue-300">
+                                                            {index + 1}
+                                                        </div>
+                                                        <div className="flex-1">
+                                                            <span className="font-medium text-sm sm:text-base">{user.name}</span>
+                                                            <p className="text-xs text-muted-foreground mt-0.5">
+                                                                {user.schedule_count} schedules assigned
+                                                            </p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex gap-2 w-full sm:w-auto">
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            className="flex-1 sm:flex-none"
+                                                            onClick={() => {
+                                                                setNoScheduleDialogOpen(false);
+                                                                handleViewEmployeeSchedules(user.id);
+                                                            }}
+                                                        >
+                                                            <Users className="h-4 w-4 mr-1" />
+                                                            View All
+                                                        </Button>
+                                                        <Can permission="schedules.create">
+                                                            <Button
+                                                                size="sm"
+                                                                variant="ghost"
+                                                                className="flex-1 sm:flex-none"
+                                                                onClick={() => {
+                                                                    setNoScheduleDialogOpen(false);
+                                                                    router.get(employeeSchedulesCreate().url + `?user_id=${user.id}`);
+                                                                }}
+                                                            >
+                                                                <Plus className="h-4 w-4 mr-1" />
+                                                                Add New
+                                                            </Button>
+                                                        </Can>
+                                                    </div>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <div className="text-center py-8 text-muted-foreground">
+                                                No employees found matching "{noScheduleSearch}"
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {scheduleDialogTab === 'multiple' && employeesWithMultipleSchedules.length === 0 && (
+                            <div className="px-3 sm:px-6 pb-4 text-center py-8 text-muted-foreground">
+                                No employees have multiple schedules assigned.
                             </div>
                         )}
 
