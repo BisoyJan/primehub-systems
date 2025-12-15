@@ -118,6 +118,7 @@ Explains how the system handles night shifts that span multiple days and require
 ### In This Folder
 - **[POINT_EXPIRATION_RULES.md](POINT_EXPIRATION_RULES.md)** - Point expiration system (SRO/GBRO)
 - **[AUTOMATIC_POINT_GENERATION.md](AUTOMATIC_POINT_GENERATION.md)** - Auto point generation
+- **[EMPLOYEE_SCHEDULES.md](EMPLOYEE_SCHEDULES.md)** - Employee schedule management and shift types
 
 ### In Project Root
 - **[ATTENDANCE_FEATURES_SUMMARY.md](../../ATTENDANCE_FEATURES_SUMMARY.md)** - Quick feature overview

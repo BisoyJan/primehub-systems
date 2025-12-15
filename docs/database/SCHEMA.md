@@ -277,20 +277,36 @@ Maintenance tracking.
 ## ⏰ Attendance Tables
 
 ### employee_schedules
-Work schedules.
+Work schedules for employees with shift type classification.
 
 | Column | Type | Description |
 |--------|------|-------------|
 | id | bigint | Primary key |
 | user_id | bigint | Foreign key to users |
+| campaign_id | bigint | Foreign key to campaigns (nullable) |
+| site_id | bigint | Foreign key to sites (nullable) |
+| shift_type | enum | morning_shift, afternoon_shift, night_shift, graveyard_shift, utility_24h |
 | scheduled_time_in | time | Scheduled start time |
 | scheduled_time_out | time | Scheduled end time |
-| rest_days | json | Array of rest days |
-| effective_date | date | Schedule start date |
+| work_days | json | Array of work days (e.g., ["monday", "tuesday", ...]) |
+| grace_period_minutes | integer | Minutes before considered tardy (default: 15) |
+| effective_date | date | Schedule start date (hired date) |
 | end_date | date | Schedule end date (nullable) |
 | is_active | boolean | Currently active schedule |
 | created_at | timestamp | Created timestamp |
 | updated_at | timestamp | Updated timestamp |
+
+**Shift Types & Recommended Time Ranges:**
+
+| Shift Type | Time In Range | Time Out Range | Crosses Midnight |
+|------------|---------------|----------------|------------------|
+| morning_shift | 04:00-09:00 (4AM-9AM) | 12:00-17:00 (12PM-5PM) | No |
+| afternoon_shift | 11:00-16:00 (11AM-4PM) | 19:00-00:00 (7PM-12AM) | No |
+| night_shift | 18:00-23:00 (6PM-11PM) | 04:00-10:00 (4AM-10AM) | Yes |
+| graveyard_shift | 22:00-02:00 (10PM-2AM) | 05:00-11:00 (5AM-11AM) | Yes |
+| utility_24h | Any | Any | Depends |
+
+**Note:** Time ranges are recommendations for UI validation only. The attendance algorithm uses the actual `scheduled_time_in` and `scheduled_time_out` values stored in the database.
 
 ### attendances
 Attendance records.
