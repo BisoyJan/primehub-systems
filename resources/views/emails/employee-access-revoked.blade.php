@@ -84,17 +84,17 @@
             color: #4b5563;
         }
         .footer {
-            background-color: #ffffff;
+            background-color: #6e6e7b;
             padding: 20px;
             text-align: center;
             font-size: 12px;
-            color: #6b7280;
+            color: #000000;
             border-top: 1px solid #e5e7eb;
         }
         .logo {
             max-height: 40px;
             margin-bottom: 10px;
-            background-color: transparent;
+            background-color: #6e6e7b;
         }
     </style>
 </head>
