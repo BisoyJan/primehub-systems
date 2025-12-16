@@ -394,6 +394,7 @@ class LeaveRequestController extends Controller
             'leaveRequest' => $leaveRequestData,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
+            'isSuperAdmin' => $user->role === 'Super Admin',
             'canCancel' => $leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id,
             'hasUserApproved' => $hasUserApproved,
             'canTlApprove' => $canTlApprove,
@@ -826,6 +827,94 @@ class LeaveRequestController extends Controller
                 'user_id' => $user->id,
             ]);
             return back()->withErrors(['error' => 'Failed to approve leave request. Please try again.']);
+        }
+    }
+
+    /**
+     * Force approve a leave request (Super Admin only).
+     * This bypasses the requirement for HR approval.
+     */
+    public function forceApprove(Request $request, LeaveRequest $leaveRequest)
+    {
+        $user = auth()->user();
+
+        // Only Super Admin can force approve
+        if ($user->role !== 'Super Admin') {
+            return back()->withErrors(['error' => 'Only Super Admin can force approve leave requests.']);
+        }
+
+        if ($leaveRequest->status !== 'pending') {
+            return back()->withErrors(['error' => 'Only pending requests can be approved.']);
+        }
+
+        $leaveCreditService = $this->leaveCreditService;
+
+        DB::beginTransaction();
+        try {
+            // Set both Admin and HR approval
+            $leaveRequest->update([
+                'admin_approved_by' => $user->id,
+                'admin_approved_at' => now(),
+                'admin_review_notes' => $request->review_notes ?? 'Force approved by Super Admin',
+                'hr_approved_by' => $user->id,
+                'hr_approved_at' => now(),
+                'hr_review_notes' => 'Force approved by Super Admin (HR approval overridden)',
+                'status' => 'approved',
+                'reviewed_by' => $user->id,
+                'reviewed_at' => now(),
+                'review_notes' => $request->review_notes ?? 'Force approved by Super Admin',
+            ]);
+
+            // If TL approval was required but not done, mark it as approved too
+            if ($leaveRequest->requiresTlApproval() && !$leaveRequest->isTlApproved()) {
+                $leaveRequest->update([
+                    'tl_approved_by' => $user->id,
+                    'tl_approved_at' => now(),
+                    'tl_review_notes' => 'Force approved by Super Admin (TL approval overridden)',
+                ]);
+            }
+
+            // Handle leave credit deduction based on leave type
+            if ($leaveRequest->leave_type === 'SL') {
+                $this->handleSlApproval($leaveRequest, $leaveCreditService);
+            } elseif ($leaveRequest->requiresCredits()) {
+                $year = $request->input('credits_year', now()->year);
+                $leaveCreditService->deductCredits($leaveRequest, $year);
+                $this->updateAttendanceForApprovedLeave($leaveRequest);
+            }
+
+            // Notify the employee about approval
+            $this->notificationService->notifyLeaveRequestFullyApproved(
+                $leaveRequest->user_id,
+                $leaveRequest->leave_type,
+                $leaveRequest->id
+            );
+
+            DB::commit();
+
+            // Send Email Notification to the employee
+            try {
+                $employee = $leaveRequest->user;
+                if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
+                }
+            } catch (\Exception $mailException) {
+                \Log::warning('Failed to send leave request force approval email', [
+                    'error' => $mailException->getMessage(),
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', 'Leave request force approved by Super Admin.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Leave request force approval failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+                'user_id' => $user->id,
+            ]);
+            return back()->withErrors(['error' => 'Failed to force approve leave request. Please try again.']);
         }
     }
 

@@ -16,7 +16,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute } from '@/routes/leave-requests';
@@ -61,18 +61,20 @@ interface Props {
     leaveRequest: LeaveRequest;
     isAdmin: boolean;
     isTeamLead?: boolean;
+    isSuperAdmin?: boolean;
     canCancel: boolean;
     hasUserApproved: boolean;
     canTlApprove?: boolean;
     userRole: string;
 }
 
-export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved, canTlApprove = false }: Props) {
+export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved, canTlApprove = false, isSuperAdmin = false }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showTLApproveDialog, setShowTLApproveDialog] = useState(false);
+    const [showForceApproveDialog, setShowForceApproveDialog] = useState(false);
     const [showTLDenyDialog, setShowTLDenyDialog] = useState(false);
     const { can } = usePermission();
 
@@ -80,6 +82,7 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
     const denyForm = useForm({ review_notes: '' });
     const tlApproveForm = useForm({ tl_review_notes: '' });
     const tlDenyForm = useForm({ tl_review_notes: '' });
+    const forceApproveForm = useForm({ review_notes: '' });
 
     // Check if Admin/HR has approved
     const isAdminApproved = !!leaveRequest.admin_approved_at;
@@ -123,6 +126,15 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
             onSuccess: () => {
                 setShowTLDenyDialog(false);
                 toast.success('Leave request has been rejected.');
+            },
+        });
+    };
+
+    const handleForceApprove = () => {
+        forceApproveForm.post(`/form-requests/leave-requests/${leaveRequest.id}/force-approve`, {
+            onSuccess: () => {
+                setShowForceApproveDialog(false);
+                toast.success('Leave request force approved by Super Admin');
             },
         });
     };
@@ -209,6 +221,18 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                                     </Button>
                                 </Can>
                             </>
+                        )}
+                        {/* Super Admin Force Approve Button - Shows when pending and not fully approved */}
+                        {isSuperAdmin && leaveRequest.status === 'pending' && !isFullyApproved && (
+                            <Button
+                                variant="default"
+                                size="sm"
+                                className="bg-purple-600 hover:bg-purple-700"
+                                onClick={() => setShowForceApproveDialog(true)}
+                            >
+                                <Shield className="mr-1 h-4 w-4" />
+                                <span className="hidden sm:inline">Force Approve</span>
+                            </Button>
                         )}
                         {hasUserApproved && leaveRequest.status === 'pending' && (
                             <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
@@ -729,6 +753,51 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                         </Button>
                         <Button variant="destructive" onClick={handleDelete}>
                             Delete
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Force Approve Dialog (Super Admin Only) */}
+            <Dialog open={showForceApproveDialog} onOpenChange={setShowForceApproveDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Shield className="h-5 w-5 text-purple-600" />
+                            Force Approve Leave Request
+                        </DialogTitle>
+                        <DialogDescription>
+                            As Super Admin, you can force approve this leave request, bypassing the requirement for HR approval. This action will immediately approve the request.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
+                        <Shield className="h-4 w-4 text-purple-600" />
+                        <AlertDescription className="text-purple-800 dark:text-purple-200">
+                            This will override any pending approvals from Team Lead, Admin, or HR.
+                        </AlertDescription>
+                    </Alert>
+                    <div className="space-y-4">
+                        <div>
+                            <label className="text-sm font-medium">Review Notes (Optional)</label>
+                            <Textarea
+                                value={forceApproveForm.data.review_notes}
+                                onChange={(e) => forceApproveForm.setData('review_notes', e.target.value)}
+                                placeholder="Add any comments for the force approval..."
+                                rows={3}
+                            />
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowForceApproveDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            className="bg-purple-600 hover:bg-purple-700"
+                            onClick={handleForceApprove}
+                            disabled={forceApproveForm.processing}
+                        >
+                            <Shield className="mr-1 h-4 w-4" />
+                            Force Approve
                         </Button>
                     </DialogFooter>
                 </DialogContent>

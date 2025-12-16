@@ -318,6 +318,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::get('/{leaveRequest}/edit', [LeaveRequestController::class, 'edit'])->name('edit');
             Route::put('/{leaveRequest}', [LeaveRequestController::class, 'update'])->name('update');
         Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
+        Route::post('/{leaveRequest}/force-approve', [LeaveRequestController::class, 'forceApprove'])->name('force-approve');
         Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
         Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
         // Team Lead approval routes
