@@ -147,6 +147,7 @@ interface DashboardProps {
             user_id: number;
             user_name: string;
             user_role: string;
+            campaign_name: string;
             leave_type: string;
             start_date: string;
             end_date: string;
@@ -196,6 +197,7 @@ interface DashboardProps {
         total_used: number;
         balance: number;
     };
+    leaveCalendarMonth?: string;
 }
 
 interface StatCardProps {
@@ -321,6 +323,7 @@ export default function Dashboard({
     isRestrictedRole,
     presenceInsights,
     leaveCredits,
+    leaveCalendarMonth,
 }: DashboardProps) {
     // Get user role from shared data
     const { auth } = usePage<SharedData>().props;
@@ -523,7 +526,14 @@ export default function Dashboard({
     //
     const [selectedVacantSite, setSelectedVacantSite] = useState<string | null>(null);
     const [selectedNoPcSite, setSelectedNoPcSite] = useState<string | null>(null);
-    const [calendarDate, setCalendarDate] = useState(new Date());
+    const [hoveredLeaveId, setHoveredLeaveId] = useState<number | null>(null);
+    const [calendarDate, setCalendarDate] = useState(() => {
+        // Initialize from server prop if available, otherwise use current date
+        if (leaveCalendarMonth) {
+            return new Date(leaveCalendarMonth);
+        }
+        return new Date();
+    });
     const [presenceDate, setPresenceDate] = useState(new Date().toISOString().split('T')[0]);
 
     const closeDialog = () => {
@@ -540,16 +550,34 @@ export default function Dashboard({
         setItTrendSlideIndex((prev) => (prev === itTrendSlides.length - 1 ? 0 : prev + 1));
     };
 
+    const handleCalendarMonthChange = (newDate: Date) => {
+        setCalendarDate(newDate);
+        // Format date as YYYY-MM-DD in local time to avoid timezone issues
+        const year = newDate.getFullYear();
+        const month = String(newDate.getMonth() + 1).padStart(2, '0');
+        const day = String(newDate.getDate()).padStart(2, '0');
+        const dateStr = `${year}-${month}-${day}`;
+
+        router.reload({
+            data: {
+                leave_calendar_month: dateStr,
+            },
+            only: ["presenceInsights", "leaveCalendarMonth"],
+        });
+    };
+
     const handlePrevMonth = () => {
-        setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1));
+        const newDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() - 1, 1);
+        handleCalendarMonthChange(newDate);
     };
 
     const handleNextMonth = () => {
-        setCalendarDate(new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1));
+        const newDate = new Date(calendarDate.getFullYear(), calendarDate.getMonth() + 1, 1);
+        handleCalendarMonthChange(newDate);
     };
 
     const handleToday = () => {
-        setCalendarDate(new Date());
+        handleCalendarMonthChange(new Date());
     };
 
     const handlePresenceDateChange = (newDate: string) => {
@@ -562,22 +590,10 @@ export default function Dashboard({
         });
     };
 
-    // Filter leaves by selected calendar month
+    // Get leaves from backend (already filtered by selected month)
     const filteredLeaves = useMemo(() => {
-        if (!presenceInsights?.leaveCalendar) return [];
-
-        const year = calendarDate.getFullYear();
-        const month = calendarDate.getMonth();
-        const firstDay = new Date(year, month, 1);
-        const lastDay = new Date(year, month + 1, 0);
-
-        return presenceInsights.leaveCalendar.filter(leave => {
-            const start = new Date(leave.start_date);
-            const end = new Date(leave.end_date);
-            // Check if leave overlaps with selected month
-            return start <= lastDay && end >= firstDay;
-        });
-    }, [presenceInsights?.leaveCalendar, calendarDate]);
+        return presenceInsights?.leaveCalendar || [];
+    }, [presenceInsights?.leaveCalendar]);
 
     // Calculate attendance trend data
     const attendanceTrendData = (() => {
@@ -1153,15 +1169,33 @@ export default function Dashboard({
                                                         const daysInMonth = lastDay.getDate();
                                                         const startingDayOfWeek = firstDay.getDay();
 
-                                                        // Get leaves by date
+                                                        // Helper to format date as YYYY-MM-DD in local time
+                                                        const formatDateKey = (date: Date) => {
+                                                            const y = date.getFullYear();
+                                                            const m = String(date.getMonth() + 1).padStart(2, '0');
+                                                            const d = String(date.getDate()).padStart(2, '0');
+                                                            return `${y}-${m}-${d}`;
+                                                        };
+
+                                                        // Get leaves by date (only for days within this month)
                                                         const leavesByDate: Record<string, typeof filteredLeaves> = {};
                                                         filteredLeaves.forEach(leave => {
-                                                            const start = new Date(leave.start_date);
-                                                            const end = new Date(leave.end_date);
-                                                            const currentDate = new Date(start);
+                                                            // Parse dates - handle both YYYY-MM-DD and ISO formats
+                                                            const startStr = leave.start_date.split('T')[0];
+                                                            const endStr = leave.end_date.split('T')[0];
+                                                            const [sy, sm, sd] = startStr.split('-').map(Number);
+                                                            const [ey, em, ed] = endStr.split('-').map(Number);
+                                                            const start = new Date(sy, sm - 1, sd);
+                                                            const end = new Date(ey, em - 1, ed);
 
-                                                            while (currentDate <= end) {
-                                                                const dateKey = currentDate.toISOString().split('T')[0];
+                                                            // Clamp to the displayed month
+                                                            const effectiveStart = start < firstDay ? firstDay : start;
+                                                            const effectiveEnd = end > lastDay ? lastDay : end;
+
+                                                            const currentDate = new Date(effectiveStart);
+
+                                                            while (currentDate <= effectiveEnd) {
+                                                                const dateKey = formatDateKey(currentDate);
                                                                 if (!leavesByDate[dateKey]) {
                                                                     leavesByDate[dateKey] = [];
                                                                 }
@@ -1191,24 +1225,25 @@ export default function Dashboard({
                                                                     {/* Actual days */}
                                                                     {Array.from({ length: daysInMonth }).map((_, i) => {
                                                                         const day = i + 1;
-                                                                        const dateObj = new Date(year, month, day);
-                                                                        const dateKey = dateObj.toISOString().split('T')[0];
+                                                                        const dateKey = formatDateKey(new Date(year, month, day));
                                                                         const leavesOnDay = leavesByDate[dateKey] || [];
                                                                         const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
                                                                         const hasLeaves = leavesOnDay.length > 0;
+                                                                        const isHoveredLeaveDay = hoveredLeaveId !== null && leavesOnDay.some(l => l.id === hoveredLeaveId);
 
                                                                         return (
                                                                             <div
                                                                                 key={day}
                                                                                 className={`
                                                                                     aspect-square p-1 rounded flex items-center justify-center text-sm relative
-                                                                                    ${hasLeaves ? 'bg-orange-500/30 font-semibold text-orange-900 dark:text-orange-100' : 'text-muted-foreground'}
+                                                                                    ${hasLeaves ? 'bg-amber-500 dark:bg-amber-600 font-semibold text-white' : 'text-muted-foreground'}
                                                                                     ${isToday ? 'ring-2 ring-primary' : ''}
+                                                                                    ${isHoveredLeaveDay ? 'animate-pulse ring-2 ring-white dark:ring-amber-300 scale-110 z-10' : ''}
                                                                                 `}
                                                                             >
                                                                                 {day}
                                                                                 {hasLeaves && leavesOnDay.length > 1 && (
-                                                                                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-orange-600 rounded-full text-[8px] text-white flex items-center justify-center">
+                                                                                    <div className="absolute -top-0.5 -right-0.5 w-3 h-3 bg-red-500 rounded-full text-[8px] text-white flex items-center justify-center">
                                                                                         {leavesOnDay.length}
                                                                                     </div>
                                                                                 )}
@@ -1217,9 +1252,9 @@ export default function Dashboard({
                                                                     })}
                                                                 </div>
                                                                 {/* Legend */}
-                                                                <div className="flex flex-row gap-2 text-xs pt-2 border-t">
+                                                                <div className="flex flex-row gap-4 text-xs pt-2 border-t">
                                                                     <div className="flex items-center gap-2">
-                                                                        <div className="w-4 h-4 rounded bg-orange-500/30" />
+                                                                        <div className="w-4 h-4 rounded bg-amber-500 dark:bg-amber-600" />
                                                                         <span>On leave</span>
                                                                     </div>
                                                                     <div className="flex items-center gap-2">
@@ -1244,9 +1279,14 @@ export default function Dashboard({
                                                                     setActiveDialog('leaveDetail');
                                                                     setSelectedVacantSite(leave.id.toString());
                                                                 }}
+                                                                onMouseEnter={() => setHoveredLeaveId(leave.id)}
+                                                                onMouseLeave={() => setHoveredLeaveId(null)}
                                                             >
                                                                 <div className="flex items-start justify-between gap-2 mb-1">
-                                                                    <span className="font-medium">{leave.user_name}</span>
+                                                                    <div>
+                                                                        <span className="font-medium">{leave.user_name}</span>
+                                                                        <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
+                                                                    </div>
                                                                     <Badge variant="outline" className="text-xs shrink-0">{leave.leave_type}</Badge>
                                                                 </div>
                                                                 <div className="text-xs text-muted-foreground">
@@ -2317,7 +2357,7 @@ export default function Dashboard({
                                 <div>
                                     <div className="text-sm font-medium text-muted-foreground">Employee</div>
                                     <div className="text-lg font-semibold">{leave.user_name}</div>
-                                    <div className="text-sm text-muted-foreground">{leave.user_role}</div>
+                                    <div className="text-sm text-muted-foreground">{leave.campaign_name}</div>
                                 </div>
                                 <Separator />
                                 <div className="grid grid-cols-2 gap-4">
@@ -2327,7 +2367,7 @@ export default function Dashboard({
                                     </div>
                                     <div>
                                         <div className="text-sm font-medium text-muted-foreground">Duration</div>
-                                        <div className="mt-1">{leave.days_requested} day{leave.days_requested !== 1 ? 's' : ''}</div>
+                                        <div className="mt-1">{`${Math.round(Number(leave.days_requested))} day${leave.days_requested !== 1 ? 's' : ''}`}</div>
                                     </div>
                                 </div>
                                 <div>

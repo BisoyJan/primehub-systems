@@ -35,14 +35,15 @@ class DashboardController extends Controller
         $campaignId = $request->input('campaign_id');
         $verificationFilter = $request->input('verification_filter', 'verified'); // all, verified, non_verified
         $presenceDate = $request->input('presence_date', now()->format('Y-m-d'));
+        $leaveCalendarMonth = $request->input('leave_calendar_month', now()->format('Y-m-d'));
 
         $user = $request->user();
         $isRestrictedRole = in_array($user->role, ['Agent', 'Utility']);
 
         $dashboardData = Cache::remember(
-            key: 'dashboard_stats_' . $presenceDate,
+            key: 'dashboard_stats_' . $presenceDate . '_' . $leaveCalendarMonth,
             ttl: 150,
-            callback: fn() => $this->dashboardService->getAllStats($presenceDate)
+            callback: fn() => $this->dashboardService->getAllStats($presenceDate, $leaveCalendarMonth)
         );
 
         // Build attendance query with filters
@@ -169,6 +170,7 @@ class DashboardController extends Controller
             'campaigns' => $campaigns,
             'isRestrictedRole' => $isRestrictedRole,
             'leaveCredits' => $leaveCredits,
+            'leaveCalendarMonth' => $leaveCalendarMonth,
         ]));
     }
 }

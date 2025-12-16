@@ -245,6 +245,50 @@ class NotificationService
     }
 
     /**
+     * Notify about attendance point expiration (SRO or GBRO).
+     */
+    public function notifyAttendancePointExpired(User|int $user, string $pointType, string $shiftDate, float $points, string $expirationType): Notification
+    {
+        // Format point type for display
+        $typeText = match($pointType) {
+            'whole_day_absence' => 'Whole Day Absence',
+            'half_day_absence' => 'Half-Day Absence',
+            'tardy' => 'Tardy',
+            'undertime' => 'Undertime',
+            'undertime_more_than_hour' => 'Undertime (>1 Hour)',
+            default => ucfirst(str_replace('_', ' ', $pointType))
+        };
+
+        // Format expiration type
+        $expirationText = match($expirationType) {
+            'gbro' => 'Good Behavior Roll Off (GBRO)',
+            'sro' => 'Standard Roll Off (SRO)',
+            default => 'expiration'
+        };
+
+        $title = 'Attendance Point Expired';
+        $message = "Your {$typeText} violation from {$shiftDate} ({$points} pts) has expired via {$expirationText}.";
+
+        if ($expirationType === 'gbro') {
+            $message .= " Congratulations on maintaining good attendance!";
+        }
+
+        return $this->create(
+            $user,
+            'attendance_status',
+            $title,
+            $message,
+            [
+                'point_type' => $pointType,
+                'shift_date' => $shiftDate,
+                'points' => $points,
+                'expiration_type' => $expirationType,
+                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user)
+            ]
+        );
+    }
+
+    /**
      * Notify IT roles about a new IT concern.
      */
     public function notifyItRolesAboutNewConcern(string $stationNumber, string $siteName, string $agentName, string $category, string $priority, string $description, int $concernId): void

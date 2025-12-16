@@ -192,7 +192,7 @@ class DashboardService
     /**
      * Get all dashboard statistics
      */
-    public function getAllStats(?string $presenceDate = null): array
+    public function getAllStats(?string $presenceDate = null, ?string $leaveCalendarMonth = null): array
     {
         return [
             'totalStations' => $this->getTotalStations(),
@@ -205,7 +205,7 @@ class DashboardService
             'unassignedPcSpecs' => $this->getUnassignedPcSpecs(),
             'itConcernStats' => $this->getItConcernStats(),
             'itConcernTrends' => $this->getItConcernTrends(),
-            'presenceInsights' => $this->getPresenceInsights($presenceDate),
+            'presenceInsights' => $this->getPresenceInsights($presenceDate, $leaveCalendarMonth),
         ];
     }
 
@@ -337,7 +337,7 @@ class DashboardService
     /**
      * Get presence insights statistics
      */
-    public function getPresenceInsights(?string $date = null): array
+    public function getPresenceInsights(?string $date = null, ?string $leaveCalendarMonth = null): array
     {
         $today = $date ?? now()->toDateString();
 
@@ -362,11 +362,12 @@ class DashboardService
             ->whereDate('end_date', '>=', $today)
             ->count();
 
-        // Get leave calendar data for the current month
-        $startOfMonth = now()->startOfMonth()->toDateString();
-        $endOfMonth = now()->endOfMonth()->toDateString();
+        // Get leave calendar data for the specified month (or current month if not provided)
+        $calendarDate = $leaveCalendarMonth ? \Carbon\Carbon::parse($leaveCalendarMonth) : now();
+        $startOfMonth = $calendarDate->copy()->startOfMonth()->toDateString();
+        $endOfMonth = $calendarDate->copy()->endOfMonth()->toDateString();
 
-        $leaveCalendarData = LeaveRequest::with(['user:id,first_name,last_name,role'])
+        $leaveCalendarData = LeaveRequest::with(['user:id,first_name,last_name,role', 'user.employeeSchedules.campaign:id,name'])
             ->where('status', 'approved')
             ->where(function ($query) use ($startOfMonth, $endOfMonth) {
                 $query->whereBetween('start_date', [$startOfMonth, $endOfMonth])
@@ -378,17 +379,21 @@ class DashboardService
             })
             ->orderBy('start_date')
             ->get()
-            ->map(fn($leave) => [
-                'id' => $leave->id,
-                'user_id' => $leave->user_id,
-                'user_name' => $leave->user->last_name . ', ' . $leave->user->first_name,
-                'user_role' => $leave->user->role,
-                'leave_type' => $leave->leave_type,
-                'start_date' => $leave->start_date,
-                'end_date' => $leave->end_date,
-                'days_requested' => $leave->days_requested,
-                'reason' => $leave->reason,
-            ])
+            ->map(function($leave) {
+                $activeSchedule = $leave->user->employeeSchedules->where('is_active', true)->first();
+                return [
+                    'id' => $leave->id,
+                    'user_id' => $leave->user_id,
+                    'user_name' => $leave->user->last_name . ', ' . $leave->user->first_name,
+                    'user_role' => $leave->user->role,
+                    'campaign_name' => $activeSchedule?->campaign?->name ?? 'No Campaign',
+                    'leave_type' => $leave->leave_type,
+                    'start_date' => $leave->start_date->format('Y-m-d'),
+                    'end_date' => $leave->end_date->format('Y-m-d'),
+                    'days_requested' => $leave->days_requested,
+                    'reason' => $leave->reason,
+                ];
+            })
             ->toArray();
 
         // Get attendance points statistics

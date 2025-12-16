@@ -192,6 +192,24 @@ const formatDateTime = (value: string, timeFormat: '12' | '24' = '24') => {
     return `${dateStr} ${timeStr}`;
 };
 
+/**
+ * Calculate days remaining until expiration.
+ * Returns positive number if days remaining, 0 if expired today, negative if already passed.
+ */
+const getDaysRemaining = (expiresAt: string): number => {
+    const expDate = new Date(expiresAt);
+    expDate.setHours(23, 59, 59, 999); // End of expiration day
+    const now = new Date();
+    return Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+};
+
+/**
+ * Check if a point is actually expired based on date (regardless of is_expired flag).
+ */
+const isActuallyExpired = (expiresAt: string): boolean => {
+    return getDaysRemaining(expiresAt) < 0;
+};
+
 const getPointTypeBadge = (type: string) => {
     const variants = {
         whole_day_absence: { className: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100', label: 'Whole Day Absence' },
@@ -1177,9 +1195,14 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                 {point.expires_at ? (
                                                     <div className="text-sm">
                                                         <div className="font-medium">{formatDate(point.expires_at)}</div>
-                                                        {!point.is_expired && (
+                                                        {!point.is_expired && !isActuallyExpired(point.expires_at) && (
                                                             <div className="text-xs text-muted-foreground">
-                                                                {Math.ceil((new Date(point.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days left
+                                                                {getDaysRemaining(point.expires_at)} days left
+                                                            </div>
+                                                        )}
+                                                        {!point.is_expired && isActuallyExpired(point.expires_at) && (
+                                                            <div className="text-xs text-orange-600 dark:text-orange-400">
+                                                                Pending expiration
                                                             </div>
                                                         )}
                                                         {point.is_expired && point.expired_at && (
@@ -1338,9 +1361,14 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                         <span className="text-muted-foreground text-sm">Expiration:</span>
                                         <div className="text-sm mt-1">
                                             <p className="font-medium">{formatDate(point.expires_at)}</p>
-                                            {!point.is_expired && (
+                                            {!point.is_expired && !isActuallyExpired(point.expires_at) && (
                                                 <p className="text-xs text-muted-foreground">
-                                                    {Math.ceil((new Date(point.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining
+                                                    {getDaysRemaining(point.expires_at)} days remaining
+                                                </p>
+                                            )}
+                                            {!point.is_expired && isActuallyExpired(point.expires_at) && (
+                                                <p className="text-xs text-orange-600 dark:text-orange-400">
+                                                    Pending expiration
                                                 </p>
                                             )}
                                             {point.is_expired && point.expired_at && (
@@ -1697,9 +1725,14 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     <div>
                                         <Label className="text-sm font-medium text-muted-foreground">Expiration Date</Label>
                                         <p className="text-sm font-medium mt-1">{formatDate(selectedViolationPoint.expires_at)}</p>
-                                        {!selectedViolationPoint.is_expired && (
+                                        {!selectedViolationPoint.is_expired && !isActuallyExpired(selectedViolationPoint.expires_at) && (
                                             <p className="text-xs text-muted-foreground mt-1">
-                                                {Math.ceil((new Date(selectedViolationPoint.expires_at).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))} days remaining
+                                                {getDaysRemaining(selectedViolationPoint.expires_at)} days remaining
+                                            </p>
+                                        )}
+                                        {!selectedViolationPoint.is_expired && isActuallyExpired(selectedViolationPoint.expires_at) && (
+                                            <p className="text-xs text-orange-600 dark:text-orange-400 mt-1">
+                                                Pending expiration
                                             </p>
                                         )}
                                     </div>

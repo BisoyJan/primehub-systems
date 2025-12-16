@@ -4,12 +4,21 @@ namespace App\Console\Commands;
 
 use App\Models\AttendancePoint;
 use App\Models\User;
+use App\Services\NotificationService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\DB;
 
 class ProcessPointExpirations extends Command
 {
+    protected NotificationService $notificationService;
+
+    public function __construct(NotificationService $notificationService)
+    {
+        parent::__construct();
+        $this->notificationService = $notificationService;
+    }
+
     /**
      * The name and signature of the console command.
      *
@@ -94,6 +103,15 @@ class ProcessPointExpirations extends Command
 
             if (!$dryRun) {
                 $point->markAsExpired('sro');
+
+                // Send notification to the employee
+                $this->notificationService->notifyAttendancePointExpired(
+                    $point->user_id,
+                    $point->point_type,
+                    $point->shift_date->format('M d, Y'),
+                    (float) $point->points,
+                    'sro'
+                );
             }
         }
 
@@ -154,6 +172,15 @@ class ProcessPointExpirations extends Command
                                 'gbro_applied_at' => now(),
                                 'gbro_batch_id' => $batchId,
                             ]);
+
+                            // Send notification to the employee
+                            $this->notificationService->notifyAttendancePointExpired(
+                                $point->user_id,
+                                $point->point_type,
+                                Carbon::parse($point->shift_date)->format('M d, Y'),
+                                (float) $point->points,
+                                'gbro'
+                            );
                         }
 
                         $totalExpired++;

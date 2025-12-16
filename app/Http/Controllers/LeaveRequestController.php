@@ -852,17 +852,21 @@ class LeaveRequestController extends Controller
         DB::beginTransaction();
         try {
             // Set both Admin and HR approval
+            $reviewNotes = $request->review_notes
+                ? trim($request->review_notes)
+                : 'Approved';
+
             $leaveRequest->update([
                 'admin_approved_by' => $user->id,
                 'admin_approved_at' => now(),
-                'admin_review_notes' => $request->review_notes ?? 'Force approved by Super Admin',
+                'admin_review_notes' => $reviewNotes,
                 'hr_approved_by' => $user->id,
                 'hr_approved_at' => now(),
-                'hr_review_notes' => 'Force approved by Super Admin (HR approval overridden)',
+                'hr_review_notes' => $reviewNotes,
                 'status' => 'approved',
                 'reviewed_by' => $user->id,
                 'reviewed_at' => now(),
-                'review_notes' => $request->review_notes ?? 'Force approved by Super Admin',
+                'review_notes' => $reviewNotes,
             ]);
 
             // If TL approval was required but not done, mark it as approved too
@@ -870,7 +874,7 @@ class LeaveRequestController extends Controller
                 $leaveRequest->update([
                     'tl_approved_by' => $user->id,
                     'tl_approved_at' => now(),
-                    'tl_review_notes' => 'Force approved by Super Admin (TL approval overridden)',
+                    'tl_review_notes' => $reviewNotes,
                 ]);
             }
 
