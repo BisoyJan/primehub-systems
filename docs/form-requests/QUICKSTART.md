@@ -48,10 +48,10 @@
 |------|--------------|-----------------|
 | VL (Vacation) | Yes | 2 weeks |
 | SL (Sick) | Yes | None |
-| BL (Birthday) | Yes | 2 weeks |
+| BL (Bereavement) | Yes | 2 weeks |
 | SPL (Solo Parent) | No | None |
 | LOA (Leave of Absence) | No | None |
-| LDV (Doctor Visit) | No | None |
+| LDV (Domestic Violence) | No | None |
 | UPTO (Unpaid) | No | None |
 
 ## 🔧 IT Concerns

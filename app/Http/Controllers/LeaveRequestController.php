@@ -52,24 +52,10 @@ class LeaveRequestController extends Controller
         if ($isAdmin) {
             // No filter - see all
         } elseif ($isTeamLead) {
-            // Team Leads see their own requests + requests from agents in their campaign
-            $teamLeadSchedule = $user->activeSchedule;
-            $campaignAgentIds = [];
-
-            if ($teamLeadSchedule && $teamLeadSchedule->campaign_id) {
-                // Get all agents in the same campaign
-                $campaignAgentIds = EmployeeSchedule::where('campaign_id', $teamLeadSchedule->campaign_id)
-                    ->where('is_active', true)
-                    ->whereHas('user', function ($q) {
-                        $q->where('role', 'Agent')->where('is_approved', true);
-                    })
-                    ->pluck('user_id')
-                    ->toArray();
-            }
-
-            $query->where(function ($q) use ($user, $campaignAgentIds) {
+            // Team Leads see their own requests + all agent requests that require TL approval
+            $query->where(function ($q) use ($user) {
                 $q->where('user_id', $user->id) // Own requests
-                    ->orWhereIn('user_id', $campaignAgentIds); // Requests from campaign agents
+                    ->orWhere('requires_tl_approval', true); // All agent requests needing TL approval
             });
         } else {
             // Regular employees see only their own
@@ -261,26 +247,17 @@ class LeaveRequestController extends Controller
         DB::beginTransaction();
         try {
             // Determine if this request requires Team Lead approval
-            // Agents need TL approval if they have a Team Lead in their campaign
+            // Agents need TL approval from any Team Lead
             $requiresTlApproval = false;
-            $teamLeadToNotify = null;
 
             if ($targetUser->role === 'Agent') {
-                $agentSchedule = $targetUser->activeSchedule;
-                if ($agentSchedule && $agentSchedule->campaign_id) {
-                    // Find Team Lead in the same campaign
-                    $teamLeadSchedule = EmployeeSchedule::where('campaign_id', $agentSchedule->campaign_id)
-                        ->where('is_active', true)
-                        ->whereHas('user', function ($q) {
-                            $q->where('role', 'Team Lead')->where('is_approved', true);
-                        })
-                        ->with('user')
-                        ->first();
+                // Check if there are any active Team Leads in the system
+                $hasTeamLeads = User::where('role', 'Team Lead')
+                    ->where('is_approved', true)
+                    ->exists();
 
-                    if ($teamLeadSchedule && $teamLeadSchedule->user) {
-                        $requiresTlApproval = true;
-                        $teamLeadToNotify = $teamLeadSchedule->user;
-                    }
+                if ($hasTeamLeads) {
+                    $requiresTlApproval = true;
                 }
             }
 
@@ -300,18 +277,24 @@ class LeaveRequestController extends Controller
             ]);
 
             // Notify based on whether TL approval is required
-            if ($requiresTlApproval && $teamLeadToNotify) {
-                // Notify the Team Lead first
-                $this->notificationService->notifyTeamLeadAboutNewLeaveRequest(
-                    $teamLeadToNotify->id,
-                    $targetUser->name,
-                    $request->leave_type,
-                    $startDate->format('Y-m-d'),
-                    $endDate->format('Y-m-d'),
-                    $leaveRequest->id
-                );
+            if ($requiresTlApproval) {
+                // Notify ALL Team Leads about the new leave request
+                $allTeamLeads = User::where('role', 'Team Lead')
+                    ->where('is_approved', true)
+                    ->get();
+
+                foreach ($allTeamLeads as $teamLead) {
+                    $this->notificationService->notifyTeamLeadAboutNewLeaveRequest(
+                        $teamLead->id,
+                        $targetUser->name,
+                        $request->leave_type,
+                        $startDate->format('Y-m-d'),
+                        $endDate->format('Y-m-d'),
+                        $leaveRequest->id
+                    );
+                }
             } else {
-                // Notify HR/Admin users about new leave request (non-agent or no TL in campaign)
+                // Notify HR/Admin users about new leave request (non-agent or no TL in system)
                 $this->notificationService->notifyHrRolesAboutNewLeaveRequest(
                     $targetUser->name,
                     $request->leave_type,
@@ -390,13 +373,8 @@ class LeaveRequestController extends Controller
         // Check if Team Lead can approve this request
         $canTlApprove = false;
         if ($isTeamLead && $leaveRequest->requiresTlApproval() && !$leaveRequest->isTlApproved() && !$leaveRequest->isTlRejected()) {
-            // Check if TL is in the same campaign
-            $teamLeadSchedule = $user->activeSchedule;
-            $agentSchedule = $leaveRequest->user->activeSchedule;
-
-            if ($teamLeadSchedule && $agentSchedule && $teamLeadSchedule->campaign_id === $agentSchedule->campaign_id) {
-                $canTlApprove = true;
-            }
+            // Any Team Lead can approve agent leave requests
+            $canTlApprove = true;
         }
 
         // Format dates to prevent timezone issues

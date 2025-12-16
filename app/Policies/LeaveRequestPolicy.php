@@ -41,14 +41,9 @@ class LeaveRequestPolicy
             return true;
         }
 
-        // Team Leads can view leave requests from agents in their campaign
-        if ($user->role === 'Team Lead') {
-            $teamLeadSchedule = $user->activeSchedule;
-            $agentSchedule = $leaveRequest->user->activeSchedule;
-
-            if ($teamLeadSchedule && $agentSchedule && $teamLeadSchedule->campaign_id === $agentSchedule->campaign_id) {
-                return true;
-            }
+        // Team Leads can view any agent leave requests that require TL approval
+        if ($user->role === 'Team Lead' && $leaveRequest->requiresTlApproval()) {
+            return true;
         }
 
         // Others need view_all permission
@@ -104,7 +99,7 @@ class LeaveRequestPolicy
     }
 
     /**
-     * Determine whether the Team Lead can approve/deny a leave request from their campaign agent.
+     * Determine whether the Team Lead can approve/deny a leave request from any agent.
      */
     public function tlApprove(User $user, LeaveRequest $leaveRequest): bool
     {
@@ -128,16 +123,8 @@ class LeaveRequestPolicy
             return false;
         }
 
-        // Check if Team Lead is in the same campaign as the agent
-        $teamLeadSchedule = $user->activeSchedule;
-        $agentSchedule = $leaveRequest->user->activeSchedule;
-
-        if (!$teamLeadSchedule || !$agentSchedule) {
-            return false;
-        }
-
-        // Team Lead must be in the same campaign as the agent
-        return $teamLeadSchedule->campaign_id === $agentSchedule->campaign_id;
+        // Any Team Lead can approve agent leave requests
+        return true;
     }
 
     /**

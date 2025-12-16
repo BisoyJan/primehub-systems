@@ -481,10 +481,10 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                     <SelectItem value="all">All Types</SelectItem>
                                     <SelectItem value="VL">Vacation Leave</SelectItem>
                                     <SelectItem value="SL">Sick Leave</SelectItem>
-                                    <SelectItem value="BL">Birthday Leave</SelectItem>
+                                    <SelectItem value="BL">Bereavement Leave</SelectItem>
                                     <SelectItem value="SPL">Solo Parent Leave</SelectItem>
                                     <SelectItem value="LOA">Leave of Absence</SelectItem>
-                                    <SelectItem value="LDV">Leave for Doctor's Visit</SelectItem>
+                                    <SelectItem value="LDV">Leave due to Domestic Violence</SelectItem>
                                     <SelectItem value="UPTO">Unpaid Time Off</SelectItem>
                                 </SelectContent>
                             </Select>

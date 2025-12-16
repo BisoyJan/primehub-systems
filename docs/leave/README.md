@@ -127,9 +127,9 @@ The Leave Management System handles:
    - Note: Medical cert submitted physically after return
    - Info message on form: "Note: SL credits are only deducted if marked as NCNS."
 
-3. **BL - Birthday Leave**
-   - Treated as Vacation Leave internally
-   - Same rules as VL apply
+3. **BL - Bereavement Leave**
+   - For mourning the loss of an immediate family member
+   - Same rules as VL apply (2-week notice, ≤6 points, no absence in 30 days)
 
 #### Non-Credited Leave Types (No Credit Deduction)
 4. **SPL - Solo Parent Leave**

@@ -459,10 +459,10 @@ leave days you have left.
  Leave Types Available
 - VL (Vacation Leave): For planned time off (holidays, personal days).
 - SL (Sick Leave): For illness or medical appointments.
-- BL (Birthday Leave): Special day off for your birthday.
+- BL (Bereavement Leave): For mourning the loss of an immediate family member.
 - SPL (Special Leave): For emergencies or special circumstances.
 - LOA (Leave of Absence): Extended unpaid leave.
-- LDV (Leave Due to Violation): Administrative leave.
+- LDV (Leave for Domestic Violence): Administrative leave.
 - UPTO (Unpaid Time Off): Additional unpaid days off.
 
  Primary Functions (What You Can Do)

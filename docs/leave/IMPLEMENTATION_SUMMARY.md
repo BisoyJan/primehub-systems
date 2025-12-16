@@ -56,10 +56,10 @@ A complete leave management system with automatic credit accrual, multiple leave
 |------|------|---------|--------|
 | Vacation Leave | VL | ✅ Deduct | 2 weeks |
 | Sick Leave | SL | ✅ Deduct | None |
-| Birthday Leave | BL | ✅ Deduct | 2 weeks |
+| Bereavement Leave | BL | ✅ Deduct | 2 weeks |
 | Solo Parent Leave | SPL | ❌ None | None |
 | Leave of Absence | LOA | ❌ None | None |
-| Doctor Visit | LDV | ❌ None | None |
+| Leave for Domestic Violence | LDV | ❌ None | None |
 | Unpaid Time Off | UPTO | ❌ None | None |
 
 ### 2. Credit Accrual

@@ -102,7 +102,7 @@ As employee:
 |------|---------|--------|--------------|
 | VL (Vacation) | ✅ Yes | 2 weeks | ✅ ≤6 points |
 | SL (Sick) | ✅ Yes | None | ❌ |
-| BL (Birthday) | ✅ Yes | 2 weeks | ✅ ≤6 points |
+| BL (Bereavement) | ✅ Yes | 2 weeks | ✅ ≤6 points |
 | SPL | ❌ No | None | ❌ |
 | LOA | ❌ No | None | ❌ |
 | LDV | ❌ No | None | ❌ |

@@ -64,10 +64,10 @@ A comprehensive form request system for employee submissions including Leave Req
 |------------|---------|--------------|
 | VL (Vacation) | ✅ Deduct | 2 weeks notice, ≤6 points |
 | SL (Sick) | ✅ Deduct | No advance notice |
-| BL (Birthday) | ✅ Deduct | Same as VL |
+| BL (Bereavement) | ✅ Deduct | Same as VL |
 | SPL (Solo Parent) | ❌ None | Special leave |
 | LOA (Leave of Absence) | ❌ None | Unpaid |
-| LDV (Doctor Visit) | ❌ None | Medical |
+| LDV (Domestic Violence) | ❌ None | Special leave |
 | UPTO (Unpaid) | ❌ None | Personal |
 
 **Credit Accrual:**
