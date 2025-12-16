@@ -82,6 +82,13 @@ class LeaveRequestController extends Controller
             $query->forUser($request->user_id);
         }
 
+        // Filter by employee name (admin/TL only)
+        if (($isAdmin || $isTeamLead) && $request->filled('employee_name')) {
+            $query->whereHas('user', function ($q) use ($request) {
+                $q->where('name', 'like', '%' . $request->employee_name . '%');
+            });
+        }
+
         $leaveRequests = $query->orderBy('created_at', 'desc')
             ->paginate(25)
             ->withQueryString();
@@ -93,7 +100,7 @@ class LeaveRequestController extends Controller
 
         return Inertia::render('FormRequest/Leave/Index', [
             'leaveRequests' => $leaveRequests,
-            'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id']),
+            'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id', 'employee_name']),
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'hasPendingRequests' => $hasPendingRequests,
@@ -1368,6 +1375,9 @@ class LeaveRequestController extends Controller
         $roleFilter = $request->input('role', '');
         $eligibilityFilter = $request->input('eligibility', '');
 
+        // Calculate eligibility cutoff date (6 months ago from start of selected year)
+        $eligibilityCutoffDate = Carbon::create($year, 1, 1)->subMonths(6);
+
         // Get all users with hire dates
         $query = User::whereNotNull('hired_date')
             ->where('is_approved', true);
@@ -1392,7 +1402,15 @@ class LeaveRequestController extends Controller
             $query->where('role', $roleFilter);
         }
 
-        $users = $query->orderBy('first_name')->orderBy('last_name')->paginate(20);
+        // Apply eligibility filter at query level
+        // Eligible = hired_date is at least 6 months before start of selected year
+        if ($eligibilityFilter === 'eligible') {
+            $query->where('hired_date', '<=', $eligibilityCutoffDate);
+        } elseif ($eligibilityFilter === 'not_eligible') {
+            $query->where('hired_date', '>', $eligibilityCutoffDate);
+        }
+
+        $users = $query->orderBy('first_name')->orderBy('last_name')->paginate(20)->withQueryString();
 
         // Get leave credits data for each user
         $creditsData = $users->through(function ($user) use ($year) {
@@ -1414,13 +1432,6 @@ class LeaveRequestController extends Controller
                 'balance' => $summary['balance'],
             ];
         });
-
-        // Apply eligibility filter after transformation
-        if ($eligibilityFilter === 'eligible') {
-            $creditsData = $creditsData->filter(fn($item) => $item['is_eligible']);
-        } elseif ($eligibilityFilter === 'not_eligible') {
-            $creditsData = $creditsData->filter(fn($item) => !$item['is_eligible']);
-        }
 
         // Get all employees for search popover
         $allEmployees = User::whereNotNull('hired_date')

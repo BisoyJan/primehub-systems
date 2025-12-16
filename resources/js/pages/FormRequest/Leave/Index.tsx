@@ -30,7 +30,13 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download } from 'lucide-react';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -96,6 +102,7 @@ interface Props {
         type?: string;
         start_date?: string;
         end_date?: string;
+        employee_name?: string;
     };
     isAdmin: boolean;
     isTeamLead?: boolean;
@@ -126,11 +133,14 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
 
     const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
     const [filterType, setFilterType] = useState(filters.type || 'all');
+    const [filterEmployeeName, setFilterEmployeeName] = useState(filters.employee_name || '');
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
+    const [showEmployeeSearch, setShowEmployeeSearch] = useState(false);
 
     // Export dialog state
     const [showExportDialog, setShowExportDialog] = useState(false);
@@ -146,7 +156,26 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
     };
     const paginationLinks = leaveRequests.links || [];
 
-    const showClearFilters = filterStatus !== 'all' || filterType !== 'all';
+    // Get unique employee names from current data
+    const uniqueEmployees = React.useMemo(() => {
+        const employeeMap = new Map<number, string>();
+        leaveRequests.data.forEach(request => {
+            if (!employeeMap.has(request.user.id)) {
+                employeeMap.set(request.user.id, request.user.name);
+            }
+        });
+        return Array.from(employeeMap.entries()).map(([id, name]) => ({ id, name }));
+    }, [leaveRequests.data]);
+
+    // Filter employees based on search query
+    const filteredEmployees = React.useMemo(() => {
+        if (!employeeSearchQuery) return uniqueEmployees;
+        return uniqueEmployees.filter(emp =>
+            emp.name.toLowerCase().includes(employeeSearchQuery.toLowerCase())
+        );
+    }, [uniqueEmployees, employeeSearchQuery]);
+
+    const showClearFilters = filterStatus !== 'all' || filterType !== 'all' || filterEmployeeName !== '';
 
     const buildFilterParams = React.useCallback(() => {
         const params: Record<string, string> = {};
@@ -156,8 +185,11 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
         if (filterType !== 'all') {
             params.type = filterType;
         }
+        if (filterEmployeeName) {
+            params.employee_name = filterEmployeeName;
+        }
         return params;
-    }, [filterStatus, filterType]);
+    }, [filterStatus, filterType, filterEmployeeName]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         router.get(leaveIndexRoute().url, params, {
@@ -195,6 +227,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
     const clearFilters = () => {
         setFilterStatus('all');
         setFilterType('all');
+        setFilterEmployeeName('');
         requestWithFilters({});
     };
 
@@ -464,6 +497,73 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                 <div className="flex flex-col gap-4">
                     <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
                         <div className="w-full sm:w-auto flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+
+                            {showEmployeeColumn && (
+                                <Popover open={showEmployeeSearch} onOpenChange={setShowEmployeeSearch}>
+                                    <PopoverTrigger asChild>
+                                        <Button
+                                            variant="outline"
+                                            role="combobox"
+                                            aria-expanded={showEmployeeSearch}
+                                            className="w-full justify-between font-normal"
+                                        >
+                                            <span className="truncate">
+                                                {filterEmployeeName || "All Employees"}
+                                            </span>
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-full p-0" align="start">
+                                        <Command shouldFilter={false}>
+                                            <CommandInput
+                                                placeholder="Search employee..."
+                                                value={employeeSearchQuery}
+                                                onValueChange={setEmployeeSearchQuery}
+                                            />
+                                            <CommandList>
+                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                <CommandGroup>
+                                                    <CommandItem
+                                                        value="all"
+                                                        onSelect={() => {
+                                                            setFilterEmployeeName('');
+                                                            setShowEmployeeSearch(false);
+                                                            setEmployeeSearchQuery('');
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${!filterEmployeeName ? "opacity-100" : "opacity-0"}`}
+                                                        />
+                                                        All Employees
+                                                    </CommandItem>
+                                                    {filteredEmployees.map((employee) => (
+                                                        <CommandItem
+                                                            key={employee.id}
+                                                            value={employee.name}
+                                                            onSelect={() => {
+                                                                setFilterEmployeeName(employee.name);
+                                                                setShowEmployeeSearch(false);
+                                                                setEmployeeSearchQuery('');
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${filterEmployeeName === employee.name
+                                                                    ? "opacity-100"
+                                                                    : "opacity-0"
+                                                                    }`}
+                                                            />
+                                                            {employee.name}
+                                                        </CommandItem>
+                                                    ))}
+                                                </CommandGroup>
+                                            </CommandList>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                            )}
+
                             <Select value={filterStatus} onValueChange={setFilterStatus}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="All Statuses" />

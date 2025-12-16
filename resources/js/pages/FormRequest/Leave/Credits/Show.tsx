@@ -104,10 +104,10 @@ export default function Show({ user, year, summary, monthlyCredits, leaveRequest
 
             <LoadingOverlay isLoading={isPageLoading} />
 
-            <div className="flex flex-col gap-6 p-4">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
                 {/* Header with Back Button - only show if user can view all credits */}
                 {canViewAll && (
-                    <div className="flex items-center gap-4 mb-2">
+                    <div className="flex items-center gap-4">
                         <Link href={creditsIndexRoute().url}>
                             <Button variant="outline" size="icon">
                                 <ArrowLeft className="h-4 w-4" />

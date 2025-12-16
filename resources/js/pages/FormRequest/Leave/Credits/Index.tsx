@@ -38,9 +38,8 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { Search, Download, Eye, Filter, X, ChevronsUpDown, Check } from 'lucide-react';
+import { Download, Eye, Filter, ChevronsUpDown, Check } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -88,6 +87,7 @@ interface Props {
         data: CreditData[];
         links?: PaginationLink[];
         meta?: PaginationMeta;
+        total?: number;
     };
     allEmployees: Employee[];
     filters: {
@@ -242,31 +242,26 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
-            <LoadingOverlay isLoading={isPageLoading} />
 
-            <div className="flex flex-col gap-6 p-4 md:p-6">
+            <div className="flex h-full flex-1 flex-col gap-4 rounded-xl p-3 relative">
+                <LoadingOverlay isLoading={isPageLoading} />
+
                 <PageHeader
                     title="Leave Credits"
                     description="View all employees' leave credit balances and history"
                 />
 
                 {/* Filters */}
-                <Card>
-                    <CardHeader className="pb-3">
-                        <CardTitle className="text-lg flex items-center gap-2">
-                            <Filter className="h-4 w-4" />
-                            Filters
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div className="flex flex-col sm:flex-row gap-4">
+                <div className="flex flex-col gap-3">
+                    <div className="flex flex-col lg:flex-row gap-3 items-start lg:items-center">
+                        <div className="flex flex-wrap gap-2 flex-1 w-full">
                             <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
                                         variant="outline"
                                         role="combobox"
                                         aria-expanded={isEmployeePopoverOpen}
-                                        className="w-full sm:w-64 justify-between font-normal"
+                                        className="w-full sm:w-auto justify-between font-normal"
                                     >
                                         <span className="truncate">
                                             {selectedEmployee
@@ -276,7 +271,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
                                 </PopoverTrigger>
-                                <PopoverContent className="w-full sm:w-64 p-0" align="start">
+                                <PopoverContent className="w-64 p-0" align="start">
                                     <Command shouldFilter={false}>
                                         <CommandInput
                                             placeholder="Search employee..."
@@ -330,7 +325,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                             </Popover>
 
                             <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v); }}>
-                                <SelectTrigger className="w-full sm:w-32">
+                                <SelectTrigger className="w-full sm:w-[120px]">
                                     <SelectValue placeholder="Year" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -343,7 +338,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                             </Select>
 
                             <Select value={roleFilter} onValueChange={setRoleFilter}>
-                                <SelectTrigger className="w-full sm:w-40">
+                                <SelectTrigger className="w-full sm:w-[140px]">
                                     <SelectValue placeholder="Role" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -359,7 +354,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                             </Select>
 
                             <Select value={eligibilityFilter} onValueChange={setEligibilityFilter}>
-                                <SelectTrigger className="w-full sm:w-40">
+                                <SelectTrigger className="w-full sm:w-[140px]">
                                     <SelectValue placeholder="Eligibility" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -368,32 +363,36 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                     <SelectItem value="not_eligible">Not Eligible</SelectItem>
                                 </SelectContent>
                             </Select>
+                        </div>
 
-                            <Button onClick={applyFilters}>
-                                <Search className="h-4 w-4 mr-2" />
-                                Search
+                        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+                            <Button variant="outline" onClick={applyFilters} className="flex-1 sm:flex-none">
+                                <Filter className="mr-2 h-4 w-4" />
+                                Filter
                             </Button>
 
                             {showClearFilters && (
-                                <Button variant="outline" onClick={clearFilters}>
-                                    <X className="h-4 w-4 mr-2" />
-                                    Clear
+                                <Button variant="outline" onClick={clearFilters} className="flex-1 sm:flex-none">
+                                    Reset
                                 </Button>
                             )}
-                        </div>
 
-                        <div className="flex justify-end mt-4">
-                            <Button variant="outline" onClick={() => setShowExportDialog(true)}>
+                            <Button variant="outline" onClick={() => setShowExportDialog(true)} className="flex-1 sm:flex-none">
                                 <Download className="h-4 w-4 mr-2" />
-                                Export to Excel
+                                Export Credits
                             </Button>
                         </div>
-                    </CardContent>
-                </Card>
+                    </div>
+
+                    <div className="text-sm text-muted-foreground">
+                        Showing {creditsData?.data?.length || 0} of {creditsData?.total || creditsData?.meta?.total || 0} employee{(creditsData?.total || creditsData?.meta?.total || 0) === 1 ? '' : 's'}
+                        {showClearFilters && ' (filtered)'}
+                    </div>
+                </div>
 
                 {/* Desktop Table */}
-                <div className="hidden md:block">
-                    <Card>
+                <div className="hidden md:block shadow rounded-md overflow-hidden bg-card">
+                    <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
                                 <TableRow>
@@ -409,7 +408,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {creditsData.data.length === 0 ? (
+                                {!creditsData?.data || creditsData.data.length === 0 ? (
                                     <TableRow>
                                         <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                                             No employees found
@@ -461,21 +460,25 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                 )}
                             </TableBody>
                         </Table>
-                    </Card>
+                    </div>
+
+                    {creditsData.links && creditsData.links.length > 0 && (
+                        <div className="border-t px-4 py-3 flex justify-center">
+                            <PaginationNav links={creditsData.links} only={["creditsData"]} />
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Cards */}
                 <div className="md:hidden space-y-4">
-                    {creditsData.data.length === 0 ? (
-                        <Card>
-                            <CardContent className="py-8 text-center text-muted-foreground">
-                                No employees found
-                            </CardContent>
-                        </Card>
+                    {!creditsData?.data || creditsData.data.length === 0 ? (
+                        <div className="bg-card border rounded-lg p-8 shadow-sm">
+                            <p className="text-center text-muted-foreground">No employees found</p>
+                        </div>
                     ) : (
-                        creditsData.data.map((employee) => (
-                            <Card key={employee.id}>
-                                <CardContent className="p-4 space-y-3">
+                        <>
+                            {creditsData.data.map((employee) => (
+                                <div key={employee.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className="font-medium">{employee.name}</p>
@@ -528,16 +531,14 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                             View History
                                         </Button>
                                     </Link>
-                                </CardContent>
-                            </Card>
-                        ))
-                    )}
-                </div>
-
-                {/* Pagination */}
-                <div className="flex justify-center mt-4">
-                    {creditsData.links && creditsData.links.length > 0 && (
-                        <PaginationNav links={creditsData.links} only={["creditsData"]} />
+                                </div>
+                            ))}
+                            {creditsData.links && creditsData.links.length > 0 && (
+                                <div className="flex justify-center mt-4">
+                                    <PaginationNav links={creditsData.links} only={["creditsData"]} />
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
             </div>
