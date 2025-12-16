@@ -4,6 +4,7 @@ import AppLayout from '@/layouts/app-layout';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { TimeInput } from '@/components/ui/time-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { format, parse } from 'date-fns';
@@ -18,10 +19,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertCircle, Check, ChevronsUpDown, Sparkles, RefreshCw } from 'lucide-react';
+import { AlertCircle, Check, ChevronsUpDown, Sparkles, RefreshCw, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageMeta } from '@/hooks';
 import { index as attendanceIndex, create as attendanceCreate, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
+import { Switch } from '@/components/ui/switch';
 
 interface User {
     id: number;
@@ -70,9 +72,9 @@ export default function Create({ users, campaigns }: Props) {
         actual_time_in: '',
         actual_time_out: '',
         actual_time_in_date: '',
-        actual_time_in_time: '01:00',
+        actual_time_in_time: '',
         actual_time_out_date: '',
-        actual_time_out_time: '01:00',
+        actual_time_out_time: '',
         notes: '',
     });
 
@@ -84,9 +86,9 @@ export default function Create({ users, campaigns }: Props) {
         actual_time_in: '',
         actual_time_out: '',
         actual_time_in_date: '',
-        actual_time_in_time: '01:00',
+        actual_time_in_time: '',
         actual_time_out_date: '',
-        actual_time_out_time: '01:00',
+        actual_time_out_time: '',
         notes: '',
     });
 
@@ -97,6 +99,15 @@ export default function Create({ users, campaigns }: Props) {
     const [shiftFilter, setShiftFilter] = useState<string>('all');
     const [campaignFilter, setCampaignFilter] = useState<string>('all');
     const [timeOutValidationError, setTimeOutValidationError] = useState<string>('');
+
+    // Multi-entry mode state - persisted in localStorage
+    const [multiEntryMode, setMultiEntryMode] = useState(() => {
+        if (typeof window !== 'undefined') {
+            return localStorage.getItem('attendance_multi_entry_mode') === 'true';
+        }
+        return false;
+    });
+    const [recordsCreatedCount, setRecordsCreatedCount] = useState(0);
 
     // Auto-status selection state (single entry mode only)
     const [suggestedStatus, setSuggestedStatus] = useState<string>('');
@@ -303,23 +314,100 @@ export default function Create({ users, campaigns }: Props) {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.user_id]);
 
-    // Time format conversion helpers
-    const convertTo24Hour = (hour: string, minute: string, period: 'AM' | 'PM') => {
-        let h = parseInt(hour);
-        if (period === 'PM' && h !== 12) h += 12;
-        if (period === 'AM' && h === 12) h = 0;
-        return `${h.toString().padStart(2, '0')}:${minute.padStart(2, '0')}`;
-    };
+    // Persist multi-entry mode to localStorage
+    useEffect(() => {
+        localStorage.setItem('attendance_multi_entry_mode', multiEntryMode.toString());
+    }, [multiEntryMode]);
 
-    const convertFrom24Hour = (time24: string): { hour: string; minute: string; period: 'AM' | 'PM' } => {
-        if (!time24) return { hour: '12', minute: '00', period: 'AM' };
-        const [h, m] = time24.split(':');
-        let hour = parseInt(h);
-        const period: 'AM' | 'PM' = hour >= 12 ? 'PM' : 'AM';
-        if (hour === 0) hour = 12;
-        else if (hour > 12) hour -= 12;
-        return { hour: hour.toString(), minute: m || '00', period };
-    };
+    // Auto-populate time-in date from shift date
+    useEffect(() => {
+        if (isBulkMode) {
+            if (bulkData.shift_date && !bulkData.actual_time_in_date) {
+                setBulkData('actual_time_in_date', bulkData.shift_date);
+            }
+        } else {
+            if (data.shift_date && !data.actual_time_in_date) {
+                setData('actual_time_in_date', data.shift_date);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.shift_date, bulkData.shift_date, isBulkMode]);
+
+    // Auto-calculate time-out date based on shift type and time values
+    const calculateTimeOutDate = useCallback((schedule: User['schedule'], shiftDate: string, timeInTime: string, timeOutTime: string): string => {
+        if (!shiftDate || !timeOutTime) return shiftDate;
+
+        const timeInHour = parseInt(timeInTime?.split(':')[0] || '0');
+        const timeOutHour = parseInt(timeOutTime.split(':')[0]);
+
+        // Determine if time-out should be next day based on shift type and times
+        let isNextDay = false;
+
+        if (schedule) {
+            const schedInHour = parseInt(schedule.scheduled_time_in.split(':')[0]);
+            const schedOutHour = parseInt(schedule.scheduled_time_out.split(':')[0]);
+
+            // Night shift: scheduled out is before scheduled in (e.g., 22:00 -> 07:00)
+            if (schedule.shift_type === 'night_shift' || schedOutHour < schedInHour) {
+                // If time-out hour is in the morning range (0-12) and time-in is in evening (14-23)
+                if (timeOutHour >= 0 && timeOutHour <= 14 && timeInHour >= 14) {
+                    isNextDay = true;
+                }
+            }
+        } else {
+            // No schedule - use heuristic: if time-out is significantly earlier than time-in, assume next day
+            // E.g., Time in 22:00, Time out 07:00 = next day
+            if (timeOutHour >= 0 && timeOutHour <= 12 && timeInHour >= 18) {
+                isNextDay = true;
+            }
+        }
+
+        if (isNextDay) {
+            const nextDay = new Date(shiftDate);
+            nextDay.setDate(nextDay.getDate() + 1);
+            return nextDay.toISOString().split('T')[0];
+        }
+
+        return shiftDate;
+    }, []);
+
+    // Auto-populate time-out date based on shift type and times
+    useEffect(() => {
+        if (isBulkMode) {
+            if (bulkData.shift_date && bulkData.actual_time_out_time) {
+                // For bulk mode, we don't have a single schedule, so use basic heuristic
+                const calculatedDate = calculateTimeOutDate(
+                    null,
+                    bulkData.shift_date,
+                    bulkData.actual_time_in_time,
+                    bulkData.actual_time_out_time
+                );
+                if (calculatedDate !== bulkData.actual_time_out_date) {
+                    setBulkData('actual_time_out_date', calculatedDate);
+                }
+            }
+        } else {
+            if (data.shift_date && data.actual_time_out_time && selectedUser?.schedule) {
+                const calculatedDate = calculateTimeOutDate(
+                    selectedUser.schedule,
+                    data.shift_date,
+                    data.actual_time_in_time,
+                    data.actual_time_out_time
+                );
+                if (calculatedDate !== data.actual_time_out_date) {
+                    setData('actual_time_out_date', calculatedDate);
+                }
+            } else if (data.shift_date && data.actual_time_out_time && !data.actual_time_out_date) {
+                // No schedule but has times - default to shift date
+                setData('actual_time_out_date', data.shift_date);
+            }
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [
+        data.shift_date, data.actual_time_in_time, data.actual_time_out_time, selectedUser?.schedule,
+        bulkData.shift_date, bulkData.actual_time_in_time, bulkData.actual_time_out_time,
+        isBulkMode, calculateTimeOutDate
+    ]);
 
     // Get unique shift schedules
     const uniqueShifts = Array.from(
@@ -393,9 +481,37 @@ export default function Create({ users, campaigns }: Props) {
         // Use transform to modify data before submission
         post(attendanceStore().url, {
             preserveScroll: true,
+            preserveState: multiEntryMode,
             onSuccess: () => {
-                toast.success('Attendance record created successfully!');
-                router.visit(attendanceIndex().url);
+                if (multiEntryMode) {
+                    // Multi-entry mode: stay on page and reset form
+                    setRecordsCreatedCount(prev => prev + 1);
+                    toast.success(`Attendance record #${recordsCreatedCount + 1} created!`, {
+                        description: 'Form reset. Add another record.',
+                    });
+                    // Reset form fields but keep shift_date for convenience
+                    const currentShiftDate = data.shift_date;
+                    setData({
+                        user_id: '',
+                        shift_date: currentShiftDate,
+                        status: '',
+                        secondary_status: '',
+                        actual_time_in: '',
+                        actual_time_out: '',
+                        actual_time_in_date: currentShiftDate,
+                        actual_time_in_time: '',
+                        actual_time_out_date: '',
+                        actual_time_out_time: '',
+                        notes: '',
+                    });
+                    setIsStatusManuallyOverridden(false);
+                    setSuggestedStatus('');
+                    setSuggestedSecondaryStatus('');
+                } else {
+                    // Normal mode: redirect to index
+                    toast.success('Attendance record created successfully!');
+                    router.visit(attendanceIndex().url);
+                }
             },
             onError: () => {
                 toast.error('Failed to create attendance record', {
@@ -419,9 +535,38 @@ export default function Create({ users, campaigns }: Props) {
 
         bulkPost(attendanceBulkStore().url, {
             preserveScroll: true,
+            preserveState: multiEntryMode,
             onSuccess: () => {
-                toast.success(`${selectedUserIds.length} attendance records created successfully!`);
-                router.visit(attendanceIndex().url);
+                const createdCount = selectedUserIds.length;
+                if (multiEntryMode) {
+                    // Multi-entry mode: stay on page and reset form
+                    setRecordsCreatedCount(prev => prev + createdCount);
+                    toast.success(`${createdCount} attendance records created!`, {
+                        description: `Total this session: ${recordsCreatedCount + createdCount}. Form reset.`,
+                    });
+                    // Reset form fields but keep shift_date
+                    const currentShiftDate = bulkData.shift_date;
+                    setBulkData({
+                        user_ids: [],
+                        shift_date: currentShiftDate,
+                        status: '',
+                        secondary_status: '',
+                        actual_time_in: '',
+                        actual_time_out: '',
+                        actual_time_in_date: currentShiftDate,
+                        actual_time_in_time: '',
+                        actual_time_out_date: '',
+                        actual_time_out_time: '',
+                        notes: '',
+                    });
+                    setSelectedUserIds([]);
+                    setCampaignFilter('all');
+                    setShiftFilter('all');
+                } else {
+                    // Normal mode: redirect to index
+                    toast.success(`${createdCount} attendance records created successfully!`);
+                    router.visit(attendanceIndex().url);
+                }
             },
             onError: () => {
                 toast.error('Failed to create attendance records', {
@@ -531,6 +676,31 @@ export default function Create({ users, campaigns }: Props) {
                     title="Create Manual Attendance"
                     description="Add a manual attendance record"
                 />
+
+                {/* Multi-Entry Toggle */}
+                <div className="flex justify-end items-center gap-3 px-1">
+                    {multiEntryMode && recordsCreatedCount > 0 && (
+                        <span className="text-sm text-muted-foreground">
+                            Records created this session: <strong className="text-foreground">{recordsCreatedCount}</strong>
+                        </span>
+                    )}
+                    <div className="flex items-center gap-2 p-3 rounded-lg border bg-card">
+                        <Repeat className={`h-4 w-4 ${multiEntryMode ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <Label htmlFor="multi-entry-toggle" className="text-sm font-medium cursor-pointer">
+                            Create Multiple Records
+                        </Label>
+                        <Switch
+                            id="multi-entry-toggle"
+                            checked={multiEntryMode}
+                            onCheckedChange={setMultiEntryMode}
+                        />
+                    </div>
+                </div>
+                {multiEntryMode && (
+                    <p className="text-xs text-muted-foreground text-right px-1 -mt-2">
+                        Stay on this page after saving. Form will reset for next entry.
+                    </p>
+                )}
 
                 <div className="flex justify-center mb-4">
                     <div className="flex gap-2">
@@ -792,10 +962,39 @@ export default function Create({ users, campaigns }: Props) {
                                         type="date"
                                         value={isBulkMode ? bulkData.shift_date : data.shift_date}
                                         onChange={(e) => {
+                                            const newShiftDate = e.target.value;
                                             if (isBulkMode) {
-                                                setBulkData('shift_date', e.target.value);
+                                                setBulkData('shift_date', newShiftDate);
+                                                // Auto-update time-in date
+                                                setBulkData('actual_time_in_date', newShiftDate);
+                                                // Auto-update time-out date if time-out time exists
+                                                if (bulkData.actual_time_out_time) {
+                                                    const calculatedTimeOutDate = calculateTimeOutDate(
+                                                        null,
+                                                        newShiftDate,
+                                                        bulkData.actual_time_in_time,
+                                                        bulkData.actual_time_out_time
+                                                    );
+                                                    setBulkData('actual_time_out_date', calculatedTimeOutDate);
+                                                } else {
+                                                    setBulkData('actual_time_out_date', newShiftDate);
+                                                }
                                             } else {
-                                                setData('shift_date', e.target.value);
+                                                setData('shift_date', newShiftDate);
+                                                // Auto-update time-in date
+                                                setData('actual_time_in_date', newShiftDate);
+                                                // Auto-update time-out date if time-out time exists
+                                                if (data.actual_time_out_time) {
+                                                    const calculatedTimeOutDate = calculateTimeOutDate(
+                                                        selectedUser?.schedule || null,
+                                                        newShiftDate,
+                                                        data.actual_time_in_time,
+                                                        data.actual_time_out_time
+                                                    );
+                                                    setData('actual_time_out_date', calculatedTimeOutDate);
+                                                } else {
+                                                    setData('actual_time_out_date', newShiftDate);
+                                                }
                                             }
                                         }}
                                         max={new Date().toISOString().split('T')[0]}
@@ -893,145 +1092,42 @@ export default function Create({ users, campaigns }: Props) {
                                     <div className="space-y-2">
                                         <Label htmlFor="actual_time_in">
                                             Actual Time In
-                                            <span className="ml-2 text-xs text-muted-foreground font-normal">
-                                                ({is24HourFormat ? '24-hour format' : '12-hour format'})
-                                            </span>
                                         </Label>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <Input
-                                                id="actual_time_in_date"
-                                                type="date"
-                                                placeholder="Date"
-                                                value={isBulkMode ? bulkData.actual_time_in_date : data.actual_time_in_date}
-                                                onChange={(e) => {
-                                                    if (isBulkMode) {
-                                                        setBulkData('actual_time_in_date', e.target.value);
-                                                    } else {
-                                                        setData('actual_time_in_date', e.target.value);
-                                                    }
-                                                }}
-                                            />
-                                            {is24HourFormat === true ? (
-                                                <div className="grid grid-cols-2 gap-1">
-                                                    <Select
-                                                        value={isBulkMode ? bulkData.actual_time_in_time.split(':')[0] || '00' : data.actual_time_in_time.split(':')[0] || '00'}
-                                                        onValueChange={(hour) => {
-                                                            const minute = (isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time).split(':')[1] || '00';
-                                                            // Convert display value (01-24) to internal value (00-23)
-                                                            const internalHour = hour === '24' ? '00' : hour;
-                                                            const time24 = `${internalHour}:${minute}`;
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_in_time', time24);
-                                                            } else {
-                                                                setData('actual_time_in_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="HH" />
-                                                        </SelectTrigger>
-                                                        <SelectContent className="max-h-[200px]">
-                                                            {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
-                                                                <SelectItem key={h} value={h === 24 ? '00' : h.toString().padStart(2, '0')}>
-                                                                    {h.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <Select
-                                                        value={(isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time).split(':')[1] || '00'}
-                                                        onValueChange={(minute) => {
-                                                            const hour = (isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time).split(':')[0] || '00';
-                                                            const time24 = `${hour}:${minute}`;
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_in_time', time24);
-                                                            } else {
-                                                                setData('actual_time_in_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="MM" />
-                                                        </SelectTrigger>
-                                                        <SelectContent className="max-h-[200px]">
-                                                            {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                                                                <SelectItem key={m} value={m.toString().padStart(2, '0')}>
-                                                                    {m.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            ) : is24HourFormat === false ? (
-                                                <div className="grid grid-cols-3 gap-1">
-                                                    <Select
-                                                        value={convertFrom24Hour(isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time).hour}
-                                                        onValueChange={(hour) => {
-                                                            const current = convertFrom24Hour(isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time);
-                                                            const time24 = convertTo24Hour(hour, current.minute, current.period);
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_in_time', time24);
-                                                            } else {
-                                                                setData('actual_time_in_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="HH" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                                                                <SelectItem key={h} value={h.toString()}>
-                                                                    {h.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <Select
-                                                        value={convertFrom24Hour(isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time).minute}
-                                                        onValueChange={(minute) => {
-                                                            const current = convertFrom24Hour(isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time);
-                                                            const time24 = convertTo24Hour(current.hour, minute, current.period);
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_in_time', time24);
-                                                            } else {
-                                                                setData('actual_time_in_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="MM" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                                                                <SelectItem key={m} value={m.toString().padStart(2, '0')}>
-                                                                    {m.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <Select
-                                                        value={convertFrom24Hour(isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time).period}
-                                                        onValueChange={(period: 'AM' | 'PM') => {
-                                                            const current = convertFrom24Hour(isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time);
-                                                            const time24 = convertTo24Hour(current.hour, current.minute, period);
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_in_time', time24);
-                                                            } else {
-                                                                setData('actual_time_in_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="AM">AM</SelectItem>
-                                                            <SelectItem value="PM">PM</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            ) : null}
+                                            <div className="space-y-1">
+                                                <Input
+                                                    id="actual_time_in_date"
+                                                    type="date"
+                                                    placeholder="Date"
+                                                    value={isBulkMode ? bulkData.actual_time_in_date : data.actual_time_in_date}
+                                                    onChange={(e) => {
+                                                        if (isBulkMode) {
+                                                            setBulkData('actual_time_in_date', e.target.value);
+                                                        } else {
+                                                            setData('actual_time_in_date', e.target.value);
+                                                        }
+                                                    }}
+                                                />
+                                                {(isBulkMode ? bulkData.actual_time_in_date : data.actual_time_in_date) && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {format(new Date((isBulkMode ? bulkData.actual_time_in_date : data.actual_time_in_date) + 'T00:00:00'), 'EEEE, MMM d, yyyy')}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="space-y-1">
+                                                <TimeInput
+                                                    id="actual_time_in_time"
+                                                    value={isBulkMode ? bulkData.actual_time_in_time : data.actual_time_in_time}
+                                                    onChange={(value: string) => {
+                                                        if (isBulkMode) {
+                                                            setBulkData('actual_time_in_time', value);
+                                                        } else {
+                                                            setData('actual_time_in_time', value);
+                                                        }
+                                                    }}
+                                                    is24HourFormat={is24HourFormat}
+                                                />
+                                            </div>
                                         </div>
                                         {(isBulkMode ? bulkErrors.actual_time_in : errors.actual_time_in) && (
                                             <p className="text-sm text-red-500">{isBulkMode ? bulkErrors.actual_time_in : errors.actual_time_in}</p>
@@ -1042,156 +1138,47 @@ export default function Create({ users, campaigns }: Props) {
                                         <Label htmlFor="actual_time_out">
                                             Actual Time Out
                                             <span className="ml-2 text-xs text-muted-foreground font-normal">
-                                                ({is24HourFormat ? '24-hour format' : '12-hour format'})
+                                                (Date auto-calculated based on shift)
                                             </span>
                                         </Label>
                                         <div className="grid grid-cols-2 gap-2">
-                                            <Input
-                                                id="actual_time_out_date"
-                                                type="date"
-                                                placeholder="Date"
-                                                value={isBulkMode ? bulkData.actual_time_out_date : data.actual_time_out_date}
-                                                onChange={(e) => {
-                                                    if (isBulkMode) {
-                                                        setBulkData('actual_time_out_date', e.target.value);
-                                                        // Re-validate when date changes
-                                                        const hour = bulkData.actual_time_out_time.split(':')[0] || '00';
-                                                        const displayHour = hour === '00' ? '24' : hour;
-                                                        validateTimeOut(bulkData.actual_time_in_date, e.target.value, displayHour);
-                                                    } else {
-                                                        setData('actual_time_out_date', e.target.value);
-                                                        // Re-validate when date changes
-                                                        const hour = data.actual_time_out_time.split(':')[0] || '00';
-                                                        const displayHour = hour === '00' ? '24' : hour;
-                                                        validateTimeOut(data.actual_time_in_date, e.target.value, displayHour);
-                                                    }
-                                                }}
-                                            />
-                                            {is24HourFormat === true ? (
-                                                <div className="grid grid-cols-2 gap-1">
-                                                    <Select
-                                                        value={isBulkMode ? bulkData.actual_time_out_time.split(':')[0] || '00' : data.actual_time_out_time.split(':')[0] || '00'}
-                                                        onValueChange={(hour) => {
-                                                            const minute = (isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time).split(':')[1] || '00';
-                                                            // Convert display value (01-24) to internal value (00-23)
-                                                            const internalHour = hour === '24' ? '00' : hour;
-                                                            const time24 = `${internalHour}:${minute}`;
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_out_time', time24);
-                                                                // Validate if hour 24 is selected on same date
-                                                                validateTimeOut(bulkData.actual_time_in_date, bulkData.actual_time_out_date, hour);
-                                                            } else {
-                                                                setData('actual_time_out_time', time24);
-                                                                // Validate if hour 24 is selected on same date
-                                                                validateTimeOut(data.actual_time_in_date, data.actual_time_out_date, hour);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="HH" />
-                                                        </SelectTrigger>
-                                                        <SelectContent className="max-h-[200px]">
-                                                            {Array.from({ length: 24 }, (_, i) => i + 1).map((h) => (
-                                                                <SelectItem key={h} value={h === 24 ? '00' : h.toString().padStart(2, '0')}>
-                                                                    {h.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <Select
-                                                        value={(isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time).split(':')[1] || '00'}
-                                                        onValueChange={(minute) => {
-                                                            const hour = (isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time).split(':')[0] || '00';
-                                                            const time24 = `${hour}:${minute}`;
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_out_time', time24);
-                                                            } else {
-                                                                setData('actual_time_out_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="MM" />
-                                                        </SelectTrigger>
-                                                        <SelectContent className="max-h-[200px]">
-                                                            {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                                                                <SelectItem key={m} value={m.toString().padStart(2, '0')}>
-                                                                    {m.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            ) : is24HourFormat === false ? (
-                                                <div className="grid grid-cols-3 gap-1">
-                                                    <Select
-                                                        value={convertFrom24Hour(isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time).hour}
-                                                        onValueChange={(hour) => {
-                                                            const current = convertFrom24Hour(isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time);
-                                                            const time24 = convertTo24Hour(hour, current.minute, current.period);
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_out_time', time24);
-                                                            } else {
-                                                                setData('actual_time_out_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="HH" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Array.from({ length: 12 }, (_, i) => i + 1).map((h) => (
-                                                                <SelectItem key={h} value={h.toString()}>
-                                                                    {h.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <Select
-                                                        value={convertFrom24Hour(isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time).minute}
-                                                        onValueChange={(minute) => {
-                                                            const current = convertFrom24Hour(isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time);
-                                                            const time24 = convertTo24Hour(current.hour, minute, current.period);
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_out_time', time24);
-                                                            } else {
-                                                                setData('actual_time_out_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue placeholder="MM" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            {Array.from({ length: 60 }, (_, i) => i).map((m) => (
-                                                                <SelectItem key={m} value={m.toString().padStart(2, '0')}>
-                                                                    {m.toString().padStart(2, '0')}
-                                                                </SelectItem>
-                                                            ))}
-                                                        </SelectContent>
-                                                    </Select>
-                                                    <Select
-                                                        value={convertFrom24Hour(isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time).period}
-                                                        onValueChange={(period: 'AM' | 'PM') => {
-                                                            const current = convertFrom24Hour(isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time);
-                                                            const time24 = convertTo24Hour(current.hour, current.minute, period);
-                                                            if (isBulkMode) {
-                                                                setBulkData('actual_time_out_time', time24);
-                                                            } else {
-                                                                setData('actual_time_out_time', time24);
-                                                            }
-                                                        }}
-                                                    >
-                                                        <SelectTrigger className="h-10">
-                                                            <SelectValue />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="AM">AM</SelectItem>
-                                                            <SelectItem value="PM">PM</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                            ) : null}
+                                            <div className="space-y-1">
+                                                <Input
+                                                    id="actual_time_out_date"
+                                                    type="date"
+                                                    placeholder="Date"
+                                                    value={isBulkMode ? bulkData.actual_time_out_date : data.actual_time_out_date}
+                                                    onChange={(e) => {
+                                                        if (isBulkMode) {
+                                                            setBulkData('actual_time_out_date', e.target.value);
+                                                        } else {
+                                                            setData('actual_time_out_date', e.target.value);
+                                                        }
+                                                    }}
+                                                />
+                                                {(isBulkMode ? bulkData.actual_time_out_date : data.actual_time_out_date) && (
+                                                    <p className="text-xs text-muted-foreground">
+                                                        {format(new Date((isBulkMode ? bulkData.actual_time_out_date : data.actual_time_out_date) + 'T00:00:00'), 'EEEE, MMM d, yyyy')}
+                                                        {(isBulkMode ? bulkData.actual_time_out_date : data.actual_time_out_date) !== (isBulkMode ? bulkData.actual_time_in_date : data.actual_time_in_date) && (
+                                                            <span className="ml-1 text-orange-600 font-medium">(Next Day)</span>
+                                                        )}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="space-y-1">
+                                                <TimeInput
+                                                    id="actual_time_out_time"
+                                                    value={isBulkMode ? bulkData.actual_time_out_time : data.actual_time_out_time}
+                                                    onChange={(value: string) => {
+                                                        if (isBulkMode) {
+                                                            setBulkData('actual_time_out_time', value);
+                                                        } else {
+                                                            setData('actual_time_out_time', value);
+                                                        }
+                                                    }}
+                                                    is24HourFormat={is24HourFormat}
+                                                />
+                                            </div>
                                         </div>
                                         {timeOutValidationError && (
                                             <p className="text-sm text-red-500">{timeOutValidationError}</p>

@@ -585,7 +585,7 @@ class AttendanceController extends Controller
 
                 $createdCount++;
             } catch (\Exception $e) {
-                $user = \App\Models\User::find($userId);
+                $user = User::find($userId);
                 $errors[] = "Failed to create attendance for {$user->name}: {$e->getMessage()}";
             }
         }
@@ -608,7 +608,7 @@ class AttendanceController extends Controller
             ->take(10)
             ->get();
 
-        $sites = \App\Models\Site::orderBy('name')->get();
+        $sites = Site::orderBy('name')->get();
 
         return Inertia::render('Attendance/Main/Import', [
             'recentUploads' => $recentUploads,
@@ -709,16 +709,16 @@ class AttendanceController extends Controller
         ]);
 
         // Filter by verification status
-        if ($request->filled('verified')) {
+        // Default behavior: show all records (matching frontend default "All Records")
+        if ($request->has('verified') && $request->verified !== '') {
             if ($request->verified === 'verified') {
                 $query->where('admin_verified', true);
             } elseif ($request->verified === 'pending') {
                 $query->where('admin_verified', false);
+                // Also apply needsVerification scope for pending to show only flagged records
+                $query->needsVerification();
             }
-            // 'all' means no filter - show all records including on_time
-        } else {
-            // Default (no filter provided): only show unverified records (needsVerification scope)
-            $query->needsVerification();
+            // Empty string means 'all' - no filter applied, show everything
         }
 
         // Filter by specific employee

@@ -247,17 +247,24 @@ class LeaveRequestController extends Controller
         DB::beginTransaction();
         try {
             // Determine if this request requires Team Lead approval
-            // Agents need TL approval from any Team Lead
+            // Agents need TL approval only if their campaign has a Team Lead
             $requiresTlApproval = false;
+            $campaignHasTeamLead = false;
 
             if ($targetUser->role === 'Agent') {
-                // Check if there are any active Team Leads in the system
-                $hasTeamLeads = User::where('role', 'Team Lead')
-                    ->where('is_approved', true)
-                    ->exists();
+                $agentSchedule = $targetUser->activeSchedule;
+                if ($agentSchedule && $agentSchedule->campaign_id) {
+                    // Check if there's a Team Lead in the agent's campaign
+                    $campaignHasTeamLead = EmployeeSchedule::where('campaign_id', $agentSchedule->campaign_id)
+                        ->where('is_active', true)
+                        ->whereHas('user', function ($q) {
+                            $q->where('role', 'Team Lead')->where('is_approved', true);
+                        })
+                        ->exists();
 
-                if ($hasTeamLeads) {
-                    $requiresTlApproval = true;
+                    if ($campaignHasTeamLead) {
+                        $requiresTlApproval = true;
+                    }
                 }
             }
 
@@ -278,7 +285,7 @@ class LeaveRequestController extends Controller
 
             // Notify based on whether TL approval is required
             if ($requiresTlApproval) {
-                // Notify ALL Team Leads about the new leave request
+                // Notify all Team Leads (any TL can approve the request)
                 $allTeamLeads = User::where('role', 'Team Lead')
                     ->where('is_approved', true)
                     ->get();
@@ -294,7 +301,8 @@ class LeaveRequestController extends Controller
                     );
                 }
             } else {
-                // Notify HR/Admin users about new leave request (non-agent or no TL in system)
+                // Notify HR/Admin users about new leave request
+                // This happens when: non-agent submits, or agent's campaign has no Team Lead
                 $this->notificationService->notifyHrRolesAboutNewLeaveRequest(
                     $targetUser->name,
                     $request->leave_type,

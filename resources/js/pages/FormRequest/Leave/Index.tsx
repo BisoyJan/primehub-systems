@@ -490,6 +490,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                     <SelectItem value="LOA">Leave of Absence</SelectItem>
                                     <SelectItem value="LDV">Leave due to Domestic Violence</SelectItem>
                                     <SelectItem value="UPTO">Unpaid Time Off</SelectItem>
+                                    <SelectItem value="ML">Maternity Leave</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>

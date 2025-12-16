@@ -276,7 +276,7 @@ export default function Edit({
         });
     };
 
-    const requiresCredits = ['VL', 'SL', 'BL'].includes(data.leave_type);
+    const requiresCredits = ['VL', 'SL'].includes(data.leave_type);
     const remainingBalance = requiresCredits
         ? Math.max(0, creditsSummary.balance - calculatedDays)
         : creditsSummary.balance;
@@ -482,6 +482,7 @@ export default function Edit({
                                         <SelectItem value="UPTO">
                                             Unpaid Personal Time Off (UPTO)
                                         </SelectItem>
+                                        <SelectItem value="ML">Maternity Leave (ML)</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 {errors.leave_type && (

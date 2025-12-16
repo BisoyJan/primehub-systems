@@ -41,6 +41,7 @@ import {
     CommandList,
 } from "@/components/ui/command";
 import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Edit, Search, X } from "lucide-react";
+import { TimeInput } from "@/components/ui/time-input";
 
 interface User {
     id: number;
@@ -351,6 +352,7 @@ export default function AttendanceReview() {
     };
 
     const timeFormat = auth.user.time_format || '24';
+    const is24HourFormat = timeFormat === '24';
 
     // Employee search popover state
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
@@ -450,7 +452,7 @@ export default function AttendanceReview() {
                 user_id: selectedUserId,
                 site_id: selectedSiteId,
                 status: statusFilter === "all" ? "" : statusFilter,
-                verified: verifiedFilter,
+                verified: verifiedFilter === "all" ? "" : verifiedFilter,
                 date_from: dateFrom,
                 date_to: dateTo,
             },
@@ -1494,117 +1496,29 @@ export default function AttendanceReview() {
                         {/* Time In */}
                         <div className="space-y-2">
                             <Label htmlFor="actual_time_in">Actual Time In</Label>
-                            <div className="flex gap-2">
-                                <Input
-                                    type="date"
-                                    value={data.actual_time_in ? data.actual_time_in.slice(0, 10) : ""}
-                                    onChange={e => {
-                                        const date = e.target.value;
-                                        const time = data.actual_time_in ? data.actual_time_in.slice(11, 16) : "00:00";
-                                        setData("actual_time_in", date ? `${date}T${time}` : "");
-                                    }}
-                                    className="flex-1"
-                                />
-                                {timeFormat === '24' ? (
-                                    <div className="flex gap-1">
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            max="23"
-                                            placeholder="HH"
-                                            value={data.actual_time_in ? data.actual_time_in.slice(11, 13) : "00"}
-                                            onChange={e => {
-                                                const hour = e.target.value.padStart(2, '0');
-                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
-                                                const minute = data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00";
-                                                setData("actual_time_in", date ? `${date}T${hour}:${minute}` : "");
-                                            }}
-                                            className="w-16 text-center"
-                                        />
-                                        <span className="flex items-center">:</span>
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            max="59"
-                                            placeholder="MM"
-                                            value={data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00"}
-                                            onChange={e => {
-                                                const minute = e.target.value.padStart(2, '0');
-                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
-                                                const hour = data.actual_time_in ? data.actual_time_in.slice(11, 13) : "00";
-                                                setData("actual_time_in", date ? `${date}T${hour}:${minute}` : "");
-                                            }}
-                                            className="w-16 text-center"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-1">
-                                        <Input
-                                            type="number"
-                                            min="1"
-                                            max="12"
-                                            placeholder="HH"
-                                            value={(() => {
-                                                if (!data.actual_time_in) return "12";
-                                                const hour24 = parseInt(data.actual_time_in.slice(11, 13));
-                                                const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
-                                                return hour12.toString();
-                                            })()}
-                                            onChange={e => {
-                                                const hour12 = parseInt(e.target.value) || 1;
-                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
-                                                const minute = data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00";
-                                                const currentHour24 = data.actual_time_in ? parseInt(data.actual_time_in.slice(11, 13)) : 0;
-                                                const isPM = currentHour24 >= 12;
-                                                let hour24 = hour12;
-                                                if (isPM && hour12 !== 12) hour24 = hour12 + 12;
-                                                else if (!isPM && hour12 === 12) hour24 = 0;
-                                                setData("actual_time_in", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
-                                            }}
-                                            className="w-14 text-center"
-                                        />
-                                        <span className="flex items-center">:</span>
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            max="59"
-                                            placeholder="MM"
-                                            value={data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00"}
-                                            onChange={e => {
-                                                const minute = e.target.value.padStart(2, '0');
-                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
-                                                const hour = data.actual_time_in ? data.actual_time_in.slice(11, 13) : "00";
-                                                setData("actual_time_in", date ? `${date}T${hour}:${minute}` : "");
-                                            }}
-                                            className="w-14 text-center"
-                                        />
-                                        <Select
-                                            value={(() => {
-                                                if (!data.actual_time_in) return "AM";
-                                                const hour24 = parseInt(data.actual_time_in.slice(11, 13));
-                                                return hour24 >= 12 ? "PM" : "AM";
-                                            })()}
-                                            onValueChange={period => {
-                                                const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
-                                                const minute = data.actual_time_in ? data.actual_time_in.slice(14, 16) : "00";
-                                                const currentHour24 = data.actual_time_in ? parseInt(data.actual_time_in.slice(11, 13)) : 0;
-                                                const currentHour12 = currentHour24 === 0 ? 12 : currentHour24 > 12 ? currentHour24 - 12 : currentHour24;
-                                                let hour24 = currentHour12;
-                                                if (period === 'PM' && currentHour12 !== 12) hour24 = currentHour12 + 12;
-                                                else if (period === 'AM' && currentHour12 === 12) hour24 = 0;
-                                                setData("actual_time_in", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
-                                            }}
-                                        >
-                                            <SelectTrigger className="w-20">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="AM">AM</SelectItem>
-                                                <SelectItem value="PM">PM</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <Input
+                                        type="date"
+                                        value={data.actual_time_in ? data.actual_time_in.slice(0, 10) : ""}
+                                        onChange={e => {
+                                            const date = e.target.value;
+                                            const time = data.actual_time_in ? data.actual_time_in.slice(11, 16) : "00:00";
+                                            setData("actual_time_in", date ? `${date}T${time}` : "");
+                                        }}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <TimeInput
+                                        id="actual_time_in_time"
+                                        value={data.actual_time_in ? data.actual_time_in.slice(11, 16) : ""}
+                                        onChange={(time: string) => {
+                                            const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
+                                            setData("actual_time_in", date && time ? `${date}T${time}` : "");
+                                        }}
+                                        is24HourFormat={is24HourFormat}
+                                    />
+                                </div>
                             </div>
                             {errors.actual_time_in && (
                                 <p className="text-sm text-red-500">{errors.actual_time_in}</p>
@@ -1614,117 +1528,29 @@ export default function AttendanceReview() {
                         {/* Time Out */}
                         <div className="space-y-2">
                             <Label htmlFor="actual_time_out">Actual Time Out</Label>
-                            <div className="flex gap-2">
-                                <Input
-                                    type="date"
-                                    value={data.actual_time_out ? data.actual_time_out.slice(0, 10) : ""}
-                                    onChange={e => {
-                                        const date = e.target.value;
-                                        const time = data.actual_time_out ? data.actual_time_out.slice(11, 16) : "00:00";
-                                        setData("actual_time_out", date ? `${date}T${time}` : "");
-                                    }}
-                                    className="flex-1"
-                                />
-                                {timeFormat === '24' ? (
-                                    <div className="flex gap-1">
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            max="23"
-                                            placeholder="HH"
-                                            value={data.actual_time_out ? data.actual_time_out.slice(11, 13) : "00"}
-                                            onChange={e => {
-                                                const hour = e.target.value.padStart(2, '0');
-                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
-                                                const minute = data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00";
-                                                setData("actual_time_out", date ? `${date}T${hour}:${minute}` : "");
-                                            }}
-                                            className="w-16 text-center"
-                                        />
-                                        <span className="flex items-center">:</span>
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            max="59"
-                                            placeholder="MM"
-                                            value={data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00"}
-                                            onChange={e => {
-                                                const minute = e.target.value.padStart(2, '0');
-                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
-                                                const hour = data.actual_time_out ? data.actual_time_out.slice(11, 13) : "00";
-                                                setData("actual_time_out", date ? `${date}T${hour}:${minute}` : "");
-                                            }}
-                                            className="w-16 text-center"
-                                        />
-                                    </div>
-                                ) : (
-                                    <div className="flex gap-1">
-                                        <Input
-                                            type="number"
-                                            min="1"
-                                            max="12"
-                                            placeholder="HH"
-                                            value={(() => {
-                                                if (!data.actual_time_out) return "12";
-                                                const hour24 = parseInt(data.actual_time_out.slice(11, 13));
-                                                const hour12 = hour24 === 0 ? 12 : hour24 > 12 ? hour24 - 12 : hour24;
-                                                return hour12.toString();
-                                            })()}
-                                            onChange={e => {
-                                                const hour12 = parseInt(e.target.value) || 1;
-                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
-                                                const minute = data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00";
-                                                const currentHour24 = data.actual_time_out ? parseInt(data.actual_time_out.slice(11, 13)) : 0;
-                                                const isPM = currentHour24 >= 12;
-                                                let hour24 = hour12;
-                                                if (isPM && hour12 !== 12) hour24 = hour12 + 12;
-                                                else if (!isPM && hour12 === 12) hour24 = 0;
-                                                setData("actual_time_out", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
-                                            }}
-                                            className="w-14 text-center"
-                                        />
-                                        <span className="flex items-center">:</span>
-                                        <Input
-                                            type="number"
-                                            min="0"
-                                            max="59"
-                                            placeholder="MM"
-                                            value={data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00"}
-                                            onChange={e => {
-                                                const minute = e.target.value.padStart(2, '0');
-                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
-                                                const hour = data.actual_time_out ? data.actual_time_out.slice(11, 13) : "00";
-                                                setData("actual_time_out", date ? `${date}T${hour}:${minute}` : "");
-                                            }}
-                                            className="w-14 text-center"
-                                        />
-                                        <Select
-                                            value={(() => {
-                                                if (!data.actual_time_out) return "AM";
-                                                const hour24 = parseInt(data.actual_time_out.slice(11, 13));
-                                                return hour24 >= 12 ? "PM" : "AM";
-                                            })()}
-                                            onValueChange={period => {
-                                                const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
-                                                const minute = data.actual_time_out ? data.actual_time_out.slice(14, 16) : "00";
-                                                const currentHour24 = data.actual_time_out ? parseInt(data.actual_time_out.slice(11, 13)) : 0;
-                                                const currentHour12 = currentHour24 === 0 ? 12 : currentHour24 > 12 ? currentHour24 - 12 : currentHour24;
-                                                let hour24 = currentHour12;
-                                                if (period === 'PM' && currentHour12 !== 12) hour24 = currentHour12 + 12;
-                                                else if (period === 'AM' && currentHour12 === 12) hour24 = 0;
-                                                setData("actual_time_out", date ? `${date}T${hour24.toString().padStart(2, '0')}:${minute}` : "");
-                                            }}
-                                        >
-                                            <SelectTrigger className="w-20">
-                                                <SelectValue />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="AM">AM</SelectItem>
-                                                <SelectItem value="PM">PM</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                )}
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <Input
+                                        type="date"
+                                        value={data.actual_time_out ? data.actual_time_out.slice(0, 10) : ""}
+                                        onChange={e => {
+                                            const date = e.target.value;
+                                            const time = data.actual_time_out ? data.actual_time_out.slice(11, 16) : "00:00";
+                                            setData("actual_time_out", date ? `${date}T${time}` : "");
+                                        }}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <TimeInput
+                                        id="actual_time_out_time"
+                                        value={data.actual_time_out ? data.actual_time_out.slice(11, 16) : ""}
+                                        onChange={(time: string) => {
+                                            const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
+                                            setData("actual_time_out", date && time ? `${date}T${time}` : "");
+                                        }}
+                                        is24HourFormat={is24HourFormat}
+                                    />
+                                </div>
                             </div>
                             {errors.actual_time_out && (
                                 <p className="text-sm text-red-500">{errors.actual_time_out}</p>

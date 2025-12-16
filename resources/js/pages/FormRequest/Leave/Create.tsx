@@ -122,15 +122,6 @@ export default function Create({
         return new Date().toISOString().split('T')[0];
     };
 
-    // Check if SL credits will be deducted
-    const willSlCreditsBeDeducted = (): boolean => {
-        if (data.leave_type !== 'SL') return true;
-        if (!creditsSummary.is_eligible) return false;
-        if (creditsSummary.balance < calculatedDays) return false;
-        if (!data.medical_cert_submitted) return false;
-        return true;
-    };
-
     // Handle start date change with weekend validation
     const handleStartDateChange = (value: string) => {
         if (isWeekend(value)) {
@@ -330,7 +321,7 @@ export default function Create({
         });
     };
 
-    const requiresCredits = ['VL', 'SL', 'BL'].includes(data.leave_type);
+    const requiresCredits = ['VL', 'SL'].includes(data.leave_type);
     const remainingBalance = requiresCredits
         ? Math.max(0, creditsSummary.balance - calculatedDays)
         : creditsSummary.balance;
@@ -599,7 +590,7 @@ export default function Create({
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="VL">Vacation Leave (VL)</SelectItem>
-                                        <SelectItem value="SL">Sick Leave (SL)</SelectItem>
+                                        <SelectItem disabled value="SL">Sick Leave (SL)</SelectItem>  {/* SL is disabled for new requests */}
                                         <SelectItem value="BL">Bereavement Leave (BL)</SelectItem>
                                         <SelectItem value="SPL">Solo Parent Leave (SPL)</SelectItem>
                                         <SelectItem value="LOA">Leave of Absence (LOA)</SelectItem>
@@ -609,6 +600,7 @@ export default function Create({
                                         <SelectItem value="UPTO">
                                             Unpaid Personal Time Off (UPTO)
                                         </SelectItem>
+                                        <SelectItem value="ML">Maternity Leave (ML)</SelectItem>
                                     </SelectContent>
                                 </Select>
                                 {errors.leave_type && (
