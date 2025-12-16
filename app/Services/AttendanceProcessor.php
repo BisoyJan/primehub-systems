@@ -645,7 +645,7 @@ class AttendanceProcessor
                 'status' => 'on_leave',
                 'leave_request_id' => $leaveRequest->id,
                 'admin_verified' => true, // Auto-verify leave records
-                'notes' => "Employee on approved {$leaveRequest->leave_type} leave. Leave request #{$leaveRequest->id}.",
+                'notes' => "On approved {$leaveRequest->leave_type}" . ($leaveRequest->reason ? " - {$leaveRequest->reason}" : ''),
             ]);
         } else {
             // Create new attendance record with on_leave status
@@ -658,7 +658,7 @@ class AttendanceProcessor
                 'scheduled_time_out' => $schedule->scheduled_time_out,
                 'status' => 'on_leave',
                 'admin_verified' => true, // Auto-verify leave records
-                'notes' => "Employee on approved {$leaveRequest->leave_type} leave. Leave request #{$leaveRequest->id}.",
+                'notes' => "On approved {$leaveRequest->leave_type}" . ($leaveRequest->reason ? " - {$leaveRequest->reason}" : ''),
             ]);
         }
 

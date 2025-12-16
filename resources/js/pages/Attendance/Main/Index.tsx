@@ -658,6 +658,7 @@ export default function AttendanceIndex() {
                                 <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                 <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
                                 <SelectItem value="needs_manual_review">Needs Review</SelectItem>
+                                <SelectItem value="on_leave">On Leave</SelectItem>
                             </SelectContent>
                         </Select>
 

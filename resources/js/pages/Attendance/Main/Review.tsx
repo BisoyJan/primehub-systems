@@ -816,6 +816,7 @@ export default function AttendanceReview() {
                                             <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
                                             <SelectItem value="tardy">Tardy</SelectItem>
                                             <SelectItem value="undertime">Undertime</SelectItem>
+                                            <SelectItem value="on_leave">On Leave</SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

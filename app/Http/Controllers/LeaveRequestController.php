@@ -1318,7 +1318,7 @@ class LeaveRequestController extends Controller
         $user = $leaveRequest->user;
         $startDate = Carbon::parse($leaveRequest->start_date);
         $endDate = Carbon::parse($leaveRequest->end_date);
-        $leaveNote = "On approved {$leaveRequest->leave_type} - Leave Request #{$leaveRequest->id}";
+        $leaveNote = "On approved {$leaveRequest->leave_type}" . ($leaveRequest->reason ? " - {$leaveRequest->reason}" : '');
 
         // Update existing attendance records
         Attendance::where('user_id', $user->id)
@@ -1327,6 +1327,7 @@ class LeaveRequestController extends Controller
                 'status' => 'on_leave',
                 'notes' => $leaveNote,
                 'leave_request_id' => $leaveRequest->id,
+                'admin_verified' => true, // Auto-verify leave records
             ]);
 
         // Create attendance records for days without existing records
@@ -1347,6 +1348,7 @@ class LeaveRequestController extends Controller
                     'status' => 'on_leave',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true, // Auto-verify leave records
                 ]);
             }
             $currentDate->addDay();
