@@ -62,6 +62,7 @@ interface LeaveRequest {
     start_date: string;
     end_date: string;
     days_requested: number;
+    campaign_department: string;
     status: string;
     admin_approved_at: string | null;
     hr_approved_at: string | null;
@@ -107,7 +108,10 @@ interface Props {
     };
 }
 
-export default function Index({ leaveRequests, filters, isAdmin, hasPendingRequests, auth }: Props) {
+export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, hasPendingRequests, auth }: Props) {
+    // Show employee column for admins and team leads (who can see other users' requests)
+    const showEmployeeColumn = isAdmin || isTeamLead;
+
     const { title, breadcrumbs } = usePageMeta({
         title: 'Leave Requests',
         breadcrumbs: [
@@ -554,7 +558,8 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                         <Table>
                             <TableHeader>
                                 <TableRow>
-                                    {isAdmin && <TableHead>Employee</TableHead>}
+                                    {showEmployeeColumn && <TableHead>Employee</TableHead>}
+                                    {showEmployeeColumn && <TableHead>Campaign</TableHead>}
                                     <TableHead>Type</TableHead>
                                     <TableHead>Start Date</TableHead>
                                     <TableHead>End Date</TableHead>
@@ -568,7 +573,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                 {leaveRequests.data.length === 0 ? (
                                     <TableRow>
                                         <TableCell
-                                            colSpan={isAdmin ? 8 : 7}
+                                            colSpan={showEmployeeColumn ? 9 : 7}
                                             className="text-center py-8 text-muted-foreground"
                                         >
                                             No leave requests found
@@ -577,9 +582,14 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                 ) : (
                                     leaveRequests.data.map((request) => (
                                         <TableRow key={request.id}>
-                                            {isAdmin && (
+                                            {showEmployeeColumn && (
                                                 <TableCell className="font-medium">
                                                     {request.user.name}
+                                                </TableCell>
+                                            )}
+                                            {showEmployeeColumn && (
+                                                <TableCell className="text-sm">
+                                                    {request.campaign_department}
                                                 </TableCell>
                                             )}
                                             <TableCell>{getLeaveTypeBadge(request.leave_type)}</TableCell>
@@ -653,7 +663,7 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                             <div key={request.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
                                 <div className="flex justify-between items-start">
                                     <div>
-                                        {isAdmin && (
+                                        {showEmployeeColumn && (
                                             <div className="text-lg font-semibold">{request.user.name}</div>
                                         )}
                                         <div className="flex items-center gap-2 mt-1">
@@ -664,6 +674,12 @@ export default function Index({ leaveRequests, filters, isAdmin, hasPendingReque
                                 </div>
 
                                 <div className="space-y-2 text-sm">
+                                    {showEmployeeColumn && (
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Campaign:</span>
+                                            <span className="font-medium">{request.campaign_department}</span>
+                                        </div>
+                                    )}
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Start Date:</span>
                                         <span className="font-medium">{format(parseISO(request.start_date), 'MMM d, yyyy')}</span>
