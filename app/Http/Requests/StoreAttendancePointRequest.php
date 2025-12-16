@@ -25,8 +25,25 @@ class StoreAttendancePointRequest extends FormRequest
     {
         return [
             'user_id' => ['required', 'exists:users,id'],
-            'shift_date' => ['required', 'date', 'before_or_equal:today'],
-            'point_type' => ['required', Rule::in(['whole_day_absence', 'half_day_absence', 'undertime', 'tardy'])],
+            'shift_date' => [
+                'required',
+                'date',
+                'before_or_equal:today',
+                function ($attribute, $value, $fail) {
+                    // Check for duplicate entry (same user, same date, same type)
+                    $exists = AttendancePoint::where('user_id', $this->user_id)
+                        ->where('shift_date', $value)
+                        ->where('point_type', $this->point_type)
+                        ->where('is_excused', false)
+                        ->where('is_expired', false)
+                        ->exists();
+
+                    if ($exists) {
+                        $fail('An active attendance point already exists for this employee on this date with the same violation type.');
+                    }
+                },
+            ],
+            'point_type' => ['required', Rule::in(['whole_day_absence', 'half_day_absence', 'undertime', 'undertime_more_than_hour', 'tardy'])],
             'is_advised' => ['boolean'],
             'violation_details' => ['nullable', 'string', 'max:1000'],
             'notes' => ['nullable', 'string', 'max:1000'],
