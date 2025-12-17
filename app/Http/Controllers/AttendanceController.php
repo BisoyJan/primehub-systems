@@ -714,9 +714,8 @@ class AttendanceController extends Controller
             if ($request->verified === 'verified') {
                 $query->where('admin_verified', true);
             } elseif ($request->verified === 'pending') {
+                // Show ALL unverified records, not just those with specific statuses
                 $query->where('admin_verified', false);
-                // Also apply needsVerification scope for pending to show only flagged records
-                $query->needsVerification();
             }
             // Empty string means 'all' - no filter applied, show everything
         }
@@ -746,7 +745,7 @@ class AttendanceController extends Controller
             });
         }
 
-        $attendances = $query->orderBy('shift_date', 'desc')->paginate(50);
+        $attendances = $query->orderBy('shift_date', 'desc')->paginate(50)->withQueryString();
 
         // Get all employees for the dropdown
         $employees = User::select('id', 'first_name', 'last_name')

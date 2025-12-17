@@ -932,4 +932,421 @@ class AttendancePointController extends Controller
 
         return response()->download($filePath, $filename)->deleteFileAfterSend(true);
     }
+
+    /**
+     * Get management statistics (duplicates count, pending expirations, etc.)
+     */
+    public function managementStats()
+    {
+        $this->authorize('viewAny', AttendancePoint::class);
+
+        // Count duplicates
+        $duplicatesCount = DB::table('attendance_points')
+            ->select('user_id', 'shift_date', 'point_type', DB::raw('COUNT(*) as count'))
+            ->groupBy('user_id', 'shift_date', 'point_type')
+            ->having('count', '>', 1)
+            ->get()
+            ->sum(function ($row) {
+                return $row->count - 1; // Count excess entries
+            });
+
+        // Count pending expirations (should be expired but not marked)
+        $pendingExpirationsCount = AttendancePoint::where('is_expired', false)
+            ->where('is_excused', false)
+            ->whereNotNull('expires_at')
+            ->where('expires_at', '<=', now())
+            ->count();
+
+        // Count expired points (only non-excused, as those can be reset)
+        $expiredCount = AttendancePoint::where('is_expired', true)
+            ->where('is_excused', false)
+            ->count();
+
+        // Count verified attendance records that should have points but don't
+        // These are attendance records with point-worthy statuses (verified) but no corresponding attendance_point
+        $missingPointsCount = Attendance::where('admin_verified', true)
+            ->whereIn('status', ['ncns', 'advised_absence', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour'])
+            ->whereNotExists(function ($query) {
+                $query->select(DB::raw(1))
+                    ->from('attendance_points')
+                    ->whereColumn('attendance_points.attendance_id', 'attendances.id');
+            })
+            ->count();
+
+        return response()->json([
+            'duplicates_count' => $duplicatesCount,
+            'pending_expirations_count' => $pendingExpirationsCount,
+            'expired_count' => $expiredCount,
+            'missing_points_count' => $missingPointsCount,
+        ]);
+    }
+
+    /**
+     * Remove duplicate attendance points (same user, date, type)
+     * Note: Prioritizes keeping excused points when removing duplicates
+     */
+    public function removeDuplicates()
+    {
+        $this->authorize('viewAny', AttendancePoint::class);
+
+        try {
+            $duplicates = DB::table('attendance_points')
+                ->select('user_id', 'shift_date', 'point_type', DB::raw('COUNT(*) as count'))
+                ->groupBy('user_id', 'shift_date', 'point_type')
+                ->having('count', '>', 1)
+                ->get();
+
+            if ($duplicates->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No duplicate attendance points found.',
+                    'removed' => 0,
+                ]);
+            }
+
+            $totalRemoved = 0;
+
+            foreach ($duplicates as $dup) {
+                // Get all duplicates for this combination
+                $points = AttendancePoint::where('user_id', $dup->user_id)
+                    ->where('shift_date', $dup->shift_date)
+                    ->where('point_type', $dup->point_type)
+                    ->orderByDesc('is_excused') // Prioritize excused points
+                    ->orderBy('id') // Then oldest first
+                    ->get();
+
+                // Keep the first one (excused if exists, otherwise oldest)
+                $keepId = $points->first()->id;
+
+                // Delete the rest
+                $deleted = AttendancePoint::where('user_id', $dup->user_id)
+                    ->where('shift_date', $dup->shift_date)
+                    ->where('point_type', $dup->point_type)
+                    ->where('id', '!=', $keepId)
+                    ->delete();
+
+                $totalRemoved += $deleted;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Removed {$totalRemoved} duplicate attendance points (excused points preserved).",
+                'removed' => $totalRemoved,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController removeDuplicates Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to remove duplicates.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Expire all pending attendance points (without notifications)
+     */
+    public function expireAllPending()
+    {
+        $this->authorize('viewAny', AttendancePoint::class);
+
+        try {
+            $pendingPoints = AttendancePoint::where('is_expired', false)
+                ->where('is_excused', false)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', now())
+                ->get();
+
+            if ($pendingPoints->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No pending expirations found.',
+                    'expired' => 0,
+                ]);
+            }
+
+            $expiredCount = 0;
+
+            foreach ($pendingPoints as $point) {
+                $point->markAsExpired('sro');
+                $expiredCount++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Expired {$expiredCount} attendance points.",
+                'expired' => $expiredCount,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController expireAllPending Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to expire pending points.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Reset expired attendance points back to active
+     * Note: Excused points are NOT reset as they were intentionally excused
+     */
+    public function resetExpired()
+    {
+        $this->authorize('viewAny', AttendancePoint::class);
+
+        try {
+            // Only reset non-excused expired points
+            $expiredPoints = AttendancePoint::where('is_expired', true)
+                ->where('is_excused', false)
+                ->get();
+
+            if ($expiredPoints->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No expired attendance points found (excused points are excluded).',
+                    'reset' => 0,
+                ]);
+            }
+
+            $resetCount = 0;
+
+            foreach ($expiredPoints as $point) {
+                $shiftDate = Carbon::parse($point->shift_date);
+                $isNcnsOrFtn = $point->point_type === 'whole_day_absence' && !$point->is_advised;
+                $newExpiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+
+                $point->update([
+                    'is_expired' => false,
+                    'expired_at' => null,
+                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                    'gbro_applied_at' => null,
+                    'gbro_batch_id' => null,
+                    'expires_at' => $newExpiresAt,
+                ]);
+
+                $resetCount++;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Reset {$resetCount} expired attendance points to active (excused points excluded).",
+                'reset' => $resetCount,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController resetExpired Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to reset expired points.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Regenerate attendance points from verified attendance records
+     */
+    public function regeneratePoints(Request $request)
+    {
+        $this->authorize('viewAny', AttendancePoint::class);
+
+        try {
+            $query = Attendance::where('status', 'verified')
+                ->where(function ($q) {
+                    $q->where('is_absent', true)
+                        ->orWhere('is_tardy', true)
+                        ->orWhere('is_undertime', true);
+                })
+                ->whereDoesntHave('attendancePoints');
+
+            // Apply date filters
+            if ($request->filled('date_from')) {
+                $query->whereDate('shift_date', '>=', $request->date_from);
+            }
+            if ($request->filled('date_to')) {
+                $query->whereDate('shift_date', '<=', $request->date_to);
+            }
+            if ($request->filled('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
+
+            $attendances = $query->with('user')->get();
+
+            if ($attendances->isEmpty()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'No attendance records found that need points regeneration.',
+                    'regenerated' => 0,
+                ]);
+            }
+
+            $regeneratedCount = 0;
+
+            foreach ($attendances as $attendance) {
+                $pointsCreated = $this->createPointsForAttendance($attendance);
+                $regeneratedCount += $pointsCreated;
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => "Regenerated {$regeneratedCount} attendance points from {$attendances->count()} attendance records.",
+                'regenerated' => $regeneratedCount,
+                'records_processed' => $attendances->count(),
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController regeneratePoints Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to regenerate points.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Create attendance points for an attendance record
+     */
+    private function createPointsForAttendance(Attendance $attendance): int
+    {
+        $pointsCreated = 0;
+        $shiftDate = Carbon::parse($attendance->shift_date);
+
+        // Handle absences
+        if ($attendance->is_absent) {
+            $isNcnsOrFtn = !$attendance->is_advised;
+            $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
+
+            // Check if it's half day or whole day
+            if ($attendance->remarks && str_contains(strtolower($attendance->remarks), 'half')) {
+                AttendancePoint::create([
+                    'user_id' => $attendance->user_id,
+                    'attendance_id' => $attendance->id,
+                    'shift_date' => $attendance->shift_date,
+                    'point_type' => 'half_day_absence',
+                    'points' => 0.50,
+                    'is_advised' => $attendance->is_advised,
+                    'is_manual' => false,
+                    'expires_at' => $expiresAt,
+                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                ]);
+                $pointsCreated++;
+            } else {
+                AttendancePoint::create([
+                    'user_id' => $attendance->user_id,
+                    'attendance_id' => $attendance->id,
+                    'shift_date' => $attendance->shift_date,
+                    'point_type' => 'whole_day_absence',
+                    'points' => 1.00,
+                    'is_advised' => $attendance->is_advised,
+                    'is_manual' => false,
+                    'expires_at' => $expiresAt,
+                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                ]);
+                $pointsCreated++;
+            }
+        }
+
+        // Handle tardy
+        if ($attendance->is_tardy && $attendance->tardy_minutes > 0) {
+            AttendancePoint::create([
+                'user_id' => $attendance->user_id,
+                'attendance_id' => $attendance->id,
+                'shift_date' => $attendance->shift_date,
+                'point_type' => 'tardy',
+                'points' => 0.25,
+                'tardy_minutes' => $attendance->tardy_minutes,
+                'is_manual' => false,
+                'expires_at' => $shiftDate->copy()->addMonths(6),
+                'expiration_type' => 'sro',
+            ]);
+            $pointsCreated++;
+        }
+
+        // Handle undertime
+        if ($attendance->is_undertime && $attendance->undertime_minutes > 0) {
+            $isMoreThanHour = $attendance->undertime_minutes > 60;
+            AttendancePoint::create([
+                'user_id' => $attendance->user_id,
+                'attendance_id' => $attendance->id,
+                'shift_date' => $attendance->shift_date,
+                'point_type' => $isMoreThanHour ? 'undertime_more_than_hour' : 'undertime',
+                'points' => $isMoreThanHour ? 0.50 : 0.25,
+                'undertime_minutes' => $attendance->undertime_minutes,
+                'is_manual' => false,
+                'expires_at' => $shiftDate->copy()->addMonths(6),
+                'expiration_type' => 'sro',
+            ]);
+            $pointsCreated++;
+        }
+
+        return $pointsCreated;
+    }
+
+    /**
+     * Full cleanup: remove duplicates + expire all pending
+     * Note: Excused points are preserved during cleanup
+     */
+    public function cleanup()
+    {
+        $this->authorize('viewAny', AttendancePoint::class);
+
+        try {
+            $results = [
+                'duplicates_removed' => 0,
+                'points_expired' => 0,
+            ];
+
+            // Step 1: Remove duplicates (preserving excused points)
+            $duplicates = DB::table('attendance_points')
+                ->select('user_id', 'shift_date', 'point_type', DB::raw('COUNT(*) as count'))
+                ->groupBy('user_id', 'shift_date', 'point_type')
+                ->having('count', '>', 1)
+                ->get();
+
+            foreach ($duplicates as $dup) {
+                // Get all duplicates, prioritize excused points
+                $points = AttendancePoint::where('user_id', $dup->user_id)
+                    ->where('shift_date', $dup->shift_date)
+                    ->where('point_type', $dup->point_type)
+                    ->orderByDesc('is_excused')
+                    ->orderBy('id')
+                    ->get();
+
+                $keepId = $points->first()->id;
+
+                $deleted = AttendancePoint::where('user_id', $dup->user_id)
+                    ->where('shift_date', $dup->shift_date)
+                    ->where('point_type', $dup->point_type)
+                    ->where('id', '!=', $keepId)
+                    ->delete();
+
+                $results['duplicates_removed'] += $deleted;
+            }
+
+            // Step 2: Expire all pending (excluding excused points)
+            $pendingPoints = AttendancePoint::where('is_expired', false)
+                ->where('is_excused', false)
+                ->whereNotNull('expires_at')
+                ->where('expires_at', '<=', now())
+                ->get();
+
+            foreach ($pendingPoints as $point) {
+                $point->markAsExpired('sro');
+                $results['points_expired']++;
+            }
+
+            $totalActions = $results['duplicates_removed'] + $results['points_expired'];
+
+            return response()->json([
+                'success' => true,
+                'message' => $totalActions > 0
+                    ? "Cleanup complete: removed {$results['duplicates_removed']} duplicates, expired {$results['points_expired']} points (excused points preserved)."
+                    : 'No cleanup actions needed. Database is already clean.',
+                'duplicates_removed' => $results['duplicates_removed'],
+                'points_expired' => $results['points_expired'],
+            ]);
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController cleanup Error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to perform cleanup.',
+            ], 500);
+        }
+    }
 }

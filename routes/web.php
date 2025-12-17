@@ -272,6 +272,14 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::get('/export-all-excel/status/{jobId}', [AttendancePointController::class, 'checkExportAllExcelStatus'])->name('export-all-excel.status');
             Route::get('/export-all-excel/download/{jobId}', [AttendancePointController::class, 'downloadExportAllExcel'])->name('export-all-excel.download');
 
+            // Management actions (admin only) - MUST be before {user} routes
+            Route::get('/management/stats', [AttendancePointController::class, 'managementStats'])->name('management.stats');
+            Route::post('/management/remove-duplicates', [AttendancePointController::class, 'removeDuplicates'])->name('management.remove-duplicates');
+            Route::post('/management/expire-all', [AttendancePointController::class, 'expireAllPending'])->name('management.expire-all');
+            Route::post('/management/reset-expired', [AttendancePointController::class, 'resetExpired'])->name('management.reset-expired');
+            Route::post('/management/regenerate', [AttendancePointController::class, 'regeneratePoints'])->name('management.regenerate');
+            Route::post('/management/cleanup', [AttendancePointController::class, 'cleanup'])->name('management.cleanup');
+
             Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
             Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])->name('statistics');
             Route::get('/{user}/export', [AttendancePointController::class, 'export'])->name('export');

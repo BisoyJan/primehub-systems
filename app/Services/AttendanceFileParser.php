@@ -336,7 +336,7 @@ class AttendanceFileParser
             }
 
             // Find the record closest to scheduled time out, but not too late
-            // Allow up to 6 hours after scheduled time (for extended overtime or unusual situations)
+            // Allow up to 8 hours after scheduled time (for extended overtime or unusual situations)
             // Anything later is likely next shift or scanner error
             $bestMatch = null;
             $smallestDiff = PHP_INT_MAX;
@@ -348,18 +348,18 @@ class AttendanceFileParser
                 // For morning time outs, accept scans BEFORE or AFTER scheduled time
                 // (employee might leave early or late)
                 // For afternoon/evening time outs, liberal acceptance window
-                $isFarAfterScheduled = $diffInMinutes > 360; // 6 hours after
+                $isFarAfterScheduled = $diffInMinutes > 480; // 8 hours after (increased for extended OT)
 
                 if ($expectedHour !== null && $expectedHour >= 0 && $expectedHour < 12) {
-                    // Morning time out: Accept scans up to 6 hours before and 6 hours after
-                    // Very liberal to allow graveyard shift patterns
-                    if ($diffInMinutes < -360 || $diffInMinutes > 360) {
+                    // Morning time out: Accept scans up to 8 hours before and 8 hours after
+                    // Very liberal to allow graveyard shift patterns and extended OT
+                    if ($diffInMinutes < -480 || $diffInMinutes > 480) {
                         continue;
                     }
                 } else {
-                    // Afternoon/evening time out: Accept scans up to 6 hours before and 6 hours after
+                    // Afternoon/evening time out: Accept scans up to 8 hours before and 8 hours after
                     // Liberal window to accommodate overtime and unusual scenarios
-                    if ($diffInMinutes < -360 || $isFarAfterScheduled) {
+                    if ($diffInMinutes < -480 || $isFarAfterScheduled) {
                         continue;
                     }
                 }

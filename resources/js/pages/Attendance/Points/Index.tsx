@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import type { SharedData, UserRole } from "@/types";
 import { toast } from "sonner";
-import { Can } from '@/components/authorization';
+import { Can, HasRole } from '@/components/authorization';
 import {
     Select,
     SelectContent,
@@ -24,6 +24,13 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,7 +50,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
@@ -57,6 +64,7 @@ import {
     unexcuse as attendancePointsUnexcuse,
 } from "@/routes/attendance-points";
 import exportAllExcelRoutes from "@/routes/attendance-points/export-all-excel";
+import managementRoutes from "@/routes/attendance-points/management";
 
 const defaultTitle = "Attendance Points";
 
@@ -296,6 +304,25 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const [exportError, setExportError] = useState(false);
     const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
     const exportPollingRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Management state
+    const [isManagementDialogOpen, setIsManagementDialogOpen] = useState(false);
+    const [managementStats, setManagementStats] = useState<{
+        duplicates_count: number;
+        pending_expirations_count: number;
+        expired_count: number;
+        missing_points_count: number;
+    } | null>(null);
+    const [isLoadingStats, setIsLoadingStats] = useState(false);
+    const [isManagementAction, setIsManagementAction] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | null>(null);
+
+    // Management filters for regenerate
+    const [mgmtDateFrom, setMgmtDateFrom] = useState('');
+    const [mgmtDateTo, setMgmtDateTo] = useState('');
+    const [mgmtUserId, setMgmtUserId] = useState('');
+    const [isMgmtUserPopoverOpen, setIsMgmtUserPopoverOpen] = useState(false);
+    const [mgmtUserSearchQuery, setMgmtUserSearchQuery] = useState('');
 
     // Cleanup polling on unmount
     useEffect(() => {
@@ -544,6 +571,83 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         setExportStatus('');
         setExportError(false);
         setExportDownloadUrl(null);
+    };
+
+    // Management Handlers
+    const fetchManagementStats = async () => {
+        setIsLoadingStats(true);
+        try {
+            const response = await fetch(managementRoutes.stats().url, {
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                credentials: 'same-origin',
+            });
+            const data = await response.json();
+            setManagementStats(data);
+        } catch {
+            toast.error('Failed to fetch management stats');
+        } finally {
+            setIsLoadingStats(false);
+        }
+    };
+
+    const handleOpenManagementDialog = () => {
+        setIsManagementDialogOpen(true);
+        // Reset filters when opening
+        setMgmtDateFrom('');
+        setMgmtDateTo('');
+        setMgmtUserId('');
+        fetchManagementStats();
+    };
+
+    const handleManagementAction = async (action: 'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup') => {
+        setIsManagementAction(true);
+        try {
+            const routeMap: Record<string, { url: string }> = {
+                'remove-duplicates': managementRoutes.removeDuplicates(),
+                'expire-all': managementRoutes.expireAll(),
+                'reset-expired': managementRoutes.resetExpired(),
+                'regenerate': managementRoutes.regenerate(),
+                'cleanup': managementRoutes.cleanup(),
+            };
+
+            // Build request body with filters for regenerate
+            const body: Record<string, string> = {};
+            if (action === 'regenerate') {
+                if (mgmtDateFrom) body.date_from = mgmtDateFrom;
+                if (mgmtDateTo) body.date_to = mgmtDateTo;
+                if (mgmtUserId) body.user_id = mgmtUserId;
+            }
+
+            const response = await fetch(routeMap[action].url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(body),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success(data.message);
+                // Refresh the stats and the page
+                fetchManagementStats();
+                handleFilter();
+            } else {
+                toast.error(data.message || 'Action failed');
+            }
+        } catch {
+            toast.error('Failed to perform action');
+        } finally {
+            setIsManagementAction(false);
+            setConfirmAction(null);
+        }
     };
 
     const viewUserDetails = (userId: number, shiftDate: string) => {
@@ -911,6 +1015,44 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                         Add Manual Entry
                                     </Button>
                                 </Can>
+                                <HasRole role={['IT', 'Super Admin']}>
+                                    <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                            <Button variant="outline" className="gap-2">
+                                                <Settings className="h-4 w-4" />
+                                                Manage
+                                            </Button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="end">
+                                            <DropdownMenuItem onClick={handleOpenManagementDialog}>
+                                                <ClipboardList className="h-4 w-4 mr-2" />
+                                                View Statistics
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => setConfirmAction('regenerate')}>
+                                                <RefreshCw className="h-4 w-4 mr-2" />
+                                                Regenerate Points
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setConfirmAction('remove-duplicates')}>
+                                                <Trash2 className="h-4 w-4 mr-2" />
+                                                Remove Duplicates
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setConfirmAction('expire-all')}>
+                                                <AlertTriangle className="h-4 w-4 mr-2" />
+                                                Expire All Pending
+                                            </DropdownMenuItem>
+                                            <DropdownMenuItem onClick={() => setConfirmAction('reset-expired')}>
+                                                <RotateCcw className="h-4 w-4 mr-2" />
+                                                Reset Expired Points
+                                            </DropdownMenuItem>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem onClick={() => setConfirmAction('cleanup')}>
+                                                <Settings className="h-4 w-4 mr-2" />
+                                                Full Cleanup
+                                            </DropdownMenuItem>
+                                        </DropdownMenuContent>
+                                    </DropdownMenu>
+                                </HasRole>
                             </div>
                         )}
                     </div>
@@ -2351,6 +2493,412 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Management Statistics Dialog */}
+            <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
+                <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Attendance Points Management</DialogTitle>
+                        <DialogDescription>
+                            View statistics and perform bulk management actions on attendance points.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-4">
+                        {isLoadingStats ? (
+                            <div className="flex items-center justify-center py-8">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                            </div>
+                        ) : managementStats ? (
+                            <div className="grid gap-3">
+                                <div className="flex items-center justify-between p-3 border rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <RefreshCw className="h-5 w-5 text-green-600" />
+                                        <div>
+                                            <p className="font-medium">Missing Points</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Verified records without points
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Badge variant={managementStats.missing_points_count > 0 ? "destructive" : "secondary"}>
+                                        {managementStats.missing_points_count}
+                                    </Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3 border rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <Trash2 className="h-5 w-5 text-yellow-600" />
+                                        <div>
+                                            <p className="font-medium">Duplicate Points</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Same user, date, and type entries
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Badge variant={managementStats.duplicates_count > 0 ? "destructive" : "secondary"}>
+                                        {managementStats.duplicates_count}
+                                    </Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3 border rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <AlertTriangle className="h-5 w-5 text-orange-600" />
+                                        <div>
+                                            <p className="font-medium">Pending Expirations</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Should be expired but not marked
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Badge variant={managementStats.pending_expirations_count > 0 ? "destructive" : "secondary"}>
+                                        {managementStats.pending_expirations_count}
+                                    </Badge>
+                                </div>
+
+                                <div className="flex items-center justify-between p-3 border rounded-lg">
+                                    <div className="flex items-center gap-3">
+                                        <RotateCcw className="h-5 w-5 text-blue-600" />
+                                        <div>
+                                            <p className="font-medium">Expired Points</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                Can be reset (excused excluded)
+                                            </p>
+                                        </div>
+                                    </div>
+                                    <Badge variant="secondary">
+                                        {managementStats.expired_count}
+                                    </Badge>
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="text-center text-muted-foreground">
+                                Failed to load statistics
+                            </p>
+                        )}
+
+                        {/* No Notification Notice */}
+                        <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                            <BellOff className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                            <p className="text-sm text-amber-700 dark:text-amber-300">
+                                <strong>Note:</strong> All management actions are performed silently. Agents will NOT receive any notifications.
+                            </p>
+                        </div>
+
+                        <div className="border-t pt-4">
+                            <h4 className="text-sm font-medium mb-3">Quick Actions</h4>
+                            <div className="grid gap-2">
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={!managementStats || managementStats.missing_points_count === 0 || isManagementAction}
+                                    onClick={() => setConfirmAction('regenerate')}
+                                >
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Regenerate Points
+                                    {managementStats && managementStats.missing_points_count > 0 && (
+                                        <Badge variant="destructive" className="ml-auto">
+                                            {managementStats.missing_points_count}
+                                        </Badge>
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={!managementStats || managementStats.duplicates_count === 0 || isManagementAction}
+                                    onClick={() => setConfirmAction('remove-duplicates')}
+                                >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Remove Duplicates
+                                    {managementStats && managementStats.duplicates_count > 0 && (
+                                        <Badge variant="destructive" className="ml-auto">
+                                            {managementStats.duplicates_count}
+                                        </Badge>
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={!managementStats || managementStats.pending_expirations_count === 0 || isManagementAction}
+                                    onClick={() => setConfirmAction('expire-all')}
+                                >
+                                    <AlertTriangle className="h-4 w-4 mr-2" />
+                                    Expire All Pending
+                                    {managementStats && managementStats.pending_expirations_count > 0 && (
+                                        <Badge variant="destructive" className="ml-auto">
+                                            {managementStats.pending_expirations_count}
+                                        </Badge>
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={!managementStats || managementStats.expired_count === 0 || isManagementAction}
+                                    onClick={() => setConfirmAction('reset-expired')}
+                                >
+                                    <RotateCcw className="h-4 w-4 mr-2" />
+                                    Reset Expired Points
+                                    {managementStats && managementStats.expired_count > 0 && (
+                                        <Badge variant="secondary" className="ml-auto">
+                                            {managementStats.expired_count}
+                                        </Badge>
+                                    )}
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={!managementStats || (managementStats.duplicates_count === 0 && managementStats.pending_expirations_count === 0) || isManagementAction}
+                                    onClick={() => setConfirmAction('cleanup')}
+                                >
+                                    <Settings className="h-4 w-4 mr-2" />
+                                    Full Cleanup
+                                    <span className="ml-auto text-xs text-muted-foreground">
+                                        (duplicates + expire)
+                                    </span>
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsManagementDialogOpen(false)}>
+                            Close
+                        </Button>
+                        <Button onClick={fetchManagementStats} disabled={isLoadingStats}>
+                            {isLoadingStats ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Refreshing...
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Refresh
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Management Action Confirmation Dialog */}
+            <AlertDialog open={!!confirmAction} onOpenChange={(open) => {
+                if (!open) {
+                    setConfirmAction(null);
+                    // Reset filters when closing
+                    setMgmtDateFrom('');
+                    setMgmtDateTo('');
+                    setMgmtUserId('');
+                }
+            }}>
+                <AlertDialogContent className="sm:max-w-[500px]">
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {confirmAction === 'regenerate' && 'Regenerate Attendance Points'}
+                            {confirmAction === 'remove-duplicates' && 'Remove Duplicate Points'}
+                            {confirmAction === 'expire-all' && 'Expire All Pending Points'}
+                            {confirmAction === 'reset-expired' && 'Reset Expired Points'}
+                            {confirmAction === 'cleanup' && 'Full Cleanup'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription asChild>
+                            <div>
+                                {confirmAction === 'regenerate' && (
+                                    <>
+                                        <p className="mb-3">
+                                            This will regenerate attendance points from verified attendance records that don't have corresponding points.
+                                        </p>
+
+                                        {/* Filters for regenerate */}
+                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
+                                            <p className="text-sm font-medium text-foreground">Filter Options (optional):</p>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div>
+                                                    <Label htmlFor="mgmt_date_from" className="text-xs">From Date</Label>
+                                                    <Input
+                                                        id="mgmt_date_from"
+                                                        type="date"
+                                                        value={mgmtDateFrom}
+                                                        onChange={(e) => setMgmtDateFrom(e.target.value)}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <Label htmlFor="mgmt_date_to" className="text-xs">To Date</Label>
+                                                    <Input
+                                                        id="mgmt_date_to"
+                                                        type="date"
+                                                        value={mgmtDateTo}
+                                                        onChange={(e) => setMgmtDateTo(e.target.value)}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <Label htmlFor="mgmt_user" className="text-xs">Employee (optional)</Label>
+                                                <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            className="w-full justify-between h-8 text-sm font-normal"
+                                                        >
+                                                            <span className="truncate">
+                                                                {mgmtUserId
+                                                                    ? (() => {
+                                                                        const user = users?.find(u => String(u.id) === mgmtUserId);
+                                                                        return user ? formatUserName(user) : "Select employee...";
+                                                                    })()
+                                                                    : "All Employees"}
+                                                            </span>
+                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-full p-0" align="start">
+                                                        <Command shouldFilter={false}>
+                                                            <CommandInput
+                                                                placeholder="Search employee..."
+                                                                value={mgmtUserSearchQuery}
+                                                                onValueChange={setMgmtUserSearchQuery}
+                                                            />
+                                                            <CommandList>
+                                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                                <CommandGroup>
+                                                                    <CommandItem
+                                                                        value="all"
+                                                                        onSelect={() => {
+                                                                            setMgmtUserId('');
+                                                                            setIsMgmtUserPopoverOpen(false);
+                                                                            setMgmtUserSearchQuery('');
+                                                                        }}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Check className={`mr-2 h-4 w-4 ${!mgmtUserId ? "opacity-100" : "opacity-0"}`} />
+                                                                        All Employees
+                                                                    </CommandItem>
+                                                                    {users?.filter(user => {
+                                                                        if (!mgmtUserSearchQuery) return true;
+                                                                        const query = mgmtUserSearchQuery.toLowerCase();
+                                                                        return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
+                                                                    }).slice(0, 50).map((user) => (
+                                                                        <CommandItem
+                                                                            key={user.id}
+                                                                            value={formatUserName(user)}
+                                                                            onSelect={() => {
+                                                                                setMgmtUserId(String(user.id));
+                                                                                setIsMgmtUserPopoverOpen(false);
+                                                                                setMgmtUserSearchQuery('');
+                                                                            }}
+                                                                            className="cursor-pointer"
+                                                                        >
+                                                                            <Check className={`mr-2 h-4 w-4 ${mgmtUserId === String(user.id) ? "opacity-100" : "opacity-0"}`} />
+                                                                            {formatUserName(user)}
+                                                                        </CommandItem>
+                                                                    ))}
+                                                                </CommandGroup>
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                        </div>
+
+                                        <span className="flex items-center gap-1 text-amber-600">
+                                            <BellOff className="h-4 w-4 inline" />
+                                            <strong>No notifications will be sent.</strong>
+                                        </span>
+                                    </>
+                                )}
+                                {confirmAction === 'remove-duplicates' && (
+                                    <>
+                                        This will remove all duplicate attendance point entries (same user, date, and type).
+                                        <br /><br />
+                                        <strong className="text-green-600">Excused points will be preserved.</strong> If duplicates exist and one is excused, the excused entry will be kept.
+                                        <br /><br />
+                                        <span className="flex items-center gap-1 text-amber-600">
+                                            <BellOff className="h-4 w-4 inline" />
+                                            <strong>No notifications will be sent.</strong>
+                                        </span>
+                                        <br />
+                                        <strong className="text-yellow-600">This action cannot be undone.</strong>
+                                    </>
+                                )}
+                                {confirmAction === 'expire-all' && (
+                                    <>
+                                        This will mark all pending expiration points as expired immediately.
+                                        Points that have passed their expiration date but not yet marked will be updated.
+                                        <br /><br />
+                                        <span className="flex items-center gap-1 text-amber-600">
+                                            <BellOff className="h-4 w-4 inline" />
+                                            <strong>No notifications will be sent to agents.</strong>
+                                        </span>
+                                    </>
+                                )}
+                                {confirmAction === 'reset-expired' && (
+                                    <>
+                                        This will reset all expired points back to active status.
+                                        Their expiration dates will be recalculated based on the original violation date.
+                                        <br /><br />
+                                        <strong className="text-blue-600">Excused points will NOT be affected.</strong>
+                                        <br /><br />
+                                        <span className="flex items-center gap-1 text-amber-600">
+                                            <BellOff className="h-4 w-4 inline" />
+                                            <strong>No notifications will be sent.</strong>
+                                        </span>
+                                        <br />
+                                        Use this if you need to reprocess expirations or correct accidental expirations.
+                                    </>
+                                )}
+                                {confirmAction === 'cleanup' && (
+                                    <>
+                                        This will perform a full cleanup of attendance points:
+                                        <br /><br />
+                                        <ul className="list-disc list-inside space-y-1 text-sm">
+                                            <li><strong>Remove Duplicates:</strong> Delete duplicate entries (excused points preserved)</li>
+                                            <li><strong>Expire Pending:</strong> Mark all past-due points as expired (excused excluded)</li>
+                                        </ul>
+                                        <br />
+                                        <strong className="text-green-600">Excused points will NOT be affected.</strong>
+                                        <br /><br />
+                                        <span className="flex items-center gap-1 text-amber-600">
+                                            <BellOff className="h-4 w-4 inline" />
+                                            <strong>No notifications will be sent.</strong>
+                                        </span>
+                                    </>
+                                )}
+                            </div>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isManagementAction}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            disabled={isManagementAction}
+                            onClick={() => confirmAction && handleManagementAction(confirmAction)}
+                            className={
+                                confirmAction === 'regenerate' ? 'bg-green-600 hover:bg-green-700' :
+                                    confirmAction === 'remove-duplicates' ? 'bg-yellow-600 hover:bg-yellow-700' :
+                                        confirmAction === 'expire-all' ? 'bg-orange-600 hover:bg-orange-700' :
+                                            confirmAction === 'cleanup' ? 'bg-purple-600 hover:bg-purple-700' :
+                                                'bg-blue-600 hover:bg-blue-700'
+                            }
+                        >
+                            {isManagementAction ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                <>
+                                    {confirmAction === 'regenerate' && 'Regenerate Points'}
+                                    {confirmAction === 'remove-duplicates' && 'Remove Duplicates'}
+                                    {confirmAction === 'expire-all' && 'Expire All'}
+                                    {confirmAction === 'reset-expired' && 'Reset Points'}
+                                    {confirmAction === 'cleanup' && 'Run Cleanup'}
+                                </>
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 }

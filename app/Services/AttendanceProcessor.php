@@ -954,6 +954,95 @@ class AttendanceProcessor
             }
         }
 
+        // Double punch detection: If both records exist but duration is < 10 minutes,
+        // it's likely a scanner error or accidental double punch
+        if ($timeInRecord && $timeOutRecord && !$sameRecord) {
+            $duration = $timeInRecord['datetime']->diffInMinutes($timeOutRecord['datetime']);
+
+            if ($duration < 10) {
+                \Log::warning('Double punch detected', [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'shift_date' => $shiftDate->format('Y-m-d'),
+                    'time_in' => $timeInRecord['datetime']->format('H:i:s'),
+                    'time_out' => $timeOutRecord['datetime']->format('H:i:s'),
+                    'duration_minutes' => $duration,
+                ]);
+
+                // Store warning in attendance for admin visibility
+                $doublePunchWarning = sprintf(
+                    'DOUBLE PUNCH DETECTED: %s → %s (%d minutes apart). Time out has been cleared pending verification.',
+                    $timeInRecord['datetime']->format('H:i:s'),
+                    $timeOutRecord['datetime']->format('H:i:s'),
+                    $duration
+                );
+
+                // Initialize warnings array if not set
+                $existingWarnings = $attendance->warnings ?? [];
+                $existingWarnings[] = $doublePunchWarning;
+                $attendance->warnings = $existingWarnings;
+
+                // Clear the time out - treat as no time out yet
+                $timeOutRecord = null;
+            }
+        }
+
+        // Maximum duration check: If duration > 20 hours, it's likely not a real time out
+        // (could be next day's time in mismatched, or employee forgot to clock out)
+        if ($timeInRecord && $timeOutRecord) {
+            $duration = $timeInRecord['datetime']->diffInMinutes($timeOutRecord['datetime']);
+
+            if ($duration > 1200) { // 20 hours = 1200 minutes
+                $hours = round($duration / 60, 1);
+                \Log::warning('Excessive shift duration detected', [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'shift_date' => $shiftDate->format('Y-m-d'),
+                    'time_in' => $timeInRecord['datetime']->format('Y-m-d H:i:s'),
+                    'time_out' => $timeOutRecord['datetime']->format('Y-m-d H:i:s'),
+                    'duration_hours' => $hours,
+                ]);
+
+                // Store warning in attendance for admin visibility
+                $excessiveDurationWarning = sprintf(
+                    'EXCESSIVE DURATION: %s → %s (%.1f hours). Time out has been cleared - likely a mismatched scan or forgot to clock out.',
+                    $timeInRecord['datetime']->format('Y-m-d H:i'),
+                    $timeOutRecord['datetime']->format('Y-m-d H:i'),
+                    $hours
+                );
+
+                // Initialize warnings array if not set
+                $existingWarnings = $attendance->warnings ?? [];
+                $existingWarnings[] = $excessiveDurationWarning;
+                $attendance->warnings = $existingWarnings;
+
+                // Clear the time out - treat as missing bio out
+                $timeOutRecord = null;
+            }
+        }
+
+        // 24H Utility shift handling: Use First IN and Last OUT only
+        // This handles the "Smoker" scenario where utility/guard staff scan multiple times
+        // throughout their shift (smoke breaks, etc.) - ignore middle scans
+        if ($schedule->shift_type === 'utility_24h' && $records->count() > 2) {
+            $sortedRecords = $records->sortBy(fn($r) => $r['datetime']->timestamp);
+            $firstRecord = $sortedRecords->first();
+            $lastRecord = $sortedRecords->last();
+
+            // Only override if first and last are different
+            if (!$firstRecord['datetime']->equalTo($lastRecord['datetime'])) {
+                $timeInRecord = $firstRecord;
+                $timeOutRecord = $lastRecord;
+
+                \Log::info('24H Utility: Using first/last scans only', [
+                    'user_id' => $user->id,
+                    'total_scans' => $records->count(),
+                    'first_scan' => $firstRecord['datetime']->format('H:i:s'),
+                    'last_scan' => $lastRecord['datetime']->format('H:i:s'),
+                ]);
+            }
+        }
+
         // Process time in
         if ($timeInRecord) {
             $actualTimeIn = $timeInRecord['datetime'];
@@ -1071,6 +1160,37 @@ class AttendanceProcessor
                 'original_status' => $attendance->status,
                 'warnings' => $scanAnalysis['warnings'],
             ]);
+        }
+
+        // 24H Utility shift: Override tardy/undertime logic
+        // Utility staff don't follow strict schedules, so standard tardy/undertime
+        // calculations would mess up their payroll. Only flag if total hours < 8.
+        if ($schedule->shift_type === 'utility_24h') {
+            // Clear tardy/undertime for utility shifts
+            $attendance->tardy_minutes = null;
+            $attendance->undertime_minutes = null;
+
+            // Determine status based on total hours worked
+            if ($attendance->actual_time_in && $attendance->actual_time_out) {
+                $hoursWorked = $attendance->actual_time_in->diffInHours($attendance->actual_time_out);
+
+                if ($hoursWorked >= 8) {
+                    $attendance->status = 'on_time';
+                    $attendance->secondary_status = null;
+                } else {
+                    // Less than 8 hours - flag as undertime for review
+                    $attendance->status = 'undertime';
+                    $attendance->secondary_status = null;
+
+                    // Add informational warning
+                    $existingWarnings = $attendance->warnings ?? [];
+                    $existingWarnings[] = sprintf(
+                        '24H UTILITY: Only %.1f hours worked (minimum 8 hours expected).',
+                        $hoursWorked
+                    );
+                    $attendance->warnings = $existingWarnings;
+                }
+            }
         }
 
         // Save all changes
@@ -1298,8 +1418,8 @@ class AttendanceProcessor
             return 'half_day_absence';
         }
 
-        // 15 minutes or more late, but within grace period - tardy
-        if ($tardyMinutes >= 15) {
+        // 1 minutes or more late, but within grace period - tardy
+        if ($tardyMinutes >= 1) {
             return 'tardy';
         }
 

@@ -24,7 +24,9 @@ class ProcessPointExpirations extends Command
      *
      * @var string
      */
-    protected $signature = 'points:process-expirations {--dry-run : Show what would be processed without making changes}';
+    protected $signature = 'points:process-expirations
+                            {--dry-run : Show what would be processed without making changes}
+                            {--no-notify : Skip sending notifications to employees}';
 
     /**
      * The console command description.
@@ -39,9 +41,15 @@ class ProcessPointExpirations extends Command
     public function handle()
     {
         $dryRun = $this->option('dry-run');
+        $noNotify = $this->option('no-notify');
 
         if ($dryRun) {
             $this->info('🔍 DRY RUN MODE - No changes will be made');
+            $this->newLine();
+        }
+
+        if ($noNotify) {
+            $this->comment('📭 Notifications are DISABLED');
             $this->newLine();
         }
 
@@ -50,10 +58,10 @@ class ProcessPointExpirations extends Command
         $this->newLine();
 
         // Process Standard Roll Off (SRO)
-        $sroExpired = $this->processSRO($dryRun);
+        $sroExpired = $this->processSRO($dryRun, !$noNotify);
 
         // Process Good Behavior Roll Off (GBRO)
-        $gbroExpired = $this->processGBRO($dryRun);
+        $gbroExpired = $this->processGBRO($dryRun, !$noNotify);
 
         $this->newLine();
         $this->info('Summary:');
@@ -78,7 +86,7 @@ class ProcessPointExpirations extends Command
     /**
      * Process Standard Roll Off (SRO) - 6 months expiration for standard violations
      */
-    protected function processSRO(bool $dryRun): int
+    protected function processSRO(bool $dryRun, bool $notify = true): int
     {
         $this->info('Processing Standard Roll Off (SRO)...');
 
@@ -104,14 +112,16 @@ class ProcessPointExpirations extends Command
             if (!$dryRun) {
                 $point->markAsExpired('sro');
 
-                // Send notification to the employee
-                $this->notificationService->notifyAttendancePointExpired(
-                    $point->user_id,
-                    $point->point_type,
-                    $point->shift_date->format('M d, Y'),
-                    (float) $point->points,
-                    'sro'
-                );
+                // Send notification to the employee (if enabled)
+                if ($notify) {
+                    $this->notificationService->notifyAttendancePointExpired(
+                        $point->user_id,
+                        $point->point_type,
+                        $point->shift_date->format('M d, Y'),
+                        (float) $point->points,
+                        'sro'
+                    );
+                }
             }
         }
 
@@ -122,7 +132,7 @@ class ProcessPointExpirations extends Command
      * Process Good Behavior Roll Off (GBRO)
      * If no violation in 60 days, the last 2 violation points will be deducted
      */
-    protected function processGBRO(bool $dryRun): int
+    protected function processGBRO(bool $dryRun, bool $notify = true): int
     {
         $this->info('Processing Good Behavior Roll Off (GBRO)...');
 
@@ -173,14 +183,16 @@ class ProcessPointExpirations extends Command
                                 'gbro_batch_id' => $batchId,
                             ]);
 
-                            // Send notification to the employee
-                            $this->notificationService->notifyAttendancePointExpired(
-                                $point->user_id,
-                                $point->point_type,
-                                Carbon::parse($point->shift_date)->format('M d, Y'),
-                                (float) $point->points,
-                                'gbro'
-                            );
+                            // Send notification to the employee (if enabled)
+                            if ($notify) {
+                                $this->notificationService->notifyAttendancePointExpired(
+                                    $point->user_id,
+                                    $point->point_type,
+                                    Carbon::parse($point->shift_date)->format('M d, Y'),
+                                    (float) $point->points,
+                                    'gbro'
+                                );
+                            }
                         }
 
                         $totalExpired++;
