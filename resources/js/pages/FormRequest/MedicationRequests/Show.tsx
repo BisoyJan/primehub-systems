@@ -62,8 +62,11 @@ export default function Show({ medicationRequest }: Props) {
     };
 
     const handleStatusUpdate = () => {
-        setData('status', actionType);
         post(medicationUpdateStatusRoute(medicationRequest.id).url, {
+            data: {
+                status: actionType,
+                admin_notes: data.admin_notes,
+            },
             preserveScroll: true,
             onSuccess: () => {
                 setIsDialogOpen(false);
