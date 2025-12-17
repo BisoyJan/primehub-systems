@@ -202,7 +202,7 @@ return [
             'leave.view', 'leave.create',
             'leave_credits.view_all', 'leave_credits.view_own',
             'it_concerns.view', 'it_concerns.create',
-            'medication_requests.view', 'medication_requests.create',
+            'medication_requests.view', 'medication_requests.create', 'medication_requests.update',
             'settings.account', 'settings.password',
         ],
 
