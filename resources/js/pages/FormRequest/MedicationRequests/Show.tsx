@@ -1,4 +1,4 @@
-import { Head, Link, useForm } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { useState } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,11 +50,8 @@ interface Props {
 export default function Show({ medicationRequest }: Props) {
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [actionType, setActionType] = useState<'approved' | 'dispensed' | 'rejected'>('approved');
-
-    const { data, setData, post, processing, errors, reset } = useForm({
-        status: '',
-        admin_notes: medicationRequest.admin_notes || '',
-    });
+    const [adminNotes, setAdminNotes] = useState(medicationRequest.admin_notes || '');
+    const [processing, setProcessing] = useState(false);
 
     const openDialog = (type: 'approved' | 'dispensed' | 'rejected') => {
         setActionType(type);
@@ -62,15 +59,18 @@ export default function Show({ medicationRequest }: Props) {
     };
 
     const handleStatusUpdate = () => {
-        post(medicationUpdateStatusRoute(medicationRequest.id).url, {
-            data: {
-                status: actionType,
-                admin_notes: data.admin_notes,
-            },
+        setProcessing(true);
+        router.post(medicationUpdateStatusRoute(medicationRequest.id).url, {
+            status: actionType,
+            admin_notes: adminNotes,
+        }, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsDialogOpen(false);
-                reset();
+                setAdminNotes('');
+            },
+            onFinish: () => {
+                setProcessing(false);
             },
         });
     };
@@ -283,9 +283,11 @@ export default function Show({ medicationRequest }: Props) {
                         </Can>
 
                         {medicationRequest.admin_notes && (
-                            <Card>
+                            <Card className={medicationRequest.status === 'rejected' ? 'border-red-300 bg-red-50' : ''}>
                                 <CardHeader>
-                                    <CardTitle>Admin Notes</CardTitle>
+                                    <CardTitle className={medicationRequest.status === 'rejected' ? 'text-red-800' : ''}>
+                                        {medicationRequest.status === 'rejected' ? 'Rejection Reason' : 'Admin Notes'}
+                                    </CardTitle>
                                 </CardHeader>
                                 <CardContent>
                                     <p className="whitespace-pre-wrap">{medicationRequest.admin_notes}</p>
@@ -317,13 +319,10 @@ export default function Show({ medicationRequest }: Props) {
                                 <Textarea
                                     id="admin_notes"
                                     placeholder="Add any notes about this request..."
-                                    value={data.admin_notes}
-                                    onChange={(e) => setData('admin_notes', e.target.value)}
+                                    value={adminNotes}
+                                    onChange={(e) => setAdminNotes(e.target.value)}
                                     rows={4}
                                 />
-                                {errors.admin_notes && (
-                                    <p className="text-sm text-red-600">{errors.admin_notes}</p>
-                                )}
                             </div>
                         )}
 
