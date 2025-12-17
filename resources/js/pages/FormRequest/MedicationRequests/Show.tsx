@@ -283,14 +283,14 @@ export default function Show({ medicationRequest }: Props) {
                         </Can>
 
                         {medicationRequest.admin_notes && (
-                            <Card className={medicationRequest.status === 'rejected' ? 'border-red-300 bg-red-50' : ''}>
+                            <Card className={medicationRequest.status === 'rejected' ? 'border-red-400 bg-red-50 dark:bg-red-950 dark:border-red-800' : ''}>
                                 <CardHeader>
-                                    <CardTitle className={medicationRequest.status === 'rejected' ? 'text-red-800' : ''}>
+                                    <CardTitle className={medicationRequest.status === 'rejected' ? 'text-red-800 dark:text-red-400' : ''}>
                                         {medicationRequest.status === 'rejected' ? 'Rejection Reason' : 'Admin Notes'}
                                     </CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <p className="whitespace-pre-wrap">{medicationRequest.admin_notes}</p>
+                                    <p className={`whitespace-pre-wrap ${medicationRequest.status === 'rejected' ? 'text-red-700 dark:text-red-300' : ''}`}>{medicationRequest.admin_notes}</p>
                                 </CardContent>
                             </Card>
                         )}
