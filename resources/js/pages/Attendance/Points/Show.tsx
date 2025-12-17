@@ -3,6 +3,7 @@ import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
 import { Button } from "@/components/ui/button";
+import { formatDateShort, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { usePermission } from "@/hooks/useAuthorization";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -127,25 +128,8 @@ interface PageProps extends SharedData {
     filters?: Filters;
 }
 
-const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-    });
-};
-
-const formatDateTime = (dateTime: string, timeFormat: '12' | '24' = '24') => {
-    const date = new Date(dateTime);
-    return new Intl.DateTimeFormat('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: timeFormat === '12'
-    }).format(date);
-};
+// formatDateShort, formatDateTime are now imported from @/lib/utils
+const formatDate = formatDateShort; // Alias for backward compatibility
 
 /**
  * Calculate days remaining until expiration.
@@ -183,9 +167,8 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats, auth, filters }) => {
+const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateRange, gbroStats, filters }) => {
     useFlashMessage();
-    const timeFormat = (auth.user.time_format as '12' | '24') ?? '24';
     const { can } = usePermission();
     const pageTitle = `${user.name}'s Attendance Points`;
     const { title, breadcrumbs } = usePageMeta({
@@ -922,7 +905,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <div className="text-sm text-green-600">
                                         <span className="text-muted-foreground">On:</span>{' '}
                                         {selectedPoint.excused_at
-                                            ? formatDateTime(selectedPoint.excused_at, timeFormat)
+                                            ? formatDateTime(selectedPoint.excused_at)
                                             : 'Unknown'}
                                     </div>
                                 </div>
@@ -1170,7 +1153,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <p className="text-sm mt-1">{selectedViolationPoint.excuse_reason}</p>
                                     {selectedViolationPoint.excused_by && selectedViolationPoint.excused_at && (
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            Excused by: {selectedViolationPoint.excused_by.name} on {formatDateTime(selectedViolationPoint.excused_at, timeFormat)}
+                                            Excused by: {selectedViolationPoint.excused_by.name} on {formatDateTime(selectedViolationPoint.excused_at)}
                                         </p>
                                     )}
                                 </div>

@@ -57,18 +57,6 @@ class InertiaPagePropsTest extends TestCase
     }
 
     #[Test]
-    public function it_includes_user_time_format_preference(): void
-    {
-        $user = User::factory()->create(['time_format' => '24', 'is_approved' => true]);
-
-        $response = $this->actingAs($user)->get('/dashboard');
-
-        $response->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('auth.user.time_format', '24')
-        );
-    }
-
-    #[Test]
     public function it_shares_null_auth_user_for_guest_pages(): void
     {
         $response = $this->get('/login');

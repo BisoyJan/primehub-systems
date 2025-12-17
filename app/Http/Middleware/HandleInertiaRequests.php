@@ -57,7 +57,6 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user ? [
                     ...$user->toArray(),
-                    'time_format' => $user->time_format ?? '24',
                     'inactivity_timeout' => $user->inactivity_timeout, // null = disabled
                     'permissions' => $this->permissionService->getPermissionsForRole($user->role),
                 ] : null,

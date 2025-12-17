@@ -3,6 +3,7 @@ import { Head, router, usePage } from "@inertiajs/react";
 import { format } from 'date-fns';
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageMeta } from "@/hooks";
+import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +46,6 @@ interface PageProps extends SharedData {
 const UploadShow: React.FC<PageProps> = ({ upload }) => {
     useFlashMessage();
     const { auth } = usePage<PageProps>().props;
-    const timeFormat = auth.user.time_format || '24';
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Upload Details - ${upload.original_filename}`,
@@ -209,7 +209,7 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                                     <p className="text-sm font-medium text-muted-foreground">Upload Date</p>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Clock className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-base">{format(new Date(upload.created_at), timeFormat === '12' ? 'MMM dd, yyyy h:mm a' : 'MMM dd, yyyy HH:mm')}</span>
+                                        <span className="text-base">{format(new Date(upload.created_at), 'MMM dd, yyyy HH:mm')}</span>
                                     </div>
                                 </div>
                             </div>

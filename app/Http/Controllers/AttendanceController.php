@@ -210,7 +210,7 @@ class AttendanceController extends Controller
                         $q->whereNull('end_date')
                             ->orWhere('end_date', '>=', now());
                     })
-                    ->select('id', 'user_id', 'shift_type', 'scheduled_time_in', 'scheduled_time_out', 'site_id', 'campaign_id')
+                    ->select('id', 'user_id', 'shift_type', 'scheduled_time_in', 'scheduled_time_out', 'site_id', 'campaign_id', 'grace_period_minutes')
                     ->with(['site:id,name', 'campaign:id,name']);
             }])
             ->orderBy('first_name')
@@ -229,6 +229,7 @@ class AttendanceController extends Controller
                         'site_name' => $schedule->site?->name,
                         'campaign_id' => $schedule->campaign_id,
                         'campaign_name' => $schedule->campaign?->name,
+                        'grace_period_minutes' => $schedule->grace_period_minutes ?? 15,
                     ] : null,
                 ];
             });

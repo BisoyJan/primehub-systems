@@ -5,6 +5,7 @@ import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { type SharedData } from "@/types";
+import { formatDateTime, formatDate, formatTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -125,29 +126,7 @@ const DEFAULT_META: Meta = {
     total: 0,
 };
 
-const formatDateTime = (value: string | undefined, timeFormat: '12' | '24' = '24') => {
-    if (!value) return "-";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: timeFormat === '12' })}`;
-};
-
-const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) {
-        return dateString;
-    }
-    return date.toLocaleDateString('en-US', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        timeZone: 'UTC'
-    });
-};
+// formatDateTime, formatDate are now imported from @/lib/utils
 
 const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
@@ -278,8 +257,8 @@ const calculateSuggestedStatus = (
             // More than grace period = half day absence
             isHalfDay = true;
             tardyMinutes = diffMinutes;
-        } else if (diffMinutes >= 15) {
-            // 15+ minutes late but within grace period = tardy
+        } else if (diffMinutes >= 1) {
+            // 1+ minutes late but within grace period = tardy
             isTardy = true;
             tardyMinutes = diffMinutes;
         }
@@ -337,22 +316,19 @@ const calculateSuggestedStatus = (
         reason = `Left ${undertimeMinutes} minutes early`;
     } else {
         status = 'on_time';
-        reason = 'Arrived within grace period';
+        reason = 'Arrived on time';
     }
 
     return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason };
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, sites = [], filters, auth } = usePage<PageProps>().props;
+    const { attendances, employees, sites = [], filters } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
         meta: attendances?.meta ?? DEFAULT_META,
     };
-
-    const timeFormat = auth.user.time_format || '24';
-    const is24HourFormat = timeFormat === '24';
 
     // Employee search popover state
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
@@ -978,7 +954,7 @@ export default function AttendanceReview() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="text-sm">
-                                                    {formatDateTime(record.actual_time_in, timeFormat)}
+                                                    {formatDateTime(record.actual_time_in)}
                                                     {record.bio_in_site && record.is_cross_site_bio && (
                                                         <div className="text-xs text-muted-foreground">
                                                             @ {record.bio_in_site.name}
@@ -986,7 +962,7 @@ export default function AttendanceReview() {
                                                     )}
                                                 </TableCell>
                                                 <TableCell className="text-sm">
-                                                    {formatDateTime(record.actual_time_out, timeFormat)}
+                                                    {formatDateTime(record.actual_time_out)}
                                                     {record.bio_out_site && record.is_cross_site_bio && (
                                                         <div className="text-xs text-muted-foreground">
                                                             @ {record.bio_out_site.name}
@@ -1118,14 +1094,14 @@ export default function AttendanceReview() {
                                         </div>
                                         <div>
                                             <span className="font-medium">Time In:</span>{" "}
-                                            {formatDateTime(record.actual_time_in, timeFormat)}
+                                            {formatDateTime(record.actual_time_in)}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
                                             )}
                                         </div>
                                         <div>
                                             <span className="font-medium">Time Out:</span>{" "}
-                                            {formatDateTime(record.actual_time_out, timeFormat)}
+                                            {formatDateTime(record.actual_time_out)}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
                                             )}
@@ -1381,11 +1357,11 @@ export default function AttendanceReview() {
                                 <div className="grid grid-cols-2 gap-2">
                                     <div>
                                         <span className="text-muted-foreground">Scheduled In:</span>{" "}
-                                        {selectedRecord.employee_schedule?.scheduled_time_in || "-"}
+                                        {formatTime(selectedRecord.employee_schedule?.scheduled_time_in) || "-"}
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Scheduled Out:</span>{" "}
-                                        {selectedRecord.employee_schedule?.scheduled_time_out || "-"}
+                                        {formatTime(selectedRecord.employee_schedule?.scheduled_time_out) || "-"}
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Assigned Site:</span>{" "}
@@ -1517,7 +1493,6 @@ export default function AttendanceReview() {
                                             const date = data.actual_time_in ? data.actual_time_in.slice(0, 10) : "";
                                             setData("actual_time_in", date && time ? `${date}T${time}` : "");
                                         }}
-                                        is24HourFormat={is24HourFormat}
                                     />
                                 </div>
                             </div>
@@ -1549,7 +1524,6 @@ export default function AttendanceReview() {
                                             const date = data.actual_time_out ? data.actual_time_out.slice(0, 10) : "";
                                             setData("actual_time_out", date && time ? `${date}T${time}` : "");
                                         }}
-                                        is24HourFormat={is24HourFormat}
                                     />
                                 </div>
                             </div>

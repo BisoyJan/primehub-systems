@@ -120,9 +120,12 @@ export default function AccountCreate() {
                                             type="email"
                                             value={data.email}
                                             onChange={e => setData("email", e.target.value)}
-                                            placeholder="john.doe@example.com"
+                                            placeholder="john.doe@primehubmail.com"
                                             required
                                         />
+                                        <p className="text-xs text-muted-foreground mt-1">
+                                            Only @primehubmail.com and @prmhubsolutions.com emails are accepted.
+                                        </p>
                                         {errors.email && <p className="text-red-600 text-sm mt-1">{errors.email}</p>}
                                     </div>
 

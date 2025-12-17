@@ -24,10 +24,25 @@ class LoginRequest extends FormRequest
      *
      * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
      */
+    /**
+     * Allowed email domains for login.
+     */
+    protected array $allowedDomains = ['primehubmail.com', 'prmhubsolutions.com'];
+
     public function rules(): array
     {
         return [
-            'email' => ['required', 'string', 'email'],
+            'email' => [
+                'required',
+                'string',
+                'email',
+                function ($attribute, $value, $fail) {
+                    $domain = substr(strrchr($value, '@'), 1);
+                    if (!in_array($domain, $this->allowedDomains)) {
+                        $fail('Only @primehubmail.com and @prmhubsolutions.com email addresses are allowed.');
+                    }
+                },
+            ],
             'password' => ['required', 'string'],
         ];
     }

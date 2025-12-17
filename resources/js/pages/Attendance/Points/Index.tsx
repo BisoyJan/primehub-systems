@@ -5,6 +5,7 @@ import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import type { SharedData, UserRole } from "@/types";
+import { formatDateShort, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { Can, HasRole } from '@/components/authorization';
 import {
@@ -177,28 +178,8 @@ interface PageProps extends SharedData {
     [key: string]: unknown;
 }
 
-const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-    });
-};
-
-const formatDateTime = (value: string, timeFormat: '12' | '24' = '24') => {
-    const date = new Date(value);
-    const dateStr = date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-    });
-    const timeStr = date.toLocaleTimeString('en-US', {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: timeFormat === '12'
-    });
-    return `${dateStr} ${timeStr}`;
-};
+// formatDateShort, formatDateTime are now imported from @/lib/utils
+const formatDate = formatDateShort; // Alias for backward compatibility
 
 /**
  * Calculate days remaining until expiration.
@@ -243,7 +224,6 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         breadcrumbs: [{ title: defaultTitle, href: attendancePointsIndex().url }],
     });
     const isPageLoading = usePageLoading();
-    const timeFormat = auth.user.time_format as '12' | '24';
 
     // Roles that should only see their own attendance points
     const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
@@ -317,10 +297,11 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const [isManagementAction, setIsManagementAction] = useState(false);
     const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | null>(null);
 
-    // Management filters for regenerate
+    // Management filters for regenerate and reset-expired
     const [mgmtDateFrom, setMgmtDateFrom] = useState('');
     const [mgmtDateTo, setMgmtDateTo] = useState('');
-    const [mgmtUserId, setMgmtUserId] = useState('');
+    const [mgmtUserId, setMgmtUserId] = useState(''); // For regenerate (single select)
+    const [mgmtUserIds, setMgmtUserIds] = useState<string[]>([]); // For reset-expired (multi-select)
     const [isMgmtUserPopoverOpen, setIsMgmtUserPopoverOpen] = useState(false);
     const [mgmtUserSearchQuery, setMgmtUserSearchQuery] = useState('');
 
@@ -600,6 +581,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         setMgmtDateFrom('');
         setMgmtDateTo('');
         setMgmtUserId('');
+        setMgmtUserIds([]);
         fetchManagementStats();
     };
 
@@ -615,11 +597,14 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
             };
 
             // Build request body with filters for regenerate and reset-expired
-            const body: Record<string, string> = {};
-            if (action === 'regenerate' || action === 'reset-expired') {
-                if (mgmtDateFrom && action === 'regenerate') body.date_from = mgmtDateFrom;
-                if (mgmtDateTo && action === 'regenerate') body.date_to = mgmtDateTo;
+            const body: Record<string, string | string[]> = {};
+            if (action === 'regenerate') {
+                if (mgmtDateFrom) body.date_from = mgmtDateFrom;
+                if (mgmtDateTo) body.date_to = mgmtDateTo;
                 if (mgmtUserId) body.user_id = mgmtUserId;
+            }
+            if (action === 'reset-expired') {
+                if (mgmtUserIds.length > 0) body.user_ids = mgmtUserIds;
             }
 
             const response = await fetch(routeMap[action].url, {
@@ -1744,7 +1729,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             <div className="text-xs text-muted-foreground p-3 bg-muted rounded-md">
                                 <p>Excused by: <span className="font-medium">{selectedPoint.excused_by.name}</span></p>
                                 {selectedPoint.excused_at && (
-                                    <p>On: <span className="font-medium">{formatDateTime(selectedPoint.excused_at, timeFormat)}</span></p>
+                                    <p>On: <span className="font-medium">{formatDateTime(selectedPoint.excused_at)}</span></p>
                                 )}
                             </div>
                         )}
@@ -1953,7 +1938,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     <p className="text-sm mt-1">{selectedViolationPoint.excuse_reason}</p>
                                     {selectedViolationPoint.excused_by && selectedViolationPoint.excused_at && (
                                         <p className="text-xs text-muted-foreground mt-1">
-                                            Excused by: {selectedViolationPoint.excused_by.name} on {formatDateTime(selectedViolationPoint.excused_at, timeFormat)}
+                                            Excused by: {selectedViolationPoint.excused_by.name} on {formatDateTime(selectedViolationPoint.excused_at)}
                                         </p>
                                     )}
                                 </div>
@@ -2689,6 +2674,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                     setMgmtDateFrom('');
                     setMgmtDateTo('');
                     setMgmtUserId('');
+                    setMgmtUserIds([]);
                 }
             }}>
                 <AlertDialogContent className="sm:max-w-[500px]">
@@ -2840,25 +2826,27 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                             Their expiration dates will be recalculated based on the original violation date.
                                         </p>
 
-                                        {/* Filter for reset-expired */}
+                                        {/* Filter for reset-expired - Multi-select */}
                                         <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
-                                            <p className="text-sm font-medium text-foreground">Filter by Employee (optional):</p>
+                                            <p className="text-sm font-medium text-foreground">Filter by Employees (optional):</p>
                                             <div>
-                                                <Label htmlFor="mgmt_user_reset" className="text-xs">Employee</Label>
+                                                <Label htmlFor="mgmt_user_reset" className="text-xs">Select Employees</Label>
                                                 <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
                                                     <PopoverTrigger asChild>
                                                         <Button
                                                             variant="outline"
                                                             role="combobox"
-                                                            className="w-full justify-between h-8 text-sm font-normal"
+                                                            className="w-full justify-between h-auto min-h-8 text-sm font-normal"
                                                         >
-                                                            <span className="truncate">
-                                                                {mgmtUserId
-                                                                    ? (() => {
-                                                                        const user = users?.find(u => String(u.id) === mgmtUserId);
-                                                                        return user ? formatUserName(user) : "Select employee...";
-                                                                    })()
-                                                                    : "All Employees"}
+                                                            <span className="truncate text-left">
+                                                                {mgmtUserIds.length === 0
+                                                                    ? "All Employees"
+                                                                    : mgmtUserIds.length === 1
+                                                                        ? (() => {
+                                                                            const user = users?.find(u => String(u.id) === mgmtUserIds[0]);
+                                                                            return user ? formatUserName(user) : "1 employee selected";
+                                                                        })()
+                                                                        : `${mgmtUserIds.length} employees selected`}
                                                             </span>
                                                             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                                         </Button>
@@ -2874,41 +2862,64 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                                 <CommandEmpty>No employee found.</CommandEmpty>
                                                                 <CommandGroup>
                                                                     <CommandItem
-                                                                        value="all"
+                                                                        value="clear-all"
                                                                         onSelect={() => {
-                                                                            setMgmtUserId('');
-                                                                            setIsMgmtUserPopoverOpen(false);
+                                                                            setMgmtUserIds([]);
                                                                             setMgmtUserSearchQuery('');
                                                                         }}
                                                                         className="cursor-pointer"
                                                                     >
-                                                                        <Check className={`mr-2 h-4 w-4 ${!mgmtUserId ? "opacity-100" : "opacity-0"}`} />
-                                                                        All Employees
+                                                                        <Check className={`mr-2 h-4 w-4 ${mgmtUserIds.length === 0 ? "opacity-100" : "opacity-0"}`} />
+                                                                        All Employees (clear selection)
                                                                     </CommandItem>
                                                                     {users?.filter(user => {
                                                                         if (!mgmtUserSearchQuery) return true;
                                                                         const query = mgmtUserSearchQuery.toLowerCase();
                                                                         return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
-                                                                    }).slice(0, 50).map((user) => (
-                                                                        <CommandItem
-                                                                            key={user.id}
-                                                                            value={formatUserName(user)}
-                                                                            onSelect={() => {
-                                                                                setMgmtUserId(String(user.id));
-                                                                                setIsMgmtUserPopoverOpen(false);
-                                                                                setMgmtUserSearchQuery('');
-                                                                            }}
-                                                                            className="cursor-pointer"
-                                                                        >
-                                                                            <Check className={`mr-2 h-4 w-4 ${mgmtUserId === String(user.id) ? "opacity-100" : "opacity-0"}`} />
-                                                                            {formatUserName(user)}
-                                                                        </CommandItem>
-                                                                    ))}
+                                                                    }).slice(0, 50).map((user) => {
+                                                                        const isSelected = mgmtUserIds.includes(String(user.id));
+                                                                        return (
+                                                                            <CommandItem
+                                                                                key={user.id}
+                                                                                value={formatUserName(user)}
+                                                                                onSelect={() => {
+                                                                                    if (isSelected) {
+                                                                                        setMgmtUserIds(mgmtUserIds.filter(id => id !== String(user.id)));
+                                                                                    } else {
+                                                                                        setMgmtUserIds([...mgmtUserIds, String(user.id)]);
+                                                                                    }
+                                                                                }}
+                                                                                className="cursor-pointer"
+                                                                            >
+                                                                                <Check className={`mr-2 h-4 w-4 ${isSelected ? "opacity-100" : "opacity-0"}`} />
+                                                                                {formatUserName(user)}
+                                                                            </CommandItem>
+                                                                        );
+                                                                    })}
                                                                 </CommandGroup>
                                                             </CommandList>
                                                         </Command>
                                                     </PopoverContent>
                                                 </Popover>
+                                                {mgmtUserIds.length > 0 && (
+                                                    <div className="flex flex-wrap gap-1 mt-2">
+                                                        {mgmtUserIds.map(id => {
+                                                            const user = users?.find(u => String(u.id) === id);
+                                                            return user ? (
+                                                                <Badge key={id} variant="secondary" className="text-xs">
+                                                                    {formatUserName(user)}
+                                                                    <button
+                                                                        type="button"
+                                                                        className="ml-1 hover:text-destructive"
+                                                                        onClick={() => setMgmtUserIds(mgmtUserIds.filter(uid => uid !== id))}
+                                                                    >
+                                                                        ×
+                                                                    </button>
+                                                                </Badge>
+                                                            ) : null;
+                                                        })}
+                                                    </div>
+                                                )}
                                             </div>
                                         </div>
 

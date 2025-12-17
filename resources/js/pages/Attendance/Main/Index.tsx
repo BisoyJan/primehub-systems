@@ -5,6 +5,7 @@ import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { type SharedData, type UserRole } from "@/types";
+import { formatTime, formatDate, formatDateTime } from "@/lib/utils";
 import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 import { Button } from "@/components/ui/button";
@@ -131,72 +132,7 @@ const DEFAULT_META: Meta = {
     total: 0,
 };
 
-const formatDateTime = (value: string | undefined, timeFormat: '12' | '24' = '24') => {
-    if (!value) return "-";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
-
-    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: timeFormat === '12' })}`;
-};
-
-const formatDate = (dateString: string) => {
-    if (!dateString) return "-";
-
-    // For date-only strings (YYYY-MM-DD), split and create date in local timezone
-    // to avoid timezone conversion issues
-    const dateParts = dateString.split('T')[0].split('-'); // Get YYYY-MM-DD part
-    if (dateParts.length === 3) {
-        const year = parseInt(dateParts[0]);
-        const month = parseInt(dateParts[1]) - 1; // Month is 0-indexed
-        const day = parseInt(dateParts[2]);
-
-        const date = new Date(year, month, day);
-
-        if (Number.isNaN(date.getTime())) {
-            return dateString; // Return original if parsing fails
-        }
-
-        return date.toLocaleDateString('en-US', {
-            weekday: 'short',
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric'
-        });
-    }
-
-    // Fallback for other date formats
-    const date = new Date(dateString);
-    if (Number.isNaN(date.getTime())) {
-        return dateString;
-    }
-
-    return date.toLocaleDateString('en-US', {
-        weekday: 'short',
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
-};
-
-const formatTime = (timeString: string, timeFormat: '12' | '24' = '24') => {
-    if (!timeString) return "-";
-
-    // Parse time string (HH:MM:SS format)
-    const [hours, minutes] = timeString.split(':');
-
-    if (!hours || !minutes) return timeString;
-
-    if (timeFormat === '12') {
-        const hour = parseInt(hours);
-        const period = hour >= 12 ? 'PM' : 'AM';
-        const hour12 = hour % 12 || 12;
-        return `${hour12}:${minutes} ${period}`;
-    }
-
-    return `${hours}:${minutes}`;
-};
+// formatDateTime, formatDate, formatTime are now imported from @/lib/utils
 
 const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; className: string }> = {
@@ -252,7 +188,6 @@ const getShiftTypeBadge = (shiftType: string) => {
 
 export default function AttendanceIndex() {
     const { attendances, users = [], sites = [], filters, auth } = usePage<PageProps>().props;
-    const timeFormat = auth.user.time_format || '24';
 
     // Ensure we have proper data structure
     const attendanceData = {
@@ -878,14 +813,14 @@ export default function AttendanceIndex() {
                                         <TableCell className="text-sm">
                                             {record.employee_schedule ? (
                                                 <div className="whitespace-nowrap">
-                                                    {formatTime(record.employee_schedule.scheduled_time_in, timeFormat)} - {formatTime(record.employee_schedule.scheduled_time_out, timeFormat)}
+                                                    {formatTime(record.employee_schedule.scheduled_time_in)} - {formatTime(record.employee_schedule.scheduled_time_out)}
                                                 </div>
                                             ) : (
                                                 "-"
                                             )}
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                            {formatDateTime(record.actual_time_in, timeFormat)}
+                                            {formatDateTime(record.actual_time_in)}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <div className="text-xs text-muted-foreground">
                                                     @ {record.bio_in_site.name}
@@ -893,7 +828,7 @@ export default function AttendanceIndex() {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                            {formatDateTime(record.actual_time_out, timeFormat)}
+                                            {formatDateTime(record.actual_time_out)}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <div className="text-xs text-muted-foreground">
                                                     @ {record.bio_out_site.name}
@@ -1014,19 +949,19 @@ export default function AttendanceIndex() {
                                         <div>
                                             <span className="font-medium">Schedule:</span>{" "}
                                             {record.employee_schedule ? (
-                                                <span>{formatTime(record.employee_schedule.scheduled_time_in, timeFormat)} - {formatTime(record.employee_schedule.scheduled_time_out, timeFormat)}</span>
+                                                <span>{formatTime(record.employee_schedule.scheduled_time_in)} - {formatTime(record.employee_schedule.scheduled_time_out)}</span>
                                             ) : (
                                                 "-"
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time In:</span> {formatDateTime(record.actual_time_in, timeFormat)}
+                                            <span className="font-medium">Time In:</span> {formatDateTime(record.actual_time_in)}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time Out:</span> {formatDateTime(record.actual_time_out, timeFormat)}
+                                            <span className="font-medium">Time Out:</span> {formatDateTime(record.actual_time_out)}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
                                             )}

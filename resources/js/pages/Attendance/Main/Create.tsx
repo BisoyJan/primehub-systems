@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Head, router, useForm, usePage } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
+import { format } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -7,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { TimeInput } from '@/components/ui/time-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { format, parse } from 'date-fns';
+import { formatTime } from '@/lib/utils';
 import {
     Select,
     SelectContent,
@@ -36,6 +37,7 @@ interface User {
         site_name: string;
         campaign_id: number | null;
         campaign_name: string | null;
+        grace_period_minutes: number;
     } | null;
 }
 
@@ -51,10 +53,6 @@ interface Props {
 
 export default function Create({ users, campaigns }: Props) {
     useFlashMessage();
-    const { auth } = usePage<{ auth: { user: { time_format: string } } }>().props;
-    const rawTimeFormat = auth.user?.time_format;
-    const timeFormat = String(rawTimeFormat || '24');
-    const is24HourFormat = timeFormat === '24';
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Manual Attendance',
@@ -141,7 +139,7 @@ export default function Create({ users, campaigns }: Props) {
         // Both times provided - calculate based on schedule
         const scheduledIn = schedule.scheduled_time_in; // Format: "HH:mm:ss"
         const scheduledOut = schedule.scheduled_time_out;
-        const gracePeriodMinutes = 15; // Default grace period
+        const gracePeriodMinutes = schedule.grace_period_minutes ?? 15; // Use schedule's grace period for half day threshold
 
         // Parse scheduled times
         const [schedInH, schedInM] = scheduledIn.split(':').map(Number);
@@ -177,8 +175,8 @@ export default function Create({ users, campaigns }: Props) {
         if (tardyMinutes > gracePeriodMinutes) {
             // More than grace period late = half_day_absence
             isHalfDay = true;
-        } else if (tardyMinutes >= 15) {
-            // 15+ minutes late but within grace period = tardy
+        } else if (tardyMinutes >= 1) {
+            // 1+ minutes late = tardy
             isTardy = true;
         }
 
@@ -237,7 +235,7 @@ export default function Create({ users, campaigns }: Props) {
             reason = `Left ${undertimeMinutes} minutes early`;
         } else {
             status = 'on_time';
-            reason = 'Arrived within grace period';
+            reason = 'Arrived on time';
         }
 
         return { status, secondaryStatus, reason };
@@ -597,16 +595,7 @@ export default function Create({ users, campaigns }: Props) {
         setBulkData('user_ids', []);
     };
 
-    // Helper function to format time based on user preference
-    const formatTimeForDisplay = (time: string) => {
-        if (!time) return '';
-        try {
-            const date = parse(time, 'HH:mm:ss', new Date());
-            return is24HourFormat ? format(date, 'HH:mm') : format(date, 'hh:mm a');
-        } catch {
-            return time;
-        }
-    };
+    // formatTime is now imported from @/lib/utils
 
     const selectUsersByShift = (shiftKey: string) => {
         if (shiftKey === 'all') {
@@ -794,7 +783,7 @@ export default function Create({ users, campaigns }: Props) {
                                                                 ).length;
                                                                 return (
                                                                     <SelectItem key={index} value={shiftKey}>
-                                                                        {shift.shift_type.replace('_', ' ').toUpperCase()} - {formatTimeForDisplay(shift.time_in)} to {formatTimeForDisplay(shift.time_out)}
+                                                                        {shift.shift_type.replace('_', ' ').toUpperCase()} - {formatTime(shift.time_in)} to {formatTime(shift.time_out)}
                                                                         {shift.site && ` (${shift.site})`} ({count})
                                                                     </SelectItem>
                                                                 );
@@ -899,7 +888,7 @@ export default function Create({ users, campaigns }: Props) {
                                                                     </span>
                                                                     {user.schedule && (
                                                                         <span className="text-xs text-muted-foreground">
-                                                                            {user.schedule.shift_type.replace('_', ' ').toUpperCase()}: {formatTimeForDisplay(user.schedule.scheduled_time_in)} - {formatTimeForDisplay(user.schedule.scheduled_time_out)}
+                                                                            {user.schedule.shift_type.replace('_', ' ').toUpperCase()}: {formatTime(user.schedule.scheduled_time_in)} - {formatTime(user.schedule.scheduled_time_out)}
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -925,7 +914,7 @@ export default function Create({ users, campaigns }: Props) {
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-muted-foreground w-24">Time In/Out:</span>
                                                         <span className="font-medium">
-                                                            {formatTimeForDisplay(selectedUser.schedule.scheduled_time_in)} - {formatTimeForDisplay(selectedUser.schedule.scheduled_time_out)}
+                                                            {formatTime(selectedUser.schedule.scheduled_time_in)} - {formatTime(selectedUser.schedule.scheduled_time_out)}
                                                         </span>
                                                     </div>
                                                     <div className="flex items-center gap-2">
@@ -1125,7 +1114,6 @@ export default function Create({ users, campaigns }: Props) {
                                                             setData('actual_time_in_time', value);
                                                         }
                                                     }}
-                                                    is24HourFormat={is24HourFormat}
                                                 />
                                             </div>
                                         </div>
@@ -1176,7 +1164,6 @@ export default function Create({ users, campaigns }: Props) {
                                                             setData('actual_time_out_time', value);
                                                         }
                                                     }}
-                                                    is24HourFormat={is24HourFormat}
                                                 />
                                             </div>
                                         </div>

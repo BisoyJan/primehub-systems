@@ -89,6 +89,9 @@ export default function Register() {
                                     name="email"
                                     placeholder="email@primehubmail.com"
                                 />
+                                <p className="text-xs text-muted-foreground">
+                                    Only @primehubmail.com and @prmhubsolutions.com emails are accepted.
+                                </p>
                                 <InputError message={errors.email} />
                             </div>
 

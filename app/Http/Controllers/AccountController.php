@@ -121,15 +121,34 @@ class AccountController extends Controller
     }
 
     /**
+     * Allowed email domains.
+     */
+    protected array $allowedEmailDomains = ['primehubmail.com', 'prmhubsolutions.com'];
+
+    /**
      * Store a newly created user account.
      */
     public function store(Request $request)
     {
+        $allowedDomains = $this->allowedEmailDomains;
+
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|size:1',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                'unique:users',
+                function ($attribute, $value, $fail) use ($allowedDomains) {
+                    $domain = substr(strrchr($value, '@'), 1);
+                    if (!in_array($domain, $allowedDomains)) {
+                        $fail('Only @primehubmail.com and @prmhubsolutions.com email addresses are allowed.');
+                    }
+                },
+            ],
             'password' => ['required', 'confirmed', Password::defaults()],
             'role' => 'required|in:Super Admin,Admin,Team Lead,Agent,HR,IT,Utility',
             'hired_date' => 'required|date',
@@ -174,11 +193,25 @@ class AccountController extends Controller
      */
     public function update(Request $request, User $account)
     {
+        $allowedDomains = $this->allowedEmailDomains;
+
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|size:1',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users,email,' . $account->id,
+            'email' => [
+                'required',
+                'string',
+                'email',
+                'max:255',
+                'unique:users,email,' . $account->id,
+                function ($attribute, $value, $fail) use ($allowedDomains) {
+                    $domain = substr(strrchr($value, '@'), 1);
+                    if (!in_array($domain, $allowedDomains)) {
+                        $fail('Only @primehubmail.com and @prmhubsolutions.com email addresses are allowed.');
+                    }
+                },
+            ],
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'role' => 'required|in:Super Admin,Admin,Team Lead,Agent,HR,IT,Utility',
             'hired_date' => 'required|date',

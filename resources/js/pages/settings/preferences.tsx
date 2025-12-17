@@ -20,7 +20,7 @@ import { Switch } from '@/components/ui/switch';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { useFlashMessage } from '@/hooks';
-import { Clock, Timer } from 'lucide-react';
+import { Timer } from 'lucide-react';
 import { useState } from 'react';
 
 const breadcrumbs: BreadcrumbItem[] = [
@@ -31,7 +31,6 @@ const breadcrumbs: BreadcrumbItem[] = [
 ];
 
 interface User {
-    time_format: '12' | '24';
     inactivity_timeout: number | null;
 }
 
@@ -41,7 +40,6 @@ interface PreferencesProps {
 
 export default function Preferences({ user }: PreferencesProps) {
     useFlashMessage();
-    const [timeFormat, setTimeFormat] = useState(user.time_format || '24');
     const [autoLogoutEnabled, setAutoLogoutEnabled] = useState(user.inactivity_timeout !== null);
     const [inactivityTimeout, setInactivityTimeout] = useState<string>(
         user.inactivity_timeout?.toString() || '15'
@@ -74,75 +72,6 @@ export default function Preferences({ user }: PreferencesProps) {
                     >
                         {({ processing, recentlySuccessful }) => (
                             <>
-                                {/* Time Format Card */}
-                                <Card>
-                                    <CardHeader>
-                                        <div className="flex items-center gap-2">
-                                            <Clock className="h-5 w-5" />
-                                            <div>
-                                                <CardTitle>Time Format Preferences</CardTitle>
-                                                <CardDescription>
-                                                    Choose how time is displayed throughout the system
-                                                </CardDescription>
-                                            </div>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="space-y-4">
-                                            <div className="space-y-2">
-                                                <Label htmlFor="time_format">
-                                                    Time Format
-                                                </Label>
-                                                <Select
-                                                    name="time_format"
-                                                    value={timeFormat}
-                                                    onValueChange={(value) => setTimeFormat(value as '12' | '24')}
-                                                >
-                                                    <SelectTrigger id="time_format">
-                                                        <SelectValue placeholder="Select time format" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        <SelectItem value="24">
-                                                            <div className="flex flex-col items-start">
-                                                                <span className="font-medium">24-Hour Format</span>
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    Examples: 09:30, 17:45, 23:59
-                                                                </span>
-                                                            </div>
-                                                        </SelectItem>
-                                                        <SelectItem value="12">
-                                                            <div className="flex flex-col items-start">
-                                                                <span className="font-medium">12-Hour Format (AM/PM)</span>
-                                                                <span className="text-xs text-muted-foreground">
-                                                                    Examples: 9:30 AM, 5:45 PM, 11:59 PM
-                                                                </span>
-                                                            </div>
-                                                        </SelectItem>
-                                                    </SelectContent>
-                                                </Select>
-                                                <p className="text-sm text-muted-foreground">
-                                                    This setting will apply to all time displays in attendance records,
-                                                    schedules, and reports throughout the system.
-                                                </p>
-                                            </div>
-
-                                            <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 dark:border-blue-200/10 dark:bg-blue-700/10">
-                                                <h4 className="mb-2 font-medium text-blue-900 dark:text-blue-100">Preview</h4>
-                                                <div className="space-y-1 text-sm">
-                                                    <p className="text-blue-800 dark:text-blue-200">
-                                                        <span className="font-medium">Current format:</span>{' '}
-                                                        {timeFormat === '24' ? (
-                                                            <span>14:30 - 22:00</span>
-                                                        ) : (
-                                                            <span>2:30 PM - 10:00 PM</span>
-                                                        )}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-
                                 {/* Auto Logout Card */}
                                 <Card>
                                     <CardHeader>

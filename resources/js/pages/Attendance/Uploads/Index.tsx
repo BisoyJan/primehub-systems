@@ -3,6 +3,7 @@ import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
 import { useFlashMessage, usePageMeta, usePageLoading } from "@/hooks";
+import { formatDateShort, formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -62,28 +63,11 @@ interface PageProps extends SharedData {
     [key: string]: unknown;
 }
 
-const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-    });
-};
-
-const formatDateTime = (datetime: string, timeFormat: '12' | '24' = '24') => {
-    return new Date(datetime).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric',
-        hour: 'numeric',
-        minute: '2-digit',
-        hour12: timeFormat === '12'
-    });
-};
+// formatDateShort, formatDateTime are now imported from @/lib/utils
+const formatDate = formatDateShort; // Alias for backward compatibility
 
 export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
     useFlashMessage();
-    const timeFormat = auth.user.time_format || '24';
 
     const { title, breadcrumbs } = usePageMeta({
         title: defaultTitle,
@@ -339,7 +323,7 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
                                             <TableCell>{getStatusBadge(upload.status)}</TableCell>
                                             <TableCell>{upload.uploader?.name || 'Unknown'}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
-                                                {formatDateTime(upload.created_at, timeFormat)}
+                                                {formatDateTime(upload.created_at)}
                                             </TableCell>
                                             <TableCell className="text-right">
                                                 <button
@@ -414,7 +398,7 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
                                 </div>
 
                                 <div className="text-sm text-muted-foreground mt-1">
-                                    {formatDateTime(upload.created_at, timeFormat)}
+                                    {formatDateTime(upload.created_at)}
                                 </div>
                             </div>
                         ))

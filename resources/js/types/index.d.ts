@@ -43,7 +43,6 @@ export interface User {
     avatar?: string;
     email_verified_at: string | null;
     two_factor_enabled?: boolean;
-    time_format?: '12' | '24';
     inactivity_timeout?: number | null; // null = disabled (no auto-logout)
     hired_date?: string | null;
     created_at: string;

@@ -30,11 +30,26 @@ class RegisteredUserController extends Controller
      */
     public function store(Request $request): RedirectResponse
     {
+        $allowedDomains = ['primehubmail.com', 'prmhubsolutions.com'];
+
         $request->validate([
             'first_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|size:1',
             'last_name' => 'required|string|max:255',
-            'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
+            'email' => [
+                'required',
+                'string',
+                'lowercase',
+                'email',
+                'max:255',
+                'unique:'.User::class,
+                function ($attribute, $value, $fail) use ($allowedDomains) {
+                    $domain = substr(strrchr($value, '@'), 1);
+                    if (!in_array($domain, $allowedDomains)) {
+                        $fail('Only @primehubmail.com and @prmhubsolutions.com email addresses are allowed.');
+                    }
+                },
+            ],
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
         ]);
 

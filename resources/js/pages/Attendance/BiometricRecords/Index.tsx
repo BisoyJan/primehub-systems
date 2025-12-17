@@ -5,6 +5,7 @@ import { type SharedData } from "@/types";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { formatTime, formatDateShort } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -88,32 +89,11 @@ interface PageProps extends SharedData {
     [key: string]: unknown;
 }
 
-const formatDate = (date: string) => {
-    return new Date(date).toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-    });
-};
-
-const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
-    if (timeFormat === '24') {
-        return time; // Return as-is in 24-hour format (HH:MM or HH:MM:SS)
-    }
-
-    // Convert to 12-hour format
-    const timeParts = time.split(':');
-    const hours = parseInt(timeParts[0]);
-    const minutes = timeParts[1];
-    const seconds = timeParts[2] || '';
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const hour12 = hours % 12 || 12;
-    return seconds ? `${hour12}:${minutes}:${seconds} ${ampm}` : `${hour12}:${minutes} ${ampm}`;
-};
+// formatTime, formatDateShort are now imported from @/lib/utils
+const formatDate = formatDateShort; // Alias for backward compatibility
 
 export default function BiometricRecordsIndex() {
-    const { records, stats, filters, auth } = usePage<PageProps>().props;
-    const timeFormat = auth.user.time_format || '24';
+    const { records, stats, filters } = usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Biometric Records",
@@ -471,7 +451,7 @@ export default function BiometricRecordsIndex() {
                                                         {formatDate(record.record_date)}
                                                     </span>
                                                     <span className="text-sm text-muted-foreground">
-                                                        {formatTime(record.record_time, timeFormat)}
+                                                        {formatTime(record.record_time)}
                                                     </span>
                                                 </div>
                                             </TableCell>
@@ -523,7 +503,7 @@ export default function BiometricRecordsIndex() {
                                     <div>
                                         <div className="text-lg font-semibold">{record.user.name}</div>
                                         <div className="text-sm text-muted-foreground">
-                                            {formatDate(record.record_date)} at {formatTime(record.record_time, timeFormat)}
+                                            {formatDate(record.record_date)} at {formatTime(record.record_time)}
                                         </div>
                                     </div>
                                     <Badge variant="outline">{record.site.name}</Badge>

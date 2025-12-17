@@ -14,7 +14,7 @@ class PreferencesController extends Controller
     public function edit(Request $request)
     {
         return Inertia::render('settings/preferences', [
-            'user' => $request->user()->only(['time_format', 'inactivity_timeout']),
+            'user' => $request->user()->only(['inactivity_timeout']),
         ]);
     }
 
@@ -24,7 +24,6 @@ class PreferencesController extends Controller
     public function update(Request $request)
     {
         $validated = $request->validate([
-            'time_format' => 'required|in:12,24',
             'inactivity_timeout' => 'nullable|integer|min:5|max:480', // 5 min to 8 hours
         ]);
 

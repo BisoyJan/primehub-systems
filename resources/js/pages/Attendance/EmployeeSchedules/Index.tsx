@@ -6,6 +6,7 @@ import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Can } from "@/components/authorization";
+import { formatTime, formatDate } from "@/lib/utils";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -113,29 +114,7 @@ interface PageProps extends SharedData {
     [key: string]: unknown;
 }
 
-const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
-    // Strip seconds if present (HH:MM:SS -> HH:MM)
-    const [hours, minutes] = time.split(':');
-
-    if (timeFormat === '24') {
-        return `${hours}:${minutes}`; // Return as HH:MM in 24-hour format
-    }
-
-    // Convert to 12-hour format
-    const hour = parseInt(hours);
-    const ampm = hour >= 12 ? 'PM' : 'AM';
-    const hour12 = hour % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-};
-
-const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-    });
-};
+// formatTime, formatDate are now imported from @/lib/utils
 
 const getShiftTypeBadge = (shiftType: string) => {
     const config: Record<string, { label: string; className: string }> = {
@@ -174,8 +153,7 @@ const groupSchedulesByUser = (schedules: Schedule[]) => {
 };
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns = [], roles = [], filters, auth, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [] } = usePage<PageProps>().props;
-    const timeFormat = (auth.user as { time_format?: '12' | '24' })?.time_format || '24';
+    const { schedules, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [] } = usePage<PageProps>().props;
     const scheduleData = {
         data: schedules?.data ?? [],
         links: schedules?.links ?? [],
@@ -681,7 +659,7 @@ export default function EmployeeSchedulesIndex() {
                                             <TableCell>{schedule.campaign?.name || "-"}</TableCell>
                                             <TableCell>{schedule.site?.name || "-"}</TableCell>
                                             <TableCell>{getShiftTypeBadge(schedule.shift_type)}</TableCell>
-                                            <TableCell className="whitespace-nowrap">{formatTime(schedule.scheduled_time_in, timeFormat)} - {formatTime(schedule.scheduled_time_out, timeFormat)}</TableCell>
+                                            <TableCell className="whitespace-nowrap">{formatTime(schedule.scheduled_time_in)} - {formatTime(schedule.scheduled_time_out)}</TableCell>
                                             <TableCell className="text-xs">
                                                 {schedule.work_days.slice(0, 3).map(day => day.substring(0, 3)).join(", ")}
                                                 {schedule.work_days.length > 3 && ` +${schedule.work_days.length - 3}`}
@@ -807,7 +785,7 @@ export default function EmployeeSchedulesIndex() {
                                     </div>
                                     <div>
                                         <span className="font-medium">Time:</span>{" "}
-                                        {formatTime(schedule.scheduled_time_in, timeFormat)} - {formatTime(schedule.scheduled_time_out, timeFormat)}
+                                        {formatTime(schedule.scheduled_time_in)} - {formatTime(schedule.scheduled_time_out)}
                                     </div>
                                     <div>
                                         <span className="font-medium">Work Days:</span>{" "}
@@ -1289,11 +1267,11 @@ export default function EmployeeSchedulesIndex() {
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Time In:</span>
-                                                <p className="mt-1">{formatTime(schedule.scheduled_time_in, timeFormat)}</p>
+                                                <p className="mt-1">{formatTime(schedule.scheduled_time_in)}</p>
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Time Out:</span>
-                                                <p className="mt-1">{formatTime(schedule.scheduled_time_out, timeFormat)}</p>
+                                                <p className="mt-1">{formatTime(schedule.scheduled_time_out)}</p>
                                             </div>
                                             <div>
                                                 <span className="font-medium text-muted-foreground">Work Days:</span>

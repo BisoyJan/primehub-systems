@@ -550,6 +550,7 @@ class NotificationService
             'link' => route('medication-requests.show', $requestId)
         ];
 
+        $this->notifyUsersByRole('Team Lead', 'medication_request', $title, $message, $data);
         $this->notifyUsersByRole('HR', 'medication_request', $title, $message, $data);
         $this->notifyUsersByRole('Admin', 'medication_request', $title, $message, $data);
         $this->notifyUsersByRole('Super Admin', 'medication_request', $title, $message, $data);

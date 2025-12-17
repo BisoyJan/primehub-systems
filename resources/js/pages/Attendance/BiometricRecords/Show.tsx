@@ -4,6 +4,7 @@ import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { formatTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -45,7 +46,7 @@ interface PageProps extends SharedData {
     records: BiometricRecord[];
 }
 
-const formatDateTime = (dateTime: string, timeFormat: '12' | '24' = '24') => {
+const formatDateTime = (dateTime: string) => {
     const date = new Date(dateTime);
     return new Intl.DateTimeFormat('en-US', {
         month: 'short',
@@ -54,29 +55,15 @@ const formatDateTime = (dateTime: string, timeFormat: '12' | '24' = '24') => {
         hour: 'numeric',
         minute: '2-digit',
         second: '2-digit',
-        hour12: timeFormat === '12'
+        hour12: false
     }).format(date);
 };
 
-const formatTime = (time: string, timeFormat: '12' | '24' = '24') => {
-    if (timeFormat === '24') {
-        return time; // Return as-is in 24-hour format (HH:MM:SS)
-    }
-
-    // Convert to 12-hour format
-    const timeParts = time.split(':');
-    const hours = parseInt(timeParts[0]);
-    const minutes = timeParts[1];
-    const seconds = timeParts[2] || '';
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const hour12 = hours % 12 || 12;
-    return seconds ? `${hour12}:${minutes}:${seconds} ${ampm}` : `${hour12}:${minutes} ${ampm}`;
-};
+// formatTime is now imported from @/lib/utils
 
 export default function BiometricRecordsShow() {
-    const { user, date, records, auth } = usePage<PageProps>().props;
+    const { user, date, records } = usePage<PageProps>().props;
     useFlashMessage();
-    const timeFormat = auth.user.time_format || '24';
 
     const formattedDate = new Date(date).toLocaleDateString('en-US', {
         weekday: 'long',
@@ -163,7 +150,7 @@ export default function BiometricRecordsShow() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-sm text-muted-foreground">
-                                {records.length > 0 ? formatTime(records[0].record_time, timeFormat) : 'N/A'}
+                                {records.length > 0 ? formatTime(records[0].record_time) : 'N/A'}
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 Likely time in
@@ -178,7 +165,7 @@ export default function BiometricRecordsShow() {
                         </CardHeader>
                         <CardContent>
                             <div className="text-lg font-bold">
-                                {records.length > 0 ? formatTime(records[records.length - 1].record_time, timeFormat) : 'N/A'}
+                                {records.length > 0 ? formatTime(records[records.length - 1].record_time) : 'N/A'}
                             </div>
                             <p className="text-xs text-muted-foreground">
                                 Likely time out
@@ -221,11 +208,11 @@ export default function BiometricRecordsShow() {
                                                     {index + 1}
                                                 </TableCell>
                                                 <TableCell>
-                                                    {formatDateTime(record.datetime, timeFormat)}
+                                                    {formatDateTime(record.datetime)}
                                                 </TableCell>
                                                 <TableCell>
                                                     <Badge variant="secondary">
-                                                        {formatTime(record.record_time, timeFormat)}
+                                                        {formatTime(record.record_time)}
                                                     </Badge>
                                                 </TableCell>
                                                 <TableCell className="font-mono text-sm">
@@ -280,7 +267,7 @@ export default function BiometricRecordsShow() {
                                             <div className="flex items-center justify-between">
                                                 <div>
                                                     <div className="font-semibold">
-                                                        {formatTime(record.record_time, timeFormat)}
+                                                        {formatTime(record.record_time)}
                                                     </div>
                                                     <div className="text-sm text-muted-foreground">
                                                         {record.site.name}

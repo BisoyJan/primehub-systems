@@ -1423,7 +1423,7 @@ class AttendanceProcessor
             return 'tardy';
         }
 
-        // Less than 15 minutes late - considered on time
+        // Less than 1 minute late - considered on time
         return 'on_time';
     }
 

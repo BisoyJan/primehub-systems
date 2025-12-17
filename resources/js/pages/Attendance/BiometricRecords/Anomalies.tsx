@@ -97,8 +97,6 @@ interface PageProps extends SharedData {
 }
 
 export default function Anomalies({ stats, results }: PageProps) {
-    const { auth } = usePage<PageProps>().props;
-    const timeFormat = auth.user.time_format || '24';
     const { title, breadcrumbs } = usePageMeta({
         title: 'Anomaly Detection',
         breadcrumbs: [
@@ -538,7 +536,7 @@ export default function Anomalies({ stats, results }: PageProps) {
                                                                             {anomaly.records.map((record, ridx) => (
                                                                                 <TableRow key={ridx}>
                                                                                     <TableCell className="font-mono text-sm">
-                                                                                        {format(new Date(record.scan_datetime), timeFormat === '12' ? 'MMM d, yyyy h:mm:ss a' : 'MMM d, yyyy HH:mm:ss')}
+                                                                                        {format(new Date(record.scan_datetime), 'MMM d, yyyy HH:mm:ss')}
                                                                                     </TableCell>
                                                                                     <TableCell>{record.site}</TableCell>
                                                                                 </TableRow>
@@ -617,7 +615,7 @@ export default function Anomalies({ stats, results }: PageProps) {
                                                     {anomaly.records.map((record, ridx) => (
                                                         <div key={ridx} className="flex justify-between text-sm p-2 bg-muted/30 rounded">
                                                             <span className="font-mono text-xs">
-                                                                {format(new Date(record.scan_datetime), timeFormat === '12' ? 'MMM d h:mm a' : 'MMM d HH:mm')}
+                                                                {format(new Date(record.scan_datetime), 'MMM d HH:mm')}
                                                             </span>
                                                             <span className="text-muted-foreground">{record.site}</span>
                                                         </div>

@@ -3,6 +3,7 @@ import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
 import { useFlashMessage, usePageMeta, usePermission } from "@/hooks";
+import { formatTime } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -108,33 +109,10 @@ const statusLabels: Record<string, string> = {
     needs_manual_review: 'Needs Review',
 };
 
-const formatTime = (time: string | undefined, timeFormat: '12' | '24' = '24') => {
-    if (!time) return '--:--';
-
-    // If it's a full datetime string, extract just the time part
-    let timeOnly = time;
-    if (time.includes(' ')) {
-        timeOnly = time.split(' ')[1]; // Get the time part after the space
-    } else if (time.includes('T')) {
-        timeOnly = time.split('T')[1]; // Handle ISO format
-    }
-
-    if (timeFormat === '24') {
-        return timeOnly.substring(0, 5); // Return HH:MM
-    }
-
-    // Convert to 12-hour format
-    const timeParts = timeOnly.split(':');
-    const hours = parseInt(timeParts[0]);
-    const minutes = timeParts[1];
-    const ampm = hours >= 12 ? 'PM' : 'AM';
-    const hour12 = hours % 12 || 12;
-    return `${hour12}:${minutes} ${ampm}`;
-};
+// formatTime is now imported from @/lib/utils
 
 export default function AttendanceCalendar() {
-    const { attendances, users, selectedUser, month, year, verificationFilter: initialVerificationFilter, auth } = usePage<PageProps>().props;
-    const timeFormat = auth.user.time_format || '24';
+    const { attendances, users, selectedUser, month, year, verificationFilter: initialVerificationFilter } = usePage<PageProps>().props;
 
     useFlashMessage();
     const { can } = usePermission();
@@ -453,10 +431,10 @@ export default function AttendanceCalendar() {
                                                             {(attendance.actual_time_in || attendance.actual_time_out) && (
                                                                 <div className="text-[13px] text-muted-foreground text-center leading-tight flex items-center justify-center gap-2">
                                                                     {attendance.actual_time_in && (
-                                                                        <span>In: {formatTime(attendance.actual_time_in, timeFormat)}</span>
+                                                                        <span>In: {formatTime(attendance.actual_time_in)}</span>
                                                                     )}
                                                                     {attendance.actual_time_out && (
-                                                                        <span>Out: {formatTime(attendance.actual_time_out, timeFormat)}</span>
+                                                                        <span>Out: {formatTime(attendance.actual_time_out)}</span>
                                                                     )}
                                                                 </div>
                                                             )}
@@ -535,7 +513,7 @@ export default function AttendanceCalendar() {
                                                 Shift: {selectedAttendance.employee_schedule.shift_type.replace('_', ' ').toUpperCase()}
                                             </div>
                                             <div>
-                                                Time: {formatTime(selectedAttendance.scheduled_time_in, timeFormat)} - {formatTime(selectedAttendance.scheduled_time_out, timeFormat)}
+                                                Time: {formatTime(selectedAttendance.scheduled_time_in)} - {formatTime(selectedAttendance.scheduled_time_out)}
                                             </div>
                                             {selectedAttendance.employee_schedule.site && (
                                                 <div>Site: {selectedAttendance.employee_schedule.site.name}</div>
@@ -550,7 +528,7 @@ export default function AttendanceCalendar() {
                                         <label className="text-sm font-semibold">Time In</label>
                                         <div className="text-sm mt-1">
                                             {selectedAttendance.actual_time_in
-                                                ? formatTime(selectedAttendance.actual_time_in, timeFormat)
+                                                ? formatTime(selectedAttendance.actual_time_in)
                                                 : 'No record'}
                                         </div>
                                         {selectedAttendance.bio_in_site && (
@@ -563,7 +541,7 @@ export default function AttendanceCalendar() {
                                         <label className="text-sm font-semibold">Time Out</label>
                                         <div className="text-sm mt-1">
                                             {selectedAttendance.actual_time_out
-                                                ? formatTime(selectedAttendance.actual_time_out, timeFormat)
+                                                ? formatTime(selectedAttendance.actual_time_out)
                                                 : 'No record'}
                                         </div>
                                         {selectedAttendance.bio_out_site && (
