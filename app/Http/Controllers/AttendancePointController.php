@@ -1088,16 +1088,23 @@ class AttendancePointController extends Controller
     /**
      * Reset expired attendance points back to active
      * Note: Excused points are NOT reset as they were intentionally excused
+     * Supports optional user_id filter for reprocessing specific user's points
      */
-    public function resetExpired()
+    public function resetExpired(Request $request)
     {
         $this->authorize('viewAny', AttendancePoint::class);
 
         try {
             // Only reset non-excused expired points
-            $expiredPoints = AttendancePoint::where('is_expired', true)
-                ->where('is_excused', false)
-                ->get();
+            $query = AttendancePoint::where('is_expired', true)
+                ->where('is_excused', false);
+
+            // Apply user filter if provided
+            if ($request->filled('user_id')) {
+                $query->where('user_id', $request->user_id);
+            }
+
+            $expiredPoints = $query->get();
 
             if ($expiredPoints->isEmpty()) {
                 return response()->json([

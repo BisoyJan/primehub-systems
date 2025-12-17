@@ -614,11 +614,11 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                 'cleanup': managementRoutes.cleanup(),
             };
 
-            // Build request body with filters for regenerate
+            // Build request body with filters for regenerate and reset-expired
             const body: Record<string, string> = {};
-            if (action === 'regenerate') {
-                if (mgmtDateFrom) body.date_from = mgmtDateFrom;
-                if (mgmtDateTo) body.date_to = mgmtDateTo;
+            if (action === 'regenerate' || action === 'reset-expired') {
+                if (mgmtDateFrom && action === 'regenerate') body.date_from = mgmtDateFrom;
+                if (mgmtDateTo && action === 'regenerate') body.date_to = mgmtDateTo;
                 if (mgmtUserId) body.user_id = mgmtUserId;
             }
 
@@ -2835,9 +2835,83 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                 )}
                                 {confirmAction === 'reset-expired' && (
                                     <>
-                                        This will reset all expired points back to active status.
-                                        Their expiration dates will be recalculated based on the original violation date.
-                                        <br /><br />
+                                        <p className="mb-3">
+                                            This will reset expired points back to active status.
+                                            Their expiration dates will be recalculated based on the original violation date.
+                                        </p>
+
+                                        {/* Filter for reset-expired */}
+                                        <div className="space-y-3 p-3 border rounded-lg bg-muted/50 mb-3">
+                                            <p className="text-sm font-medium text-foreground">Filter by Employee (optional):</p>
+                                            <div>
+                                                <Label htmlFor="mgmt_user_reset" className="text-xs">Employee</Label>
+                                                <Popover open={isMgmtUserPopoverOpen} onOpenChange={setIsMgmtUserPopoverOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            className="w-full justify-between h-8 text-sm font-normal"
+                                                        >
+                                                            <span className="truncate">
+                                                                {mgmtUserId
+                                                                    ? (() => {
+                                                                        const user = users?.find(u => String(u.id) === mgmtUserId);
+                                                                        return user ? formatUserName(user) : "Select employee...";
+                                                                    })()
+                                                                    : "All Employees"}
+                                                            </span>
+                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-full p-0" align="start">
+                                                        <Command shouldFilter={false}>
+                                                            <CommandInput
+                                                                placeholder="Search employee..."
+                                                                value={mgmtUserSearchQuery}
+                                                                onValueChange={setMgmtUserSearchQuery}
+                                                            />
+                                                            <CommandList>
+                                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                                <CommandGroup>
+                                                                    <CommandItem
+                                                                        value="all"
+                                                                        onSelect={() => {
+                                                                            setMgmtUserId('');
+                                                                            setIsMgmtUserPopoverOpen(false);
+                                                                            setMgmtUserSearchQuery('');
+                                                                        }}
+                                                                        className="cursor-pointer"
+                                                                    >
+                                                                        <Check className={`mr-2 h-4 w-4 ${!mgmtUserId ? "opacity-100" : "opacity-0"}`} />
+                                                                        All Employees
+                                                                    </CommandItem>
+                                                                    {users?.filter(user => {
+                                                                        if (!mgmtUserSearchQuery) return true;
+                                                                        const query = mgmtUserSearchQuery.toLowerCase();
+                                                                        return formatUserName(user).toLowerCase().includes(query) || user.name.toLowerCase().includes(query);
+                                                                    }).slice(0, 50).map((user) => (
+                                                                        <CommandItem
+                                                                            key={user.id}
+                                                                            value={formatUserName(user)}
+                                                                            onSelect={() => {
+                                                                                setMgmtUserId(String(user.id));
+                                                                                setIsMgmtUserPopoverOpen(false);
+                                                                                setMgmtUserSearchQuery('');
+                                                                            }}
+                                                                            className="cursor-pointer"
+                                                                        >
+                                                                            <Check className={`mr-2 h-4 w-4 ${mgmtUserId === String(user.id) ? "opacity-100" : "opacity-0"}`} />
+                                                                            {formatUserName(user)}
+                                                                        </CommandItem>
+                                                                    ))}
+                                                                </CommandGroup>
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
+                                            </div>
+                                        </div>
+
                                         <strong className="text-blue-600">Excused points will NOT be affected.</strong>
                                         <br /><br />
                                         <span className="flex items-center gap-1 text-amber-600">
@@ -2845,7 +2919,9 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                             <strong>No notifications will be sent.</strong>
                                         </span>
                                         <br />
-                                        Use this if you need to reprocess expirations or correct accidental expirations.
+                                        <span className="text-xs text-muted-foreground">
+                                            Use this if you need to reprocess expirations or correct accidental expirations.
+                                        </span>
                                     </>
                                 )}
                                 {confirmAction === 'cleanup' && (

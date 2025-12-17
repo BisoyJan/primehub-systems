@@ -71,6 +71,11 @@ When selecting **Regenerate Points**, you can optionally filter by:
 - **Date Range**: From/To dates to limit which attendance records are processed
 - **Employee**: Specific user to regenerate points for
 
+### Reset Expired Points with Filters
+
+When selecting **Reset Expired Points**, you can optionally filter by:
+- **Employee**: Specific user to reset points for (useful for reprocessing individual employee's points)
+
 ### Important Notes
 
 ⚠️ **No Notifications**: All UI management actions are performed silently. Agents will NOT receive any notifications.
