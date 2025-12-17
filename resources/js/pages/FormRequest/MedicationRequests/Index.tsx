@@ -42,6 +42,10 @@ interface MedicationRequest {
     user?: {
         name: string;
         email: string;
+        active_schedule?: {
+            campaign?: { name: string };
+            site?: { name: string };
+        };
     };
 }
 
@@ -303,6 +307,8 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                 <TableRow>
                                     <TableHead>Employee Name</TableHead>
                                     <TableHead>Email</TableHead>
+                                    <TableHead>Campaign</TableHead>
+                                    <TableHead>Site</TableHead>
                                     <TableHead>Medication Type</TableHead>
                                     <TableHead>Onset of Symptoms</TableHead>
                                     <TableHead>Status</TableHead>
@@ -313,7 +319,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                             <TableBody>
                                 {medicationRequests.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
                                             No medication requests found
                                         </TableCell>
                                     </TableRow>
@@ -322,6 +328,8 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                         <TableRow key={request.id}>
                                             <TableCell className="font-medium">{request.name}</TableCell>
                                             <TableCell>{request.user?.email || '-'}</TableCell>
+                                            <TableCell>{request.user?.active_schedule?.campaign?.name || '-'}</TableCell>
+                                            <TableCell>{request.user?.active_schedule?.site?.name || '-'}</TableCell>
                                             <TableCell>{request.medication_type}</TableCell>
                                             <TableCell className="capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</TableCell>
                                             <TableCell>{getStatusBadge(request.status)}</TableCell>
@@ -376,6 +384,14 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                 </div>
 
                                 <div className="space-y-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Campaign:</span>
+                                        <span className="font-medium">{request.user?.active_schedule?.campaign?.name || '-'}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Site:</span>
+                                        <span className="font-medium">{request.user?.active_schedule?.site?.name || '-'}</span>
+                                    </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Medication Type:</span>
                                         <span className="font-medium">{request.medication_type}</span>

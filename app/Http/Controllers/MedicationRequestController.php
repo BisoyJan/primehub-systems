@@ -32,7 +32,7 @@ class MedicationRequestController extends Controller
     {
         $this->authorize('viewAny', MedicationRequest::class);
 
-        $query = MedicationRequest::with(['user', 'approvedBy'])
+        $query = MedicationRequest::with(['user.activeSchedule.campaign', 'user.activeSchedule.site', 'approvedBy'])
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
                     $q->where('name', 'like', "%{$search}%")
@@ -124,7 +124,7 @@ class MedicationRequestController extends Controller
     {
         $this->authorize('view', $medicationRequest);
 
-        $medicationRequest->load(['user', 'approvedBy']);
+        $medicationRequest->load(['user.activeSchedule.campaign', 'user.activeSchedule.site', 'approvedBy']);
 
         return Inertia::render('FormRequest/MedicationRequests/Show', [
             'medicationRequest' => $medicationRequest,

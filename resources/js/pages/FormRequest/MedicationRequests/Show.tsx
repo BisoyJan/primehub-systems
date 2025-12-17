@@ -33,6 +33,10 @@ interface MedicationRequest {
     approved_at: string | null;
     user?: {
         name: string;
+        active_schedule?: {
+            campaign?: { name: string };
+            site?: { name: string };
+        };
     };
     approved_by_user?: {
         name: string;
@@ -115,6 +119,20 @@ export default function Show({ medicationRequest }: Props) {
                             <div>
                                 <Label className="text-muted-foreground">Employee Name</Label>
                                 <p className="text-lg font-medium">{medicationRequest.name}</p>
+                            </div>
+
+                            <Separator />
+
+                            <div>
+                                <Label className="text-muted-foreground">Campaign</Label>
+                                <p className="text-lg font-medium">{medicationRequest.user?.active_schedule?.campaign?.name || '-'}</p>
+                            </div>
+
+                            <Separator />
+
+                            <div>
+                                <Label className="text-muted-foreground">Site</Label>
+                                <p className="text-lg font-medium">{medicationRequest.user?.active_schedule?.site?.name || '-'}</p>
                             </div>
 
                             <Separator />

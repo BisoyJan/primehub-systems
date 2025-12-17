@@ -137,12 +137,12 @@ export default function Preferences({ user }: PreferencesProps) {
                                             )}
 
                                             <div className={`rounded-lg border p-4 ${autoLogoutEnabled
-                                                    ? 'border-amber-200 bg-amber-50 dark:border-amber-200/10 dark:bg-amber-700/10'
-                                                    : 'border-green-200 bg-green-50 dark:border-green-200/10 dark:bg-green-700/10'
+                                                ? 'border-amber-200 bg-amber-50 dark:border-amber-200/10 dark:bg-amber-700/10'
+                                                : 'border-green-200 bg-green-50 dark:border-green-200/10 dark:bg-green-700/10'
                                                 }`}>
                                                 <h4 className={`mb-2 font-medium ${autoLogoutEnabled
-                                                        ? 'text-amber-900 dark:text-amber-100'
-                                                        : 'text-green-900 dark:text-green-100'
+                                                    ? 'text-amber-900 dark:text-amber-100'
+                                                    : 'text-green-900 dark:text-green-100'
                                                     }`}>
                                                     Current Status
                                                 </h4>
