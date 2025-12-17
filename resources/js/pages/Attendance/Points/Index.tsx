@@ -2438,7 +2438,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                         variant="outline"
                                         className="w-full"
                                         onClick={() => {
-                                            router.visit(attendancePointsShow({ user: selectedHighPointsEmployee.user_id }).url);
+                                            router.visit(attendancePointsShow({ user: selectedHighPointsEmployee.user_id }).url + '?show_all=1');
                                         }}
                                     >
                                         <Eye className="h-4 w-4 mr-2" />
