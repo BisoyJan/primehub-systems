@@ -51,7 +51,7 @@ class DashboardController extends Controller
 
         // Cache key includes campaign ID for per-campaign caching when applicable
         $cacheKey = 'dashboard_stats_' . $presenceDate . '_' . $leaveCalendarMonth . '_campaign_' . ($leaveCalendarCampaignId ?? 'all');
-        
+
         $dashboardData = Cache::remember(
             key: $cacheKey,
             ttl: 150,

@@ -86,7 +86,7 @@ class ItConcernController extends Controller
         $this->authorize('create', ItConcern::class);
 
         $sites = Site::orderBy('name')->get();
-        
+
         // Pass users list for all roles to file concerns on behalf of others (e.g., if their PC is not working)
         $users = User::where('is_approved', true)
             ->orderBy('first_name')
@@ -107,7 +107,7 @@ class ItConcernController extends Controller
         $this->authorize('create', ItConcern::class);
 
         $validated = $request->validated();
-        
+
         // If user_id is provided (filing for someone else), use it; otherwise default to authenticated user
         if (!isset($validated['user_id']) || empty($validated['user_id'])) {
             $validated['user_id'] = auth()->id();

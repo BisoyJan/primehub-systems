@@ -191,7 +191,7 @@ class DashboardService
 
     /**
      * Get all dashboard statistics
-     * 
+     *
      * @param string|null $presenceDate Date for presence insights
      * @param string|null $leaveCalendarMonth Month for leave calendar
      * @param int|null $leaveCalendarCampaignId Campaign ID to filter leave calendar (for Agents to see same-campaign leaves)
@@ -343,7 +343,7 @@ class DashboardService
      */
     /**
      * Get presence insights including leave calendar
-     * 
+     *
      * @param string|null $date Date for presence stats
      * @param string|null $leaveCalendarMonth Month for leave calendar
      * @param int|null $campaignId If provided, filter leave calendar to only show users from this campaign

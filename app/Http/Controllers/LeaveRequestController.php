@@ -125,7 +125,7 @@ class LeaveRequestController extends Controller
 
         // Parse month to get date range
         $calendarDate = Carbon::parse($month . '-01');
-        
+
         // For multi-month view, show 3 months (prev, current, next)
         if ($viewMode === 'multi') {
             $startOfRange = $calendarDate->copy()->subMonth()->startOfMonth();
