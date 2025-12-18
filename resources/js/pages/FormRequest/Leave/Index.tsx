@@ -36,7 +36,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -619,6 +619,17 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                         Export Credits
                                     </Button>
                                 )}
+
+                                <Link href="/form-requests/leave-requests/calendar">
+                                    <Button
+                                        variant="outline"
+                                        className="flex-1 sm:flex-none"
+                                        title="View Leave Calendar"
+                                    >
+                                        <Calendar className="mr-2 h-4 w-4" />
+                                        Calendar
+                                    </Button>
+                                </Link>
 
                                 <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
                                     <RefreshCw className="h-4 w-4" />
