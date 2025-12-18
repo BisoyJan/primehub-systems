@@ -17,14 +17,13 @@ import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calen
 import type { SharedData, UserRole } from '@/types';
 
 //
-import { dashboard } from '@/routes';
 import { show as attendancePointsShow } from '@/routes/attendance-points';
 import type { BreadcrumbItem } from '@/types';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
         title: 'Dashboard',
-        href: dashboard().url,
+        href: '/dashboard',
     },
 ];
 
