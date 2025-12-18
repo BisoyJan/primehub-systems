@@ -40,10 +40,22 @@ class DashboardController extends Controller
         $user = $request->user();
         $isRestrictedRole = in_array($user->role, ['Agent', 'Utility']);
 
+        // Get user's active campaign ID for leave calendar filtering (Agents can see same-campaign leaves)
+        $leaveCalendarCampaignId = null;
+        if ($isRestrictedRole) {
+            $activeSchedule = $user->employeeSchedules()
+                ->where('is_active', true)
+                ->first();
+            $leaveCalendarCampaignId = $activeSchedule?->campaign_id;
+        }
+
+        // Cache key includes campaign ID for per-campaign caching when applicable
+        $cacheKey = 'dashboard_stats_' . $presenceDate . '_' . $leaveCalendarMonth . '_campaign_' . ($leaveCalendarCampaignId ?? 'all');
+        
         $dashboardData = Cache::remember(
-            key: 'dashboard_stats_' . $presenceDate . '_' . $leaveCalendarMonth,
+            key: $cacheKey,
             ttl: 150,
-            callback: fn() => $this->dashboardService->getAllStats($presenceDate, $leaveCalendarMonth)
+            callback: fn() => $this->dashboardService->getAllStats($presenceDate, $leaveCalendarMonth, $leaveCalendarCampaignId)
         );
 
         // Build attendance query with filters

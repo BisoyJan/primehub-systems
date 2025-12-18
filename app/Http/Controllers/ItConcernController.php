@@ -86,9 +86,16 @@ class ItConcernController extends Controller
         $this->authorize('create', ItConcern::class);
 
         $sites = Site::orderBy('name')->get();
+        
+        // Pass users list for all roles to file concerns on behalf of others (e.g., if their PC is not working)
+        $users = User::where('is_approved', true)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'middle_name', 'last_name']);
 
         return Inertia::render('FormRequest/ItConcerns/Create', [
             'sites' => $sites,
+            'users' => $users,
         ]);
     }
 
@@ -101,11 +108,8 @@ class ItConcernController extends Controller
 
         $validated = $request->validated();
         
-        // If user is Admin/Super Admin/Team Lead, they can assign the concern to another user
-        // Otherwise, it defaults to the authenticated user
-        if (in_array(auth()->user()->role, ['Super Admin', 'Admin', 'Team Lead']) && isset($validated['user_id'])) {
-            // user_id is already in validated
-        } else {
+        // If user_id is provided (filing for someone else), use it; otherwise default to authenticated user
+        if (!isset($validated['user_id']) || empty($validated['user_id'])) {
             $validated['user_id'] = auth()->id();
         }
 

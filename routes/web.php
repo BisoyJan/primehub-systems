@@ -321,24 +321,23 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->group(function () {
             Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
             Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
+            Route::get('/calendar', [LeaveRequestController::class, 'calendar'])->name('calendar');
+            Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
+            Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
+            Route::post('/export/credits', [LeaveRequestController::class, 'exportCredits'])->name('export.credits');
+            Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
+            Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download');
             Route::post('/', [LeaveRequestController::class, 'store'])->name('store');
             Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->name('show');
             Route::get('/{leaveRequest}/edit', [LeaveRequestController::class, 'edit'])->name('edit');
             Route::put('/{leaveRequest}', [LeaveRequestController::class, 'update'])->name('update');
-        Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
-        Route::post('/{leaveRequest}/force-approve', [LeaveRequestController::class, 'forceApprove'])->name('force-approve');
-        Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
-        Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
-        // Team Lead approval routes
-        Route::post('/{leaveRequest}/approve-tl', [LeaveRequestController::class, 'approveTL'])->name('approve-tl');
-        Route::post('/{leaveRequest}/deny-tl', [LeaveRequestController::class, 'denyTL'])->name('deny-tl');
-        Route::delete('/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->name('destroy');
-        Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
-        Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
-        // Export leave credits
-        Route::post('/export/credits', [LeaveRequestController::class, 'exportCredits'])->name('export.credits');
-        Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
-        Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download');
+            Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
+            Route::post('/{leaveRequest}/force-approve', [LeaveRequestController::class, 'forceApprove'])->name('force-approve');
+            Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
+            Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
+            Route::post('/{leaveRequest}/approve-tl', [LeaveRequestController::class, 'approveTL'])->name('approve-tl');
+            Route::post('/{leaveRequest}/deny-tl', [LeaveRequestController::class, 'denyTL'])->name('deny-tl');
+            Route::delete('/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->name('destroy');
     });
 
     // Form Requests - IT Concerns

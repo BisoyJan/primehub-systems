@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -16,6 +16,8 @@ import {
     SelectValue
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { AlertCircle } from "lucide-react";
 
 interface Site {
     id: number;
@@ -24,7 +26,9 @@ interface Site {
 
 interface User {
     id: number;
-    name: string;
+    first_name: string;
+    middle_name: string | null;
+    last_name: string;
 }
 
 interface PageProps {
@@ -35,6 +39,7 @@ interface PageProps {
 
 export default function ItConcernCreate() {
     const { sites, users } = usePage<PageProps>().props;
+    const [fileForSomeoneElse, setFileForSomeoneElse] = useState(false);
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Submit IT Concern",
@@ -55,6 +60,13 @@ export default function ItConcernCreate() {
         priority: "medium",
         description: "",
     });
+
+    const handleToggleChange = (checked: boolean) => {
+        setFileForSomeoneElse(checked);
+        if (!checked) {
+            setData("user_id", "");
+        }
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -84,28 +96,56 @@ export default function ItConcernCreate() {
                         </CardHeader>
                         <CardContent>
                             <form onSubmit={handleSubmit} className="space-y-6">
+                                {/* Toggle for filing on behalf of someone else */}
                                 {users && (
-                                    <div className="space-y-2">
-                                        <Label htmlFor="user_id">
-                                            Request for Agent <span className="text-red-500">*</span>
-                                        </Label>
-                                        <Select
-                                            value={data.user_id}
-                                            onValueChange={(value) => setData("user_id", value)}
-                                        >
-                                            <SelectTrigger className={errors.user_id ? "border-red-500" : ""}>
-                                                <SelectValue placeholder="Select an agent" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {users.map((user) => (
-                                                    <SelectItem key={user.id} value={String(user.id)}>
-                                                        {user.name}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                        {errors.user_id && (
-                                            <p className="text-sm text-red-500">{errors.user_id}</p>
+                                    <div className="space-y-4">
+                                        <div className="flex items-center justify-between rounded-lg border p-4 bg-muted/30">
+                                            <div className="space-y-0.5">
+                                                <Label htmlFor="file-for-someone" className="text-base font-medium">
+                                                    File for someone else
+                                                </Label>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Enable this if you're reporting an issue on behalf of another employee (e.g., their PC is not working)
+                                                </p>
+                                            </div>
+                                            <Switch
+                                                id="file-for-someone"
+                                                checked={fileForSomeoneElse}
+                                                onCheckedChange={handleToggleChange}
+                                            />
+                                        </div>
+
+                                        {/* User selection - shown when toggle is enabled */}
+                                        {fileForSomeoneElse && (
+                                            <div className="space-y-2 animate-in fade-in-50 duration-200">
+                                                <div className="flex items-center gap-2 p-3 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                                                    <AlertCircle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                                                    <p className="text-sm text-amber-700 dark:text-amber-300">
+                                                        The IT concern will be filed under the selected employee's name
+                                                    </p>
+                                                </div>
+                                                <Label htmlFor="user_id">
+                                                    Select Employee <span className="text-red-500">*</span>
+                                                </Label>
+                                                <Select
+                                                    value={data.user_id}
+                                                    onValueChange={(value) => setData("user_id", value)}
+                                                >
+                                                    <SelectTrigger className={errors.user_id ? "border-red-500" : ""}>
+                                                        <SelectValue placeholder="Select an employee" />
+                                                    </SelectTrigger>
+                                                    <SelectContent>
+                                                        {users.map((user) => (
+                                                            <SelectItem key={user.id} value={String(user.id)}>
+                                                                {`${user.first_name}${user.middle_name ? ' ' + user.middle_name : ''} ${user.last_name}`}
+                                                            </SelectItem>
+                                                        ))}
+                                                    </SelectContent>
+                                                </Select>
+                                                {errors.user_id && (
+                                                    <p className="text-sm text-red-500">{errors.user_id}</p>
+                                                )}
+                                            </div>
                                         )}
                                     </div>
                                 )}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router, usePage, Link } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,7 +13,7 @@ import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, XAxis, YAxis, Pie, PieChart, Label, RadialBar, RadialBarChart, PolarGrid, Area, AreaChart, ResponsiveContainer, PolarRadiusAxis } from 'recharts';
 
-import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList, Building2, Users, UserCheck, UserX, UserMinus, AlertTriangle, TrendingUp, Award } from 'lucide-react';
+import { Monitor, AlertCircle, HardDrive, Wrench, MapPin, Server, XCircle, Calendar, ChevronLeft, ChevronRight, Clock, Loader2, CheckCircle2, ClipboardList, Building2, Users, UserCheck, UserX, UserMinus, AlertTriangle, TrendingUp, Award, ExternalLink } from 'lucide-react';
 import type { SharedData, UserRole } from '@/types';
 
 //
@@ -289,7 +289,7 @@ const ROLE_TABS: Record<UserRole, TabType[]> = {
     'Admin': ['attendance', 'presence-insights', 'infrastructure'],
     'IT': ['infrastructure', 'it-concerns', 'attendance'],
     'Team Lead': ['attendance', 'presence-insights'],
-    'Agent': ['attendance'],
+    'Agent': ['attendance', 'presence-insights'],
     'HR': ['attendance', 'presence-insights'],
     'Utility': ['attendance'],
 };
@@ -1045,84 +1045,86 @@ export default function Dashboard({
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.3 }}
                             >
-                                {/* Today's Presence Overview */}
-                                <Card className="mb-6">
-                                    <CardHeader>
-                                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                                            <div>
-                                                <CardTitle className="flex items-center gap-2">
-                                                    <UserCheck className="h-5 w-5" />
-                                                    Presence Overview
-                                                </CardTitle>
-                                                <CardDescription>Employee presence status for {new Date(presenceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</CardDescription>
+                                {/* Today's Presence Overview - Hidden for Agent/Utility */}
+                                {!isRestrictedRole && (
+                                    <Card className="mb-6">
+                                        <CardHeader>
+                                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                                                <div>
+                                                    <CardTitle className="flex items-center gap-2">
+                                                        <UserCheck className="h-5 w-5" />
+                                                        Presence Overview
+                                                    </CardTitle>
+                                                    <CardDescription>Employee presence status for {new Date(presenceDate).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}</CardDescription>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handlePresenceDateChange(new Date().toISOString().split('T')[0])}
+                                                    >
+                                                        Today
+                                                    </Button>
+                                                    <input
+                                                        type="date"
+                                                        value={presenceDate}
+                                                        onChange={(e) => handlePresenceDateChange(e.target.value)}
+                                                        className="h-9 px-3 border rounded-md text-sm"
+                                                        title="Select date"
+                                                    />
+                                                </div>
                                             </div>
-                                            <div className="flex items-center gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    onClick={() => handlePresenceDateChange(new Date().toISOString().split('T')[0])}
-                                                >
-                                                    Today
-                                                </Button>
-                                                <input
-                                                    type="date"
-                                                    value={presenceDate}
-                                                    onChange={(e) => handlePresenceDateChange(e.target.value)}
-                                                    className="h-9 px-3 border rounded-md text-sm"
-                                                    title="Select date"
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+                                                <StatCard
+                                                    title="Total Scheduled"
+                                                    value={presenceInsights?.todayPresence.total_scheduled || 0}
+                                                    icon={Users}
+                                                    description="Active employees"
+                                                    onClick={() => { }}
+                                                    delay={0}
+                                                />
+                                                <StatCard
+                                                    title="Present"
+                                                    value={presenceInsights?.todayPresence.present || 0}
+                                                    icon={UserCheck}
+                                                    description="Currently at work"
+                                                    onClick={() => setActiveDialog('presentEmployees')}
+                                                    variant="success"
+                                                    delay={0.05}
+                                                />
+                                                <StatCard
+                                                    title="Absent"
+                                                    value={presenceInsights?.todayPresence.absent || 0}
+                                                    icon={UserX}
+                                                    description="Not reported"
+                                                    onClick={() => setActiveDialog('absentEmployees')}
+                                                    variant="danger"
+                                                    delay={0.1}
+                                                />
+                                                <StatCard
+                                                    title="On Leave"
+                                                    value={presenceInsights?.todayPresence.on_leave || 0}
+                                                    icon={UserMinus}
+                                                    description="Approved leaves"
+                                                    onClick={() => { }}
+                                                    variant="warning"
+                                                    delay={0.15}
+                                                />
+                                                <StatCard
+                                                    title="Unaccounted"
+                                                    value={presenceInsights?.todayPresence.unaccounted || 0}
+                                                    icon={AlertCircle}
+                                                    description="No record yet"
+                                                    onClick={() => { }}
+                                                    variant={presenceInsights?.todayPresence.unaccounted ? "warning" : "default"}
+                                                    delay={0.2}
                                                 />
                                             </div>
-                                        </div>
-                                    </CardHeader>
-                                    <CardContent>
-                                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-                                            <StatCard
-                                                title="Total Scheduled"
-                                                value={presenceInsights?.todayPresence.total_scheduled || 0}
-                                                icon={Users}
-                                                description="Active employees"
-                                                onClick={() => { }}
-                                                delay={0}
-                                            />
-                                            <StatCard
-                                                title="Present"
-                                                value={presenceInsights?.todayPresence.present || 0}
-                                                icon={UserCheck}
-                                                description="Currently at work"
-                                                onClick={() => setActiveDialog('presentEmployees')}
-                                                variant="success"
-                                                delay={0.05}
-                                            />
-                                            <StatCard
-                                                title="Absent"
-                                                value={presenceInsights?.todayPresence.absent || 0}
-                                                icon={UserX}
-                                                description="Not reported"
-                                                onClick={() => setActiveDialog('absentEmployees')}
-                                                variant="danger"
-                                                delay={0.1}
-                                            />
-                                            <StatCard
-                                                title="On Leave"
-                                                value={presenceInsights?.todayPresence.on_leave || 0}
-                                                icon={UserMinus}
-                                                description="Approved leaves"
-                                                onClick={() => { }}
-                                                variant="warning"
-                                                delay={0.15}
-                                            />
-                                            <StatCard
-                                                title="Unaccounted"
-                                                value={presenceInsights?.todayPresence.unaccounted || 0}
-                                                icon={AlertCircle}
-                                                description="No record yet"
-                                                onClick={() => { }}
-                                                variant={presenceInsights?.todayPresence.unaccounted ? "warning" : "default"}
-                                                delay={0.2}
-                                            />
-                                        </div>
-                                    </CardContent>
-                                </Card>
+                                        </CardContent>
+                                    </Card>
+                                )}
 
                                 {/* Leave Calendar Section */}
                                 <Card className="mb-6">
@@ -1136,6 +1138,12 @@ export default function Dashboard({
                                                 <CardDescription>Employees on approved leave</CardDescription>
                                             </div>
                                             <div className="flex items-center gap-2">
+                                                <Button variant="outline" size="sm" asChild>
+                                                    <Link href="/form-requests/leave-requests/calendar">
+                                                        <ExternalLink className="h-4 w-4 mr-1" />
+                                                        Full Calendar
+                                                    </Link>
+                                                </Button>
                                                 <Button variant="outline" size="sm" onClick={handleToday}>
                                                     Today
                                                 </Button>
@@ -1235,10 +1243,10 @@ export default function Dashboard({
                                                                             <div
                                                                                 key={day}
                                                                                 className={`
-                                                                                    aspect-square p-1 rounded flex items-center justify-center text-sm relative
+                                                                                    aspect-square p-1 rounded flex items-center justify-center text-sm relative transition-all duration-150
                                                                                     ${hasLeaves ? 'bg-amber-500 dark:bg-amber-600 font-semibold text-white' : 'text-muted-foreground'}
                                                                                     ${isToday ? 'ring-2 ring-primary' : ''}
-                                                                                    ${isHoveredLeaveDay ? 'animate-pulse ring-2 ring-white dark:ring-amber-300 scale-110 z-10' : ''}
+                                                                                    ${isHoveredLeaveDay ? 'ring-2 ring-offset-1 ring-offset-background ring-primary bg-amber-400 dark:bg-amber-500 shadow-lg' : ''}
                                                                                 `}
                                                                             >
                                                                                 {day}
@@ -1260,6 +1268,12 @@ export default function Dashboard({
                                                                     <div className="flex items-center gap-2">
                                                                         <div className="w-4 h-4 rounded ring-2 ring-primary" />
                                                                         <span>Today</span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className="w-4 h-4 rounded bg-amber-500 relative">
+                                                                            <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
+                                                                        </div>
+                                                                        <span>Multiple employees</span>
                                                                     </div>
                                                                 </div>
                                                             </div>
@@ -1304,102 +1318,104 @@ export default function Dashboard({
                                     </CardContent>
                                 </Card>
 
-                                {/* Attendance Points Section */}
-                                <Card>
-                                    <CardHeader>
-                                        <CardTitle className="flex items-center gap-2">
-                                            <AlertTriangle className="h-5 w-5" />
-                                            Attendance Points Overview
-                                        </CardTitle>
-                                        <CardDescription>Active attendance violations and high-risk employees</CardDescription>
-                                    </CardHeader>
-                                    <CardContent className="space-y-6">
-                                        {/* Summary Cards */}
-                                        <div className="grid gap-4 md:grid-cols-4">
-                                            <StatCard
-                                                title="Total Active Points"
-                                                value={presenceInsights?.attendancePoints.total_active_points.toFixed(1) || '0.0'}
-                                                icon={AlertTriangle}
-                                                description="All active violations"
-                                                onClick={() => setActiveDialog('pointsBreakdown')}
-                                                variant="warning"
-                                            />
-                                            <StatCard
-                                                title="Total Violations"
-                                                value={presenceInsights?.attendancePoints.total_violations || 0}
-                                                icon={XCircle}
-                                                description="Count of infractions"
-                                                onClick={() => setActiveDialog('pointsBreakdown')}
-                                            />
-                                            <StatCard
-                                                title="High Risk Employees"
-                                                value={presenceInsights?.attendancePoints.high_risk_count || 0}
-                                                icon={AlertCircle}
-                                                description="6+ points"
-                                                onClick={() => setActiveDialog('highRiskEmployees')}
-                                                variant={(presenceInsights?.attendancePoints.high_risk_count || 0) > 0 ? "danger" : "default"}
-                                            />
-                                            <StatCard
-                                                title="Points Trend"
-                                                value={
-                                                    <TrendingUp className="h-6 w-6 text-orange-500" />
-                                                }
-                                                icon={TrendingUp}
-                                                description="Last 6 months"
-                                                onClick={() => setActiveDialog('pointsTrend')}
-                                            />
-                                        </div>
-
-                                        {/* High Risk Employees Preview */}
-                                        {presenceInsights?.attendancePoints.high_risk_employees && presenceInsights.attendancePoints.high_risk_employees.length > 0 && (
-                                            <div className="space-y-3">
-                                                <div className="flex items-center justify-between">
-                                                    <h3 className="text-lg font-semibold">High Risk Employees (6+ Points)</h3>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => setActiveDialog('highRiskEmployees')}
-                                                    >
-                                                        View All
-                                                    </Button>
-                                                </div>
-                                                <div className="grid gap-3 md:grid-cols-2">
-                                                    {presenceInsights.attendancePoints.high_risk_employees.slice(0, 4).map((emp) => (
-                                                        <Card key={emp.user_id} className="border-red-500/30">
-                                                            <CardHeader className="pb-3">
-                                                                <div className="flex items-start justify-between">
-                                                                    <div>
-                                                                        <CardTitle className="text-base">{emp.user_name}</CardTitle>
-                                                                        <CardDescription>{emp.user_role}</CardDescription>
-                                                                    </div>
-                                                                    <Badge variant="destructive" className="text-lg font-bold">
-                                                                        {emp.total_points} pts
-                                                                    </Badge>
-                                                                </div>
-                                                            </CardHeader>
-                                                            <CardContent>
-                                                                <div className="text-sm text-muted-foreground">
-                                                                    {emp.violations_count} violations
-                                                                </div>
-                                                                <Button
-                                                                    variant="link"
-                                                                    size="sm"
-                                                                    className="px-0 h-auto"
-                                                                    onClick={() => {
-                                                                        setActiveDialog('highRiskDetail');
-                                                                        setSelectedVacantSite(emp.user_id.toString());
-                                                                    }}
-                                                                >
-                                                                    View Details →
-                                                                </Button>
-                                                            </CardContent>
-                                                        </Card>
-                                                    ))}
-                                                </div>
+                                {/* Attendance Points Section - Hidden for Agent/Utility */}
+                                {!isRestrictedRole && (
+                                    <Card>
+                                        <CardHeader>
+                                            <CardTitle className="flex items-center gap-2">
+                                                <AlertTriangle className="h-5 w-5" />
+                                                Attendance Points Overview
+                                            </CardTitle>
+                                            <CardDescription>Active attendance violations and high-risk employees</CardDescription>
+                                        </CardHeader>
+                                        <CardContent className="space-y-6">
+                                            {/* Summary Cards */}
+                                            <div className="grid gap-4 md:grid-cols-4">
+                                                <StatCard
+                                                    title="Total Active Points"
+                                                    value={presenceInsights?.attendancePoints.total_active_points.toFixed(1) || '0.0'}
+                                                    icon={AlertTriangle}
+                                                    description="All active violations"
+                                                    onClick={() => setActiveDialog('pointsBreakdown')}
+                                                    variant="warning"
+                                                />
+                                                <StatCard
+                                                    title="Total Violations"
+                                                    value={presenceInsights?.attendancePoints.total_violations || 0}
+                                                    icon={XCircle}
+                                                    description="Count of infractions"
+                                                    onClick={() => setActiveDialog('pointsBreakdown')}
+                                                />
+                                                <StatCard
+                                                    title="High Risk Employees"
+                                                    value={presenceInsights?.attendancePoints.high_risk_count || 0}
+                                                    icon={AlertCircle}
+                                                    description="6+ points"
+                                                    onClick={() => setActiveDialog('highRiskEmployees')}
+                                                    variant={(presenceInsights?.attendancePoints.high_risk_count || 0) > 0 ? "danger" : "default"}
+                                                />
+                                                <StatCard
+                                                    title="Points Trend"
+                                                    value={
+                                                        <TrendingUp className="h-6 w-6 text-orange-500" />
+                                                    }
+                                                    icon={TrendingUp}
+                                                    description="Last 6 months"
+                                                    onClick={() => setActiveDialog('pointsTrend')}
+                                                />
                                             </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
+
+                                            {/* High Risk Employees Preview */}
+                                            {presenceInsights?.attendancePoints.high_risk_employees && presenceInsights.attendancePoints.high_risk_employees.length > 0 && (
+                                                <div className="space-y-3">
+                                                    <div className="flex items-center justify-between">
+                                                        <h3 className="text-lg font-semibold">High Risk Employees (6+ Points)</h3>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => setActiveDialog('highRiskEmployees')}
+                                                        >
+                                                            View All
+                                                        </Button>
+                                                    </div>
+                                                    <div className="grid gap-3 md:grid-cols-2">
+                                                        {presenceInsights.attendancePoints.high_risk_employees.slice(0, 4).map((emp) => (
+                                                            <Card key={emp.user_id} className="border-red-500/30">
+                                                                <CardHeader className="pb-3">
+                                                                    <div className="flex items-start justify-between">
+                                                                        <div>
+                                                                            <CardTitle className="text-base">{emp.user_name}</CardTitle>
+                                                                            <CardDescription>{emp.user_role}</CardDescription>
+                                                                        </div>
+                                                                        <Badge variant="destructive" className="text-lg font-bold">
+                                                                            {emp.total_points} pts
+                                                                        </Badge>
+                                                                    </div>
+                                                                </CardHeader>
+                                                                <CardContent>
+                                                                    <div className="text-sm text-muted-foreground">
+                                                                        {emp.violations_count} violations
+                                                                    </div>
+                                                                    <Button
+                                                                        variant="link"
+                                                                        size="sm"
+                                                                        className="px-0 h-auto"
+                                                                        onClick={() => {
+                                                                            setActiveDialog('highRiskDetail');
+                                                                            setSelectedVacantSite(emp.user_id.toString());
+                                                                        }}
+                                                                    >
+                                                                        View Details →
+                                                                    </Button>
+                                                                </CardContent>
+                                                            </Card>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </CardContent>
+                                    </Card>
+                                )}
                             </motion.div>
                         </TabsContent>
                     )}

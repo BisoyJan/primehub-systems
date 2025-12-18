@@ -191,8 +191,12 @@ class DashboardService
 
     /**
      * Get all dashboard statistics
+     * 
+     * @param string|null $presenceDate Date for presence insights
+     * @param string|null $leaveCalendarMonth Month for leave calendar
+     * @param int|null $leaveCalendarCampaignId Campaign ID to filter leave calendar (for Agents to see same-campaign leaves)
      */
-    public function getAllStats(?string $presenceDate = null, ?string $leaveCalendarMonth = null): array
+    public function getAllStats(?string $presenceDate = null, ?string $leaveCalendarMonth = null, ?int $leaveCalendarCampaignId = null): array
     {
         return [
             'totalStations' => $this->getTotalStations(),
@@ -205,7 +209,7 @@ class DashboardService
             'unassignedPcSpecs' => $this->getUnassignedPcSpecs(),
             'itConcernStats' => $this->getItConcernStats(),
             'itConcernTrends' => $this->getItConcernTrends(),
-            'presenceInsights' => $this->getPresenceInsights($presenceDate, $leaveCalendarMonth),
+            'presenceInsights' => $this->getPresenceInsights($presenceDate, $leaveCalendarMonth, $leaveCalendarCampaignId),
         ];
     }
 
@@ -337,7 +341,14 @@ class DashboardService
     /**
      * Get presence insights statistics
      */
-    public function getPresenceInsights(?string $date = null, ?string $leaveCalendarMonth = null): array
+    /**
+     * Get presence insights including leave calendar
+     * 
+     * @param string|null $date Date for presence stats
+     * @param string|null $leaveCalendarMonth Month for leave calendar
+     * @param int|null $campaignId If provided, filter leave calendar to only show users from this campaign
+     */
+    public function getPresenceInsights(?string $date = null, ?string $leaveCalendarMonth = null, ?int $campaignId = null): array
     {
         $today = $date ?? now()->toDateString();
 
@@ -367,7 +378,7 @@ class DashboardService
         $startOfMonth = $calendarDate->copy()->startOfMonth()->toDateString();
         $endOfMonth = $calendarDate->copy()->endOfMonth()->toDateString();
 
-        $leaveCalendarData = LeaveRequest::with(['user:id,first_name,last_name,role', 'user.employeeSchedules.campaign:id,name'])
+        $leaveCalendarQuery = LeaveRequest::with(['user:id,first_name,last_name,role', 'user.employeeSchedules.campaign:id,name'])
             ->where('status', 'approved')
             ->where(function ($query) use ($startOfMonth, $endOfMonth) {
                 $query->whereBetween('start_date', [$startOfMonth, $endOfMonth])
@@ -376,7 +387,17 @@ class DashboardService
                         $q->where('start_date', '<=', $startOfMonth)
                           ->where('end_date', '>=', $endOfMonth);
                     });
-            })
+            });
+
+        // If campaign ID is provided, filter to only show users from that campaign
+        if ($campaignId) {
+            $leaveCalendarQuery->whereHas('user.employeeSchedules', function ($query) use ($campaignId) {
+                $query->where('campaign_id', $campaignId)
+                      ->where('is_active', true);
+            });
+        }
+
+        $leaveCalendarData = $leaveCalendarQuery
             ->orderBy('start_date')
             ->get()
             ->map(function($leave) {

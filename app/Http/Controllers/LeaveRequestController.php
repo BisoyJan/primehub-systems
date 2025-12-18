@@ -108,6 +108,108 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Display the leave calendar page.
+     */
+    public function calendar(Request $request)
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $user = auth()->user();
+        $isRestrictedRole = in_array($user->role, ['Agent', 'Utility']);
+
+        // Get filters
+        $month = $request->input('month', now()->format('Y-m'));
+        $campaignId = $request->input('campaign_id');
+        $leaveType = $request->input('leave_type');
+        $viewMode = $request->input('view_mode', 'single'); // 'single' or 'multi'
+
+        // Parse month to get date range
+        $calendarDate = Carbon::parse($month . '-01');
+        
+        // For multi-month view, show 3 months (prev, current, next)
+        if ($viewMode === 'multi') {
+            $startOfRange = $calendarDate->copy()->subMonth()->startOfMonth();
+            $endOfRange = $calendarDate->copy()->addMonth()->endOfMonth();
+        } else {
+            $startOfRange = $calendarDate->copy()->startOfMonth();
+            $endOfRange = $calendarDate->copy()->endOfMonth();
+        }
+
+        // Build query for approved leaves
+        $query = LeaveRequest::with(['user:id,first_name,last_name,role', 'user.employeeSchedules' => function ($q) {
+                $q->where('is_active', true)->with('campaign:id,name');
+            }])
+            ->where('status', 'approved')
+            ->where(function ($q) use ($startOfRange, $endOfRange) {
+                $q->whereBetween('start_date', [$startOfRange, $endOfRange])
+                    ->orWhereBetween('end_date', [$startOfRange, $endOfRange])
+                    ->orWhere(function ($inner) use ($startOfRange, $endOfRange) {
+                        $inner->where('start_date', '<=', $startOfRange)
+                              ->where('end_date', '>=', $endOfRange);
+                    });
+            });
+
+        // For agents, filter by their campaign
+        if ($isRestrictedRole) {
+            $activeSchedule = $user->employeeSchedules()
+                ->where('is_active', true)
+                ->first();
+            if ($activeSchedule?->campaign_id) {
+                $query->whereHas('user.employeeSchedules', function ($q) use ($activeSchedule) {
+                    $q->where('campaign_id', $activeSchedule->campaign_id)
+                      ->where('is_active', true);
+                });
+            }
+        } elseif ($campaignId) {
+            // Admin filter by campaign
+            $query->whereHas('user.employeeSchedules', function ($q) use ($campaignId) {
+                $q->where('campaign_id', $campaignId)
+                  ->where('is_active', true);
+            });
+        }
+
+        // Filter by leave type
+        if ($leaveType) {
+            $query->where('leave_type', $leaveType);
+        }
+
+        $leaves = $query->orderBy('start_date')->get()->map(function ($leave) {
+            $activeSchedule = $leave->user->employeeSchedules->first();
+            return [
+                'id' => $leave->id,
+                'user_id' => $leave->user_id,
+                'user_name' => $leave->user->last_name . ', ' . $leave->user->first_name,
+                'user_role' => $leave->user->role,
+                'campaign_name' => $activeSchedule?->campaign?->name ?? 'No Campaign',
+                'leave_type' => $leave->leave_type,
+                'start_date' => $leave->start_date->format('Y-m-d'),
+                'end_date' => $leave->end_date->format('Y-m-d'),
+                'days_requested' => $leave->days_requested,
+                'reason' => $leave->reason,
+                'status' => $leave->status,
+            ];
+        });
+
+        // Get campaigns for filter (only for non-restricted roles)
+        $campaigns = null;
+        if (!$isRestrictedRole) {
+            $campaigns = Campaign::select('id', 'name')->orderBy('name')->get();
+        }
+
+        return Inertia::render('FormRequest/Leave/Calendar', [
+            'leaves' => $leaves,
+            'campaigns' => $campaigns,
+            'filters' => [
+                'month' => $month,
+                'campaign_id' => $campaignId,
+                'leave_type' => $leaveType,
+                'view_mode' => $viewMode,
+            ],
+            'isRestrictedRole' => $isRestrictedRole,
+        ]);
+    }
+
+    /**
      * Show the form for creating a new leave request.
      */
     public function create(Request $request)
