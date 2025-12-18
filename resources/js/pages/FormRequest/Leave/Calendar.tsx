@@ -380,7 +380,7 @@ export default function LeaveCalendar() {
                             <CardDescription>Hover to highlight dates</CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="space-y-2 max-h-[340px] overflow-y-auto pr-2">
+                            <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
                                 {leaves.length === 0 ? (
                                     <div className="text-center text-muted-foreground py-8">
                                         No approved leaves in this period
