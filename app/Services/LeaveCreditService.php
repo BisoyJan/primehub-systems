@@ -438,6 +438,19 @@ class LeaveCreditService
         // Check if short notice override is enabled (Admin/Super Admin bypassing 2-week rule)
         $shortNoticeOverride = $data['short_notice_override'] ?? false;
 
+        // Check if leave dates are within valid credit usage period
+        // Credits from year X can only be used until March of year X+1
+        // For example: 2025 credits can be used until March 31, 2026
+        if (in_array($leaveType, ['VL', 'BL'])) {
+            $creditYear = $year;
+            $nextYear = $creditYear + 1;
+            $maxLeaveDate = Carbon::create($nextYear, 3, 31)->endOfDay(); // March 31 of next year
+
+            if ($startDate->gt($maxLeaveDate) || $endDate->gt($maxLeaveDate)) {
+                $errors[] = "Leave dates cannot be beyond March {$nextYear}. Credits from {$creditYear} can only be used until March 31, {$nextYear}.";
+            }
+        }
+
         // Check eligibility (6 months rule) for VL and BL only (SL can proceed without eligibility)
         if (in_array($leaveType, ['VL', 'BL'])) {
             if (!$this->isEligible($user)) {
