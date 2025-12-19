@@ -85,7 +85,15 @@ class LeaveRequestController extends Controller
         // Filter by employee name (admin/TL only)
         if (($isAdmin || $isTeamLead) && $request->filled('employee_name')) {
             $query->whereHas('user', function ($q) use ($request) {
-                $q->where('name', 'like', '%' . $request->employee_name . '%');
+                $searchTerm = '%' . $request->employee_name . '%';
+                // Search across first_name, middle_name, and last_name
+                // Format: "First M. Last" or "First Last"
+                $q->where(function ($q2) use ($searchTerm) {
+                    $q2->whereRaw("CONCAT(first_name, ' ', COALESCE(CONCAT(middle_name, '. '), ''), last_name) LIKE ?", [$searchTerm])
+                       ->orWhere('first_name', 'like', $searchTerm)
+                       ->orWhere('last_name', 'like', $searchTerm)
+                       ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
+                });
             });
         }
 
@@ -293,6 +301,9 @@ class LeaveRequestController extends Controller
         // Calculate two weeks from now for 2-week notice validation
         $twoWeeksFromNow = now()->addWeeks(2)->format('Y-m-d');
 
+        // Check if user can override short notice (Admin/Super Admin only)
+        $canOverrideShortNotice = in_array($user->role, ['Super Admin', 'Admin']);
+
         return Inertia::render('FormRequest/Leave/Create', [
             'creditsSummary' => $creditsSummary,
             'attendancePoints' => $attendancePoints,
@@ -306,6 +317,7 @@ class LeaveRequestController extends Controller
             'isAdmin' => $isAdmin,
             'employees' => $employees,
             'selectedEmployeeId' => $targetUser->id,
+            'canOverrideShortNotice' => $canOverrideShortNotice,
         ]);
     }
 
@@ -340,10 +352,19 @@ class LeaveRequestController extends Controller
         // Get current attendance points
         $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
 
+        // Check if short notice override is requested (Admin/Super Admin only)
+        $shortNoticeOverride = false;
+        $shortNoticeOverrideBy = null;
+        if ($request->boolean('short_notice_override') && in_array($user->role, ['Super Admin', 'Admin'])) {
+            $shortNoticeOverride = true;
+            $shortNoticeOverrideBy = $user->id;
+        }
+
         // Prepare data for validation
         $validationData = array_merge($request->validated(), [
             'days_requested' => $daysRequested,
             'credits_year' => now()->year,
+            'short_notice_override' => $shortNoticeOverride,
         ]);
 
         // Validate business rules
@@ -390,6 +411,10 @@ class LeaveRequestController extends Controller
                 'status' => 'pending',
                 'attendance_points_at_request' => $attendancePoints,
                 'requires_tl_approval' => $requiresTlApproval,
+                // Short notice override tracking
+                'short_notice_override' => $shortNoticeOverride,
+                'short_notice_override_by' => $shortNoticeOverrideBy,
+                'short_notice_override_at' => $shortNoticeOverride ? now() : null,
             ]);
 
             // Notify based on whether TL approval is required
@@ -499,12 +524,27 @@ class LeaveRequestController extends Controller
         $leaveRequestData['start_date'] = $leaveRequest->start_date->format('Y-m-d');
         $leaveRequestData['end_date'] = $leaveRequest->end_date->format('Y-m-d');
 
+        // Check if leave end date has passed (cannot modify past leaves)
+        $leaveEndDatePassed = $leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast();
+
+        // Check if Admin/Super Admin can cancel approved leave (not if dates passed)
+        $canAdminCancel = in_array($user->role, ['Super Admin', 'Admin'])
+            && $leaveRequest->status === 'approved'
+            && !$leaveEndDatePassed;
+
+        // Check if Admin/Super Admin can edit approved leave dates (not if dates passed)
+        $canEditApproved = in_array($user->role, ['Super Admin', 'Admin'])
+            && $leaveRequest->status === 'approved'
+            && !$leaveEndDatePassed;
+
         return Inertia::render('FormRequest/Leave/Show', [
             'leaveRequest' => $leaveRequestData,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'isSuperAdmin' => $user->role === 'Super Admin',
             'canCancel' => $leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id,
+            'canAdminCancel' => $canAdminCancel,
+            'canEditApproved' => $canEditApproved,
             'hasUserApproved' => $hasUserApproved,
             'canTlApprove' => $canTlApprove,
             'userRole' => $user->role,
@@ -519,10 +559,18 @@ class LeaveRequestController extends Controller
         $this->authorize('update', $leaveRequest);
 
         $user = auth()->user();
-        $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+        $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+        $isHR = $user->role === 'HR';
+        $isApprovedLeave = $leaveRequest->status === 'approved';
 
-        // Only pending requests can be edited
-        if ($leaveRequest->status !== 'pending') {
+        // Only Admin/Super Admin can edit approved leaves
+        if ($isApprovedLeave && !$isAdmin) {
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('error', 'Only Admin or Super Admin can edit approved leave requests.');
+        }
+
+        // For non-admins, only pending requests can be edited
+        if (!$isAdmin && $leaveRequest->status !== 'pending') {
             return redirect()->route('leave-requests.show', $leaveRequest)
                 ->with('error', 'Only pending leave requests can be edited.');
         }
@@ -569,12 +617,21 @@ class LeaveRequestController extends Controller
         // Calculate two weeks from now for 2-week notice validation
         $twoWeeksFromNow = now()->addWeeks(2)->format('Y-m-d');
 
+        // Check if user can override short notice (Admin/Super Admin only)
+        $canOverrideShortNotice = in_array($user->role, ['Super Admin', 'Admin']);
+
         $leaveRequest->load('user');
 
         // Format dates to prevent timezone issues
         $leaveRequestData = $leaveRequest->toArray();
         $leaveRequestData['start_date'] = $leaveRequest->start_date->format('Y-m-d');
         $leaveRequestData['end_date'] = $leaveRequest->end_date->format('Y-m-d');
+        if ($leaveRequest->original_start_date) {
+            $leaveRequestData['original_start_date'] = $leaveRequest->original_start_date->format('Y-m-d');
+        }
+        if ($leaveRequest->original_end_date) {
+            $leaveRequestData['original_end_date'] = $leaveRequest->original_end_date->format('Y-m-d');
+        }
 
         return Inertia::render('FormRequest/Leave/Edit', [
             'leaveRequest' => $leaveRequestData,
@@ -586,6 +643,8 @@ class LeaveRequestController extends Controller
             'campaigns' => $campaigns,
             'twoWeeksFromNow' => $twoWeeksFromNow,
             'isAdmin' => $isAdmin,
+            'isApprovedLeave' => $isApprovedLeave,
+            'canOverrideShortNotice' => $canOverrideShortNotice,
         ]);
     }
 
@@ -596,8 +655,21 @@ class LeaveRequestController extends Controller
     {
         $this->authorize('update', $leaveRequest);
 
-        // Only pending requests can be edited
-        if ($leaveRequest->status !== 'pending') {
+        $user = auth()->user();
+        $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+        $isApprovedLeave = $leaveRequest->status === 'approved';
+
+        // For approved leaves, only Admin/Super Admin can update (for date changes)
+        if ($isApprovedLeave) {
+            if (!$isAdmin) {
+                return back()->withErrors(['error' => 'Only Admin or Super Admin can edit approved leave requests.']);
+            }
+            // Redirect to updateApproved method
+            return $this->updateApproved($request, $leaveRequest);
+        }
+
+        // For non-admins, only pending requests can be edited
+        if (!$isAdmin && $leaveRequest->status !== 'pending') {
             return back()->withErrors(['error' => 'Only pending leave requests can be edited.']);
         }
 
@@ -612,10 +684,17 @@ class LeaveRequestController extends Controller
         // Get current attendance points
         $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
 
+        // Check if short notice override is requested (Admin/Super Admin only)
+        $shortNoticeOverride = false;
+        if ($request->boolean('short_notice_override') && $isAdmin) {
+            $shortNoticeOverride = true;
+        }
+
         // Prepare data for validation
         $validationData = array_merge($request->validated(), [
             'days_requested' => $daysRequested,
             'credits_year' => now()->year,
+            'short_notice_override' => $shortNoticeOverride,
         ]);
 
         // Validate business rules
@@ -627,7 +706,7 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
-            $leaveRequest->update([
+            $updateData = [
                 'leave_type' => $request->leave_type,
                 'start_date' => $startDate,
                 'end_date' => $endDate,
@@ -636,7 +715,16 @@ class LeaveRequestController extends Controller
                 'campaign_department' => $request->campaign_department,
                 'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
                 'attendance_points_at_request' => $attendancePoints,
-            ]);
+            ];
+
+            // Track short notice override if applied
+            if ($shortNoticeOverride && !$leaveRequest->short_notice_override) {
+                $updateData['short_notice_override'] = true;
+                $updateData['short_notice_override_by'] = $user->id;
+                $updateData['short_notice_override_at'] = now();
+            }
+
+            $leaveRequest->update($updateData);
 
             DB::commit();
 
@@ -651,6 +739,129 @@ class LeaveRequestController extends Controller
             ]);
 
             return back()->withErrors(['error' => 'Failed to update leave request. Please try again.'])->withInput();
+        }
+    }
+
+    /**
+     * Update approved leave request dates (Admin/Super Admin only).
+     * This handles Scenario 1: Employee wants to change dates of approved leave.
+     */
+    public function updateApproved(LeaveRequestRequest $request, LeaveRequest $leaveRequest)
+    {
+        $user = auth()->user();
+
+        // Double-check authorization
+        if (!in_array($user->role, ['Super Admin', 'Admin'])) {
+            return back()->withErrors(['error' => 'Only Admin or Super Admin can update approved leave requests.']);
+        }
+
+        if ($leaveRequest->status !== 'approved') {
+            return back()->withErrors(['error' => 'This method is only for approved leave requests.']);
+        }
+
+        $targetUser = $leaveRequest->user;
+        $leaveCreditService = $this->leaveCreditService;
+
+        // Store original dates if not already stored
+        $originalStartDate = $leaveRequest->original_start_date ?? $leaveRequest->start_date;
+        $originalEndDate = $leaveRequest->original_end_date ?? $leaveRequest->end_date;
+
+        // Calculate new days
+        $newStartDate = Carbon::parse($request->start_date);
+        $newEndDate = Carbon::parse($request->end_date);
+        $newDaysRequested = $leaveCreditService->calculateDays($newStartDate, $newEndDate);
+        $oldDaysRequested = $leaveRequest->days_requested;
+
+        // Get the reason for modification
+        $modificationReason = $request->input('date_modification_reason', 'Date change requested by employee');
+
+        DB::beginTransaction();
+        try {
+            // 1. Delete old attendance records associated with this leave
+            Attendance::where('leave_request_id', $leaveRequest->id)->delete();
+
+            // 2. Handle credit adjustments if days changed and this is a credited leave type
+            if ($leaveRequest->requiresCredits() && $leaveRequest->credits_deducted) {
+                $creditsDifference = $newDaysRequested - $oldDaysRequested;
+
+                if ($creditsDifference > 0) {
+                    // Need to deduct more credits
+                    $tempRequest = new LeaveRequest([
+                        'user_id' => $targetUser->id,
+                        'leave_type' => $leaveRequest->leave_type,
+                        'days_requested' => $creditsDifference,
+                    ]);
+                    $leaveCreditService->deductCredits($tempRequest, $leaveRequest->credits_year);
+
+                    // Update total credits deducted
+                    $leaveRequest->credits_deducted = $leaveRequest->credits_deducted + $creditsDifference;
+                } elseif ($creditsDifference < 0) {
+                    // Need to restore some credits
+                    $tempRequest = new LeaveRequest([
+                        'user_id' => $targetUser->id,
+                        'credits_deducted' => abs($creditsDifference),
+                        'credits_year' => $leaveRequest->credits_year,
+                    ]);
+                    $leaveCreditService->restoreCredits($tempRequest);
+
+                    // Update total credits deducted
+                    $leaveRequest->credits_deducted = $leaveRequest->credits_deducted + $creditsDifference;
+                }
+            }
+
+            // 3. Update leave request with new dates
+            $leaveRequest->update([
+                'start_date' => $newStartDate,
+                'end_date' => $newEndDate,
+                'days_requested' => $newDaysRequested,
+                'reason' => $request->reason,
+                'campaign_department' => $request->campaign_department,
+                // Track original dates and modification
+                'original_start_date' => $originalStartDate,
+                'original_end_date' => $originalEndDate,
+                'date_modified_by' => $user->id,
+                'date_modified_at' => now(),
+                'date_modification_reason' => $modificationReason,
+            ]);
+
+            // 4. Create new attendance records for the new date range
+            $this->updateAttendanceForApprovedLeave($leaveRequest);
+
+            DB::commit();
+
+            // Notify the employee about the date change
+            $this->notificationService->notifyLeaveRequestDateChanged(
+                $targetUser->id,
+                str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
+                Carbon::parse($originalStartDate)->format('M d, Y'),
+                Carbon::parse($originalEndDate)->format('M d, Y'),
+                Carbon::parse($newStartDate)->format('M d, Y'),
+                Carbon::parse($newEndDate)->format('M d, Y'),
+                $user->name,
+                $modificationReason,
+                $leaveRequest->id
+            );
+
+            \Log::info('Approved leave request dates updated', [
+                'leave_request_id' => $leaveRequest->id,
+                'modified_by' => $user->id,
+                'old_dates' => Carbon::parse($originalStartDate)->format('Y-m-d') . ' to ' . Carbon::parse($originalEndDate)->format('Y-m-d'),
+                'new_dates' => Carbon::parse($newStartDate)->format('Y-m-d') . ' to ' . Carbon::parse($newEndDate)->format('Y-m-d'),
+                'old_days' => $oldDaysRequested,
+                'new_days' => $newDaysRequested,
+            ]);
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', 'Approved leave request dates updated successfully. Attendance records have been adjusted.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Approved leave request update failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+
+            return back()->withErrors(['error' => 'Failed to update approved leave request. Please try again.'])->withInput();
         }
     }
 
@@ -1089,16 +1300,244 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Cancel a leave request (Employee only, for their own requests).
+     * Adjust leave dates when employee reported to work on specific day(s).
+     * This allows HR/Admin to reduce leave duration and restore partial credits.
+     *
+     * Example: 3-day leave (Mon-Wed), employee reported on Wed
+     * - Original: Mon-Wed (3 days)
+     * - Adjusted: Mon-Tue (2 days)
+     * - Restores 1 day of credits
+     */
+    public function adjustForWorkDay(Request $request, LeaveRequest $leaveRequest)
+    {
+        $this->authorize('updateApproved', $leaveRequest);
+
+        $validated = $request->validate([
+            'work_date' => 'required|date',
+            'adjustment_type' => 'required|in:end_early,start_late,remove_day',
+            'notes' => 'nullable|string|max:500',
+        ]);
+
+        $workDate = Carbon::parse($validated['work_date']);
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $user = auth()->user();
+
+        // Validate work date is within leave period
+        if ($workDate->lt($startDate) || $workDate->gt($endDate)) {
+            return back()->withErrors(['error' => 'Work date must be within the leave period.']);
+        }
+
+        // Cannot adjust past leaves
+        if ($endDate->endOfDay()->isPast()) {
+            return back()->withErrors(['error' => 'Cannot adjust leave that has already ended.']);
+        }
+
+        DB::beginTransaction();
+        try {
+            $originalStartDate = $leaveRequest->original_start_date ?? $leaveRequest->start_date;
+            $originalEndDate = $leaveRequest->original_end_date ?? $leaveRequest->end_date;
+            $originalDays = $leaveRequest->days_requested;
+
+            $newStartDate = $startDate;
+            $newEndDate = $endDate;
+
+            switch ($validated['adjustment_type']) {
+                case 'end_early':
+                    // Employee reported on work_date, so leave ends the day before
+                    $newEndDate = $workDate->copy()->subDay();
+                    if ($newEndDate->lt($startDate)) {
+                        // If work date is the first day, cancel the entire leave
+                        return $this->cancelEntireLeaveForWork($leaveRequest, $workDate, $validated['notes'] ?? '');
+                    }
+                    break;
+
+                case 'start_late':
+                    // Employee reported on work_date but wants to continue leave after
+                    $newStartDate = $workDate->copy()->addDay();
+                    if ($newStartDate->gt($endDate)) {
+                        // If work date is the last day, cancel the entire leave
+                        return $this->cancelEntireLeaveForWork($leaveRequest, $workDate, $validated['notes'] ?? '');
+                    }
+                    break;
+
+                case 'remove_day':
+                    // This is more complex - for now redirect to manual date edit
+                    return back()->withErrors(['error' => 'For removing a middle day, please use the Edit Dates feature to split the leave.']);
+            }
+
+            // Calculate new days
+            $newDays = $this->leaveCreditService->calculateDays(
+                $newStartDate,
+                $newEndDate
+            );
+
+            $daysReduced = $originalDays - $newDays;
+
+            if ($daysReduced <= 0) {
+                return back()->withErrors(['error' => 'No days to reduce. Check the dates.']);
+            }
+
+            // Restore credits for reduced days
+            if ($leaveRequest->credits_deducted) {
+                $this->leaveCreditService->restorePartialCredits(
+                    $leaveRequest,
+                    $daysReduced,
+                    "Adjusted for work on {$workDate->format('M d, Y')}"
+                );
+            }
+
+            // Update leave request
+            $adjustmentNote = "Adjusted: Employee reported to work on {$workDate->format('M d, Y')}. " .
+                "Original period: {$startDate->format('M d')} - {$endDate->format('M d, Y')} ({$originalDays} days). " .
+                "New period: {$newStartDate->format('M d')} - {$newEndDate->format('M d, Y')} ({$newDays} days). " .
+                "{$daysReduced} day(s) credit restored.";
+
+            if ($validated['notes']) {
+                $adjustmentNote .= " Note: {$validated['notes']}";
+            }
+
+            $leaveRequest->update([
+                'start_date' => $newStartDate,
+                'end_date' => $newEndDate,
+                'days_requested' => $newDays,
+                'credits_deducted' => $leaveRequest->credits_deducted - $daysReduced,
+                'original_start_date' => $originalStartDate,
+                'original_end_date' => $originalEndDate,
+                'date_modified_by' => $user->id,
+                'date_modified_at' => now(),
+                'date_modification_reason' => $adjustmentNote,
+            ]);
+
+            // Delete attendance records for removed leave days
+            Attendance::where('leave_request_id', $leaveRequest->id)
+                ->where(function ($query) use ($newStartDate, $newEndDate) {
+                    $query->where('shift_date', '<', $newStartDate)
+                        ->orWhere('shift_date', '>', $newEndDate);
+                })
+                ->delete();
+
+            // Approve the attendance record for the work day (if exists and pending)
+            Attendance::where('user_id', $leaveRequest->user_id)
+                ->where('shift_date', $workDate)
+                ->where('admin_verified', false)
+                ->update([
+                    'admin_verified' => true,
+                    'leave_request_id' => null, // No longer a leave conflict
+                    'verification_notes' => "Leave adjusted - employee worked this day. Verified by {$user->name}",
+                    'remarks' => null,
+                ]);
+
+            // Notify employee
+            $this->notificationService->notifyLeaveRequestDateChanged(
+                $leaveRequest->user_id,
+                str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
+                $startDate->format('M d, Y'),
+                $endDate->format('M d, Y'),
+                $newStartDate->format('M d, Y'),
+                $newEndDate->format('M d, Y'),
+                $user->name,
+                "Reported to work on {$workDate->format('M d, Y')}",
+                $leaveRequest->id
+            );
+
+            DB::commit();
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', "Leave adjusted successfully. {$daysReduced} day(s) credit restored.");
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Leave adjustment failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+            return back()->withErrors(['error' => 'Failed to adjust leave. ' . $e->getMessage()]);
+        }
+    }
+
+    /**
+     * Cancel entire leave when employee reported on single-day leave or first/last day.
+     */
+    protected function cancelEntireLeaveForWork(LeaveRequest $leaveRequest, Carbon $workDate, string $notes = '')
+    {
+        $user = auth()->user();
+
+        // Restore all credits
+        if ($leaveRequest->credits_deducted) {
+            $this->leaveCreditService->restoreCredits($leaveRequest);
+        }
+
+        $reason = "Employee reported to work on {$workDate->format('M d, Y')}. Leave cancelled and credits restored.";
+        if ($notes) {
+            $reason .= " Note: {$notes}";
+        }
+
+        $leaveRequest->update([
+            'status' => 'cancelled',
+            'cancelled_by' => $user->id,
+            'cancelled_at' => now(),
+            'cancellation_reason' => $reason,
+        ]);
+
+        // Delete attendance records for this leave
+        Attendance::where('leave_request_id', $leaveRequest->id)->delete();
+
+        // Approve the work day attendance
+        Attendance::where('user_id', $leaveRequest->user_id)
+            ->where('shift_date', $workDate)
+            ->where('admin_verified', false)
+            ->update([
+                'admin_verified' => true,
+                'leave_request_id' => null,
+                'verification_notes' => "Leave cancelled - employee worked. Verified by {$user->name}",
+                'remarks' => null,
+            ]);
+
+        // Notify employee
+        $this->notificationService->notifyLeaveRequestCancelledByAdmin(
+            $leaveRequest->user_id,
+            str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
+            Carbon::parse($leaveRequest->start_date)->format('M d, Y'),
+            Carbon::parse($leaveRequest->end_date)->format('M d, Y'),
+            $user->name,
+            $reason,
+            $leaveRequest->id
+        );
+
+        DB::commit();
+
+        return redirect()->route('leave-requests.show', $leaveRequest)
+            ->with('success', 'Leave cancelled as employee reported to work. Credits restored.');
+    }
+
+    /**
+     * Cancel a leave request.
+     * - Employees can cancel their own pending requests
+     * - Admin/Super Admin can cancel any pending or approved requests
      */
     public function cancel(Request $request, LeaveRequest $leaveRequest)
     {
         $this->authorize('cancel', $leaveRequest);
 
         $user = auth()->user();
+        $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+        $isOwnRequest = $leaveRequest->user_id === $user->id;
+        $isApprovedLeave = $leaveRequest->status === 'approved';
 
-        if (!$leaveRequest->canBeCancelled()) {
+        // For approved leaves, only Admin/Super Admin can cancel
+        if ($isApprovedLeave && !$isAdmin) {
+            return back()->withErrors(['error' => 'Only Admin or Super Admin can cancel approved leave requests.']);
+        }
+
+        // For regular employees, check canBeCancelled
+        if (!$isAdmin && !$leaveRequest->canBeCancelled()) {
             return back()->withErrors(['error' => 'This leave request cannot be cancelled.']);
+        }
+
+        // Get cancellation reason from request (required for admin cancellation of approved leaves)
+        $cancellationReason = $request->input('cancellation_reason', '');
+        if ($isApprovedLeave && $isAdmin && empty($cancellationReason)) {
+            return back()->withErrors(['error' => 'A reason is required when cancelling an approved leave request.']);
         }
 
         $leaveCreditService = $this->leaveCreditService;
@@ -1108,26 +1547,64 @@ class LeaveRequestController extends Controller
             // Restore credits if it was approved and credits were deducted
             if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
                 $leaveCreditService->restoreCredits($leaveRequest);
+
+                // Also delete attendance records for this leave
+                Attendance::where('leave_request_id', $leaveRequest->id)->delete();
             }
 
-            $leaveRequest->update([
+            // Update cancellation tracking
+            $updateData = [
                 'status' => 'cancelled',
-            ]);
+                'cancelled_by' => $user->id,
+                'cancelled_at' => now(),
+            ];
 
-            // Notify HR/Admin about cancellation
-            $this->notificationService->notifyHrRolesAboutLeaveCancellation(
-                $user->name,
-                $leaveRequest->leave_type,
-                Carbon::parse($leaveRequest->start_date)->format('Y-m-d'),
-                Carbon::parse($leaveRequest->end_date)->format('Y-m-d')
-            );
+            if ($cancellationReason) {
+                $updateData['cancellation_reason'] = $cancellationReason;
+            }
+
+            $leaveRequest->update($updateData);
+
+            // Notify the employee about cancellation (if cancelled by admin)
+            if ($isAdmin && !$isOwnRequest) {
+                $this->notificationService->notifyLeaveRequestCancelledByAdmin(
+                    $leaveRequest->user_id,
+                    str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
+                    Carbon::parse($leaveRequest->start_date)->format('M d, Y'),
+                    Carbon::parse($leaveRequest->end_date)->format('M d, Y'),
+                    $user->name,
+                    $cancellationReason ?? 'No reason provided',
+                    $leaveRequest->id
+                );
+            }
+
+            // Notify HR/Admin about cancellation (if cancelled by employee)
+            if ($isOwnRequest) {
+                $this->notificationService->notifyHrRolesAboutLeaveCancellation(
+                    $user->name,
+                    $leaveRequest->leave_type,
+                    Carbon::parse($leaveRequest->start_date)->format('Y-m-d'),
+                    Carbon::parse($leaveRequest->end_date)->format('Y-m-d')
+                );
+            }
 
             DB::commit();
 
+            \Log::info('Leave request cancelled', [
+                'leave_request_id' => $leaveRequest->id,
+                'cancelled_by' => $user->id,
+                'was_approved' => $isApprovedLeave,
+                'credits_restored' => $leaveRequest->credits_deducted,
+            ]);
+
             return redirect()->route('leave-requests.index')
-                ->with('success', 'Leave request cancelled successfully.');
+                ->with('success', 'Leave request cancelled successfully.' . ($leaveRequest->credits_deducted ? ' Credits have been restored.' : ''));
         } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error('Leave request cancellation failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
             return back()->withErrors(['error' => 'Failed to cancel leave request. Please try again.']);
         }
     }

@@ -51,6 +51,24 @@ class LeaveRequest extends Model
         'tl_approved_at',
         'tl_review_notes',
         'tl_rejected',
+        // Short notice override fields (Admin/Super Admin can bypass 2-week notice)
+        'short_notice_override',
+        'short_notice_override_by',
+        'short_notice_override_at',
+        // Date modification tracking (when approved leave dates are changed)
+        'original_start_date',
+        'original_end_date',
+        'date_modified_by',
+        'date_modified_at',
+        'date_modification_reason',
+        // Auto-cancellation fields (when employee reports to work during leave)
+        'auto_cancelled',
+        'auto_cancelled_reason',
+        'auto_cancelled_at',
+        // Cancellation tracking (for admin cancellation of approved leaves)
+        'cancelled_by',
+        'cancelled_at',
+        'cancellation_reason',
     ];
 
     protected function casts(): array
@@ -68,6 +86,18 @@ class LeaveRequest extends Model
             'admin_approved_at' => 'datetime',
             'hr_approved_at' => 'datetime',
             'requires_tl_approval' => 'boolean',
+            // Short notice override
+            'short_notice_override' => 'boolean',
+            'short_notice_override_at' => 'datetime',
+            // Date modification tracking
+            'original_start_date' => 'date',
+            'original_end_date' => 'date',
+            'date_modified_at' => 'datetime',
+            // Auto-cancellation
+            'auto_cancelled' => 'boolean',
+            'auto_cancelled_at' => 'datetime',
+            // Cancellation tracking
+            'cancelled_at' => 'datetime',
             'tl_approved_at' => 'datetime',
             'tl_rejected' => 'boolean',
         ];
@@ -130,6 +160,30 @@ class LeaveRequest extends Model
     public function attendances()
     {
         return $this->hasMany(Attendance::class);
+    }
+
+    /**
+     * Get the user who overrode the short notice requirement.
+     */
+    public function shortNoticeOverrideBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'short_notice_override_by');
+    }
+
+    /**
+     * Get the user who modified the leave dates.
+     */
+    public function dateModifier(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'date_modified_by');
+    }
+
+    /**
+     * Get the user who cancelled the leave request.
+     */
+    public function cancelledBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'cancelled_by');
     }
 
     /**

@@ -62,6 +62,7 @@ interface Props {
     isAdmin: boolean;
     employees: Employee[];
     selectedEmployeeId: number;
+    canOverrideShortNotice: boolean;
 }
 
 export default function Create({
@@ -77,6 +78,7 @@ export default function Create({
     isAdmin,
     employees,
     selectedEmployeeId,
+    canOverrideShortNotice = false,
 }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         employee_id: selectedEmployeeId,
@@ -86,6 +88,7 @@ export default function Create({
         reason: '',
         campaign_department: selectedCampaign || '',
         medical_cert_submitted: false,
+        short_notice_override: false,
     });
 
     const [selectedEmployee, setSelectedEmployee] = useState<number>(selectedEmployeeId);
@@ -94,6 +97,7 @@ export default function Create({
 
     const [calculatedDays, setCalculatedDays] = useState<number>(0);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
 
@@ -217,6 +221,7 @@ export default function Create({
     // Real-time validation warnings
     useEffect(() => {
         const warnings: string[] = [];
+        let shortNotice: string | null = null;
 
         // Check eligibility (skip warning for SL - allow submission without credits)
         if (!creditsSummary.is_eligible && ['VL', 'BL'].includes(data.leave_type)) {
@@ -229,15 +234,19 @@ export default function Create({
         }
 
         // Check 2-week notice (only for VL and BL, not SL as it's unpredictable)
+        // Track separately for override capability
         if (data.start_date && ['VL', 'BL'].includes(data.leave_type)) {
             const start = new Date(data.start_date);
             start.setHours(0, 0, 0, 0);
             const twoWeeks = new Date(twoWeeksFromNow);
             twoWeeks.setHours(0, 0, 0, 0);
             if (start.getTime() < twoWeeks.getTime()) {
-                warnings.push(
-                    `Leave must be requested at least 2 weeks in advance. Earliest date: ${format(twoWeeks, 'MMMM d, yyyy')}`
-                );
+                const warningMsg = `Leave must be requested at least 2 weeks in advance. Earliest date: ${format(twoWeeks, 'MMMM d, yyyy')}`;
+                // Only add to warnings if not overridden
+                if (!data.short_notice_override) {
+                    warnings.push(warningMsg);
+                }
+                shortNotice = warningMsg;
             }
         }
 
@@ -265,9 +274,11 @@ export default function Create({
         }
 
         setValidationWarnings(warnings);
+        setShortNoticeWarning(shortNotice);
     }, [
         data.leave_type,
         data.start_date,
+        data.short_notice_override,
         creditsSummary,
         attendancePoints,
         hasRecentAbsence,
@@ -497,6 +508,47 @@ export default function Create({
                                     <li key={idx}>{warning}</li>
                                 ))}
                             </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Short Notice Override Option (Admin/Super Admin Only) */}
+                {canOverrideShortNotice && shortNoticeWarning && !data.short_notice_override && (
+                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-800 dark:text-amber-200">Short Notice Leave Request</AlertTitle>
+                        <AlertDescription className="text-amber-700 dark:text-amber-300">
+                            <p className="mb-3">{shortNoticeWarning}</p>
+                            <p className="mb-3 text-sm">As Admin/Super Admin, you can override this requirement.</p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900"
+                                onClick={() => setData('short_notice_override', true)}
+                            >
+                                Override 2-Week Notice Requirement
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Short Notice Override Active */}
+                {data.short_notice_override && (
+                    <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                        <Check className="h-4 w-4 text-blue-600" />
+                        <AlertTitle className="text-blue-800 dark:text-blue-200">Short Notice Override Active</AlertTitle>
+                        <AlertDescription className="text-blue-700 dark:text-blue-300">
+                            <p className="mb-2">The 2-week advance notice requirement has been overridden by Admin.</p>
+                            <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 p-0 h-auto"
+                                onClick={() => setData('short_notice_override', false)}
+                            >
+                                Remove Override
+                            </Button>
                         </AlertDescription>
                     </Alert>
                 )}

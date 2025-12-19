@@ -12,14 +12,19 @@ use App\Models\LeaveRequest;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AttendanceProcessor
 {
     protected AttendanceFileParser $parser;
+    protected ?LeaveCreditService $leaveCreditService = null;
+    protected ?NotificationService $notificationService = null;
 
     public function __construct(AttendanceFileParser $parser)
     {
         $this->parser = $parser;
+        $this->leaveCreditService = app(LeaveCreditService::class);
+        $this->notificationService = app(NotificationService::class);
     }
 
     /**
@@ -595,7 +600,53 @@ class AttendanceProcessor
         // Check if user has an approved leave request for this date
         $approvedLeave = $this->checkApprovedLeave($user, $detectedShiftDate);
         if ($approvedLeave) {
-            // Create attendance record with on_leave status
+            // Check if biometric records indicate activity during leave
+            // Instead of auto-cancelling, flag for HR/Admin review
+            // This handles edge cases like:
+            // - Accidental clock-ins (habit)
+            // - Partial work days (came in 2 hours, went home sick)
+            // - Multi-day leaves where employee only worked one day
+            if ($this->hasSufficientWorkScans($records)) {
+                // Flag for HR/Admin review - do NOT auto-cancel
+                $flagResult = $this->flagLeaveForReview($approvedLeave, $user, $detectedShiftDate, $records);
+
+                // Process attendance normally so we have the record
+                // HR/Admin can review and decide to cancel leave if appropriate
+                $result = $this->processAttendance($user, $schedule, $records, $detectedShiftDate, $biometricSiteId);
+
+                // Mark attendance as needing review due to leave conflict
+                $attendance = Attendance::where('user_id', $user->id)
+                    ->where('shift_date', $detectedShiftDate)
+                    ->first();
+
+                if ($attendance) {
+                    $attendance->update([
+                        'admin_verified' => false, // Requires HR approval due to leave conflict
+                        'leave_request_id' => $approvedLeave->id,
+                        'remarks' => ($attendance->remarks ? $attendance->remarks . ' | ' : '') .
+                            "Leave conflict: Employee on approved leave but has biometric activity. " .
+                            "Duration: {$flagResult['work_duration']} hrs. Pending HR review.",
+                    ]);
+                }
+
+                Log::info('Leave attendance conflict detected - flagged for HR review', [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'leave_request_id' => $approvedLeave->id,
+                    'shift_date' => $detectedShiftDate->format('Y-m-d'),
+                    'scan_count' => $records->count(),
+                    'work_duration' => $flagResult['work_duration'] ?? 0,
+                ]);
+
+                return [
+                    'processed' => $result['matched'] ?? false,
+                    'leave_conflict_flagged' => true,
+                    'work_duration' => $flagResult['work_duration'] ?? 0,
+                    'error' => !empty($result['errors']) ? implode(', ', $result['errors']) : null,
+                ];
+            }
+
+            // No work scans detected, create attendance record with on_leave status
             $this->createLeaveAttendance($user, $schedule, $detectedShiftDate, $approvedLeave);
 
             return [
@@ -612,6 +663,120 @@ class AttendanceProcessor
             'processed' => $result['matched'] ?? false,
             'error' => !empty($result['errors']) ? implode(', ', $result['errors']) : null,
         ];
+    }
+
+    /**
+     * Check if biometric records indicate sufficient work scans (employee actually worked).
+     * Requires at least 2 scans (time in and time out) to consider as work.
+     *
+     * @param Collection $records
+     * @return bool
+     */
+    protected function hasSufficientWorkScans(Collection $records): bool
+    {
+        // Require at least 2 scans (time in and time out) to be considered as working
+        return $records->count() >= 2;
+    }
+
+    /**
+     * Calculate estimated work duration from biometric records.
+     * Returns duration in hours between first and last scan.
+     *
+     * @param Collection $records
+     * @return float Hours worked (0 if less than 2 scans)
+     */
+    protected function calculateWorkDuration(Collection $records): float
+    {
+        if ($records->count() < 2) {
+            return 0;
+        }
+
+        $sortedRecords = $records->sortBy(fn($r) => $r['datetime']->timestamp);
+        $firstScan = $sortedRecords->first()['datetime'];
+        $lastScan = $sortedRecords->last()['datetime'];
+
+        return round($firstScan->diffInMinutes($lastScan) / 60, 2);
+    }
+
+    /**
+     * Flag leave request for HR/Admin review when employee has biometric activity during leave.
+     * Does NOT auto-cancel - instead notifies HR/Admin to investigate and decide.
+     *
+     * This handles edge cases like:
+     * - Accidental clock-ins (employee clocked in out of habit but didn't work)
+     * - Partial work days (employee came in for 2 hours then went home sick)
+     * - Multi-day leaves where only one day has attendance
+     *
+     * @param LeaveRequest $leaveRequest
+     * @param User $user
+     * @param Carbon $workDate
+     * @param Collection $biometricRecords
+     * @return array
+     */
+    protected function flagLeaveForReview(
+        LeaveRequest $leaveRequest,
+        User $user,
+        Carbon $workDate,
+        Collection $biometricRecords
+    ): array {
+        $scanTimes = $biometricRecords->pluck('datetime')
+            ->map(fn($dt) => $dt->format('H:i'))
+            ->implode(', ');
+
+        $workDuration = $this->calculateWorkDuration($biometricRecords);
+        $scanCount = $biometricRecords->count();
+
+        // Determine if this is a multi-day leave
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $isMultiDayLeave = $startDate->diffInDays($endDate) > 0;
+
+        $details = "Employee {$user->name} has biometric activity during approved leave.\n" .
+                   "Leave: {$startDate->format('M d, Y')} to {$endDate->format('M d, Y')}\n" .
+                   "Activity Date: {$workDate->format('M d, Y')}\n" .
+                   "Scan Count: {$scanCount}\n" .
+                   "Scan Times: {$scanTimes}\n" .
+                   "Estimated Duration: {$workDuration} hours";
+
+        try {
+            // Notify HR/Admin for review (do NOT auto-cancel)
+            if ($this->notificationService) {
+                $this->notificationService->notifyLeaveAttendanceConflict(
+                    $user,
+                    $leaveRequest,
+                    $workDate,
+                    $scanCount,
+                    $scanTimes,
+                    $workDuration,
+                    $isMultiDayLeave
+                );
+            }
+
+            Log::info('Leave attendance conflict flagged for HR review', [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'leave_request_id' => $leaveRequest->id,
+                'work_date' => $workDate->format('Y-m-d'),
+                'scan_count' => $scanCount,
+                'work_duration_hours' => $workDuration,
+                'is_multi_day_leave' => $isMultiDayLeave,
+            ]);
+
+            return [
+                'flagged' => true,
+                'details' => $details,
+                'work_duration' => $workDuration,
+                'is_multi_day_leave' => $isMultiDayLeave,
+            ];
+        } catch (\Exception $e) {
+            Log::error('Failed to flag leave attendance conflict', [
+                'leave_request_id' => $leaveRequest->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return ['flagged' => false, 'error' => $e->getMessage()];
+        }
     }
 
     /**

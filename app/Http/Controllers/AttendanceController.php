@@ -5,11 +5,15 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Models\AttendanceUpload;
 use App\Models\AttendancePoint;
+use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Models\Site;
 use App\Services\AttendanceProcessor;
+use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 use Carbon\Carbon;
@@ -18,11 +22,16 @@ class AttendanceController extends Controller
 {
     protected AttendanceProcessor $processor;
     protected NotificationService $notificationService;
+    protected LeaveCreditService $leaveCreditService;
 
-    public function __construct(AttendanceProcessor $processor, NotificationService $notificationService)
-    {
+    public function __construct(
+        AttendanceProcessor $processor,
+        NotificationService $notificationService,
+        LeaveCreditService $leaveCreditService
+    ) {
         $this->processor = $processor;
         $this->notificationService = $notificationService;
+        $this->leaveCreditService = $leaveCreditService;
     }
 
     /**
@@ -291,6 +300,9 @@ class AttendanceController extends Controller
             ->where('end_date', '>=', $validated['shift_date'])
             ->first();
 
+        // Flag if this is a leave conflict (attendance during approved leave)
+        $hasLeaveConflict = $approvedLeave && ($validated['actual_time_in'] || $validated['actual_time_out']);
+
         // Calculate tardy, undertime, overtime if schedule exists and times are provided
         $tardyMinutes = null;
         $undertimeMinutes = null;
@@ -404,12 +416,41 @@ class AttendanceController extends Controller
             'tardy_minutes' => $tardyMinutes,
             'undertime_minutes' => $undertimeMinutes,
             'overtime_minutes' => $overtimeMinutes,
-            'admin_verified' => true, // Manual entries are pre-verified
-            'verification_notes' => 'Manually created by ' . auth()->user()->name,
+            'admin_verified' => !$hasLeaveConflict, // Requires approval if leave conflict
+            'leave_request_id' => $approvedLeave?->id,
+            'verification_notes' => $hasLeaveConflict
+                ? 'Manual entry during approved leave - requires HR review. Created by ' . auth()->user()->name
+                : 'Manually created by ' . auth()->user()->name,
             'notes' => $validated['notes'],
+            'remarks' => $hasLeaveConflict
+                ? 'Leave conflict: Employee on approved leave but has attendance entry. Pending HR review.'
+                : null,
         ]);
 
-        return redirect()->route('attendance.index')->with('success', 'Attendance record created successfully.');
+        // Notify HR if there's a leave conflict
+        if ($hasLeaveConflict) {
+            $notificationService = app(NotificationService::class);
+            $employee = User::find($validated['user_id']);
+            $workDuration = $actualTimeIn && $actualTimeOut
+                ? round($actualTimeIn->diffInMinutes($actualTimeOut) / 60, 2)
+                : 0;
+
+            $notificationService->notifyLeaveAttendanceConflict(
+                $employee,
+                $approvedLeave,
+                Carbon::parse($validated['shift_date']),
+                $actualTimeIn && $actualTimeOut ? 2 : 1, // scan count approximation
+                $actualTimeIn ? $actualTimeIn->format('H:i') . ($actualTimeOut ? ', ' . $actualTimeOut->format('H:i') : '') : 'N/A',
+                $workDuration,
+                $approvedLeave->start_date != $approvedLeave->end_date
+            );
+        }
+
+        return redirect()->route('attendance.index')->with('success',
+            $hasLeaveConflict
+                ? 'Attendance record created. Requires HR approval due to leave conflict.'
+                : 'Attendance record created successfully.'
+        );
     }
 
     /**
@@ -624,8 +665,8 @@ class AttendanceController extends Controller
     {
         $request->validate([
             'file' => 'required|file|mimes:txt|max:10240', // Max 10MB
-            'date_from' => 'required|date|before_or_equal:today',
-            'date_to' => 'nullable|date|after_or_equal:date_from|before_or_equal:today',
+            'date_from' => 'required|date',
+            'date_to' => 'nullable|date|after_or_equal:date_from',
             'biometric_site_id' => 'required|exists:sites,id',
             'notes' => 'nullable|string|max:1000',
         ]);
@@ -676,6 +717,15 @@ class AttendanceController extends Controller
                 $message .= '. Unmatched: ' . $unmatchedList;
             }
 
+            // Return JSON if requested via fetch/API
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'message' => $message,
+                    'upload_id' => $upload->id,
+                ]);
+            }
+
             return redirect()->route('attendance.import')
                 ->with('success', $message);
 
@@ -692,6 +742,14 @@ class AttendanceController extends Controller
                 'trace' => $e->getTraceAsString()
             ]);
 
+            // Return JSON error if requested via fetch/API
+            if ($request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to process attendance file: ' . $e->getMessage(),
+                ], 422);
+            }
+
             return redirect()->back()
                 ->with('error', 'Failed to process attendance file: ' . $e->getMessage());
         }
@@ -703,10 +761,11 @@ class AttendanceController extends Controller
     public function review(Request $request)
     {
         $query = Attendance::with([
-            'user',
+            'user.activeSchedule.site', // Include user's active schedule as fallback
             'employeeSchedule.site',
             'bioInSite',
-            'bioOutSite'
+            'bioOutSite',
+            'leaveRequest' // Include leave request info
         ]);
 
         // Filter by verification status
@@ -783,8 +842,8 @@ class AttendanceController extends Controller
      */
     public function verify(Request $request, Attendance $attendance)
     {
-        // Load employee schedule for shift type checking
-        $attendance->load('employeeSchedule');
+        // Load employee schedule and leave request for checking
+        $attendance->load(['employeeSchedule', 'leaveRequest']);
 
         $request->validate([
             'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
@@ -793,12 +852,27 @@ class AttendanceController extends Controller
             'verification_notes' => 'required|string|max:1000',
             'overtime_approved' => 'nullable|boolean',
             'notes' => 'nullable|string|max:500',
+            'adjust_leave' => 'nullable|boolean', // Flag to confirm leave adjustment
         ]);
 
         // Note: Allow re-verification of already verified records
         // This is intentional - admins can update verified records through this interface
 
         $oldStatus = $attendance->status;
+        $leaveAdjusted = false;
+        $leaveAdjustmentMessage = '';
+
+        // Check if this attendance conflicts with an approved leave
+        // If status is not 'on_leave' (meaning they actually worked), handle leave adjustment
+        if ($attendance->leave_request_id &&
+            $attendance->leaveRequest &&
+            $attendance->leaveRequest->status === 'approved' &&
+            $request->status !== 'on_leave') {
+
+            $leaveResult = $this->adjustLeaveForWorkDay($attendance, $request);
+            $leaveAdjusted = $leaveResult['adjusted'];
+            $leaveAdjustmentMessage = $leaveResult['message'];
+        }
 
         $updates = [
             'status' => $request->status,
@@ -808,6 +882,11 @@ class AttendanceController extends Controller
             'verification_notes' => $request->verification_notes,
             'notes' => $request->notes,
         ];
+
+        // Clear leave_request_id if employee actually worked (not on_leave status)
+        if ($request->status !== 'on_leave' && $attendance->leave_request_id) {
+            $updates['leave_request_id'] = null;
+        }
 
         // Set is_advised flag for advised_absence status
         if ($request->status === 'advised_absence') {
@@ -923,8 +1002,13 @@ class AttendanceController extends Controller
             );
         }
 
+        $successMessage = 'Attendance record verified and updated successfully.';
+        if ($leaveAdjusted && $leaveAdjustmentMessage) {
+            $successMessage .= ' ' . $leaveAdjustmentMessage;
+        }
+
         return redirect()->back()
-            ->with('success', 'Attendance record verified and updated successfully.');
+            ->with('success', $successMessage);
     }
 
     /**
@@ -1148,5 +1232,297 @@ class AttendanceController extends Controller
 
         return redirect()->back()
             ->with('success', "Successfully deleted {$count} attendance record" . ($count === 1 ? '' : 's') . '.');
+    }
+
+    /**
+     * Adjust leave request when employee reports to work during approved leave.
+     *
+     * Scenarios:
+     * 1. Single-day leave: Cancel the leave entirely, restore full credit
+     * 2. Multi-day leave, work on first day: Adjust start date forward
+     * 3. Multi-day leave, work on last day: Adjust end date backward
+     * 4. Multi-day leave, work in middle: Split or adjust (currently just adjust end date to day before)
+     *
+     * @param Attendance $attendance The attendance record being verified
+     * @param Request $request The verification request
+     * @return array ['adjusted' => bool, 'message' => string]
+     */
+    private function adjustLeaveForWorkDay(Attendance $attendance, Request $request): array
+    {
+        $leaveRequest = $attendance->leaveRequest;
+        $workDate = Carbon::parse($attendance->shift_date);
+        $leaveStart = Carbon::parse($leaveRequest->start_date);
+        $leaveEnd = Carbon::parse($leaveRequest->end_date);
+
+        // Calculate original leave days (this should match what was approved)
+        $originalLeaveDays = $leaveRequest->days_requested;
+        $creditsDeducted = $leaveRequest->credits_deducted ?? $originalLeaveDays;
+
+        // Check if credits can be restored based on year
+        // Credits can only be restored if current year matches the credits_year
+        // (e.g., 2025 credits used in Jan/Feb 2026 cannot be restored in 2026)
+        $currentYear = now()->year;
+        $creditsYear = $leaveRequest->credits_year;
+        $canRestoreCredits = $creditsYear && $currentYear === $creditsYear;
+
+        try {
+            DB::beginTransaction();
+
+            // Single day leave - cancel entirely
+            if ($leaveStart->isSameDay($leaveEnd)) {
+                // Only restore credits if year matches
+                if ($canRestoreCredits) {
+                    $this->leaveCreditService->restoreCredits($leaveRequest);
+                }
+
+                // Clear leave_request_id from all related attendance records
+                $relatedAttendances = Attendance::where('user_id', $leaveRequest->user_id)
+                    ->where('leave_request_id', $leaveRequest->id)
+                    ->get();
+
+                foreach ($relatedAttendances as $relatedAtt) {
+                    $relatedAtt->update([
+                        'leave_request_id' => null,
+                        'status' => 'needs_manual_review',
+                        'notes' => ($relatedAtt->notes ? $relatedAtt->notes . "\n" : '') . 'Leave was cancelled - requires review.',
+                    ]);
+                }
+
+                // Build cancellation reason message
+                $creditMessage = $canRestoreCredits
+                    ? 'Original leave credit restored.'
+                    : 'Credits not restored (year mismatch: credits from ' . $creditsYear . ', current year ' . $currentYear . ').';
+
+                // Update leave request status to cancelled
+                $leaveRequest->update([
+                    'status' => 'cancelled',
+                    'auto_cancelled' => true,
+                    'auto_cancelled_at' => now(),
+                    'auto_cancelled_reason' => 'Employee reported to work on ' . $workDate->format('M d, Y') . '. ' . $creditMessage,
+                ]);
+
+                // Notify the employee
+                $this->notificationService->notifyLeaveRequest(
+                    $leaveRequest->user_id,
+                    $attendance->user->full_name ?? 'Employee',
+                    'cancelled',
+                    $leaveRequest->id
+                );
+
+                DB::commit();
+
+                Log::info('Leave cancelled due to work day', [
+                    'leave_request_id' => $leaveRequest->id,
+                    'user_id' => $leaveRequest->user_id,
+                    'work_date' => $workDate->format('Y-m-d'),
+                    'credits_restored' => $canRestoreCredits ? $creditsDeducted : 0,
+                    'can_restore_credits' => $canRestoreCredits,
+                ]);
+
+                $resultMessage = $canRestoreCredits
+                    ? "Leave request cancelled. {$creditsDeducted} day(s) of {$leaveRequest->leave_type} credit restored."
+                    : "Leave request cancelled. Credits not restored (year mismatch).";
+
+                return [
+                    'adjusted' => true,
+                    'message' => $resultMessage,
+                ];
+            }
+
+            // Multi-day leave - determine how to adjust
+            $creditsToRestore = 0;
+            $newStart = $leaveStart;
+            $newEnd = $leaveEnd;
+            $adjustmentType = '';
+
+            // Work on first day of leave
+            if ($workDate->isSameDay($leaveStart)) {
+                $newStart = $leaveStart->copy()->addDay();
+                $creditsToRestore = 1;
+                $adjustmentType = 'start_adjusted';
+            }
+            // Work on last day of leave
+            elseif ($workDate->isSameDay($leaveEnd)) {
+                $newEnd = $leaveEnd->copy()->subDay();
+                $creditsToRestore = 1;
+                $adjustmentType = 'end_adjusted';
+            }
+            // Work in the middle of leave - adjust end date to day before work
+            else {
+                // Calculate days from work date to original end
+                $daysToRestore = $workDate->diffInDays($leaveEnd) + 1; // +1 to include work day
+                $newEnd = $workDate->copy()->subDay();
+                $creditsToRestore = $daysToRestore;
+                $adjustmentType = 'middle_adjusted';
+            }
+
+            // Calculate new leave days
+            $newLeaveDays = $newStart->diffInDays($newEnd) + 1;
+
+            // If adjustment results in no leave days (shouldn't happen but safety check)
+            if ($newLeaveDays <= 0 || $newStart->gt($newEnd)) {
+                // Cancel the leave entirely - only restore credits if year matches
+                if ($canRestoreCredits) {
+                    $this->leaveCreditService->restoreCredits($leaveRequest);
+                }
+
+                // Clear leave_request_id from all related attendance records
+                $relatedAttendances = Attendance::where('user_id', $leaveRequest->user_id)
+                    ->where('leave_request_id', $leaveRequest->id)
+                    ->get();
+
+                foreach ($relatedAttendances as $relatedAtt) {
+                    $relatedAtt->update([
+                        'leave_request_id' => null,
+                        'status' => 'needs_manual_review',
+                        'notes' => ($relatedAtt->notes ? $relatedAtt->notes . "\n" : '') . 'Leave was cancelled - requires review.',
+                    ]);
+                }
+                
+                $creditMessage = $canRestoreCredits 
+                    ? 'Credits restored.' 
+                    : 'Credits not restored (year mismatch).';
+
+                $leaveRequest->update([
+                    'status' => 'cancelled',
+                    'auto_cancelled' => true,
+                    'auto_cancelled_at' => now(),
+                    'auto_cancelled_reason' => 'Employee worked on leave dates. ' . $creditMessage,
+                ]);
+
+                $this->notificationService->notifyLeaveRequest(
+                    $leaveRequest->user_id,
+                    $attendance->user->full_name ?? 'Employee',
+                    'cancelled',
+                    $leaveRequest->id
+                );
+
+                DB::commit();
+                
+                $resultMessage = $canRestoreCredits
+                    ? "Leave request cancelled. {$creditsDeducted} day(s) of {$leaveRequest->leave_type} credit restored."
+                    : "Leave request cancelled. Credits not restored (year mismatch).";
+
+                return [
+                    'adjusted' => true,
+                    'message' => $resultMessage,
+                ];
+            }
+
+            // Update the leave request with new dates
+            // Only adjust credits_deducted if we can restore credits
+            $newCreditsDeducted = $canRestoreCredits 
+                ? max(0, $creditsDeducted - $creditsToRestore)
+                : $creditsDeducted; // Keep original if can't restore
+            
+            $leaveRequest->update([
+                'start_date' => $newStart->format('Y-m-d'),
+                'end_date' => $newEnd->format('Y-m-d'),
+                'days_requested' => $newLeaveDays,
+                'credits_deducted' => $newCreditsDeducted,
+                'original_start_date' => $leaveRequest->original_start_date ?? $leaveStart->format('Y-m-d'),
+                'original_end_date' => $leaveRequest->original_end_date ?? $leaveEnd->format('Y-m-d'),
+                'date_modified_by' => auth()->id(),
+                'date_modified_at' => now(),
+                'date_modification_reason' => 'Auto-adjusted: Employee reported to work on ' . $workDate->format('M d, Y') .
+                    '. Leave dates changed from ' . $leaveStart->format('M d') . '-' . $leaveEnd->format('M d, Y') .
+                    ' to ' . $newStart->format('M d') . '-' . $newEnd->format('M d, Y') . '.',
+            ]);
+
+            // Update other attendance records that are now outside the adjusted leave dates
+            // Clear leave_request_id and set status to needs_manual_review for dates > newEnd
+            $affectedAttendances = Attendance::where('user_id', $leaveRequest->user_id)
+                ->where('leave_request_id', $leaveRequest->id)
+                ->where('shift_date', '>', $newEnd->format('Y-m-d'))
+                ->where('shift_date', '<=', $leaveEnd->format('Y-m-d'))
+                ->get();
+
+            foreach ($affectedAttendances as $affectedAtt) {
+                $affectedAtt->update([
+                    'leave_request_id' => null,
+                    'status' => 'needs_manual_review',
+                    'notes' => ($affectedAtt->notes ? $affectedAtt->notes . "\n" : '') .
+                        'Leave was adjusted - this date is no longer covered by leave.',
+                ]);
+            }
+
+            // Also update attendance records for dates < newStart (if start date was adjusted)
+            if ($adjustmentType === 'start_adjusted') {
+                $beforeStartAttendances = Attendance::where('user_id', $leaveRequest->user_id)
+                    ->where('leave_request_id', $leaveRequest->id)
+                    ->where('shift_date', '>=', $leaveStart->format('Y-m-d'))
+                    ->where('shift_date', '<', $newStart->format('Y-m-d'))
+                    ->get();
+
+                foreach ($beforeStartAttendances as $affectedAtt) {
+                    $affectedAtt->update([
+                        'leave_request_id' => null,
+                        'status' => 'needs_manual_review',
+                        'notes' => ($affectedAtt->notes ? $affectedAtt->notes . "\n" : '') .
+                            'Leave was adjusted - this date is no longer covered by leave.',
+                    ]);
+                }
+            }
+
+            // Restore partial credit using the service method (only if year matches)
+            if ($creditsToRestore > 0 && $canRestoreCredits) {
+                $this->leaveCreditService->restorePartialCredits(
+                    $leaveRequest,
+                    $creditsToRestore,
+                    'Partial leave credit restored - Employee worked on ' . $workDate->format('M d, Y')
+                );
+            }
+            
+            // Build notification message based on whether credits were restored
+            $creditNotificationMsg = $canRestoreCredits
+                ? '. ' . $creditsToRestore . ' day(s) of leave credit has been restored.'
+                : '. Credits not restored (year mismatch - credits from ' . $creditsYear . ', current year ' . $currentYear . ').';
+
+            // Notify the employee about leave adjustment
+            $this->notificationService->notifySystemMessage(
+                $leaveRequest->user_id,
+                'Leave Dates Adjusted',
+                'Your ' . $leaveRequest->leave_type . ' leave has been adjusted from ' .
+                    $leaveStart->format('M d') . '-' . $leaveEnd->format('M d, Y') . ' to ' .
+                    $newStart->format('M d') . '-' . $newEnd->format('M d, Y') .
+                    ' because you reported to work on ' . $workDate->format('M d, Y') . $creditNotificationMsg,
+                ['leave_request_id' => $leaveRequest->id]
+            );
+
+            DB::commit();
+
+            Log::info('Leave adjusted due to work day', [
+                'leave_request_id' => $leaveRequest->id,
+                'user_id' => $leaveRequest->user_id,
+                'work_date' => $workDate->format('Y-m-d'),
+                'adjustment_type' => $adjustmentType,
+                'original_dates' => $leaveStart->format('Y-m-d') . ' to ' . $leaveEnd->format('Y-m-d'),
+                'new_dates' => $newStart->format('Y-m-d') . ' to ' . $newEnd->format('Y-m-d'),
+                'credits_restored' => $canRestoreCredits ? $creditsToRestore : 0,
+                'can_restore_credits' => $canRestoreCredits,
+            ]);
+            
+            $resultMessage = $canRestoreCredits
+                ? "Leave adjusted to {$newStart->format('M d')}-{$newEnd->format('M d, Y')}. {$creditsToRestore} day(s) of {$leaveRequest->leave_type} credit restored."
+                : "Leave adjusted to {$newStart->format('M d')}-{$newEnd->format('M d, Y')}. Credits not restored (year mismatch).";
+
+            return [
+                'adjusted' => true,
+                'message' => $resultMessage,
+            ];
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Failed to adjust leave for work day: ' . $e->getMessage(), [
+                'leave_request_id' => $leaveRequest->id,
+                'attendance_id' => $attendance->id,
+                'work_date' => $workDate->format('Y-m-d'),
+            ]);
+
+            return [
+                'adjusted' => false,
+                'message' => 'Failed to adjust leave: ' . $e->getMessage(),
+            ];
+        }
     }
 }

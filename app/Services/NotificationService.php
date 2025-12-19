@@ -646,4 +646,153 @@ class NotificationService
             null
         );
     }
+
+    /**
+     * Notify user that their approved leave request dates have been modified by admin.
+     */
+    public function notifyLeaveRequestDateChanged(
+        User|int $user,
+        string $leaveType,
+        string $originalStartDate,
+        string $originalEndDate,
+        string $newStartDate,
+        string $newEndDate,
+        string $modifiedByName,
+        string $reason,
+        int $requestId
+    ): Notification {
+        return $this->create(
+            $user,
+            'leave_request',
+            'Leave Request Dates Modified',
+            "Your approved {$leaveType} leave has been modified by {$modifiedByName}. Original dates: {$originalStartDate} to {$originalEndDate}. New dates: {$newStartDate} to {$newEndDate}. Reason: {$reason}",
+            [
+                'leave_type' => $leaveType,
+                'original_start_date' => $originalStartDate,
+                'original_end_date' => $originalEndDate,
+                'new_start_date' => $newStartDate,
+                'new_end_date' => $newEndDate,
+                'modified_by' => $modifiedByName,
+                'reason' => $reason,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
+     * Notify user that their approved leave request has been cancelled by admin.
+     */
+    public function notifyLeaveRequestCancelledByAdmin(
+        User|int $user,
+        string $leaveType,
+        string $startDate,
+        string $endDate,
+        string $cancelledByName,
+        string $reason,
+        int $requestId
+    ): Notification {
+        return $this->create(
+            $user,
+            'leave_request',
+            'Approved Leave Request Cancelled',
+            "Your approved {$leaveType} leave ({$startDate} to {$endDate}) has been cancelled by {$cancelledByName}. Reason: {$reason}. Your leave credits have been restored.",
+            [
+                'leave_type' => $leaveType,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'cancelled_by' => $cancelledByName,
+                'reason' => $reason,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
+     * Notify user that their approved leave request was auto-cancelled due to attendance.
+     */
+    public function notifyLeaveRequestAutoCancelled(
+        User|int $user,
+        string $leaveType,
+        string $startDate,
+        string $endDate,
+        string $reason,
+        int $requestId
+    ): Notification {
+        return $this->create(
+            $user,
+            'leave_request',
+            'Leave Request Auto-Cancelled',
+            "Your approved {$leaveType} leave ({$startDate} to {$endDate}) has been automatically cancelled. Reason: {$reason}. Your leave credits have been restored.",
+            [
+                'leave_type' => $leaveType,
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'reason' => $reason,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId)
+            ]
+        );
+    }
+
+    /**
+     * Notify HR/Admin about leave attendance conflict for review.
+     * Called when employee has biometric activity during approved leave.
+     *
+     * @param User $employee The employee with the leave
+     * @param \App\Models\LeaveRequest $leaveRequest The approved leave request
+     * @param \Carbon\Carbon $activityDate The date with biometric activity
+     * @param int $scanCount Number of biometric scans
+     * @param string $scanTimes Comma-separated scan times
+     * @param float $workDuration Estimated work duration in hours
+     * @param bool $isMultiDayLeave Whether this is a multi-day leave
+     */
+    public function notifyLeaveAttendanceConflict(
+        User $employee,
+        \App\Models\LeaveRequest $leaveRequest,
+        \Carbon\Carbon $activityDate,
+        int $scanCount,
+        string $scanTimes,
+        float $workDuration,
+        bool $isMultiDayLeave
+    ): void {
+        $leaveType = str_replace('_', ' ', ucfirst($leaveRequest->leave_type));
+        $startDate = \Carbon\Carbon::parse($leaveRequest->start_date)->format('M d, Y');
+        $endDate = \Carbon\Carbon::parse($leaveRequest->end_date)->format('M d, Y');
+        $activityDateFormatted = $activityDate->format('M d, Y');
+
+        $title = 'Leave Attendance Conflict - Review Required';
+
+        $message = "{$employee->name} has biometric activity during approved {$leaveType} leave.\n\n" .
+            "Leave Period: {$startDate} to {$endDate}\n" .
+            "Activity Date: {$activityDateFormatted}\n" .
+            "Scans: {$scanCount} ({$scanTimes})\n" .
+            "Est. Duration: {$workDuration} hours\n\n" .
+            "Please review and decide:\n" .
+            "• If accidental clock-in: No action needed\n" .
+            "• If partial work day: Consider adjusting leave\n" .
+            "• If full work day: Cancel leave to restore credits";
+
+        $data = [
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'leave_request_id' => $leaveRequest->id,
+            'leave_type' => $leaveType,
+            'leave_start' => $startDate,
+            'leave_end' => $endDate,
+            'activity_date' => $activityDateFormatted,
+            'scan_count' => $scanCount,
+            'scan_times' => $scanTimes,
+            'work_duration_hours' => $workDuration,
+            'is_multi_day_leave' => $isMultiDayLeave,
+            'link' => route('leave-requests.show', $leaveRequest->id),
+        ];
+
+        // Notify HR users
+        $this->notifyUsersByRole('HR', 'leave_request', $title, $message, $data);
+
+        // Also notify IT (admins)
+        $this->notifyUsersByRole('IT', 'leave_request', $title, $message, $data);
+    }
 }

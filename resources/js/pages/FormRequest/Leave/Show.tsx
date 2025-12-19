@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, isWithinInterval, eachDayOfInterval, isWeekend } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Can } from '@/components/authorization';
@@ -16,10 +19,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -55,6 +58,19 @@ interface LeaveRequest {
     credits_deducted: number | null;
     attendance_points_at_request: number;
     created_at: string;
+    original_start_date?: string;
+    original_end_date?: string;
+    date_modified_by?: number;
+    date_modification_reason?: string;
+    date_modifier?: User;
+    cancelled_by?: number;
+    cancellation_reason?: string;
+    canceller?: User;
+    auto_cancelled?: boolean;
+    auto_cancelled_reason?: string;
+    short_notice_override?: boolean;
+    short_notice_override_by?: number;
+    short_notice_overrider?: User;
 }
 
 interface Props {
@@ -66,9 +82,20 @@ interface Props {
     hasUserApproved: boolean;
     canTlApprove?: boolean;
     userRole: string;
+    canAdminCancel?: boolean;
+    canEditApproved?: boolean;
 }
 
-export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved, canTlApprove = false, isSuperAdmin = false }: Props) {
+export default function Show({
+    leaveRequest,
+    isAdmin,
+    canCancel,
+    hasUserApproved,
+    canTlApprove = false,
+    isSuperAdmin = false,
+    canAdminCancel = false,
+    canEditApproved = false,
+}: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
@@ -76,6 +103,8 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
     const [showTLApproveDialog, setShowTLApproveDialog] = useState(false);
     const [showForceApproveDialog, setShowForceApproveDialog] = useState(false);
     const [showTLDenyDialog, setShowTLDenyDialog] = useState(false);
+    const [showAdminCancelDialog, setShowAdminCancelDialog] = useState(false);
+    const [showAdjustForWorkDialog, setShowAdjustForWorkDialog] = useState(false);
     const { can } = usePermission();
 
     const approveForm = useForm({ review_notes: '' });
@@ -83,6 +112,12 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
     const tlApproveForm = useForm({ tl_review_notes: '' });
     const tlDenyForm = useForm({ tl_review_notes: '' });
     const forceApproveForm = useForm({ review_notes: '' });
+    const adminCancelForm = useForm({ cancellation_reason: '' });
+    const adjustForWorkForm = useForm({
+        work_date: '',
+        adjustment_type: 'end_early' as 'end_early' | 'start_late' | 'remove_day',
+        notes: ''
+    });
 
     // Check if Admin/HR has approved
     const isAdminApproved = !!leaveRequest.admin_approved_at;
@@ -150,6 +185,42 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                 },
             }
         );
+    };
+
+    const handleAdminCancel = () => {
+        adminCancelForm.post(leaveCancelRoute(leaveRequest.id).url, {
+            onSuccess: () => {
+                setShowAdminCancelDialog(false);
+                toast.success('Approved leave request cancelled. Credits have been restored.');
+            },
+            onError: () => {
+                toast.error('Failed to cancel leave request');
+            },
+        });
+    };
+
+    const handleAdjustForWork = () => {
+        adjustForWorkForm.post(`/form-requests/leave-requests/${leaveRequest.id}/adjust-for-work`, {
+            onSuccess: () => {
+                setShowAdjustForWorkDialog(false);
+                adjustForWorkForm.reset();
+                toast.success('Leave adjusted successfully. Credits have been restored for the work day.');
+            },
+            onError: (errors) => {
+                toast.error(errors.error || 'Failed to adjust leave');
+            },
+        });
+    };
+
+    // Get list of dates in leave period for the adjust dialog
+    const getLeaveDates = () => {
+        try {
+            const start = parseISO(leaveRequest.start_date);
+            const end = parseISO(leaveRequest.end_date);
+            return eachDayOfInterval({ start, end }).filter(date => !isWeekend(date));
+        } catch {
+            return [];
+        }
     };
 
     const handleDelete = () => {
@@ -239,6 +310,37 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                                 <CheckCircle className="mr-1 h-3 w-3" />
                                 You've Approved
                             </Badge>
+                        )}
+                        {/* Admin Actions for Approved Leaves */}
+                        {canEditApproved && leaveRequest.status === 'approved' && (
+                            <>
+                                <Link href={leaveEditRoute({ leaveRequest: leaveRequest.id }).url}>
+                                    <Button variant="outline" size="sm">
+                                        <Edit className="mr-1 h-4 w-4" />
+                                        <span className="hidden sm:inline">Edit Dates</span>
+                                    </Button>
+                                </Link>
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                                    onClick={() => setShowAdjustForWorkDialog(true)}
+                                >
+                                    <Calendar className="mr-1 h-4 w-4" />
+                                    <span className="hidden sm:inline">Adjust for Work</span>
+                                </Button>
+                            </>
+                        )}
+                        {canAdminCancel && leaveRequest.status === 'approved' && (
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                className="border-red-300 text-red-700 hover:bg-red-50"
+                                onClick={() => setShowAdminCancelDialog(true)}
+                            >
+                                <Ban className="mr-1 h-4 w-4" />
+                                <span className="hidden sm:inline">Cancel Approved</span>
+                            </Button>
                         )}
                         {canCancel && leaveRequest.status === 'pending' && (
                             <Can permission="leave.cancel">
@@ -357,6 +459,58 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                                 <AlertDescription className="break-words whitespace-pre-wrap">{leaveRequest.reason}</AlertDescription>
                             </Alert>
                         </div>
+
+                        {/* Short Notice Override Info */}
+                        {leaveRequest.short_notice_override && (
+                            <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                <Shield className="h-4 w-4 text-blue-600" />
+                                <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                    <strong>Short Notice Override:</strong> The 2-week advance notice requirement was overridden
+                                    {leaveRequest.short_notice_overrider && (
+                                        <span> by {leaveRequest.short_notice_overrider.name}</span>
+                                    )}.
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* Date Modification History */}
+                        {leaveRequest.original_start_date && leaveRequest.original_end_date && (
+                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <strong>Dates Modified:</strong> Original dates were{' '}
+                                    {format(parseISO(leaveRequest.original_start_date), 'MMM d, yyyy')} to{' '}
+                                    {format(parseISO(leaveRequest.original_end_date), 'MMM d, yyyy')}
+                                    {leaveRequest.date_modifier && (
+                                        <span>. Modified by {leaveRequest.date_modifier.name}</span>
+                                    )}
+                                    {leaveRequest.date_modification_reason && (
+                                        <p className="mt-1 text-sm">Reason: {leaveRequest.date_modification_reason}</p>
+                                    )}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* Cancellation Info */}
+                        {leaveRequest.status === 'cancelled' && (
+                            <Alert className="border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900">
+                                <Ban className="h-4 w-4 text-gray-600" />
+                                <AlertDescription className="text-gray-800 dark:text-gray-200">
+                                    {leaveRequest.auto_cancelled ? (
+                                        <>
+                                            <strong>Auto-Cancelled:</strong> {leaveRequest.auto_cancelled_reason}
+                                        </>
+                                    ) : leaveRequest.canceller ? (
+                                        <>
+                                            <strong>Cancelled by {leaveRequest.canceller.name}:</strong>{' '}
+                                            {leaveRequest.cancellation_reason || 'No reason provided'}
+                                        </>
+                                    ) : (
+                                        <strong>Cancelled by user</strong>
+                                    )}
+                                </AlertDescription>
+                            </Alert>
+                        )}
 
                         {/* TL Approval Status (for requests requiring TL approval) */}
                         {leaveRequest.requires_tl_approval && leaveRequest.status === 'pending' && !leaveRequest.tl_rejected && (
@@ -738,6 +892,58 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                 </DialogContent>
             </Dialog>
 
+            {/* Admin Cancel Approved Leave Dialog */}
+            <Dialog open={showAdminCancelDialog} onOpenChange={setShowAdminCancelDialog}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-red-600" />
+                            Cancel Approved Leave Request
+                        </DialogTitle>
+                        <DialogDescription>
+                            You are about to cancel an approved leave request. This will restore the employee's leave credits and delete any associated attendance records.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                            <ul className="list-disc list-inside text-sm space-y-1">
+                                <li>Leave credits ({leaveRequest.days_requested} days) will be restored</li>
+                                <li>Attendance records for leave dates will be deleted</li>
+                                <li>The employee will be notified of this cancellation</li>
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                    <div className="space-y-4">
+                        <div className="space-y-2">
+                            <Label htmlFor="cancellation_reason">Reason for Cancellation <span className="text-red-500">*</span></Label>
+                            <Textarea
+                                id="cancellation_reason"
+                                value={adminCancelForm.data.cancellation_reason}
+                                onChange={(e) => adminCancelForm.setData('cancellation_reason', e.target.value)}
+                                placeholder="Please provide a reason for cancelling this approved leave..."
+                                rows={3}
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                This reason will be recorded in the audit log and sent to the employee.
+                            </p>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowAdminCancelDialog(false)}>
+                            Keep Approved
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={handleAdminCancel}
+                            disabled={adminCancelForm.processing || !adminCancelForm.data.cancellation_reason.trim()}
+                        >
+                            Cancel Approved Leave
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             {/* Delete Dialog */}
             <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
                 <DialogContent>
@@ -798,6 +1004,105 @@ export default function Show({ leaveRequest, isAdmin, canCancel, hasUserApproved
                         >
                             <Shield className="mr-1 h-4 w-4" />
                             Force Approve
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Adjust for Work Day Dialog */}
+            <Dialog open={showAdjustForWorkDialog} onOpenChange={setShowAdjustForWorkDialog}>
+                <DialogContent className="max-w-md">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Calendar className="h-5 w-5 text-blue-600" />
+                            Adjust Leave for Work Day
+                        </DialogTitle>
+                        <DialogDescription>
+                            Adjust this leave when the employee reported to work on one of the leave days. Credits will be restored for the adjusted days.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                            <Info className="h-4 w-4 text-blue-600" />
+                            <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                Current leave: {format(parseISO(leaveRequest.start_date), 'MMM d')} - {format(parseISO(leaveRequest.end_date), 'MMM d, yyyy')} ({leaveRequest.days_requested} days)
+                            </AlertDescription>
+                        </Alert>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="work_date">Date Employee Reported to Work</Label>
+                            <Select
+                                value={adjustForWorkForm.data.work_date}
+                                onValueChange={(value) => adjustForWorkForm.setData('work_date', value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select the work date" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {getLeaveDates().map((date) => (
+                                        <SelectItem key={date.toISOString()} value={format(date, 'yyyy-MM-dd')}>
+                                            {format(date, 'EEEE, MMM d, yyyy')}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="adjustment_type">How to Adjust Leave</Label>
+                            <Select
+                                value={adjustForWorkForm.data.adjustment_type}
+                                onValueChange={(value: 'end_early' | 'start_late' | 'remove_day') =>
+                                    adjustForWorkForm.setData('adjustment_type', value)
+                                }
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Select adjustment type" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="end_early">
+                                        End leave early (reported on work date, worked remaining days)
+                                    </SelectItem>
+                                    <SelectItem value="start_late">
+                                        Start leave later (reported on work date, on leave after)
+                                    </SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                {adjustForWorkForm.data.adjustment_type === 'end_early'
+                                    ? 'Leave will end the day before the work date. Days after will be restored.'
+                                    : 'Leave will start the day after the work date. Days before will be restored.'
+                                }
+                            </p>
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label htmlFor="notes">Notes (Optional)</Label>
+                            <Textarea
+                                id="notes"
+                                value={adjustForWorkForm.data.notes}
+                                onChange={(e) => adjustForWorkForm.setData('notes', e.target.value)}
+                                placeholder="Add any notes about this adjustment..."
+                                rows={2}
+                            />
+                        </div>
+                    </div>
+
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => {
+                            setShowAdjustForWorkDialog(false);
+                            adjustForWorkForm.reset();
+                        }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleAdjustForWork}
+                            disabled={adjustForWorkForm.processing || !adjustForWorkForm.data.work_date}
+                            className="bg-blue-600 hover:bg-blue-700"
+                        >
+                            <Calendar className="mr-1 h-4 w-4" />
+                            Adjust Leave
                         </Button>
                     </DialogFooter>
                 </DialogContent>

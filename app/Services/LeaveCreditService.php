@@ -288,6 +288,73 @@ class LeaveCreditService
     }
 
     /**
+     * Restore partial leave credits when leave is shortened (e.g., employee reported on last day).
+     *
+     * @param LeaveRequest $leaveRequest The leave request being adjusted
+     * @param float $daysToRestore Number of days to restore
+     * @param string $reason Reason for the restoration
+     * @return bool
+     */
+    public function restorePartialCredits(LeaveRequest $leaveRequest, float $daysToRestore, string $reason = ''): bool
+    {
+        if (!$leaveRequest->credits_deducted || !$leaveRequest->credits_year || $daysToRestore <= 0) {
+            return true; // Nothing to restore
+        }
+
+        // Don't restore more than was deducted
+        $daysToRestore = min($daysToRestore, $leaveRequest->credits_deducted);
+
+        $year = $leaveRequest->credits_year;
+
+        // Get all credit records for this year ordered by month (ascending)
+        $credits = LeaveCredit::forUser($leaveRequest->user_id)
+            ->forYear($year)
+            ->orderBy('month')
+            ->get();
+
+        $remainingToRestore = $daysToRestore;
+
+        DB::beginTransaction();
+        try {
+            foreach ($credits as $credit) {
+                if ($remainingToRestore <= 0) {
+                    break;
+                }
+
+                $usedInThisMonth = $credit->credits_used;
+                $restoreToThisMonth = min($remainingToRestore, $usedInThisMonth);
+
+                if ($restoreToThisMonth > 0) {
+                    $credit->credits_used -= $restoreToThisMonth;
+                    $credit->credits_balance += $restoreToThisMonth;
+                    $credit->save();
+
+                    $remainingToRestore -= $restoreToThisMonth;
+
+                    \Log::info('Partial credits restored', [
+                        'leave_request_id' => $leaveRequest->id,
+                        'user_id' => $leaveRequest->user_id,
+                        'month' => $credit->month,
+                        'year' => $credit->year,
+                        'restored' => $restoreToThisMonth,
+                        'reason' => $reason,
+                    ]);
+                }
+            }
+
+            DB::commit();
+            return true;
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Failed to restore partial credits', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+            return false;
+        }
+    }
+
+    /**
      * Get total attendance points for a user.
      */
     public function getAttendancePoints(User $user): float
@@ -355,6 +422,10 @@ class LeaveCreditService
      * Validate if a leave request can be submitted based on all business rules.
      * Note: Sick Leave (SL) can be submitted without credits - credits are only deducted
      * if employee is eligible, has sufficient balance, AND submits a medical certificate.
+     *
+     * @param User $user
+     * @param array $data Request data including 'short_notice_override' flag
+     * @return array
      */
     public function validateLeaveRequest(User $user, array $data): array
     {
@@ -363,6 +434,9 @@ class LeaveCreditService
         $startDate = Carbon::parse($data['start_date']);
         $endDate = Carbon::parse($data['end_date']);
         $year = $data['credits_year'] ?? now()->year;
+
+        // Check if short notice override is enabled (Admin/Super Admin bypassing 2-week rule)
+        $shortNoticeOverride = $data['short_notice_override'] ?? false;
 
         // Check eligibility (6 months rule) for VL and BL only (SL can proceed without eligibility)
         if (in_array($leaveType, ['VL', 'BL'])) {
@@ -373,7 +447,8 @@ class LeaveCreditService
         }
 
         // Check 2-week advance notice for VL and BL only (SL is unpredictable)
-        if (in_array($leaveType, ['VL', 'BL'])) {
+        // Skip this check if short notice override is enabled
+        if (in_array($leaveType, ['VL', 'BL']) && !$shortNoticeOverride) {
             $twoWeeksFromNow = now()->addWeeks(2)->startOfDay();
             if ($startDate->startOfDay()->lt($twoWeeksFromNow)) {
                 $errors[] = "Leave requests must be submitted at least 2 weeks in advance. Earliest date you can apply for is {$twoWeeksFromNow->format('F j, Y')}.";
@@ -423,6 +498,21 @@ class LeaveCreditService
             'valid' => empty($errors),
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Check if a leave request requires short notice (less than 2 weeks advance).
+     * Used to determine if override button should be shown to Admin/Super Admin.
+     */
+    public function requiresShortNoticeOverride(string $leaveType, Carbon $startDate): bool
+    {
+        // Only VL and BL require 2-week notice
+        if (!in_array($leaveType, ['VL', 'BL'])) {
+            return false;
+        }
+
+        $twoWeeksFromNow = now()->addWeeks(2)->startOfDay();
+        return $startDate->startOfDay()->lt($twoWeeksFromNow);
     }
 
     /**

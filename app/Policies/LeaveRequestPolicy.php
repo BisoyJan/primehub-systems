@@ -63,7 +63,15 @@ class LeaveRequestPolicy
      */
     public function update(User $user, LeaveRequest $leaveRequest): bool
     {
-        // Only pending requests can be updated
+        // Super Admin and Admin can update approved leaves (for date changes)
+        if (in_array($user->role, ['Super Admin', 'Admin'])) {
+            // Can update pending or approved leaves
+            if (in_array($leaveRequest->status, ['pending', 'approved'])) {
+                return $this->permissionService->userHasPermission($user, 'leave.edit');
+            }
+        }
+
+        // For non-admins, only pending requests can be updated
         if ($leaveRequest->status !== 'pending') {
             return false;
         }
@@ -73,13 +81,34 @@ class LeaveRequestPolicy
             return true;
         }
 
-        // Admins/HR with edit permission can update any pending request
+        // HR with edit permission can update any pending request
         if ($this->permissionService->userHasPermission($user, 'leave.edit') &&
-            in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+            $user->role === 'HR') {
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Determine whether the user can update approved leave dates.
+     * Only Super Admin and Admin can do this.
+     */
+    public function updateApproved(User $user, LeaveRequest $leaveRequest): bool
+    {
+        // Only approved leaves can have their dates changed
+        if ($leaveRequest->status !== 'approved') {
+            return false;
+        }
+
+        // Cannot update if the leave end date has already passed
+        if ($leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast()) {
+            return false;
+        }
+
+        // Only Super Admin and Admin can update approved leaves
+        return in_array($user->role, ['Super Admin', 'Admin']) &&
+               $this->permissionService->userHasPermission($user, 'leave.edit');
     }
 
     /**
@@ -132,23 +161,56 @@ class LeaveRequestPolicy
      */
     public function cancel(User $user, LeaveRequest $leaveRequest): bool
     {
-        // Only pending requests can be cancelled
-        if ($leaveRequest->status !== 'pending') {
+        // Cannot cancel if the leave end date has already passed
+        if ($leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast()) {
             return false;
         }
 
-        // Users can cancel their own pending requests if they have permission
-        if ($leaveRequest->user_id === $user->id) {
-            return $this->permissionService->userHasPermission($user, 'leave.cancel');
+        // Super Admin and Admin can cancel ANY pending or approved request
+        if (in_array($user->role, ['Super Admin', 'Admin'])) {
+            if (in_array($leaveRequest->status, ['pending', 'approved'])) {
+                return $this->permissionService->userHasPermission($user, 'leave.cancel');
+            }
         }
 
-        // Admins/HR with cancel permission can cancel any pending request
-        if ($this->permissionService->userHasPermission($user, 'leave.cancel') &&
-            in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+        // For employees: Only pending requests can be cancelled directly
+        // For approved requests, only if start date is in the future
+        if ($leaveRequest->status === 'pending') {
+            // Users can cancel their own pending requests if they have permission
+            if ($leaveRequest->user_id === $user->id) {
+                return $this->permissionService->userHasPermission($user, 'leave.cancel');
+            }
+        }
+
+        // HR with cancel permission can cancel any pending request
+        if ($leaveRequest->status === 'pending' &&
+            $this->permissionService->userHasPermission($user, 'leave.cancel') &&
+            $user->role === 'HR') {
             return true;
         }
 
         return false;
+    }
+
+    /**
+     * Determine whether the user can cancel an approved leave request.
+     * Only Super Admin and Admin can cancel approved leaves.
+     */
+    public function cancelApproved(User $user, LeaveRequest $leaveRequest): bool
+    {
+        // Only approved leaves can be cancelled with this method
+        if ($leaveRequest->status !== 'approved') {
+            return false;
+        }
+
+        // Cannot cancel if the leave end date has already passed
+        if ($leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast()) {
+            return false;
+        }
+
+        // Only Super Admin and Admin can cancel approved leaves
+        return in_array($user->role, ['Super Admin', 'Admin']) &&
+               $this->permissionService->userHasPermission($user, 'leave.cancel');
     }
 
     /**

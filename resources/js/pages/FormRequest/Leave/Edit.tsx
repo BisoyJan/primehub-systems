@@ -18,7 +18,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, AlertTriangle } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { show as leaveShowRoute, update as leaveUpdateRoute } from '@/routes/leave-requests';
 
@@ -33,10 +33,19 @@ interface LeaveRequest {
     campaign_department: string;
     medical_cert_submitted: boolean;
     status: string;
+    short_notice_override?: boolean;
+    original_start_date?: string;
+    original_end_date?: string;
+    date_modified_by?: number;
+    date_modification_reason?: string;
     user: {
         id: number;
         name: string;
         email: string;
+    };
+    dateModifier?: {
+        id: number;
+        name: string;
     };
 }
 
@@ -68,6 +77,9 @@ interface Props {
     nextEligibleLeaveDate: string | null;
     campaigns: string[];
     twoWeeksFromNow: string;
+    isAdmin: boolean;
+    isApprovedLeave: boolean;
+    canOverrideShortNotice: boolean;
 }
 
 export default function Edit({
@@ -79,6 +91,9 @@ export default function Edit({
     nextEligibleLeaveDate,
     campaigns,
     twoWeeksFromNow,
+    isAdmin = false,
+    isApprovedLeave = false,
+    canOverrideShortNotice = false,
 }: Props) {
     const { data, setData, put, processing, errors } = useForm({
         leave_type: leaveRequest.leave_type,
@@ -87,12 +102,21 @@ export default function Edit({
         reason: leaveRequest.reason,
         campaign_department: leaveRequest.campaign_department,
         medical_cert_submitted: leaveRequest.medical_cert_submitted,
+        date_modification_reason: '',
+        short_notice_override: leaveRequest.short_notice_override || false,
     });
 
     const [calculatedDays, setCalculatedDays] = useState<number>(leaveRequest.days_requested);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
+
+    // Track if dates have changed for approved leaves
+    const datesChanged = isApprovedLeave && (
+        data.start_date !== leaveRequest.start_date ||
+        data.end_date !== leaveRequest.end_date
+    );
 
     // Helper function to check if a date is a weekend
     const isWeekend = (dateString: string): boolean => {
@@ -172,6 +196,7 @@ export default function Edit({
     // Real-time validation warnings
     useEffect(() => {
         const warnings: string[] = [];
+        let shortNotice: string | null = null;
 
         // Check eligibility (skip for SL - allow without credits)
         if (!creditsSummary.is_eligible && ['VL', 'BL'].includes(data.leave_type)) {
@@ -184,15 +209,19 @@ export default function Edit({
         }
 
         // Check 2-week notice (only for VL and BL, not SL as it's unpredictable)
+        // Track separately for override capability
         if (data.start_date && ['VL', 'BL'].includes(data.leave_type)) {
             const start = new Date(data.start_date);
             start.setHours(0, 0, 0, 0);
             const twoWeeks = new Date(twoWeeksFromNow);
             twoWeeks.setHours(0, 0, 0, 0);
             if (start.getTime() < twoWeeks.getTime()) {
-                warnings.push(
-                    `Leave must be requested at least 2 weeks in advance. Earliest date: ${format(twoWeeks, 'MMMM d, yyyy')}`
-                );
+                const warningMsg = `Leave must be requested at least 2 weeks in advance. Earliest date: ${format(twoWeeks, 'MMMM d, yyyy')}`;
+                // Only add to warnings if not overridden
+                if (!data.short_notice_override) {
+                    warnings.push(warningMsg);
+                }
+                shortNotice = warningMsg;
             }
         }
 
@@ -220,9 +249,11 @@ export default function Edit({
         }
 
         setValidationWarnings(warnings);
+        setShortNoticeWarning(shortNotice);
     }, [
         data.leave_type,
         data.start_date,
+        data.short_notice_override,
         creditsSummary,
         attendancePoints,
         hasRecentAbsence,
@@ -281,15 +312,33 @@ export default function Edit({
         ? Math.max(0, creditsSummary.balance - calculatedDays)
         : creditsSummary.balance;
 
+    // Status badge variant
+    const getStatusBadge = (status: string) => {
+        const variants: Record<string, string> = {
+            pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+            approved: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+            denied: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
+            cancelled: 'bg-gray-100 text-gray-800 dark:bg-gray-900 dark:text-gray-200',
+        };
+        return variants[status] || variants.pending;
+    };
+
     return (
         <AppLayout>
             <Head title="Edit Leave Request" />
 
             <div className="container mx-auto px-4 py-8 max-w-4xl">
                 <div className="mb-6">
-                    <h1 className="text-3xl font-bold">Edit Leave Request</h1>
+                    <div className="flex items-center gap-3 mb-2">
+                        <h1 className="text-3xl font-bold">Edit Leave Request</h1>
+                        <Badge className={getStatusBadge(leaveRequest.status)}>
+                            {leaveRequest.status.charAt(0).toUpperCase() + leaveRequest.status.slice(1)}
+                        </Badge>
+                    </div>
                     <p className="text-muted-foreground mt-2">
-                        Update your pending leave request
+                        {isApprovedLeave
+                            ? 'Modify approved leave request dates (Admin only)'
+                            : 'Update your pending leave request'}
                     </p>
                     {leaveRequest.user && (
                         <p className="text-sm text-muted-foreground mt-1">
@@ -297,6 +346,47 @@ export default function Edit({
                         </p>
                     )}
                 </div>
+
+                {/* Approved Leave Edit Notice */}
+                {isApprovedLeave && isAdmin && (
+                    <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                        <Info className="h-4 w-4 text-blue-600" />
+                        <AlertTitle className="text-blue-800 dark:text-blue-200">Editing Approved Leave</AlertTitle>
+                        <AlertDescription className="text-blue-700 dark:text-blue-300">
+                            <p>As Admin/Super Admin, you can modify the dates of this approved leave request.</p>
+                            <ul className="list-disc list-inside mt-2 text-sm">
+                                <li>Changing dates will update associated attendance records</li>
+                                <li>Leave credits will be adjusted automatically based on day difference</li>
+                                <li>The employee will be notified of the changes</li>
+                                <li>You must provide a reason for the date change</li>
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Original Dates Display (if previously modified) */}
+                {leaveRequest.original_start_date && leaveRequest.original_end_date && (
+                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-800 dark:text-amber-200">Previously Modified</AlertTitle>
+                        <AlertDescription className="text-amber-700 dark:text-amber-300">
+                            <p className="mb-2">
+                                Original dates: <strong>{format(parseISO(leaveRequest.original_start_date), 'MMM d, yyyy')}</strong> to{' '}
+                                <strong>{format(parseISO(leaveRequest.original_end_date), 'MMM d, yyyy')}</strong>
+                            </p>
+                            {leaveRequest.date_modification_reason && (
+                                <p className="text-sm">
+                                    Reason: {leaveRequest.date_modification_reason}
+                                </p>
+                            )}
+                            {leaveRequest.dateModifier && (
+                                <p className="text-sm">
+                                    Modified by: {leaveRequest.dateModifier.name}
+                                </p>
+                            )}
+                        </AlertDescription>
+                    </Alert>
+                )}
 
                 {/* Leave Credits Summary */}
                 {creditsSummary.is_eligible && (
@@ -446,6 +536,49 @@ export default function Edit({
                                     <li key={idx}>{warning}</li>
                                 ))}
                             </ul>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Short Notice Override Option (Admin/Super Admin Only) */}
+                {canOverrideShortNotice && shortNoticeWarning && !data.short_notice_override && (
+                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-800 dark:text-amber-200">Short Notice Leave Request</AlertTitle>
+                        <AlertDescription className="text-amber-700 dark:text-amber-300">
+                            <p className="mb-3">{shortNoticeWarning}</p>
+                            <p className="mb-3 text-sm">As Admin/Super Admin, you can override this requirement.</p>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900"
+                                onClick={() => setData('short_notice_override', true)}
+                            >
+                                Override 2-Week Notice Requirement
+                            </Button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Short Notice Override Active */}
+                {data.short_notice_override && (
+                    <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                        <Check className="h-4 w-4 text-blue-600" />
+                        <AlertTitle className="text-blue-800 dark:text-blue-200">Short Notice Override Active</AlertTitle>
+                        <AlertDescription className="text-blue-700 dark:text-blue-300">
+                            <p className="mb-2">The 2-week advance notice requirement has been overridden by Admin.</p>
+                            {canOverrideShortNotice && (
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 p-0 h-auto"
+                                    onClick={() => setData('short_notice_override', false)}
+                                >
+                                    Remove Override
+                                </Button>
+                            )}
                         </AlertDescription>
                     </Alert>
                 )}
@@ -627,12 +760,36 @@ export default function Edit({
                                     placeholder="Please provide a detailed reason for your leave request..."
                                     rows={4}
                                     className="resize-none"
+                                    disabled={isApprovedLeave}
                                 />
                                 {errors.reason && <p className="text-sm text-red-500">{errors.reason}</p>}
                                 <p className="text-xs text-muted-foreground">
                                     {data.reason.length}/1000 characters (minimum 10)
                                 </p>
                             </div>
+
+                            {/* Date Modification Reason (Required for approved leave date changes) */}
+                            {isApprovedLeave && datesChanged && (
+                                <div className="space-y-2">
+                                    <Label htmlFor="date_modification_reason">
+                                        Reason for Date Change <span className="text-red-500">*</span>
+                                    </Label>
+                                    <Textarea
+                                        id="date_modification_reason"
+                                        value={data.date_modification_reason}
+                                        onChange={(e) => setData('date_modification_reason', e.target.value)}
+                                        placeholder="Please explain why the leave dates need to be changed..."
+                                        rows={3}
+                                        className="resize-none"
+                                    />
+                                    {errors.date_modification_reason && (
+                                        <p className="text-sm text-red-500">{errors.date_modification_reason}</p>
+                                    )}
+                                    <p className="text-xs text-muted-foreground">
+                                        This reason will be recorded in the audit log and sent to the employee.
+                                    </p>
+                                </div>
+                            )}
 
                             {/* Form Errors */}
                             {(errors as Record<string, string | string[]>).validation && (
@@ -665,8 +822,17 @@ export default function Edit({
 
                             {/* Submit Button */}
                             <div className="flex flex-col sm:flex-row gap-4">
-                                <Button type="submit" disabled={processing || validationWarnings.length > 0 || !!weekendError.start || !!weekendError.end}>
-                                    {processing ? 'Updating...' : 'Update Leave Request'}
+                                <Button
+                                    type="submit"
+                                    disabled={
+                                        processing ||
+                                        (!isApprovedLeave && validationWarnings.length > 0) ||
+                                        !!weekendError.start ||
+                                        !!weekendError.end ||
+                                        (isApprovedLeave && datesChanged && !data.date_modification_reason.trim())
+                                    }
+                                >
+                                    {processing ? 'Updating...' : isApprovedLeave ? 'Update Approved Leave' : 'Update Leave Request'}
                                 </Button>
                                 <Button
                                     type="button"

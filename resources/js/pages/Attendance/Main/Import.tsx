@@ -4,6 +4,7 @@ import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -128,16 +129,27 @@ export default function AttendanceImport() {
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        if (files.length === 0) return;
+        console.log('handleSubmit triggered');
+        console.log('Files:', files);
+        console.log('Date range:', dateFrom, 'to', dateTo);
+
+        if (files.length === 0) {
+            console.log('No files selected');
+            return;
+        }
 
         // Validate all files have sites assigned
         const unassignedFiles = files.filter(f => !f.biometric_site_id);
         if (unassignedFiles.length > 0) {
+            console.log('Unassigned files:', unassignedFiles);
             alert("Please assign a site to all files before uploading.");
             return;
         }
 
         setIsUploading(true);
+
+        let allSuccessful = true;
+        const successMessages: string[] = [];
 
         // Upload files sequentially
         for (const fileItem of files) {
@@ -148,22 +160,55 @@ export default function AttendanceImport() {
             formData.append('biometric_site_id', fileItem.biometric_site_id.toString());
             formData.append('notes', notes);
 
+            console.log('Uploading file:', fileItem.file.name, 'to URL:', attendanceUpload().url);
+
             try {
-                await fetch(attendanceUpload().url, {
+                const response = await fetch(attendanceUpload().url, {
                     method: 'POST',
                     body: formData,
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'Accept': 'application/json',
                     },
                 });
+
+                console.log('Response status:', response.status);
+
+                if (!response.ok) {
+                    allSuccessful = false;
+                    const errorData = await response.json().catch(() => ({}));
+                    console.error(`Error uploading ${fileItem.file.name}:`, errorData);
+                    toast.error(`Failed to upload ${fileItem.file.name}`, {
+                        description: errorData.message || response.statusText
+                    });
+                } else {
+                    const successData = await response.json();
+                    console.log('Upload successful for:', fileItem.file.name, successData);
+                    successMessages.push(successData.message || `${fileItem.file.name} uploaded successfully`);
+                }
             } catch (error) {
+                allSuccessful = false;
                 console.error(`Error uploading ${fileItem.file.name}:`, error);
+                toast.error(`Network error uploading ${fileItem.file.name}`);
             }
         }
 
         setIsUploading(false);
         setFiles([]);
         setNotes("");
+
+        // Show success messages
+        if (allSuccessful && successMessages.length > 0) {
+            successMessages.forEach((msg, index) => {
+                // Delay each toast slightly to show them in sequence
+                setTimeout(() => {
+                    toast.success('Attendance file processed', {
+                        description: msg,
+                        duration: 5000,
+                    });
+                }, index * 100);
+            });
+        }
 
         // Reload page to show updated uploads
         router.reload();
@@ -314,7 +359,6 @@ export default function AttendanceImport() {
                                                 type="date"
                                                 value={dateFrom}
                                                 onChange={e => setDateFrom(e.target.value)}
-                                                max={new Date().toISOString().split("T")[0]}
                                             />
                                         </div>
                                         <div>
@@ -327,7 +371,6 @@ export default function AttendanceImport() {
                                                 value={dateTo}
                                                 onChange={e => setDateTo(e.target.value)}
                                                 min={dateFrom}
-                                                max={new Date().toISOString().split("T")[0]}
                                             />
                                         </div>
                                     </div>

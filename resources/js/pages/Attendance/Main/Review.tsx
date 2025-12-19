@@ -41,15 +41,8 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command";
-import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Edit, Search, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Edit, Search, UserCheck, X } from "lucide-react";
 import { TimeInput } from "@/components/ui/time-input";
-
-interface User {
-    id: number;
-    first_name: string;
-    last_name: string;
-    name: string;
-}
 
 interface Site {
     id: number;
@@ -65,10 +58,29 @@ interface EmployeeSchedule {
     site?: Site;
 }
 
+interface User {
+    id: number;
+    first_name: string;
+    last_name: string;
+    name: string;
+    active_schedule?: EmployeeSchedule; // User's active schedule as fallback
+}
+
+interface LeaveRequest {
+    id: number;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    status: string;
+    days_requested: number;
+}
+
 interface AttendanceRecord {
     id: number;
     user: User;
     employee_schedule?: EmployeeSchedule;
+    leave_request?: LeaveRequest;
+    leave_request_id?: number;
     shift_date: string;
     actual_time_in?: string;
     actual_time_out?: string;
@@ -358,25 +370,26 @@ export default function AttendanceReview() {
     const [highlightedRecordId, setHighlightedRecordId] = useState<number | null>(null);
     const highlightedRowRef = React.useRef<HTMLTableRowElement | HTMLDivElement>(null);
     const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-    const [selectedNote, setSelectedNote] = useState<string>("");
+    const [selectedNoteRecord, setSelectedNoteRecord] = useState<AttendanceRecord | null>(null);
 
-    // Helper to display notes - truncate if longer than 10 characters
-    const NotesDisplay = ({ notes }: { notes: string | undefined }) => {
-        if (!notes) return <span className="text-muted-foreground">-</span>;
+    // Helper to display notes - show dialog with both notes and verification notes
+    const NotesDisplay = ({ record }: { record: AttendanceRecord }) => {
+        const hasNotes = record.notes || record.verification_notes;
+        
+        if (!hasNotes) return <span className="text-muted-foreground">-</span>;
 
-        if (notes.length <= 10) {
-            return <span className="text-sm">{notes}</span>;
-        }
+        // Combine for preview
+        const preview = record.notes || record.verification_notes || '';
 
         return (
             <button
                 onClick={() => {
-                    setSelectedNote(notes);
+                    setSelectedNoteRecord(record);
                     setNoteDialogOpen(true);
                 }}
                 className="text-sm text-primary hover:underline cursor-pointer text-left"
             >
-                {notes.substring(0, 10)}...
+                {preview.length > 10 ? `${preview.substring(0, 10)}...` : preview}
             </button>
         );
     };
@@ -472,9 +485,12 @@ export default function AttendanceReview() {
         const timeIn = toLocalDateTimeString(record.actual_time_in);
         const timeOut = toLocalDateTimeString(record.actual_time_out);
 
+        // Use attendance's schedule or fallback to user's active schedule
+        const schedule = record.employee_schedule || record.user?.active_schedule;
+
         // Calculate suggested status based on times and schedule
         const suggestion = calculateSuggestedStatus(
-            record.employee_schedule,
+            schedule,
             record.shift_date,
             timeIn,
             timeOut
@@ -498,8 +514,11 @@ export default function AttendanceReview() {
     const recalculateSuggestedStatus = (timeIn: string, timeOut: string) => {
         if (!selectedRecord) return;
 
+        // Use attendance's schedule or fallback to user's active schedule
+        const schedule = selectedRecord.employee_schedule || selectedRecord.user?.active_schedule;
+
         const suggestion = calculateSuggestedStatus(
-            selectedRecord.employee_schedule,
+            schedule,
             selectedRecord.shift_date,
             timeIn,
             timeOut
@@ -599,6 +618,32 @@ export default function AttendanceReview() {
         if (!selectedRecord) return;
 
         post(`/attendance/${selectedRecord.id}/verify`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsDialogOpen(false);
+                reset();
+                setSelectedRecord(null);
+            },
+        });
+    };
+
+    // Handle "Flag as Reported" - directly submit with on_time status
+    const handleFlagAsReported = () => {
+        if (!selectedRecord) return;
+
+        const verificationNote = data.verification_notes
+            ? `${data.verification_notes}${data.verification_notes.endsWith('.') ? '' : '.'} Employee reported to office during approved leave.`
+            : 'Employee reported to office during approved leave.';
+
+        // Use router.post to submit directly with the modified data
+        router.post(`/attendance/${selectedRecord.id}/verify`, {
+            status: 'on_time',
+            actual_time_in: data.actual_time_in,
+            actual_time_out: data.actual_time_out,
+            notes: data.notes,
+            verification_notes: verificationNote,
+            overtime_approved: data.overtime_approved,
+        }, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsDialogOpen(false);
@@ -996,7 +1041,7 @@ export default function AttendanceReview() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <NotesDisplay notes={record.notes} />
+                                                    <NotesDisplay record={record} />
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="space-y-1">
@@ -1152,10 +1197,10 @@ export default function AttendanceReview() {
                                                 </div>
                                             </div>
                                         )}
-                                        {record.notes && (
+                                        {(record.notes || record.verification_notes) && (
                                             <div>
                                                 <span className="font-medium">Notes:</span>{" "}
-                                                <NotesDisplay notes={record.notes} />
+                                                <NotesDisplay record={record} />
                                             </div>
                                         )}
                                     </div>
@@ -1350,56 +1395,101 @@ export default function AttendanceReview() {
                     </DialogHeader>
 
                     <form onSubmit={handleVerify} className="space-y-4">
+                        {/* Leave Warning - Show detailed impact */}
+                        {selectedRecord?.leave_request && (
+                            <div className="bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 p-4 rounded-md">
+                                <div className="flex items-start gap-3">
+                                    <AlertCircle className="h-5 w-5 text-amber-600 flex-shrink-0 mt-0.5" />
+                                    <div className="flex-1">
+                                        <h4 className="font-semibold text-amber-800 dark:text-amber-200">
+                                            {selectedRecord.actual_time_in || selectedRecord.actual_time_out
+                                                ? "Employee Reported to Office During Leave"
+                                                : "Employee is on Approved Leave"}
+                                        </h4>
+                                        <p className="text-sm text-amber-700 dark:text-amber-300 mt-1">
+                                            {selectedRecord.leave_request.leave_type} Leave: {formatDate(selectedRecord.leave_request.start_date)} to {formatDate(selectedRecord.leave_request.end_date)} ({selectedRecord.leave_request.days_requested} day{selectedRecord.leave_request.days_requested !== 1 ? 's' : ''})
+                                        </p>
+                                        {(selectedRecord.actual_time_in || selectedRecord.actual_time_out) && (
+                                            <div className="mt-2 p-2 bg-amber-100 dark:bg-amber-900/50 rounded text-xs">
+                                                <p className="font-medium text-amber-800 dark:text-amber-200 mb-1">
+                                                    If you verify this as worked (not "On Leave"):
+                                                </p>
+                                                <ul className="list-disc list-inside text-amber-700 dark:text-amber-300 space-y-0.5">
+                                                    <li>Leave dates will be adjusted to exclude this day and any following days</li>
+                                                    <li>Unused leave credits will be automatically restored</li>
+                                                    <li>Employee will be notified of the change</li>
+                                                </ul>
+                                            </div>
+                                        )}
+                                        {!(selectedRecord.actual_time_in || selectedRecord.actual_time_out) && (
+                                            <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">
+                                                ⚠️ Changing status from "On Leave" will adjust or cancel the leave request and restore credits.
+                                            </p>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Current Info */}
-                        {selectedRecord && (
-                            <div className="bg-muted p-4 rounded-md space-y-2 text-sm">
-                                <h4 className="font-semibold">Current Information</h4>
-                                <div className="grid grid-cols-2 gap-2">
-                                    <div>
-                                        <span className="text-muted-foreground">Scheduled In:</span>{" "}
-                                        {formatTime(selectedRecord.employee_schedule?.scheduled_time_in) || "-"}
-                                    </div>
-                                    <div>
-                                        <span className="text-muted-foreground">Scheduled Out:</span>{" "}
-                                        {formatTime(selectedRecord.employee_schedule?.scheduled_time_out) || "-"}
-                                    </div>
-                                    <div>
-                                        <span className="text-muted-foreground">Assigned Site:</span>{" "}
-                                        {selectedRecord.employee_schedule?.site?.name || "-"}
-                                    </div>
-                                    <div>
-                                        <span className="text-muted-foreground">Grace Period:</span>{" "}
-                                        {selectedRecord.employee_schedule?.grace_period_minutes ?? 15} minutes
+                        {selectedRecord && (() => {
+                            // Use attendance's employee_schedule or fallback to user's active_schedule
+                            const schedule = selectedRecord.employee_schedule || selectedRecord.user?.active_schedule;
+                            return (
+                                <div className="bg-muted p-4 rounded-md space-y-2 text-sm">
+                                    <h4 className="font-semibold">Current Information</h4>
+                                    {!selectedRecord.employee_schedule && selectedRecord.user?.active_schedule && (
+                                        <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+                                            ⓘ Using employee's current active schedule (attendance record has no assigned schedule)
+                                        </p>
+                                    )}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <span className="text-muted-foreground">Scheduled In:</span>{" "}
+                                            {formatTime(schedule?.scheduled_time_in) || "-"}
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Scheduled Out:</span>{" "}
+                                            {formatTime(schedule?.scheduled_time_out) || "-"}
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Assigned Site:</span>{" "}
+                                            {schedule?.site?.name || "-"}
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Grace Period:</span>{" "}
+                                            {schedule?.grace_period_minutes ?? 15} minutes
+                                        </div>
+                                        {selectedRecord.is_cross_site_bio && (
+                                            <>
+                                                <div>
+                                                    <span className="text-muted-foreground">Bio In Site:</span>{" "}
+                                                    {selectedRecord.bio_in_site?.name || "-"}
+                                                </div>
+                                                <div>
+                                                    <span className="text-muted-foreground">Bio Out Site:</span>{" "}
+                                                    {selectedRecord.bio_out_site?.name || "-"}
+                                                </div>
+                                            </>
+                                        )}
+                                        {selectedRecord.notes && (
+                                            <div className="col-span-2">
+                                                <span className="text-muted-foreground">Current Notes:</span>{" "}
+                                                <span className="text-foreground">{selectedRecord.notes}</span>
+                                            </div>
+                                        )}
                                     </div>
                                     {selectedRecord.is_cross_site_bio && (
-                                        <>
-                                            <div>
-                                                <span className="text-muted-foreground">Bio In Site:</span>{" "}
-                                                {selectedRecord.bio_in_site?.name || "-"}
-                                            </div>
-                                            <div>
-                                                <span className="text-muted-foreground">Bio Out Site:</span>{" "}
-                                                {selectedRecord.bio_out_site?.name || "-"}
-                                            </div>
-                                        </>
-                                    )}
-                                    {selectedRecord.notes && (
-                                        <div className="col-span-2">
-                                            <span className="text-muted-foreground">Current Notes:</span>{" "}
-                                            <span className="text-foreground">{selectedRecord.notes}</span>
+                                        <div className="flex items-center gap-2 mt-2 text-orange-600">
+                                            <AlertCircle className="h-4 w-4" />
+                                            <span className="text-xs font-medium">
+                                                Cross-site biometric detected - employee bio'd at different location
+                                            </span>
                                         </div>
                                     )}
                                 </div>
-                                {selectedRecord.is_cross_site_bio && (
-                                    <div className="flex items-center gap-2 mt-2 text-orange-600">
-                                        <AlertCircle className="h-4 w-4" />
-                                        <span className="text-xs font-medium">
-                                            Cross-site biometric detected - employee bio'd at different location
-                                        </span>
-                                    </div>
-                                )}
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {/* Status */}
                         <div className="space-y-2">
@@ -1635,7 +1725,7 @@ export default function AttendanceReview() {
                             )}
                         </div>
 
-                        <DialogFooter>
+                        <DialogFooter className="flex-col sm:flex-row gap-2">
                             <Button
                                 type="button"
                                 variant="outline"
@@ -1644,9 +1734,22 @@ export default function AttendanceReview() {
                             >
                                 Cancel
                             </Button>
-                            <Button type="submit" disabled={processing}>
-                                {processing ? "Verifying..." : "Verify & Save"}
-                            </Button>
+                            {/* Show "Flag as Reported" for on_leave records with biometric data - this directly saves */}
+                            {selectedRecord?.status === 'on_leave' && selectedRecord?.leave_request && (selectedRecord?.actual_time_in || selectedRecord?.actual_time_out) ? (
+                                <Button
+                                    type="button"
+                                    onClick={handleFlagAsReported}
+                                    disabled={processing}
+                                    className="bg-orange-500 hover:bg-orange-600 text-white"
+                                >
+                                    <UserCheck className="h-4 w-4 mr-2" />
+                                    {processing ? "Saving..." : "Flag as Reported & Save"}
+                                </Button>
+                            ) : (
+                                <Button type="submit" disabled={processing}>
+                                    {processing ? "Verifying..." : "Verify & Save"}
+                                </Button>
+                            )}
                         </DialogFooter>
                     </form>
                 </DialogContent>
@@ -1747,11 +1850,34 @@ export default function AttendanceReview() {
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Attendance Notes</DialogTitle>
-                        <DialogDescription>Full notes for this attendance record</DialogDescription>
+                        <DialogDescription>
+                            {selectedNoteRecord && (
+                                <span>{selectedNoteRecord.user.name} - {formatDate(selectedNoteRecord.shift_date)}</span>
+                            )}
+                        </DialogDescription>
                     </DialogHeader>
-                    <div className="p-4 bg-muted rounded-md">
-                        <p className="text-sm whitespace-pre-wrap">{selectedNote}</p>
-                    </div>
+                    {selectedNoteRecord && (
+                        <div className="space-y-4">
+                            {/* Employee Notes */}
+                            <div>
+                                <h4 className="text-sm font-semibold mb-2">Employee Notes</h4>
+                                <div className="p-3 bg-muted rounded-md">
+                                    <p className="text-sm whitespace-pre-wrap">
+                                        {selectedNoteRecord.notes || <span className="text-muted-foreground italic">No notes</span>}
+                                    </p>
+                                </div>
+                            </div>
+                            {/* Admin Verification Notes */}
+                            <div>
+                                <h4 className="text-sm font-semibold mb-2">Admin Verification Notes</h4>
+                                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
+                                    <p className="text-sm whitespace-pre-wrap">
+                                        {selectedNoteRecord.verification_notes || <span className="text-muted-foreground italic">Not verified yet</span>}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </AppLayout>
