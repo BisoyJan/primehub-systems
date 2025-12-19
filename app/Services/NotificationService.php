@@ -169,10 +169,10 @@ class NotificationService
     /**
      * Send system message to all users.
      */
-    public function notifyAllUsers(string $title, string $message, ?array $data = null): void
+    public function notifyAllUsers(string $title, string $message, ?array $data = null, string $type = 'system'): void
     {
         $userIds = User::where('is_approved', true)->pluck('id')->toArray();
-        $this->createForMultipleUsers($userIds, 'system', $title, $message, $data);
+        $this->createForMultipleUsers($userIds, $type, $title, $message, $data);
     }
 
     /**

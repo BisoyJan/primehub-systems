@@ -43,6 +43,42 @@ Or send to all approved users:
 php artisan notification:test --all
 ```
 
+#### Option B: Send Custom Notifications via Command
+
+Use `notification:send` to send custom messages from the command line:
+
+**Interactive mode** (prompts for title and message):
+```bash
+php artisan notification:send
+```
+
+**Send to a specific user:**
+```bash
+php artisan notification:send 1 --title="Hello" --message="Your custom message here"
+```
+
+**Send to all approved users:**
+```bash
+php artisan notification:send --all --title="Announcement" --message="System maintenance scheduled"
+```
+
+**Send to users by role:**
+```bash
+php artisan notification:send --role=IT --title="IT Alert" --message="Please check server status"
+```
+
+**Send to specific users (comma-separated IDs):**
+```bash
+php artisan notification:send --users=1,5,10,15 --title="Team Update" --message="Your custom message"
+```
+
+**With custom notification type:**
+```bash
+php artisan notification:send 1 --title="Reminder" --message="Meeting at 3pm" --type=reminder
+```
+
+> **Note:** The command will ask for confirmation before sending to multiple users.
+
 #### Option B: Trigger from Application
 
 The notification system is already integrated with Leave Requests. To test:

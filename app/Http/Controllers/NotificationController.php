@@ -2,12 +2,23 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\SendNotificationRequest;
 use App\Models\Notification;
+use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Inertia\Inertia;
+use App\Http\Traits\RedirectsWithFlashMessages;
 
 class NotificationController extends Controller
 {
+    use RedirectsWithFlashMessages;
+
+    public function __construct(protected NotificationService $notificationService)
+    {
+    }
     /**
      * Display a listing of the user's notifications.
      */
@@ -111,5 +122,95 @@ class NotificationController extends Controller
         $request->user()->notifications()->delete();
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * Show the form for sending a notification.
+     */
+    public function create()
+    {
+        $this->authorize('send', Notification::class);
+
+        // Get all approved users for single/multiple user selection
+        $users = User::where('is_approved', true)
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get(['id', 'first_name', 'last_name', 'email', 'role'])
+            ->map(fn($user) => [
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+                'role' => $user->role,
+            ]);
+
+        // Get available roles
+        $roles = collect(config('permissions.roles'))->map(fn($label, $value) => [
+            'value' => $value,
+            'label' => $label,
+        ])->values();
+
+        return Inertia::render('Notifications/Send', [
+            'users' => $users,
+            'roles' => $roles,
+        ]);
+    }
+
+    /**
+     * Store a newly created notification.
+     */
+    public function store(SendNotificationRequest $request)
+    {
+        $this->authorize('send', Notification::class);
+
+        try {
+            DB::beginTransaction();
+
+            $validated = $request->validated();
+            $recipientType = $validated['recipient_type'];
+            $title = $validated['title'];
+            $message = $validated['message'];
+            $type = $validated['type'] ?? 'system';
+
+            $recipientCount = 0;
+
+            switch ($recipientType) {
+                case 'all':
+                    $this->notificationService->notifyAllUsers($title, $message, ['sent_by' => auth()->id()], $type);
+                    $recipientCount = User::where('is_approved', true)->count();
+                    break;
+
+                case 'role':
+                    $role = $validated['role'];
+                    $this->notificationService->notifyUsersByRole($role, $type, $title, $message, ['sent_by' => auth()->id()]);
+                    $recipientCount = User::where('role', $role)->where('is_approved', true)->count();
+                    break;
+
+                case 'specific_users':
+                    $userIds = $validated['user_ids'];
+                    foreach ($userIds as $userId) {
+                        $this->notificationService->create($userId, $type, $title, $message, ['sent_by' => auth()->id()]);
+                    }
+                    $recipientCount = count($userIds);
+                    break;
+
+                case 'single_user':
+                    $userId = $validated['user_id'];
+                    $this->notificationService->create($userId, $type, $title, $message, ['sent_by' => auth()->id()]);
+                    $recipientCount = 1;
+                    break;
+            }
+
+            DB::commit();
+
+            return $this->redirectWithFlash(
+                'notifications.index',
+                "Notification sent successfully to {$recipientCount} user(s).",
+                'success'
+            );
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('NotificationController store Error: ' . $e->getMessage());
+            return $this->backWithFlash('Failed to send notification. Please try again.', 'error');
+        }
     }
 }

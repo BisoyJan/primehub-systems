@@ -6,12 +6,14 @@ import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Bell, Check, Trash2, RefreshCw, Play, Pause } from 'lucide-react';
+import { Bell, Check, Trash2, RefreshCw, Play, Pause, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import type { BreadcrumbItem } from '@/types';
 import notificationRoutes from '@/routes/notifications';
+import { send as notificationsSendRoute } from '@/routes/notifications';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { Can } from '@/components/authorization';
 
 const breadcrumbs: BreadcrumbItem[] = [
     { title: 'Notifications', href: '/notifications' }
@@ -166,8 +168,29 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
             pc_assignment: 'bg-green-500',
             system: 'bg-gray-500',
             attendance_status: 'bg-yellow-500',
+            announcement: 'bg-purple-500',
+            reminder: 'bg-amber-500',
+            alert: 'bg-red-500',
+            custom: 'bg-indigo-500',
         };
         return colors[type] || 'bg-gray-500';
+    };
+
+    const getNotificationTypeLabel = (type: string) => {
+        const labels: Record<string, string> = {
+            maintenance_due: 'Maintenance',
+            leave_request: 'Leave Request',
+            it_concern: 'IT Concern',
+            medication_request: 'Medication',
+            pc_assignment: 'PC Assignment',
+            system: 'System',
+            attendance_status: 'Attendance',
+            announcement: 'Announcement',
+            reminder: 'Reminder',
+            alert: 'Alert',
+            custom: 'Custom',
+        };
+        return labels[type] || 'Notification';
     };
 
     return (
@@ -179,6 +202,12 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                     description="View and manage your notifications"
                     actions={
                         <div className="flex flex-wrap gap-2">
+                            <Can permission="notifications.send">
+                                <Button onClick={() => router.visit(notificationsSendRoute().url)}>
+                                    <Send className="h-4 w-4 mr-2" />
+                                    Send Notification
+                                </Button>
+                            </Can>
                             <div className="flex gap-2">
                                 <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
                                     <RefreshCw className="h-4 w-4" />
@@ -232,8 +261,11 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                                     <div className="flex-1 space-y-1">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="flex-1">
-                                                <div className="flex items-center gap-2">
+                                                <div className="flex items-center gap-2 flex-wrap">
                                                     <p className="font-semibold">{notification.title}</p>
+                                                    <Badge variant="outline" className="text-xs">
+                                                        {getNotificationTypeLabel(notification.type)}
+                                                    </Badge>
                                                     {!notification.read_at && (
                                                         <Badge variant="secondary" className="text-xs">New</Badge>
                                                     )}

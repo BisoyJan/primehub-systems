@@ -4,6 +4,7 @@ import { Bell, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
 interface Notification {
@@ -51,8 +52,29 @@ export function NotificationDropdown({
             pc_assignment: 'text-green-500',
             system: 'text-gray-500',
             attendance_status: 'text-yellow-500',
+            announcement: 'text-purple-500',
+            reminder: 'text-amber-500',
+            alert: 'text-red-500',
+            custom: 'text-indigo-500',
         };
         return colors[type] || 'text-gray-500';
+    };
+
+    const getNotificationTypeLabel = (type: string) => {
+        const labels: Record<string, string> = {
+            maintenance_due: 'Maintenance',
+            leave_request: 'Leave',
+            it_concern: 'IT',
+            medication_request: 'Med',
+            pc_assignment: 'PC',
+            system: 'System',
+            attendance_status: 'Attendance',
+            announcement: 'Announcement',
+            reminder: 'Reminder',
+            alert: 'Alert',
+            custom: 'Custom',
+        };
+        return labels[type] || 'Notification';
     };
 
     return (
@@ -106,9 +128,14 @@ export function NotificationDropdown({
                                     </div>
                                     <div className="flex-1 space-y-1">
                                         <div className="flex items-start justify-between gap-2">
-                                            <p className="text-sm font-medium leading-none">
-                                                {notification.title}
-                                            </p>
+                                            <div className="flex flex-col gap-1 flex-1">
+                                                <p className="text-sm font-medium leading-none">
+                                                    {notification.title}
+                                                </p>
+                                                <Badge variant="outline" className="text-xs w-fit">
+                                                    {getNotificationTypeLabel(notification.type)}
+                                                </Badge>
+                                            </div>
                                             {!notification.read_at && (
                                                 <span className="h-2 w-2 rounded-full bg-blue-500 shrink-0 mt-1" />
                                             )}

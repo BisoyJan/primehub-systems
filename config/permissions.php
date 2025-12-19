@@ -154,6 +154,10 @@ return [
         // Form Requests Retention
         'form_requests.retention' => 'Manage Form Requests Retention Policies',
 
+        // Notifications
+        'notifications.send' => 'Send Notifications to Users',
+        'notifications.send_all' => 'Send Notifications to All Users',
+
         // Settings
         'settings.view' => 'Access Settings',
         'settings.account' => 'Manage Account Settings',
@@ -190,6 +194,7 @@ return [
             'it_concerns.view', 'it_concerns.create', 'it_concerns.assign',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
             'form_requests.retention',
+            'notifications.send', 'notifications.send_all',
             'settings.view', 'settings.account', 'settings.password',
         ],
 
@@ -228,6 +233,7 @@ return [
             'leave_credits.view_all', 'leave_credits.view_own',
             'it_concerns.view', 'it_concerns.create',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
+            'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],
 
@@ -249,6 +255,7 @@ return [
             'it_concerns.view', 'it_concerns.create', 'it_concerns.edit', 'it_concerns.delete', 'it_concerns.assign', 'it_concerns.resolve',
             'medication_requests.view', 'medication_requests.create',
             'form_requests.retention',
+            'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],
 
