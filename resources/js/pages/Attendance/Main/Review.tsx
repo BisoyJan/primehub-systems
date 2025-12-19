@@ -375,7 +375,7 @@ export default function AttendanceReview() {
     // Helper to display notes - show dialog with both notes and verification notes
     const NotesDisplay = ({ record }: { record: AttendanceRecord }) => {
         const hasNotes = record.notes || record.verification_notes;
-        
+
         if (!hasNotes) return <span className="text-muted-foreground">-</span>;
 
         // Combine for preview

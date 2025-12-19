@@ -1378,9 +1378,9 @@ class AttendanceController extends Controller
                         'notes' => ($relatedAtt->notes ? $relatedAtt->notes . "\n" : '') . 'Leave was cancelled - requires review.',
                     ]);
                 }
-                
-                $creditMessage = $canRestoreCredits 
-                    ? 'Credits restored.' 
+
+                $creditMessage = $canRestoreCredits
+                    ? 'Credits restored.'
                     : 'Credits not restored (year mismatch).';
 
                 $leaveRequest->update([
@@ -1398,7 +1398,7 @@ class AttendanceController extends Controller
                 );
 
                 DB::commit();
-                
+
                 $resultMessage = $canRestoreCredits
                     ? "Leave request cancelled. {$creditsDeducted} day(s) of {$leaveRequest->leave_type} credit restored."
                     : "Leave request cancelled. Credits not restored (year mismatch).";
@@ -1411,10 +1411,10 @@ class AttendanceController extends Controller
 
             // Update the leave request with new dates
             // Only adjust credits_deducted if we can restore credits
-            $newCreditsDeducted = $canRestoreCredits 
+            $newCreditsDeducted = $canRestoreCredits
                 ? max(0, $creditsDeducted - $creditsToRestore)
                 : $creditsDeducted; // Keep original if can't restore
-            
+
             $leaveRequest->update([
                 'start_date' => $newStart->format('Y-m-d'),
                 'end_date' => $newEnd->format('Y-m-d'),
@@ -1472,7 +1472,7 @@ class AttendanceController extends Controller
                     'Partial leave credit restored - Employee worked on ' . $workDate->format('M d, Y')
                 );
             }
-            
+
             // Build notification message based on whether credits were restored
             $creditNotificationMsg = $canRestoreCredits
                 ? '. ' . $creditsToRestore . ' day(s) of leave credit has been restored.'
@@ -1501,7 +1501,7 @@ class AttendanceController extends Controller
                 'credits_restored' => $canRestoreCredits ? $creditsToRestore : 0,
                 'can_restore_credits' => $canRestoreCredits,
             ]);
-            
+
             $resultMessage = $canRestoreCredits
                 ? "Leave adjusted to {$newStart->format('M d')}-{$newEnd->format('M d, Y')}. {$creditsToRestore} day(s) of {$leaveRequest->leave_type} credit restored."
                 : "Leave adjusted to {$newStart->format('M d')}-{$newEnd->format('M d, Y')}. Credits not restored (year mismatch).";
