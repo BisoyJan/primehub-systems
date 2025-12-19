@@ -245,25 +245,26 @@ export default function AttendanceIndex() {
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [noteDialogOpen, setNoteDialogOpen] = useState(false);
-    const [selectedNote, setSelectedNote] = useState<string>("");
+    const [selectedNoteRecord, setSelectedNoteRecord] = useState<AttendanceRecord | null>(null);
 
-    // Helper to display notes - truncate if longer than 10 characters
-    const NotesDisplay = ({ notes }: { notes: string | undefined }) => {
-        if (!notes) return <span className="text-muted-foreground">-</span>;
+    // Helper to display notes - show dialog with both notes and verification notes
+    const NotesDisplay = ({ record }: { record: AttendanceRecord }) => {
+        const hasNotes = record.notes || record.verification_notes;
 
-        if (notes.length <= 10) {
-            return <span className="text-sm">{notes}</span>;
-        }
+        if (!hasNotes) return <span className="text-muted-foreground">-</span>;
+
+        // Combine for preview
+        const preview = record.notes || record.verification_notes || '';
 
         return (
             <button
                 onClick={() => {
-                    setSelectedNote(notes);
+                    setSelectedNoteRecord(record);
                     setNoteDialogOpen(true);
                 }}
                 className="text-sm text-primary hover:underline cursor-pointer text-left"
             >
-                {notes.substring(0, 10)}...
+                {preview.length > 10 ? `${preview.substring(0, 10)}...` : preview}
             </button>
         );
     };
@@ -862,7 +863,7 @@ export default function AttendanceIndex() {
                                             </div>
                                         </TableCell>
                                         <TableCell>
-                                            <NotesDisplay notes={record.notes} />
+                                            <NotesDisplay record={record} />
                                         </TableCell>
                                         <TableCell>
                                             {record.admin_verified ? (
@@ -999,10 +1000,10 @@ export default function AttendanceIndex() {
                                                 <span className="text-muted-foreground">Pending</span>
                                             )}
                                         </div>
-                                        {record.notes && (
+                                        {(record.notes || record.verification_notes) && (
                                             <div>
                                                 <span className="font-medium">Notes:</span>{" "}
-                                                <NotesDisplay notes={record.notes} />
+                                                <NotesDisplay record={record} />
                                             </div>
                                         )}
                                     </div>
@@ -1075,11 +1076,34 @@ export default function AttendanceIndex() {
                 <DialogContent className="max-w-[90vw] sm:max-w-md">
                     <DialogHeader>
                         <DialogTitle>Attendance Notes</DialogTitle>
-                        <DialogDescription>Full notes for this attendance record</DialogDescription>
+                        <DialogDescription>
+                            {selectedNoteRecord && (
+                                <span>{selectedNoteRecord.user.name} - {formatDate(selectedNoteRecord.shift_date)}</span>
+                            )}
+                        </DialogDescription>
                     </DialogHeader>
-                    <div className="p-4 bg-muted rounded-md">
-                        <p className="text-sm whitespace-pre-wrap">{selectedNote}</p>
-                    </div>
+                    {selectedNoteRecord && (
+                        <div className="space-y-4">
+                            {/* Employee Notes */}
+                            <div>
+                                <h4 className="text-sm font-semibold mb-2">Employee Notes</h4>
+                                <div className="p-3 bg-muted rounded-md">
+                                    <p className="text-sm whitespace-pre-wrap">
+                                        {selectedNoteRecord.notes || <span className="text-muted-foreground italic">No notes</span>}
+                                    </p>
+                                </div>
+                            </div>
+                            {/* Admin Verification Notes */}
+                            <div>
+                                <h4 className="text-sm font-semibold mb-2">Admin Verification Notes</h4>
+                                <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
+                                    <p className="text-sm whitespace-pre-wrap">
+                                        {selectedNoteRecord.verification_notes || <span className="text-muted-foreground italic">Not verified yet</span>}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
                 </DialogContent>
             </Dialog>
         </AppLayout>
