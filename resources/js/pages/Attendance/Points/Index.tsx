@@ -833,12 +833,6 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         router.delete(
             attendancePointsDestroy({ point: pointToDelete.id }).url,
             {
-                onSuccess: () => {
-                    toast.success("Manual attendance point deleted successfully");
-                },
-                onError: () => {
-                    toast.error("Failed to delete attendance point");
-                },
                 onFinish: () => {
                     setIsDeleteDialogOpen(false);
                     setPointToDelete(null);
