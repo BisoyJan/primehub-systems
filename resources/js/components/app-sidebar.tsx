@@ -10,6 +10,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
 import { index as ramIndex } from '@/routes/ramspecs'
@@ -259,8 +260,10 @@ const MAX_OPEN_GROUPS = 1;
 export function AppSidebar() {
     const { can } = usePermission();
     const { auth } = usePage<SharedData>().props;
+    const { state } = useSidebar();
 
-    // Track which groups are currently open (max 2)
+    // Track which groups are currently open (max 1)
+    // When sidebar is collapsed, keep all groups open to show icons
     const [openGroups, setOpenGroups] = useState<string[]>([]);
 
     // Handle click toggle on a group
@@ -333,9 +336,12 @@ export function AppSidebar() {
         },
     };
 
+    // When sidebar is collapsed, all groups should be open to show icons
+    const isCollapsed = state === 'collapsed';
+
     return (
         <Sidebar collapsible="icon" variant="inset">
-            <SidebarHeader>
+            <SidebarHeader className="shrink-0">
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
@@ -347,50 +353,51 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent>
+            <SidebarContent className="!overflow-y-auto min-h-0">
                 <NavGroup
                     groupId="main"
                     label={filteredNavigation.main.label}
                     items={filteredNavigation.main.items}
-                    isOpen={openGroups.includes('main')}
+                    isOpen={isCollapsed || openGroups.includes('main')}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
                     groupId="computer"
                     label={filteredNavigation.computer.label}
                     items={filteredNavigation.computer.items}
-                    isOpen={openGroups.includes('computer')}
+                    isOpen={isCollapsed || openGroups.includes('computer')}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
                     groupId="station"
                     label={filteredNavigation.station.label}
                     items={filteredNavigation.station.items}
-                    isOpen={openGroups.includes('station')}
+                    isOpen={isCollapsed || openGroups.includes('station')}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
                     groupId="attendance"
                     label={filteredNavigation.attendance.label}
                     items={filteredNavigation.attendance.items}
-                    isOpen={openGroups.includes('attendance')}
+                    isOpen={isCollapsed || openGroups.includes('attendance')}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
                     groupId="requests"
                     label={filteredNavigation.requests.label}
                     items={filteredNavigation.requests.items}
-                    isOpen={openGroups.includes('requests')}
+                    isOpen={isCollapsed || openGroups.includes('requests')}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup
                     groupId="account"
                     label={filteredNavigation.account.label}
                     items={filteredNavigation.account.items}
-                    isOpen={openGroups.includes('account')}
+                    isOpen={isCollapsed || openGroups.includes('account')}
                     onToggle={handleGroupToggle}
                 />
-            </SidebarContent>            <SidebarFooter>
+            </SidebarContent>
+            <SidebarFooter className="shrink-0">
                 {/* <NavFooter items={footerNavItems} className="mt-auto" /> */}
                 <NavUser />
             </SidebarFooter>

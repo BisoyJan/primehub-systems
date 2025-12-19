@@ -4,6 +4,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
+    useSidebar,
 } from '@/components/ui/sidebar';
 import {
     Collapsible,
@@ -25,6 +26,7 @@ interface NavGroupProps {
 
 export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGroupProps) {
     const page = usePage();
+    const { state } = useSidebar();
 
     if (items.length === 0) {
         return null;
@@ -37,6 +39,35 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
     });
 
     const isExpanded = isOpen || hasActiveItem;
+    const isCollapsed = state === 'collapsed';
+
+    // When sidebar is collapsed, show items directly without collapsible wrapper
+    if (isCollapsed) {
+        return (
+            <SidebarGroup className="px-2 py-0">
+                <SidebarMenu>
+                    {items.map((item) => (
+                        <SidebarMenuItem key={item.title}>
+                            <SidebarMenuButton
+                                asChild
+                                isActive={page.url.startsWith(
+                                    typeof item.href === 'string'
+                                        ? item.href
+                                        : item.href.url,
+                                )}
+                                tooltip={{ children: item.title }}
+                            >
+                                <Link href={item.href} prefetch="mount">
+                                    {item.icon && <item.icon />}
+                                    <span>{item.title}</span>
+                                </Link>
+                            </SidebarMenuButton>
+                        </SidebarMenuItem>
+                    ))}
+                </SidebarMenu>
+            </SidebarGroup>
+        );
+    }
 
     return (
         <Collapsible
