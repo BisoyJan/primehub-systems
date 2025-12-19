@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -17,7 +17,9 @@ import {
 } from "@/components/ui/select";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
-import { AlertCircle } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { AlertCircle, Check, ChevronsUpDown } from "lucide-react";
 
 interface Site {
     id: number;
@@ -40,6 +42,8 @@ interface PageProps {
 export default function ItConcernCreate() {
     const { sites, users } = usePage<PageProps>().props;
     const [fileForSomeoneElse, setFileForSomeoneElse] = useState(false);
+    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
+    const [userSearchQuery, setUserSearchQuery] = useState("");
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Submit IT Concern",
@@ -61,10 +65,21 @@ export default function ItConcernCreate() {
         description: "",
     });
 
+    // Filter users based on search query
+    const filteredUsers = useMemo(() => {
+        if (!users || !userSearchQuery) return users || [];
+        const query = userSearchQuery.toLowerCase();
+        return users.filter(user => {
+            const fullName = `${user.first_name}${user.middle_name ? ' ' + user.middle_name : ''} ${user.last_name}`.toLowerCase();
+            return fullName.includes(query);
+        });
+    }, [users, userSearchQuery]);
+
     const handleToggleChange = (checked: boolean) => {
         setFileForSomeoneElse(checked);
         if (!checked) {
             setData("user_id", "");
+            setUserSearchQuery("");
         }
     };
 
@@ -127,21 +142,63 @@ export default function ItConcernCreate() {
                                                 <Label htmlFor="user_id">
                                                     Select Employee <span className="text-red-500">*</span>
                                                 </Label>
-                                                <Select
-                                                    value={data.user_id}
-                                                    onValueChange={(value) => setData("user_id", value)}
-                                                >
-                                                    <SelectTrigger className={errors.user_id ? "border-red-500" : ""}>
-                                                        <SelectValue placeholder="Select an employee" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {users.map((user) => (
-                                                            <SelectItem key={user.id} value={String(user.id)}>
-                                                                {`${user.first_name}${user.middle_name ? ' ' + user.middle_name : ''} ${user.last_name}`}
-                                                            </SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+                                                <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
+                                                    <PopoverTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            role="combobox"
+                                                            aria-expanded={isUserPopoverOpen}
+                                                            className={`w-full justify-between font-normal ${errors.user_id ? "border-red-500" : ""}`}
+                                                        >
+                                                            <span className="truncate">
+                                                                {data.user_id && users
+                                                                    ? (() => {
+                                                                        const user = users.find(u => String(u.id) === data.user_id);
+                                                                        return user ? `${user.first_name}${user.middle_name ? ' ' + user.middle_name : ''} ${user.last_name}` : "Select an employee...";
+                                                                    })()
+                                                                    : "Select an employee..."}
+                                                            </span>
+                                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                                        </Button>
+                                                    </PopoverTrigger>
+                                                    <PopoverContent className="w-full p-0" align="start">
+                                                        <Command shouldFilter={false}>
+                                                            <CommandInput
+                                                                placeholder="Search employee..."
+                                                                value={userSearchQuery}
+                                                                onValueChange={setUserSearchQuery}
+                                                            />
+                                                            <CommandList>
+                                                                <CommandEmpty>No employee found.</CommandEmpty>
+                                                                <CommandGroup>
+                                                                    {filteredUsers.map((user) => {
+                                                                        const userFullName = `${user.first_name}${user.middle_name ? ' ' + user.middle_name : ''} ${user.last_name}`;
+                                                                        return (
+                                                                            <CommandItem
+                                                                                key={user.id}
+                                                                                value={userFullName}
+                                                                                onSelect={() => {
+                                                                                    setData("user_id", String(user.id));
+                                                                                    setIsUserPopoverOpen(false);
+                                                                                    setUserSearchQuery("");
+                                                                                }}
+                                                                                className="cursor-pointer"
+                                                                            >
+                                                                                <Check
+                                                                                    className={`mr-2 h-4 w-4 ${data.user_id === String(user.id)
+                                                                                        ? "opacity-100"
+                                                                                        : "opacity-0"
+                                                                                        }`}
+                                                                                />
+                                                                                {userFullName}
+                                                                            </CommandItem>
+                                                                        );
+                                                                    })}
+                                                                </CommandGroup>
+                                                            </CommandList>
+                                                        </Command>
+                                                    </PopoverContent>
+                                                </Popover>
                                                 {errors.user_id && (
                                                     <p className="text-sm text-red-500">{errors.user_id}</p>
                                                 )}
