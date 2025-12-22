@@ -711,7 +711,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                             <TableCell>
                                                 {format(parseISO(request.end_date), 'MMM d, yyyy')}
                                             </TableCell>
-                                            <TableCell>{request.days_requested}</TableCell>
+                                            <TableCell>{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</TableCell>
                                             <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}</TableCell>
                                             <TableCell className="text-sm text-muted-foreground">
                                                 {format(parseISO(request.created_at), 'MMM d, yyyy')}
@@ -802,7 +802,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Days Requested:</span>
-                                        <span className="font-medium">{request.days_requested}</span>
+                                        <span className="font-medium">{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</span>
                                     </div>
                                     <div className="text-xs text-muted-foreground pt-1">
                                         Submitted: {format(parseISO(request.created_at), 'MMM d, yyyy')}
