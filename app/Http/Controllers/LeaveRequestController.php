@@ -304,6 +304,20 @@ class LeaveRequestController extends Controller
         // Check if user can override short notice (Admin/Super Admin only)
         $canOverrideShortNotice = in_array($user->role, ['Super Admin', 'Admin']);
 
+        // Get existing pending/approved leave requests for overlap validation
+        $existingLeaveRequests = LeaveRequest::where('user_id', $targetUser->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->get(['id', 'leave_type', 'start_date', 'end_date', 'status'])
+            ->map(function ($req) {
+                return [
+                    'id' => $req->id,
+                    'leave_type' => $req->leave_type,
+                    'start_date' => $req->start_date->format('Y-m-d'),
+                    'end_date' => $req->end_date->format('Y-m-d'),
+                    'status' => $req->status,
+                ];
+            });
+
         return Inertia::render('FormRequest/Leave/Create', [
             'creditsSummary' => $creditsSummary,
             'attendancePoints' => $attendancePoints,
@@ -318,6 +332,7 @@ class LeaveRequestController extends Controller
             'employees' => $employees,
             'selectedEmployeeId' => $targetUser->id,
             'canOverrideShortNotice' => $canOverrideShortNotice,
+            'existingLeaveRequests' => $existingLeaveRequests,
         ]);
     }
 
@@ -335,18 +350,43 @@ class LeaveRequestController extends Controller
             $targetUser = User::findOrFail($request->employee_id);
         }
 
-        // Check if user has pending leave requests
-        $hasPendingRequests = LeaveRequest::where('user_id', $targetUser->id)
+        // Check if user has a duplicate pending leave request
+        // (same dates, same leave type, same person)
+        $hasDuplicateRequest = LeaveRequest::where('user_id', $targetUser->id)
             ->where('status', 'pending')
+            ->where('leave_type', $request->leave_type)
+            ->where('start_date', $request->start_date)
+            ->where('end_date', $request->end_date)
             ->exists();
 
-        if ($hasPendingRequests) {
-            return back()->withErrors(['error' => 'You cannot create a new leave request while you have pending requests. Please wait for approval or cancel your existing pending request.'])->withInput();
+        if ($hasDuplicateRequest) {
+            return back()->withErrors(['error' => 'You already have a pending leave request with the same dates and leave type. Please edit or cancel the existing request instead.'])->withInput();
+        }
+
+        // Check for overlapping dates with existing pending or approved leave requests
+        $startDate = Carbon::parse($request->start_date);
+        $endDate = Carbon::parse($request->end_date);
+
+        $overlappingRequest = LeaveRequest::where('user_id', $targetUser->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->where(function ($query) use ($startDate, $endDate) {
+                // Check if any existing request overlaps with the new date range
+                $query->where(function ($q) use ($startDate, $endDate) {
+                    // New request starts during existing request
+                    $q->where('start_date', '<=', $endDate)
+                      ->where('end_date', '>=', $startDate);
+                });
+            })
+            ->first();
+
+        if ($overlappingRequest) {
+            $existingStart = Carbon::parse($overlappingRequest->start_date)->format('M d, Y');
+            $existingEnd = Carbon::parse($overlappingRequest->end_date)->format('M d, Y');
+            $status = ucfirst($overlappingRequest->status);
+            return back()->withErrors(['error' => "The selected dates overlap with an existing {$status} leave request ({$overlappingRequest->leave_type}: {$existingStart} to {$existingEnd}). Please choose different dates."])->withInput();
         }
 
         // Calculate days
-        $startDate = Carbon::parse($request->start_date);
-        $endDate = Carbon::parse($request->end_date);
         $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate);
 
         // Get current attendance points
@@ -633,6 +673,21 @@ class LeaveRequestController extends Controller
             $leaveRequestData['original_end_date'] = $leaveRequest->original_end_date->format('Y-m-d');
         }
 
+        // Get existing pending/approved leave requests for overlap validation (exclude current request)
+        $existingLeaveRequests = LeaveRequest::where('user_id', $targetUser->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->where('id', '!=', $leaveRequest->id)
+            ->get(['id', 'leave_type', 'start_date', 'end_date', 'status'])
+            ->map(function ($req) {
+                return [
+                    'id' => $req->id,
+                    'leave_type' => $req->leave_type,
+                    'start_date' => $req->start_date->format('Y-m-d'),
+                    'end_date' => $req->end_date->format('Y-m-d'),
+                    'status' => $req->status,
+                ];
+            });
+
         return Inertia::render('FormRequest/Leave/Edit', [
             'leaveRequest' => $leaveRequestData,
             'creditsSummary' => $creditsSummary,
@@ -645,6 +700,7 @@ class LeaveRequestController extends Controller
             'isAdmin' => $isAdmin,
             'isApprovedLeave' => $isApprovedLeave,
             'canOverrideShortNotice' => $canOverrideShortNotice,
+            'existingLeaveRequests' => $existingLeaveRequests,
         ]);
     }
 
@@ -666,6 +722,26 @@ class LeaveRequestController extends Controller
             }
             // Redirect to updateApproved method
             return $this->updateApproved($request, $leaveRequest);
+        }
+
+        // Check for overlapping dates with existing pending or approved leave requests (exclude current request)
+        $startDate = Carbon::parse($request->start_date);
+        $endDate = Carbon::parse($request->end_date);
+
+        $overlappingRequest = LeaveRequest::where('user_id', $leaveRequest->user_id)
+            ->where('id', '!=', $leaveRequest->id)
+            ->whereIn('status', ['pending', 'approved'])
+            ->where(function ($query) use ($startDate, $endDate) {
+                $query->where('start_date', '<=', $endDate)
+                      ->where('end_date', '>=', $startDate);
+            })
+            ->first();
+
+        if ($overlappingRequest) {
+            $existingStart = Carbon::parse($overlappingRequest->start_date)->format('M d, Y');
+            $existingEnd = Carbon::parse($overlappingRequest->end_date)->format('M d, Y');
+            $status = ucfirst($overlappingRequest->status);
+            return back()->withErrors(['error' => "The selected dates overlap with an existing {$status} leave request ({$overlappingRequest->leave_type}: {$existingStart} to {$existingEnd}). Please choose different dates."])->withInput();
         }
 
         // For non-admins, only pending requests can be edited

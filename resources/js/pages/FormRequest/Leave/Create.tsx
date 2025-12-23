@@ -32,6 +32,7 @@ interface CreditsSummary {
     total_earned: number;
     total_used: number;
     balance: number;
+    pending_credits: number;
 }
 
 interface AttendanceViolation {
@@ -49,6 +50,14 @@ interface Employee {
     email: string;
 }
 
+interface ExistingLeaveRequest {
+    id: number;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    status: string;
+}
+
 interface Props {
     creditsSummary: CreditsSummary;
     attendancePoints: number;
@@ -63,6 +72,7 @@ interface Props {
     employees: Employee[];
     selectedEmployeeId: number;
     canOverrideShortNotice: boolean;
+    existingLeaveRequests: ExistingLeaveRequest[];
 }
 
 export default function Create({
@@ -70,7 +80,6 @@ export default function Create({
     attendancePoints,
     attendanceViolations,
     hasRecentAbsence,
-    hasPendingRequests,
     nextEligibleLeaveDate,
     campaigns,
     selectedCampaign,
@@ -79,6 +88,7 @@ export default function Create({
     employees,
     selectedEmployeeId,
     canOverrideShortNotice = false,
+    existingLeaveRequests = [],
 }: Props) {
     const { data, setData, post, processing, errors } = useForm({
         employee_id: selectedEmployeeId,
@@ -145,16 +155,6 @@ export default function Create({
         }
         setData('end_date', value);
     };
-
-    // Show warning if user has pending requests
-    useEffect(() => {
-        if (hasPendingRequests) {
-            toast.warning('Cannot create new leave request', {
-                description: 'You have a pending leave request. Please wait for approval or cancel your existing pending request before creating a new one.',
-                duration: 6000,
-            });
-        }
-    }, [hasPendingRequests]);
 
     // Update campaign_department when selectedCampaign changes
     useEffect(() => {
@@ -265,11 +265,39 @@ export default function Create({
         }
 
         // Check leave credits balance (only block for VL/BL, SL can proceed without credits)
+        // Use available balance (total balance - pending credits) for validation
         if (['VL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
-            if (creditsSummary.balance < calculatedDays) {
+            const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits);
+            if (availableBalance < calculatedDays) {
                 warnings.push(
-                    `Insufficient leave credits. Available: ${creditsSummary.balance} days, Requested: ${calculatedDays} days`
+                    `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} days, Requested: ${calculatedDays} days`
                 );
+            }
+        }
+
+        // Check for overlapping dates with existing pending/approved leave requests
+        if (data.start_date && data.end_date && existingLeaveRequests.length > 0) {
+            const newStart = new Date(data.start_date);
+            const newEnd = new Date(data.end_date);
+            newStart.setHours(0, 0, 0, 0);
+            newEnd.setHours(0, 0, 0, 0);
+
+            for (const existing of existingLeaveRequests) {
+                const existingStart = new Date(existing.start_date);
+                const existingEnd = new Date(existing.end_date);
+                existingStart.setHours(0, 0, 0, 0);
+                existingEnd.setHours(0, 0, 0, 0);
+
+                // Check if dates overlap
+                if (newStart <= existingEnd && newEnd >= existingStart) {
+                    const startStr = format(existingStart, 'MMM d, yyyy');
+                    const endStr = format(existingEnd, 'MMM d, yyyy');
+                    const status = existing.status.charAt(0).toUpperCase() + existing.status.slice(1);
+                    warnings.push(
+                        `Selected dates overlap with an existing ${status} ${existing.leave_type} request (${startStr} to ${endStr}).`
+                    );
+                    break; // Only show one overlap warning
+                }
             }
         }
 
@@ -278,12 +306,14 @@ export default function Create({
     }, [
         data.leave_type,
         data.start_date,
+        data.end_date,
         data.short_notice_override,
         creditsSummary,
         attendancePoints,
         hasRecentAbsence,
         nextEligibleLeaveDate,
         calculatedDays,
+        existingLeaveRequests,
         twoWeeksFromNow,
     ]);
 
@@ -333,9 +363,6 @@ export default function Create({
     };
 
     const requiresCredits = ['VL', 'SL'].includes(data.leave_type);
-    const remainingBalance = requiresCredits
-        ? Math.max(0, creditsSummary.balance - calculatedDays)
-        : creditsSummary.balance;
 
     return (
         <AppLayout>
@@ -362,10 +389,22 @@ export default function Create({
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total Balance</p>
+                                    <p className="text-2xl font-bold">{creditsSummary.balance.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Pending Requests</p>
+                                    <p className="text-2xl font-bold text-yellow-600">
+                                        {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
+                                    </p>
+                                </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground">Available</p>
-                                    <p className="text-2xl font-bold">{creditsSummary.balance}</p>
+                                    <p className="text-2xl font-bold text-blue-600">
+                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits).toFixed(2)}
+                                    </p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground">This Request</p>
@@ -374,9 +413,9 @@ export default function Create({
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-muted-foreground">Remaining</p>
+                                    <p className="text-sm text-muted-foreground">After Submit</p>
                                     <p className="text-2xl font-bold text-green-600">
-                                        {remainingBalance.toFixed(2)}
+                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
                                     </p>
                                 </div>
                                 <div>
@@ -484,17 +523,6 @@ export default function Create({
                             </Accordion>
                         </CardContent>
                     </Card>
-                )}
-
-                {/* Pending Request Warning */}
-                {hasPendingRequests && (
-                    <Alert variant="destructive" className="mb-6">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Cannot Create New Request</AlertTitle>
-                        <AlertDescription>
-                            You have a pending leave request. Please wait for approval or cancel your existing pending request before creating a new one.
-                        </AlertDescription>
-                    </Alert>
                 )}
 
                 {/* Validation Warnings */}
@@ -836,7 +864,7 @@ export default function Create({
 
                             {/* Submit Button */}
                             <div className="flex gap-4">
-                                <Button type="submit" disabled={processing || validationWarnings.length > 0 || hasPendingRequests || !!weekendError.start || !!weekendError.end}>
+                                <Button type="submit" disabled={processing || validationWarnings.length > 0 || !!weekendError.start || !!weekendError.end}>
                                     {processing ? 'Submitting...' : 'Submit Leave Request'}
                                 </Button>
                                 <Button

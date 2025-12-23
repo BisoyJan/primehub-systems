@@ -390,15 +390,8 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
         return <Badge variant="secondary">{type}</Badge>;
     };
 
-    const handleRequestLeaveClick = (e: React.MouseEvent) => {
-        if (hasPendingRequests) {
-            e.preventDefault();
-            toast.warning('Cannot create new leave request', {
-                description: 'You have a pending leave request. Please wait for approval or cancel your existing pending request before creating a new one.',
-                duration: 6000,
-            });
-        }
-    };
+    // Allow creating new leave requests even with pending requests
+    // Backend now allows multiple pending requests as long as they're not duplicates
 
     const handleExportCredits = async () => {
         if (!exportYear || exportYear < 2020 || exportYear > new Date().getFullYear() + 1) {
@@ -645,8 +638,8 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                             </div>
 
                             <Can permission="leave.create">
-                                <Link href={leaveCreateRoute().url} onClick={handleRequestLeaveClick} className="flex-1 sm:flex-none">
-                                    <Button disabled={hasPendingRequests} className="w-full sm:w-auto">
+                                <Link href={leaveCreateRoute().url} className="flex-1 sm:flex-none">
+                                    <Button className="w-full sm:w-auto">
                                         <Plus className="mr-2 h-4 w-4" />
                                         Request Leave
                                     </Button>

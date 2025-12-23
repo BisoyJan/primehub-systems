@@ -68,6 +68,19 @@ class LeaveCreditService
     }
 
     /**
+     * Get total days from pending leave requests that require credits.
+     * Note: We count ALL pending requests regardless of year, since they represent
+     * credits that will be deducted from the user's balance when approved.
+     */
+    public function getPendingCredits(User $user, ?int $year = null): float
+    {
+        return LeaveRequest::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->whereIn('leave_type', ['VL', 'SL', 'BL']) // Only credit-requiring leave types
+            ->sum('days_requested');
+    }
+
+    /**
      * Get detailed leave credits summary for a user.
      */
     public function getSummary(User $user, ?int $year = null): array
@@ -82,6 +95,7 @@ class LeaveCreditService
             'total_earned' => LeaveCredit::getTotalEarned($user->id, $year),
             'total_used' => LeaveCredit::getTotalUsed($user->id, $year),
             'balance' => $this->getBalance($user, $year),
+            'pending_credits' => $this->getPendingCredits($user, $year),
             'credits_by_month' => LeaveCredit::forUser($user->id)
                 ->forYear($year)
                 ->orderBy('month')

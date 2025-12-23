@@ -57,6 +57,7 @@ interface CreditsSummary {
     total_earned: number;
     total_used: number;
     balance: number;
+    pending_credits: number;
 }
 
 interface AttendanceViolation {
@@ -66,6 +67,14 @@ interface AttendanceViolation {
     points: number;
     violation_details: string;
     expires_at: string;
+}
+
+interface ExistingLeaveRequest {
+    id: number;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    status: string;
 }
 
 interface Props {
@@ -80,6 +89,7 @@ interface Props {
     isAdmin: boolean;
     isApprovedLeave: boolean;
     canOverrideShortNotice: boolean;
+    existingLeaveRequests: ExistingLeaveRequest[];
 }
 
 export default function Edit({
@@ -94,6 +104,7 @@ export default function Edit({
     isAdmin = false,
     isApprovedLeave = false,
     canOverrideShortNotice = false,
+    existingLeaveRequests = [],
 }: Props) {
     const { data, setData, put, processing, errors } = useForm({
         leave_type: leaveRequest.leave_type,
@@ -111,6 +122,8 @@ export default function Edit({
     const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
+
+    const requiresCredits = ['VL', 'SL'].includes(data.leave_type);
 
     // Track if dates have changed for approved leaves
     const datesChanged = isApprovedLeave && (
@@ -240,11 +253,39 @@ export default function Edit({
         }
 
         // Check leave credits balance (only block for VL/BL, SL can proceed)
+        // Use available balance (total balance - pending credits) for validation
         if (['VL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
-            if (creditsSummary.balance < calculatedDays) {
+            const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + (requiresCredits ? leaveRequest.days_requested : 0));
+            if (availableBalance < calculatedDays) {
                 warnings.push(
-                    `Insufficient leave credits. Available: ${creditsSummary.balance} days, Requested: ${calculatedDays} days`
+                    `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} days, Requested: ${calculatedDays} days`
                 );
+            }
+        }
+
+        // Check for overlapping dates with existing pending/approved leave requests
+        if (data.start_date && data.end_date && existingLeaveRequests.length > 0) {
+            const newStart = new Date(data.start_date);
+            const newEnd = new Date(data.end_date);
+            newStart.setHours(0, 0, 0, 0);
+            newEnd.setHours(0, 0, 0, 0);
+
+            for (const existing of existingLeaveRequests) {
+                const existingStart = new Date(existing.start_date);
+                const existingEnd = new Date(existing.end_date);
+                existingStart.setHours(0, 0, 0, 0);
+                existingEnd.setHours(0, 0, 0, 0);
+
+                // Check if dates overlap
+                if (newStart <= existingEnd && newEnd >= existingStart) {
+                    const startStr = format(existingStart, 'MMM d, yyyy');
+                    const endStr = format(existingEnd, 'MMM d, yyyy');
+                    const status = existing.status.charAt(0).toUpperCase() + existing.status.slice(1);
+                    warnings.push(
+                        `Selected dates overlap with an existing ${status} ${existing.leave_type} request (${startStr} to ${endStr}).`
+                    );
+                    break; // Only show one overlap warning
+                }
             }
         }
 
@@ -253,6 +294,7 @@ export default function Edit({
     }, [
         data.leave_type,
         data.start_date,
+        data.end_date,
         data.short_notice_override,
         creditsSummary,
         attendancePoints,
@@ -260,6 +302,9 @@ export default function Edit({
         nextEligibleLeaveDate,
         calculatedDays,
         twoWeeksFromNow,
+        existingLeaveRequests,
+        leaveRequest.days_requested,
+        requiresCredits,
     ]);
 
     // Update SL credit info message
@@ -306,11 +351,6 @@ export default function Edit({
             },
         });
     };
-
-    const requiresCredits = ['VL', 'SL'].includes(data.leave_type);
-    const remainingBalance = requiresCredits
-        ? Math.max(0, creditsSummary.balance - calculatedDays)
-        : creditsSummary.balance;
 
     // Status badge variant
     const getStatusBadge = (status: string) => {
@@ -401,10 +441,22 @@ export default function Edit({
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total Balance</p>
+                                    <p className="text-2xl font-bold">{creditsSummary.balance.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Pending Requests</p>
+                                    <p className="text-2xl font-bold text-yellow-600">
+                                        {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
+                                    </p>
+                                </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground">Available</p>
-                                    <p className="text-2xl font-bold">{creditsSummary.balance}</p>
+                                    <p className="text-2xl font-bold text-blue-600">
+                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits).toFixed(2)}
+                                    </p>
                                 </div>
                                 <div>
                                     <p className="text-sm text-muted-foreground">This Request</p>
@@ -413,9 +465,9 @@ export default function Edit({
                                     </p>
                                 </div>
                                 <div>
-                                    <p className="text-sm text-muted-foreground">Remaining</p>
+                                    <p className="text-sm text-muted-foreground">After Update</p>
                                     <p className="text-2xl font-bold text-green-600">
-                                        {remainingBalance.toFixed(2)}
+                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits - (requiresCredits ? calculatedDays : 0) + (requiresCredits ? leaveRequest.days_requested : 0)).toFixed(2)}
                                     </p>
                                 </div>
                                 <div>
