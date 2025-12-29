@@ -110,7 +110,7 @@ export default function Show({
     const approveForm = useForm({ review_notes: '' });
     const denyForm = useForm({ review_notes: '' });
     const tlApproveForm = useForm({ tl_review_notes: '' });
-    const tlDenyForm = useForm({ tl_review_notes: '' });
+    const tlDenyForm = useForm({ review_notes: '' });
     const forceApproveForm = useForm({ review_notes: '' });
     const adminCancelForm = useForm({ cancellation_reason: '' });
     const adjustForWorkForm = useForm({
@@ -847,13 +847,13 @@ export default function Show({
                                 Review Notes <span className="text-red-500">*</span>
                             </label>
                             <Textarea
-                                value={tlDenyForm.data.tl_review_notes}
-                                onChange={(e) => tlDenyForm.setData('tl_review_notes', e.target.value)}
+                                value={tlDenyForm.data.review_notes}
+                                onChange={(e) => tlDenyForm.setData('review_notes', e.target.value)}
                                 placeholder="Reason for rejection (required, minimum 10 characters)..."
                                 rows={3}
                             />
-                            {tlDenyForm.errors.tl_review_notes && (
-                                <p className="text-sm text-red-500 mt-1">{tlDenyForm.errors.tl_review_notes}</p>
+                            {tlDenyForm.errors.review_notes && (
+                                <p className="text-sm text-red-500 mt-1">{tlDenyForm.errors.review_notes}</p>
                             )}
                         </div>
                     </div>
