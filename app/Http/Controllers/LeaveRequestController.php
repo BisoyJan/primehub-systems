@@ -97,9 +97,17 @@ class LeaveRequestController extends Controller
             });
         }
 
+        // Filter by campaign/department
+        if ($request->filled('campaign_department')) {
+            $query->where('campaign_department', $request->campaign_department);
+        }
+
         $leaveRequests = $query->orderBy('created_at', 'desc')
             ->paginate(25)
             ->withQueryString();
+
+        // Get list of campaigns/departments for filters (unique names from campaigns table)
+        $campaigns = \App\Models\Campaign::orderBy('name')->pluck('name')->toArray();
 
         // Check if current user has pending leave requests
         $hasPendingRequests = LeaveRequest::where('user_id', $user->id)
@@ -108,7 +116,8 @@ class LeaveRequestController extends Controller
 
         return Inertia::render('FormRequest/Leave/Index', [
             'leaveRequests' => $leaveRequests,
-            'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id', 'employee_name']),
+            'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id', 'employee_name', 'campaign_department']),
+            'campaigns' => $campaigns,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'hasPendingRequests' => $hasPendingRequests,

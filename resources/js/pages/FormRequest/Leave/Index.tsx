@@ -103,6 +103,7 @@ interface Props {
         start_date?: string;
         end_date?: string;
         employee_name?: string;
+        campaign_department?: string;
     };
     isAdmin: boolean;
     isTeamLead?: boolean;
@@ -113,9 +114,10 @@ interface Props {
             name: string;
         };
     };
+    campaigns?: string[];
 }
 
-export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, hasPendingRequests, auth }: Props) {
+export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, hasPendingRequests, auth, campaigns = [] }: Props) {
     // Show employee column for admins and team leads (who can see other users' requests)
     const showEmployeeColumn = isAdmin || isTeamLead;
 
@@ -134,6 +136,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
     const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
     const [filterType, setFilterType] = useState(filters.type || 'all');
     const [filterEmployeeName, setFilterEmployeeName] = useState(filters.employee_name || '');
+    const [filterCampaign, setFilterCampaign] = useState(filters.campaign_department || 'all');
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -175,7 +178,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
         );
     }, [uniqueEmployees, employeeSearchQuery]);
 
-    const showClearFilters = filterStatus !== 'all' || filterType !== 'all' || filterEmployeeName !== '';
+    const showClearFilters = filterStatus !== 'all' || filterType !== 'all' || filterEmployeeName !== '' || (filterCampaign && filterCampaign !== 'all');
 
     const buildFilterParams = React.useCallback(() => {
         const params: Record<string, string> = {};
@@ -188,8 +191,11 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
         if (filterEmployeeName) {
             params.employee_name = filterEmployeeName;
         }
+        if (filterCampaign && filterCampaign !== 'all') {
+            params.campaign_department = filterCampaign;
+        }
         return params;
-    }, [filterStatus, filterType, filterEmployeeName]);
+    }, [filterStatus, filterType, filterEmployeeName, filterCampaign]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         router.get(leaveIndexRoute().url, params, {
@@ -228,6 +234,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
         setFilterStatus('all');
         setFilterType('all');
         setFilterEmployeeName('');
+        setFilterCampaign('all');
         requestWithFilters({});
     };
 
@@ -584,6 +591,18 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                     <SelectItem value="LDV">Leave due to Domestic Violence</SelectItem>
                                     <SelectItem value="UPTO">Unpaid Time Off</SelectItem>
                                     <SelectItem value="ML">Maternity Leave</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={filterCampaign} onValueChange={setFilterCampaign}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {campaigns.map((c) => (
+                                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>
