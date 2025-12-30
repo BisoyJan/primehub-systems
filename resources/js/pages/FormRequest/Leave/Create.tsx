@@ -114,14 +114,14 @@ export default function Create({
     // Helper function to check if a date is a weekend
     const isWeekend = (dateString: string): boolean => {
         if (!dateString) return false;
-        const date = new Date(dateString);
+        const date = parseISO(dateString);
         const day = date.getDay();
         return day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
     };
 
     // Helper function to get the day name
     const getDayName = (dateString: string): string => {
-        const date = new Date(dateString);
+        const date = parseISO(dateString);
         return date.toLocaleDateString('en-US', { weekday: 'long' });
     };
 
@@ -129,11 +129,11 @@ export default function Create({
     const getSlMinDate = (): string => {
         const date = new Date();
         date.setDate(date.getDate() - 7);
-        return date.toISOString().split('T')[0];
+        return format(date, 'yyyy-MM-dd');
     };
 
     const getTodayDate = (): string => {
-        return new Date().toISOString().split('T')[0];
+        return format(new Date(), 'yyyy-MM-dd');
     };
 
     // Handle start date change with weekend validation
@@ -236,7 +236,7 @@ export default function Create({
         // Check 2-week notice (only for VL and BL, not SL as it's unpredictable)
         // Track separately for override capability
         if (data.start_date && ['VL', 'BL'].includes(data.leave_type)) {
-            const start = new Date(data.start_date);
+            const start = parseISO(data.start_date);
             start.setHours(0, 0, 0, 0);
             const twoWeeks = new Date(twoWeeksFromNow);
             twoWeeks.setHours(0, 0, 0, 0);
@@ -277,14 +277,14 @@ export default function Create({
 
         // Check for overlapping dates with existing pending/approved leave requests
         if (data.start_date && data.end_date && existingLeaveRequests.length > 0) {
-            const newStart = new Date(data.start_date);
-            const newEnd = new Date(data.end_date);
+            const newStart = parseISO(data.start_date);
+            const newEnd = parseISO(data.end_date);
             newStart.setHours(0, 0, 0, 0);
             newEnd.setHours(0, 0, 0, 0);
 
             for (const existing of existingLeaveRequests) {
-                const existingStart = new Date(existing.start_date);
-                const existingEnd = new Date(existing.end_date);
+                const existingStart = parseISO(existing.start_date);
+                const existingEnd = parseISO(existing.end_date);
                 existingStart.setHours(0, 0, 0, 0);
                 existingEnd.setHours(0, 0, 0, 0);
 
