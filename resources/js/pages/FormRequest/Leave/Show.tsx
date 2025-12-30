@@ -109,7 +109,7 @@ export default function Show({
 
     const approveForm = useForm({ review_notes: '' });
     const denyForm = useForm({ review_notes: '' });
-    const tlApproveForm = useForm({ tl_review_notes: '' });
+    const tlApproveForm = useForm({ review_notes: '' });
     const tlDenyForm = useForm({ review_notes: '' });
     const forceApproveForm = useForm({ review_notes: '' });
     const adminCancelForm = useForm({ cancellation_reason: '' });
@@ -533,9 +533,9 @@ export default function Show({
                                             <p className="text-xs text-muted-foreground mt-1">
                                                 {leaveRequest.tl_approved_at && format(parseISO(leaveRequest.tl_approved_at), 'MMM d, yyyy h:mm a')}
                                             </p>
-                                            {leaveRequest.tl_review_notes && (
-                                                <p className="text-sm mt-2 italic text-muted-foreground">"{leaveRequest.tl_review_notes}"</p>
-                                            )}
+                                            <p className="text-sm mt-2 italic text-muted-foreground">
+                                                {leaveRequest.tl_review_notes ? `"${leaveRequest.tl_review_notes}"` : 'No notes provided'}
+                                            </p>
                                         </>
                                     ) : (
                                         <p className="text-sm text-yellow-700 dark:text-yellow-400">Awaiting Team Lead approval</p>
@@ -627,9 +627,9 @@ export default function Show({
                                                 <p className="text-xs text-muted-foreground">
                                                     {leaveRequest.tl_approved_at && format(parseISO(leaveRequest.tl_approved_at), 'MMM d, yyyy h:mm a')}
                                                 </p>
-                                                {leaveRequest.tl_review_notes && (
-                                                    <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.tl_review_notes}"</p>
-                                                )}
+                                                <p className="text-xs mt-1 italic text-muted-foreground">
+                                                    {leaveRequest.tl_review_notes ? `"${leaveRequest.tl_review_notes}"` : 'No notes provided'}
+                                                </p>
                                             </div>
                                         )}
 
@@ -684,9 +684,9 @@ export default function Show({
                                             <p className="text-sm text-muted-foreground">
                                                 {leaveRequest.tl_approver?.name || 'Team Lead'}
                                             </p>
-                                            {leaveRequest.tl_review_notes && (
-                                                <p className="text-xs mt-1 italic text-muted-foreground">"{leaveRequest.tl_review_notes}"</p>
-                                            )}
+                                            <p className="text-xs mt-1 italic text-muted-foreground">
+                                                {leaveRequest.tl_review_notes ? `"${leaveRequest.tl_review_notes}"` : 'No notes provided'}
+                                            </p>
                                         </div>
                                     </div>
                                 )}
@@ -743,13 +743,18 @@ export default function Show({
                     </DialogHeader>
                     <div className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium">Review Notes (Optional)</label>
+                            <label className="text-sm font-medium">
+                                Review Notes <span className="text-red-500">*</span>
+                            </label>
                             <Textarea
                                 value={approveForm.data.review_notes}
                                 onChange={(e) => approveForm.setData('review_notes', e.target.value)}
-                                placeholder="Add any comments..."
+                                placeholder="Add comments (required, minimum 10 characters)..."
                                 rows={3}
                             />
+                            {approveForm.errors.review_notes && (
+                                <p className="text-sm text-red-500 mt-1">{approveForm.errors.review_notes}</p>
+                            )}
                         </div>
                     </div>
                     <DialogFooter>
@@ -812,13 +817,18 @@ export default function Show({
                     </DialogHeader>
                     <div className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium">Review Notes (Optional)</label>
+                            <label className="text-sm font-medium">
+                                Review Notes <span className="text-red-500">*</span>
+                            </label>
                             <Textarea
-                                value={tlApproveForm.data.tl_review_notes}
-                                onChange={(e) => tlApproveForm.setData('tl_review_notes', e.target.value)}
-                                placeholder="Add any comments..."
+                                value={tlApproveForm.data.review_notes}
+                                onChange={(e) => tlApproveForm.setData('review_notes', e.target.value)}
+                                placeholder="Add comments (required, minimum 10 characters)..."
                                 rows={3}
                             />
+                            {tlApproveForm.errors.review_notes && (
+                                <p className="text-sm text-red-500 mt-1">{tlApproveForm.errors.review_notes}</p>
+                            )}
                         </div>
                     </div>
                     <DialogFooter>
@@ -984,13 +994,18 @@ export default function Show({
                     </Alert>
                     <div className="space-y-4">
                         <div>
-                            <label className="text-sm font-medium">Review Notes (Optional)</label>
+                            <label className="text-sm font-medium">
+                                Review Notes <span className="text-red-500">*</span>
+                            </label>
                             <Textarea
                                 value={forceApproveForm.data.review_notes}
                                 onChange={(e) => forceApproveForm.setData('review_notes', e.target.value)}
-                                placeholder="Add any comments for the force approval..."
+                                placeholder="Add comments for the force approval (required, minimum 10 characters)..."
                                 rows={3}
                             />
+                            {forceApproveForm.errors.review_notes && (
+                                <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.review_notes}</p>
+                            )}
                         </div>
                     </div>
                     <DialogFooter>

@@ -971,6 +971,10 @@ class LeaveRequestController extends Controller
             return back()->withErrors(['error' => 'This request has already been reviewed by Team Lead.']);
         }
 
+        $request->validate([
+            'review_notes' => 'required|string|min:10',
+        ]);
+
         DB::beginTransaction();
         try {
             $leaveRequest->update([
@@ -1128,6 +1132,10 @@ class LeaveRequestController extends Controller
             return back()->withErrors(['error' => 'HR has already approved this request.']);
         }
 
+        $request->validate([
+            'review_notes' => 'required|string|min:10',
+        ]);
+
         $leaveCreditService = $this->leaveCreditService;
 
         DB::beginTransaction();
@@ -1252,26 +1260,26 @@ class LeaveRequestController extends Controller
             return back()->withErrors(['error' => 'Only pending requests can be approved.']);
         }
 
+        $request->validate([
+            'review_notes' => 'required|string|min:10',
+        ]);
+
         $leaveCreditService = $this->leaveCreditService;
 
         DB::beginTransaction();
         try {
             // Set both Admin and HR approval
-            $reviewNotes = $request->review_notes
-                ? trim($request->review_notes)
-                : 'Approved';
-
             $leaveRequest->update([
                 'admin_approved_by' => $user->id,
                 'admin_approved_at' => now(),
-                'admin_review_notes' => $reviewNotes,
+                'admin_review_notes' => $request->review_notes,
                 'hr_approved_by' => $user->id,
                 'hr_approved_at' => now(),
-                'hr_review_notes' => $reviewNotes,
+                'hr_review_notes' => $request->review_notes,
                 'status' => 'approved',
                 'reviewed_by' => $user->id,
                 'reviewed_at' => now(),
-                'review_notes' => $reviewNotes,
+                'review_notes' => $request->review_notes,
             ]);
 
             // If TL approval was required but not done, mark it as approved too
@@ -1279,7 +1287,7 @@ class LeaveRequestController extends Controller
                 $leaveRequest->update([
                     'tl_approved_by' => $user->id,
                     'tl_approved_at' => now(),
-                    'tl_review_notes' => $reviewNotes,
+                    'tl_review_notes' => $request->review_notes,
                 ]);
             }
 
