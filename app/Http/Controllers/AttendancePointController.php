@@ -155,27 +155,31 @@ class AttendancePointController extends Controller
         ];
 
         // Calculate GBRO statistics
+        // Note: Last violation date includes excused points (GBRO clock doesn't reset just because a point was excused)
         $lastViolationDate = AttendancePoint::where('user_id', $user->id)
-            ->where('is_excused', false)
             ->where('is_expired', false)
             ->max('shift_date');
 
         $daysClean = 0;
         $daysUntilGbro = 60;
         $eligiblePointsCount = 0;
+        $eligiblePointsSum = 0;
 
         if ($lastViolationDate) {
             $daysClean = Carbon::parse($lastViolationDate)->diffInDays(Carbon::now());
             $daysUntilGbro = max(0, 60 - $daysClean);
 
-            // Count eligible points (last 2 points that can be removed by GBRO)
-            $eligiblePointsCount = AttendancePoint::where('user_id', $user->id)
+            // Get the last 2 active (non-excused) points eligible for GBRO deduction
+            $eligiblePoints = AttendancePoint::where('user_id', $user->id)
                 ->where('is_excused', false)
                 ->where('is_expired', false)
                 ->where('eligible_for_gbro', true)
                 ->orderBy('shift_date', 'desc')
                 ->limit(2)
-                ->count();
+                ->get();
+
+            $eligiblePointsCount = $eligiblePoints->count();
+            $eligiblePointsSum = $eligiblePoints->sum('points');
         }
 
         return Inertia::render('Attendance/Points/Show', [
@@ -190,6 +194,7 @@ class AttendancePointController extends Controller
                 'days_clean' => $daysClean,
                 'days_until_gbro' => $daysUntilGbro,
                 'eligible_points_count' => $eligiblePointsCount,
+                'eligible_points_sum' => (float) $eligiblePointsSum,
                 'last_violation_date' => $lastViolationDate,
                 'is_gbro_ready' => $daysClean >= 60 && $eligiblePointsCount > 0,
             ],
@@ -291,7 +296,7 @@ class AttendancePointController extends Controller
                     $request->user_id,
                     $pointType,
                     Carbon::parse($request->shift_date)->format('M d, Y'),
-                    $point->points
+                    $point->points ?? 0
                 );
             });
 
@@ -353,7 +358,7 @@ class AttendancePointController extends Controller
                     $request->user_id,
                     $pointType,
                     Carbon::parse($request->shift_date)->format('M d, Y'),
-                    $point->fresh()->points
+                    $point->fresh()->points ?? 0
                 );
             });
 

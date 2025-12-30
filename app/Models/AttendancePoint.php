@@ -292,6 +292,11 @@ class AttendancePoint extends Model
      */
     public function getExpirationStatusAttribute(): string
     {
+        // Excused points are never expired
+        if ($this->is_excused) {
+            return 'Excused (Won\'t Expire)';
+        }
+
         if ($this->is_expired) {
             $type = match ($this->expiration_type) {
                 'gbro' => 'GBRO (Good Behavior)',

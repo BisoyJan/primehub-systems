@@ -109,6 +109,7 @@ interface GbroStats {
     days_clean: number;
     days_until_gbro: number;
     eligible_points_count: number;
+    eligible_points_sum: number;
     last_violation_date: string | null;
     is_gbro_ready: boolean;
 }
@@ -659,7 +660,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 <div>
                                     <Label className="text-xs font-medium text-muted-foreground">Eligible Points for Deduction</Label>
                                     <p className="text-xl font-bold mt-0.5">
-                                        {gbroStats.eligible_points_count} {gbroStats.eligible_points_count === 1 ? 'point' : 'points'}
+                                        {gbroStats.eligible_points_sum.toFixed(2)} {gbroStats.eligible_points_count === 1 ? 'point' : 'points'}
                                     </p>
                                 </div>
                             </div>
@@ -746,6 +747,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                         <div className="flex items-center gap-2">
                                                             <Calendar className="h-4 w-4 text-muted-foreground" />
                                                             <span>{formatDate(point.shift_date)}</span>
+                                                            {point.point_type === 'whole_day_absence' && !point.is_advised && (
+                                                                <Badge className="bg-purple-600 text-white text-xs border-0">
+                                                                    NCNS
+                                                                </Badge>
+                                                            )}
                                                             {isGbroEligible && (
                                                                 <Badge className="bg-green-600 text-white text-xs">
                                                                     {gbroStats.is_gbro_ready ? 'Ready for GBRO' : `GBRO in ${Math.floor(gbroStats.days_until_gbro)}d`}
@@ -791,7 +797,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                         )}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {point.expires_at ? (
+                                                        {point.is_excused ? (
+                                                            <div className="text-sm">
+                                                                <div className="text-muted-foreground italic">Excused (Won't Expire)</div>
+                                                            </div>
+                                                        ) : point.expires_at ? (
                                                             <div className="text-sm">
                                                                 <div className="font-medium">{formatDate(point.expires_at)}</div>
                                                                 {!point.is_expired && !isActuallyExpired(point.expires_at) && (

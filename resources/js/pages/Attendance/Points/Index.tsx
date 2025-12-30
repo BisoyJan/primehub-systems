@@ -1132,13 +1132,15 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                             </SelectContent>
                         </Select>
 
-                        <Select value={selectedStatus || undefined} onValueChange={(value) => setSelectedStatus(value || "")}>
+                        <Select value={selectedStatus || "all"} onValueChange={(value) => setSelectedStatus(value === "all" ? "" : value)}>
                             <SelectTrigger className="w-full">
                                 <SelectValue placeholder="All Status" />
                             </SelectTrigger>
                             <SelectContent>
+                                <SelectItem value="all">All Status</SelectItem>
                                 <SelectItem value="active">Active</SelectItem>
                                 <SelectItem value="excused">Excused</SelectItem>
+                                <SelectItem value="expired">Expired</SelectItem>
                             </SelectContent>
                         </Select>
 
@@ -1267,7 +1269,16 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                     <span className="font-medium">{formatUserName(point.user)}</span>
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{formatDate(point.shift_date)}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <span>{formatDate(point.shift_date)}</span>
+                                                    {point.point_type === 'whole_day_absence' && !point.is_advised && (
+                                                        <Badge className="bg-purple-600 text-white text-xs border-0">
+                                                            NCNS
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </TableCell>
                                             <TableCell>{getPointTypeBadge(point.point_type)}</TableCell>
                                             <TableCell className="text-right font-bold text-red-600 dark:text-red-400">
                                                 {Number(point.points).toFixed(2)}
@@ -1313,7 +1324,11 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                                 )}
                                             </TableCell>
                                             <TableCell>
-                                                {point.expires_at ? (
+                                                {point.is_excused ? (
+                                                    <div className="text-sm">
+                                                        <div className="text-muted-foreground italic">Excused (Won't Expire)</div>
+                                                    </div>
+                                                ) : point.expires_at ? (
                                                     <div className="text-sm">
                                                         <div className="font-medium">{formatDate(point.expires_at)}</div>
                                                         {!point.is_expired && !isActuallyExpired(point.expires_at) && (
@@ -1446,7 +1461,14 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <span className="text-muted-foreground text-sm">Date:</span>
-                                        <p className="font-medium">{formatDate(point.shift_date)}</p>
+                                        <div className="flex items-center gap-2">
+                                            <p className="font-medium">{formatDate(point.shift_date)}</p>
+                                            {point.point_type === 'whole_day_absence' && !point.is_advised && (
+                                                <Badge className="bg-purple-600 text-white text-xs border-0">
+                                                    NCNS
+                                                </Badge>
+                                            )}
+                                        </div>
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Points:</span>
@@ -1477,7 +1499,14 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     </div>
                                 )}
 
-                                {point.expires_at && (
+                                {point.is_excused ? (
+                                    <div>
+                                        <span className="text-muted-foreground text-sm">Expiration:</span>
+                                        <div className="text-sm mt-1">
+                                            <p className="text-muted-foreground italic">Excused (Won't Expire)</p>
+                                        </div>
+                                    </div>
+                                ) : point.expires_at && (
                                     <div>
                                         <span className="text-muted-foreground text-sm">Expiration:</span>
                                         <div className="text-sm mt-1">
