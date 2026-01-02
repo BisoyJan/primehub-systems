@@ -31,7 +31,7 @@ Schedule::command('form-request:clean-old-records --force')
 
 // Process attendance point expirations (SRO and GBRO) - runs daily at 3:00 AM
 Schedule::command('points:process-expirations')
-    ->dailyAt('04:20')
+    ->dailyAt('04:10')
     ->withoutOverlapping()
     ->onOneServer();
 
