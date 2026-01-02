@@ -31,13 +31,13 @@ Schedule::command('form-request:clean-old-records --force')
 
 // Process attendance point expirations (SRO and GBRO) - runs daily at 3:00 AM
 Schedule::command('points:process-expirations')
-    ->dailyAt('03:00')
+    ->dailyAt('04:00')
     ->withoutOverlapping()
     ->onOneServer();
 
 // Check biometric retention policy expiry and notify admins - runs daily at 4:00 AM
 Schedule::command('retention:check-expiry --days=7')
-    ->dailyAt('04:00')
+    ->dailyAt('04:15')
     ->withoutOverlapping()
     ->onOneServer();
 
