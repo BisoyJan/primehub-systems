@@ -21,6 +21,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
 
@@ -447,6 +448,14 @@ class LeaveRequestController extends Controller
                 }
             }
 
+            // Handle medical certificate file upload for Sick Leave
+            $medicalCertPath = null;
+            if ($request->leave_type === 'SL' && $request->hasFile('medical_cert_file')) {
+                $file = $request->file('medical_cert_file');
+                $filename = 'medcert_' . $targetUser->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+                $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
+            }
+
             // Create leave request
             $leaveRequest = LeaveRequest::create([
                 'user_id' => $targetUser->id,
@@ -457,6 +466,7 @@ class LeaveRequestController extends Controller
                 'reason' => $request->reason,
                 'campaign_department' => $request->campaign_department,
                 'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
+                'medical_cert_path' => $medicalCertPath,
                 'status' => 'pending',
                 'attendance_points_at_request' => $attendancePoints,
                 'requires_tl_approval' => $requiresTlApproval,
@@ -586,6 +596,9 @@ class LeaveRequestController extends Controller
             && $leaveRequest->status === 'approved'
             && !$leaveEndDatePassed;
 
+        // Check if user can view medical certificate (Admin, HR, Super Admin only)
+        $canViewMedicalCert = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+
         return Inertia::render('FormRequest/Leave/Show', [
             'leaveRequest' => $leaveRequestData,
             'isAdmin' => $isAdmin,
@@ -597,7 +610,34 @@ class LeaveRequestController extends Controller
             'hasUserApproved' => $hasUserApproved,
             'canTlApprove' => $canTlApprove,
             'userRole' => $user->role,
+            'canViewMedicalCert' => $canViewMedicalCert,
         ]);
+    }
+
+    /**
+     * View medical certificate for a leave request.
+     * Only accessible by Admin, HR, Super Admin.
+     */
+    public function viewMedicalCert(LeaveRequest $leaveRequest)
+    {
+        $user = auth()->user();
+
+        // Only Admin, HR, Super Admin can view medical certificates
+        if (!in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+            abort(403, 'Unauthorized to view medical certificate.');
+        }
+
+        if (!$leaveRequest->medical_cert_path) {
+            abort(404, 'Medical certificate not found.');
+        }
+
+        $path = storage_path('app/private/' . $leaveRequest->medical_cert_path);
+
+        if (!file_exists($path)) {
+            abort(404, 'Medical certificate file not found.');
+        }
+
+        return response()->file($path);
     }
 
     /**
@@ -791,6 +831,18 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
+            // Handle medical certificate file upload for Sick Leave
+            $medicalCertPath = $leaveRequest->medical_cert_path; // Keep existing if not replaced
+            if ($request->leave_type === 'SL' && $request->hasFile('medical_cert_file')) {
+                // Delete old file if exists
+                if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
+                    Storage::disk('local')->delete($leaveRequest->medical_cert_path);
+                }
+                $file = $request->file('medical_cert_file');
+                $filename = 'medcert_' . $targetUser->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+                $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
+            }
+
             $updateData = [
                 'leave_type' => $request->leave_type,
                 'start_date' => $startDate,
@@ -799,6 +851,7 @@ class LeaveRequestController extends Controller
                 'reason' => $request->reason,
                 'campaign_department' => $request->campaign_department,
                 'medical_cert_submitted' => $request->boolean('medical_cert_submitted', false),
+                'medical_cert_path' => $medicalCertPath,
                 'attendance_points_at_request' => $attendancePoints,
             ];
 
@@ -1713,6 +1766,11 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
+            // Delete medical certificate file if exists
+            if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
+                Storage::disk('local')->delete($leaveRequest->medical_cert_path);
+            }
+
             // Restore credits if it was approved and credits were deducted
             if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
                 $leaveCreditService->restoreCredits($leaveRequest);

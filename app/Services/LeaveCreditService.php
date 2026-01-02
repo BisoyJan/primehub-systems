@@ -482,16 +482,16 @@ class LeaveCreditService
             }
         }
 
-        // Validate SL date constraints (last 7 days to today)
+        // Validate SL date constraints (3 weeks back to 1 month ahead)
         if ($leaveType === 'SL') {
-            $sevenDaysAgo = now()->subDays(7)->startOfDay();
-            $today = now()->endOfDay();
+            $threeWeeksAgo = now()->subWeeks(3)->startOfDay();
+            $oneMonthAhead = now()->addMonth()->endOfDay();
 
-            if ($startDate->lt($sevenDaysAgo)) {
-                $errors[] = "Sick Leave start date must be within the last 7 days.";
+            if ($startDate->lt($threeWeeksAgo)) {
+                $errors[] = "Sick Leave start date must be within the last 3 weeks.";
             }
-            if ($endDate->gt($today)) {
-                $errors[] = "Sick Leave end date cannot be in the future.";
+            if ($endDate->gt($oneMonthAhead)) {
+                $errors[] = "Sick Leave end date cannot exceed 1 month from today.";
             }
         }
 

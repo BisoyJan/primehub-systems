@@ -29,6 +29,7 @@ class LeaveRequest extends Model
         'reason',
         'campaign_department',
         'medical_cert_submitted',
+        'medical_cert_path',
         'status',
         'reviewed_by',
         'reviewed_at',

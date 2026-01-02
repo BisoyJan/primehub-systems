@@ -36,7 +36,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -54,7 +54,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, create as leaveCreateRoute, show as leaveShowRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -76,6 +76,8 @@ interface LeaveRequest {
     tl_approved_at: string | null;
     tl_rejected: boolean;
     created_at: string;
+    medical_cert_path: string | null;
+    medical_cert_submitted: boolean;
 }
 
 interface PaginationLink {
@@ -145,6 +147,11 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [showEmployeeSearch, setShowEmployeeSearch] = useState(false);
 
+    // Medical Certificate dialog state
+    const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
+    const [selectedMedicalCertLeaveId, setSelectedMedicalCertLeaveId] = useState<number | null>(null);
+    const [selectedMedicalCertUserName, setSelectedMedicalCertUserName] = useState<string>('');
+
     // Export dialog state
     const [showExportDialog, setShowExportDialog] = useState(false);
     const [exportYear, setExportYear] = useState(new Date().getFullYear() - 1);
@@ -158,6 +165,13 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
         total: leaveRequests.data.length,
     };
     const paginationLinks = leaveRequests.links || [];
+
+    // Handle opening medical certificate dialog
+    const handleViewMedicalCert = (leaveId: number, userName: string) => {
+        setSelectedMedicalCertLeaveId(leaveId);
+        setSelectedMedicalCertUserName(userName);
+        setShowMedicalCertDialog(true);
+    };
 
     // Get unique employee names from current data
     const uniqueEmployees = React.useMemo(() => {
@@ -735,6 +749,17 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     </Link>
+                                                    {/* Medical Certificate Button - Only for SL with uploaded cert */}
+                                                    {request.leave_type === 'SL' && request.medical_cert_path && isAdmin && (
+                                                        <Button
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => handleViewMedicalCert(request.id, request.user.name)}
+                                                            title="View Medical Certificate"
+                                                        >
+                                                            <FileImage className="h-4 w-4 text-green-600" />
+                                                        </Button>
+                                                    )}
                                                     {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
                                                         <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
                                                             <Button size="sm" variant="ghost">
@@ -828,6 +853,18 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                             View
                                         </Button>
                                     </Link>
+                                    {/* Medical Certificate Button - Mobile */}
+                                    {request.leave_type === 'SL' && request.medical_cert_path && isAdmin && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleViewMedicalCert(request.id, request.user.name)}
+                                            className="flex-1"
+                                        >
+                                            <FileImage className="mr-2 h-4 w-4 text-green-600" />
+                                            Med Cert
+                                        </Button>
+                                    )}
                                     {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
                                         <Link href={leaveEditRoute({ leaveRequest: request.id }).url} className="flex-1">
                                             <Button size="sm" variant="outline" className="w-full">
@@ -964,6 +1001,32 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                 Exporting...
                             </Button>
                         )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Medical Certificate Dialog */}
+            <Dialog open={showMedicalCertDialog} onOpenChange={setShowMedicalCertDialog}>
+                <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-auto">
+                    <DialogHeader>
+                        <DialogTitle>Medical Certificate</DialogTitle>
+                        <DialogDescription>
+                            Medical certificate submitted by {selectedMedicalCertUserName}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="flex justify-center items-center p-4 bg-muted/30 rounded-lg">
+                        {selectedMedicalCertLeaveId && (
+                            <img
+                                src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
+                                alt="Medical Certificate"
+                                className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-lg"
+                            />
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowMedicalCertDialog(false)}>
+                            Close
+                        </Button>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>

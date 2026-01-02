@@ -330,6 +330,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/', [LeaveRequestController::class, 'store'])->name('store');
             Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->name('show');
             Route::get('/{leaveRequest}/edit', [LeaveRequestController::class, 'edit'])->name('edit');
+            Route::get('/{leaveRequest}/medical-cert', [LeaveRequestController::class, 'viewMedicalCert'])->name('medical-cert');
             Route::put('/{leaveRequest}', [LeaveRequestController::class, 'update'])->name('update');
             Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
             Route::post('/{leaveRequest}/force-approve', [LeaveRequestController::class, 'forceApprove'])->name('force-approve');

@@ -19,10 +19,10 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -71,6 +71,7 @@ interface LeaveRequest {
     short_notice_override?: boolean;
     short_notice_override_by?: number;
     short_notice_overrider?: User;
+    medical_cert_path?: string;
 }
 
 interface Props {
@@ -84,6 +85,7 @@ interface Props {
     userRole: string;
     canAdminCancel?: boolean;
     canEditApproved?: boolean;
+    canViewMedicalCert?: boolean;
 }
 
 export default function Show({
@@ -95,9 +97,11 @@ export default function Show({
     isSuperAdmin = false,
     canAdminCancel = false,
     canEditApproved = false,
+    canViewMedicalCert = false,
 }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
+    const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showTLApproveDialog, setShowTLApproveDialog] = useState(false);
@@ -421,13 +425,44 @@ export default function Show({
 
                         {/* Medical Cert (if SL) */}
                         {leaveRequest.leave_type === 'SL' && (
-                            <div>
+                            <div className="space-y-2">
                                 <p className="text-sm font-medium text-muted-foreground">
                                     Medical Certificate
                                 </p>
-                                <p className="text-base">
-                                    {leaveRequest.medical_cert_submitted ? 'Will be submitted' : 'Not required'}
-                                </p>
+                                {leaveRequest.medical_cert_path && canViewMedicalCert ? (
+                                    <div className="flex items-center gap-2">
+                                        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-300">
+                                            <FileImage className="h-3 w-3 mr-1" />
+                                            Uploaded
+                                        </Badge>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowMedicalCertDialog(true)}
+                                        >
+                                            <FileImage className="h-4 w-4 mr-1" />
+                                            View Certificate
+                                        </Button>
+                                        <a
+                                            href={leaveMedicalCertRoute(leaveRequest.id).url}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            title="Open medical certificate in new tab"
+                                        >
+                                            <Button variant="ghost" size="sm">
+                                                <ExternalLink className="h-4 w-4" />
+                                            </Button>
+                                        </a>
+                                    </div>
+                                ) : leaveRequest.medical_cert_submitted ? (
+                                    <Badge variant="outline" className="bg-yellow-50 text-yellow-700 border-yellow-300">
+                                        Pending submission
+                                    </Badge>
+                                ) : (
+                                    <Badge variant="outline" className="bg-gray-50 text-gray-600 border-gray-300">
+                                        Not provided
+                                    </Badge>
+                                )}
                             </div>
                         )}
 
@@ -1118,6 +1153,47 @@ export default function Show({
                         >
                             <Calendar className="mr-1 h-4 w-4" />
                             Adjust Leave
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Medical Certificate Dialog */}
+            <Dialog open={showMedicalCertDialog} onOpenChange={setShowMedicalCertDialog}>
+                <DialogContent className="max-w-3xl max-h-[90vh]">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <FileImage className="h-5 w-5" />
+                            Medical Certificate
+                        </DialogTitle>
+                        <DialogDescription>
+                            Leave Request #{leaveRequest.id} - {leaveRequest.user.name}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="flex flex-col items-center justify-center p-4">
+                        {leaveRequest.medical_cert_path && (
+                            <img
+                                src={leaveMedicalCertRoute(leaveRequest.id).url}
+                                alt="Medical Certificate"
+                                className="max-w-full max-h-[60vh] object-contain rounded-lg border"
+                            />
+                        )}
+                    </div>
+
+                    <DialogFooter>
+                        <a
+                            href={leaveMedicalCertRoute(leaveRequest.id).url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <Button variant="outline">
+                                <ExternalLink className="h-4 w-4 mr-2" />
+                                Open in New Tab
+                            </Button>
+                        </a>
+                        <Button onClick={() => setShowMedicalCertDialog(false)}>
+                            Close
                         </Button>
                     </DialogFooter>
                 </DialogContent>

@@ -14,13 +14,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check, FileImage, Upload, X } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { show as leaveShowRoute, update as leaveUpdateRoute } from '@/routes/leave-requests';
+import { show as leaveShowRoute, update as leaveUpdateRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
 
 interface LeaveRequest {
     id: number;
@@ -32,6 +32,7 @@ interface LeaveRequest {
     reason: string;
     campaign_department: string;
     medical_cert_submitted: boolean;
+    medical_cert_path: string | null;
     status: string;
     short_notice_override?: boolean;
     original_start_date?: string;
@@ -106,15 +107,17 @@ export default function Edit({
     canOverrideShortNotice = false,
     existingLeaveRequests = [],
 }: Props) {
-    const { data, setData, put, processing, errors } = useForm({
+    const { data, setData, post, processing, errors, progress } = useForm({
         leave_type: leaveRequest.leave_type,
         start_date: leaveRequest.start_date,
         end_date: leaveRequest.end_date,
         reason: leaveRequest.reason,
         campaign_department: leaveRequest.campaign_department,
         medical_cert_submitted: leaveRequest.medical_cert_submitted,
+        medical_cert_file: null as File | null,
         date_modification_reason: '',
         short_notice_override: leaveRequest.short_notice_override || false,
+        _method: 'PUT', // For method spoofing
     });
 
     const [calculatedDays, setCalculatedDays] = useState<number>(leaveRequest.days_requested);
@@ -122,6 +125,7 @@ export default function Edit({
     const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
+    const [medicalCertPreview, setMedicalCertPreview] = useState<string | null>(null);
 
     const requiresCredits = ['VL', 'SL'].includes(data.leave_type);
 
@@ -145,15 +149,52 @@ export default function Edit({
         return date.toLocaleDateString('en-US', { weekday: 'long' });
     };
 
-    // Get date constraints for Sick Leave (7 days back to today)
+    // Get date constraints for Sick Leave (3 weeks back for start, 1 month ahead for end)
     const getSlMinDate = (): string => {
         const date = new Date();
-        date.setDate(date.getDate() - 7);
+        date.setDate(date.getDate() - 21); // 3 weeks ago
         return date.toISOString().split('T')[0];
     };
 
-    const getTodayDate = (): string => {
-        return new Date().toISOString().split('T')[0];
+    const getSlMaxEndDate = (): string => {
+        const date = new Date();
+        date.setMonth(date.getMonth() + 1); // 1 month from now
+        return date.toISOString().split('T')[0];
+    };
+
+    // Handle medical certificate file selection
+    const handleMedicalCertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            if (!allowedTypes.includes(file.type)) {
+                toast.error('Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
+                return;
+            }
+            // Validate file size (4MB max)
+            if (file.size > 4 * 1024 * 1024) {
+                toast.error('File size exceeds 4MB limit.');
+                return;
+            }
+            setData('medical_cert_file', file);
+            setData('medical_cert_submitted', true);
+            // Create preview
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setMedicalCertPreview(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Clear selected medical certificate
+    const clearMedicalCert = () => {
+        setData('medical_cert_file', null);
+        setMedicalCertPreview(null);
+        // Reset file input
+        const fileInput = document.getElementById('medical_cert_file') as HTMLInputElement;
+        if (fileInput) fileInput.value = '';
     };
 
     // Handle start date change with weekend validation
@@ -328,7 +369,8 @@ export default function Edit({
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
 
-        put(leaveUpdateRoute({ leaveRequest: leaveRequest.id }).url, {
+        post(leaveUpdateRoute({ leaveRequest: leaveRequest.id }).url, {
+            forceFormData: true, // Required for file uploads
             onSuccess: () => {
                 toast.success('Leave request updated successfully!', {
                     description: 'Your changes have been saved.',
@@ -694,7 +736,7 @@ export default function Edit({
                                         value={data.start_date}
                                         onChange={(e) => handleStartDateChange(e.target.value)}
                                         min={data.leave_type === 'SL' ? getSlMinDate() : new Date().toISOString().split('T')[0]}
-                                        max={data.leave_type === 'SL' ? getTodayDate() : undefined}
+                                        max={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
                                         className={`[&::-webkit-calendar-picker-indicator]:dark:invert ${weekendError.start ? 'border-red-500' : ''}`}
                                     />
                                     {weekendError.start && (
@@ -704,7 +746,7 @@ export default function Edit({
                                         <p className="text-sm text-red-500">{errors.start_date}</p>
                                     )}
                                     {data.leave_type === 'SL' ? (
-                                        <p className="text-xs text-muted-foreground">Sick Leave: Select from last 7 days to today</p>
+                                        <p className="text-xs text-muted-foreground">Sick Leave: Select from last 3 weeks to 1 month ahead</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
@@ -720,7 +762,7 @@ export default function Edit({
                                         value={data.end_date}
                                         onChange={(e) => handleEndDateChange(e.target.value)}
                                         min={data.leave_type === 'SL' ? (data.start_date || getSlMinDate()) : (data.start_date || new Date().toISOString().split('T')[0])}
-                                        max={data.leave_type === 'SL' ? getTodayDate() : undefined}
+                                        max={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
                                         className={`[&::-webkit-calendar-picker-indicator]:dark:invert ${weekendError.end ? 'border-red-500' : ''}`}
                                     />
                                     {weekendError.end && (
@@ -730,7 +772,7 @@ export default function Edit({
                                         <p className="text-sm text-red-500">{errors.end_date}</p>
                                     )}
                                     {data.leave_type === 'SL' ? (
-                                        <p className="text-xs text-muted-foreground">Sick Leave: Cannot exceed today</p>
+                                        <p className="text-xs text-muted-foreground">Sick Leave: Up to 1 month from today</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
@@ -777,18 +819,88 @@ export default function Edit({
                             {/* Medical Certificate (for SL) */}
                             {data.leave_type === 'SL' && (
                                 <div className="space-y-3">
-                                    <div className="flex items-center space-x-2">
-                                        <Checkbox
-                                            id="medical_cert_submitted"
-                                            checked={data.medical_cert_submitted}
-                                            onCheckedChange={(checked) =>
-                                                setData('medical_cert_submitted', checked as boolean)
-                                            }
-                                        />
-                                        <Label htmlFor="medical_cert_submitted" className="font-normal">
-                                            I will submit a medical certificate
-                                        </Label>
-                                    </div>
+                                    <Label>Medical Certificate (Optional)</Label>
+
+                                    {/* Show existing certificate if available */}
+                                    {leaveRequest.medical_cert_path && !medicalCertPreview && (
+                                        <div className="mb-4 p-4 border rounded-lg bg-muted/30">
+                                            <div className="flex items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <FileImage className="h-5 w-5 text-green-600" />
+                                                    <span className="text-sm font-medium">Existing Medical Certificate</span>
+                                                </div>
+                                                <a
+                                                    href={leaveMedicalCertRoute(leaveRequest.id).url}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="text-sm text-primary hover:underline"
+                                                >
+                                                    View Current
+                                                </a>
+                                            </div>
+                                            <p className="text-xs text-muted-foreground mt-2">
+                                                Upload a new file below to replace the existing certificate
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Preview uploaded file */}
+                                    {medicalCertPreview ? (
+                                        <div className="relative">
+                                            <img
+                                                src={medicalCertPreview}
+                                                alt="Medical Certificate Preview"
+                                                className="max-h-48 rounded-lg border object-contain"
+                                            />
+                                            <Button
+                                                type="button"
+                                                variant="destructive"
+                                                size="icon"
+                                                className="absolute top-2 right-2 h-6 w-6"
+                                                onClick={clearMedicalCert}
+                                            >
+                                                <X className="h-4 w-4" />
+                                            </Button>
+                                            <p className="text-xs text-muted-foreground mt-2">
+                                                {data.medical_cert_file?.name} ({((data.medical_cert_file?.size || 0) / 1024 / 1024).toFixed(2)} MB)
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-6 text-center hover:border-muted-foreground/50 transition-colors">
+                                            <input
+                                                id="medical_cert_file"
+                                                type="file"
+                                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                                                onChange={handleMedicalCertChange}
+                                                className="hidden"
+                                            />
+                                            <label
+                                                htmlFor="medical_cert_file"
+                                                className="cursor-pointer flex flex-col items-center gap-2"
+                                            >
+                                                <Upload className="h-8 w-8 text-muted-foreground" />
+                                                <span className="text-sm font-medium">Click to upload medical certificate</span>
+                                                <span className="text-xs text-muted-foreground">
+                                                    JPEG, PNG, GIF, WebP (max 4MB)
+                                                </span>
+                                            </label>
+                                        </div>
+                                    )}
+
+                                    {errors.medical_cert_file && (
+                                        <p className="text-sm text-red-500">{errors.medical_cert_file}</p>
+                                    )}
+
+                                    {/* Upload progress */}
+                                    {progress && (progress.percentage ?? 0) > 0 && (progress.percentage ?? 0) < 100 && (
+                                        <div className="space-y-2">
+                                            <Progress value={progress.percentage ?? 0} className="h-2" />
+                                            <p className="text-xs text-muted-foreground text-center">
+                                                Uploading... {progress.percentage ?? 0}%
+                                            </p>
+                                        </div>
+                                    )}
+
                                     {slCreditInfo && (
                                         <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                                             <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />

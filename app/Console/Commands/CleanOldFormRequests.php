@@ -10,6 +10,7 @@ use App\Models\Site;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Storage;
 
 class CleanOldFormRequests extends Command
 {
@@ -137,6 +138,12 @@ class CleanOldFormRequests extends Command
 
         // Skip confirmation if --force flag is used or running in scheduled context
         if ($this->option('force') || !$this->input->isInteractive()) {
+            // Delete associated files before deleting records
+            $filesDeleted = $this->deleteAssociatedFiles($query->clone(), $formType);
+            if ($filesDeleted > 0) {
+                $this->line("  Deleted {$filesDeleted} associated file(s).");
+            }
+
             $deleted = $query->delete();
             $this->info("  Deleted {$deleted} records.");
 
@@ -153,5 +160,28 @@ class CleanOldFormRequests extends Command
         }
 
         return 0;
+    }
+
+    /**
+     * Delete associated files for records that will be deleted
+     */
+    protected function deleteAssociatedFiles($query, string $formType): int
+    {
+        $filesDeleted = 0;
+
+        // Only LeaveRequest has file attachments (medical certificates)
+        if ($formType === 'leave_request') {
+            $records = $query->whereNotNull('medical_cert_path')
+                ->pluck('medical_cert_path');
+
+            foreach ($records as $filePath) {
+                if ($filePath && Storage::disk('local')->exists($filePath)) {
+                    Storage::disk('local')->delete($filePath);
+                    $filesDeleted++;
+                }
+            }
+        }
+
+        return $filesDeleted;
     }
 }
