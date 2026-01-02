@@ -816,10 +816,12 @@ export default function Edit({
                                 )}
                             </div>
 
-                            {/* Medical Certificate (for SL) */}
-                            {data.leave_type === 'SL' && (
+                            {/* Medical/Supporting Document (for SL and BL) */}
+                            {(data.leave_type === 'SL' || data.leave_type === 'BL') && (
                                 <div className="space-y-3">
-                                    <Label>Medical Certificate (Optional)</Label>
+                                    <Label>
+                                        {data.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'} (Optional)
+                                    </Label>
 
                                     {/* Show existing certificate if available */}
                                     {leaveRequest.medical_cert_path && !medicalCertPreview && (
@@ -827,7 +829,9 @@ export default function Edit({
                                             <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-2">
                                                     <FileImage className="h-5 w-5 text-green-600" />
-                                                    <span className="text-sm font-medium">Existing Medical Certificate</span>
+                                                    <span className="text-sm font-medium">
+                                                        Existing {data.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
+                                                    </span>
                                                 </div>
                                                 <a
                                                     href={leaveMedicalCertRoute(leaveRequest.id).url}
@@ -879,7 +883,9 @@ export default function Edit({
                                                 className="cursor-pointer flex flex-col items-center gap-2"
                                             >
                                                 <Upload className="h-8 w-8 text-muted-foreground" />
-                                                <span className="text-sm font-medium">Click to upload medical certificate</span>
+                                                <span className="text-sm font-medium">
+                                                    Click to upload {data.leave_type === 'SL' ? 'medical certificate' : 'supporting document'}
+                                                </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     JPEG, PNG, GIF, WebP (max 4MB)
                                                 </span>

@@ -749,13 +749,13 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     </Link>
-                                                    {/* Medical Certificate Button - Only for SL with uploaded cert */}
-                                                    {request.leave_type === 'SL' && request.medical_cert_path && isAdmin && (
+                                                    {/* Medical/Supporting Document Button - For SL and BL with uploaded cert */}
+                                                    {(request.leave_type === 'SL' || request.leave_type === 'BL') && request.medical_cert_path && isAdmin && (
                                                         <Button
                                                             size="sm"
                                                             variant="ghost"
                                                             onClick={() => handleViewMedicalCert(request.id, request.user.name)}
-                                                            title="View Medical Certificate"
+                                                            title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}`}
                                                         >
                                                             <FileImage className="h-4 w-4 text-green-600" />
                                                         </Button>
@@ -853,8 +853,8 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                             View
                                         </Button>
                                     </Link>
-                                    {/* Medical Certificate Button - Mobile */}
-                                    {request.leave_type === 'SL' && request.medical_cert_path && isAdmin && (
+                                    {/* Medical/Supporting Document Button - Mobile */}
+                                    {(request.leave_type === 'SL' || request.leave_type === 'BL') && request.medical_cert_path && isAdmin && (
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -862,7 +862,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                             className="flex-1"
                                         >
                                             <FileImage className="mr-2 h-4 w-4 text-green-600" />
-                                            Med Cert
+                                            {request.leave_type === 'SL' ? 'Med Cert' : 'Document'}
                                         </Button>
                                     )}
                                     {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
@@ -1009,16 +1009,24 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
             <Dialog open={showMedicalCertDialog} onOpenChange={setShowMedicalCertDialog}>
                 <DialogContent className="max-w-[90vw] sm:max-w-2xl max-h-[90vh] overflow-auto">
                     <DialogHeader>
-                        <DialogTitle>Medical Certificate</DialogTitle>
+                        <DialogTitle>
+                            {selectedMedicalCertLeaveId && leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type === 'SL'
+                                ? 'Medical Certificate'
+                                : 'Supporting Document'}
+                        </DialogTitle>
                         <DialogDescription>
-                            Medical certificate submitted by {selectedMedicalCertUserName}
+                            {selectedMedicalCertLeaveId && leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type === 'SL'
+                                ? 'Medical certificate'
+                                : 'Supporting document'} submitted by {selectedMedicalCertUserName}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-center items-center p-4 bg-muted/30 rounded-lg">
                         {selectedMedicalCertLeaveId && (
                             <img
                                 src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
-                                alt="Medical Certificate"
+                                alt={leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type === 'SL'
+                                    ? 'Medical Certificate'
+                                    : 'Supporting Document'}
                                 className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-lg"
                             />
                         )}

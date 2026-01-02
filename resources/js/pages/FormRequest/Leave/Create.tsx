@@ -849,8 +849,8 @@ export default function Create({
                                 )}
                             </div>
 
-                            {/* Medical Certificate (for SL) */}
-                            {data.leave_type === 'SL' && (
+                            {/* Medical/Supporting Document (for SL and BL) */}
+                            {(data.leave_type === 'SL' || data.leave_type === 'BL') && (
                                 <div className="space-y-4">
                                     <div>
                                         <Label className="text-base font-medium">

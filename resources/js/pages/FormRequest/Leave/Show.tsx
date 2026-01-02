@@ -1164,7 +1164,7 @@ export default function Show({
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <FileImage className="h-5 w-5" />
-                            Medical Certificate
+                            {leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
                         </DialogTitle>
                         <DialogDescription>
                             Leave Request #{leaveRequest.id} - {leaveRequest.user.name}
@@ -1175,7 +1175,7 @@ export default function Show({
                         {leaveRequest.medical_cert_path && (
                             <img
                                 src={leaveMedicalCertRoute(leaveRequest.id).url}
-                                alt="Medical Certificate"
+                                alt={leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
                                 className="max-w-full max-h-[60vh] object-contain rounded-lg border"
                             />
                         )}
