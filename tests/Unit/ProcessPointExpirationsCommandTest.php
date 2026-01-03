@@ -393,5 +393,51 @@ class ProcessPointExpirationsCommandTest extends TestCase
         $this->assertTrue($newPoint->fresh()->is_expired);
         $this->assertNotEquals('batch123', $newPoint->fresh()->gbro_batch_id);
     }
-}
 
+    #[Test]
+    public function it_resets_gbro_clock_after_gbro_is_applied()
+    {
+        $user = User::factory()->create();
+
+        // Create 4 violations, oldest to newest
+        $point1 = AttendancePoint::factory()
+            ->tardy()
+            ->forUser($user)
+            ->onDate(now()->subDays(100))
+            ->create(['eligible_for_gbro' => true]);
+
+        $point2 = AttendancePoint::factory()
+            ->tardy()
+            ->forUser($user)
+            ->onDate(now()->subDays(90))
+            ->create(['eligible_for_gbro' => true]);
+
+        $point3 = AttendancePoint::factory()
+            ->tardy()
+            ->forUser($user)
+            ->onDate(now()->subDays(80))
+            ->create(['eligible_for_gbro' => true]);
+
+        $point4 = AttendancePoint::factory()
+            ->tardy()
+            ->forUser($user)
+            ->onDate(now()->subDays(70))
+            ->create(['eligible_for_gbro' => true]);
+
+        // First GBRO run - should expire point4 and point3 (most recent 2)
+        Artisan::call('points:process-expirations');
+
+        $this->assertFalse($point1->fresh()->is_expired);
+        $this->assertFalse($point2->fresh()->is_expired);
+        $this->assertTrue($point3->fresh()->is_expired);
+        $this->assertTrue($point4->fresh()->is_expired);
+
+        // Second GBRO run immediately after - should NOT expire point1 and point2
+        // because the clock reset to today (GBRO application date)
+        Artisan::call('points:process-expirations');
+
+        // point1 and point2 should still be active (clock reset, need 60 more days)
+        $this->assertFalse($point1->fresh()->is_expired);
+        $this->assertFalse($point2->fresh()->is_expired);
+    }
+}

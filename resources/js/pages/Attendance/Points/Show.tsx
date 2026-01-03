@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { formatDateShort, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import { usePermission } from "@/hooks/useAuthorization";
+import { HasRole } from "@/components/authorization";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -30,7 +31,21 @@ import {
     AlertDialogHeader,
     AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2 } from "lucide-react";
+import {
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+    DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
+import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, Play, RefreshCw, BellOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -41,8 +56,10 @@ import {
     startExportExcel as attendancePointsStartExportExcel,
     excuse as attendancePointsExcuse,
     unexcuse as attendancePointsUnexcuse,
+    recalculateGbro as attendancePointsRecalculateGbro,
 } from "@/routes/attendance-points";
 import exportExcelRoutes from "@/routes/attendance-points/export-excel";
+import managementRoutes from "@/routes/attendance-points/management";
 
 interface User {
     id: number;
@@ -69,6 +86,7 @@ interface AttendancePoint {
     user?: User;
     // Expiration fields
     expires_at: string | null;
+    gbro_expires_at: string | null;
     expiration_type: 'sro' | 'gbro' | 'none' | null;
     is_expired: boolean;
     expired_at: string | null;
@@ -111,6 +129,9 @@ interface GbroStats {
     eligible_points_count: number;
     eligible_points_sum: number;
     last_violation_date: string | null;
+    last_gbro_date: string | null;
+    gbro_reference_date: string | null;
+    gbro_reference_type: 'violation' | 'gbro' | null;
     is_gbro_ready: boolean;
 }
 
@@ -138,9 +159,10 @@ const formatDate = formatDateShort; // Alias for backward compatibility
  */
 const getDaysRemaining = (expiresAt: string): number => {
     const expDate = new Date(expiresAt);
-    expDate.setHours(23, 59, 59, 999); // End of expiration day
+    expDate.setHours(0, 0, 0, 0); // Start of expiration day
     const now = new Date();
-    return Math.ceil((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+    now.setHours(0, 0, 0, 0); // Start of today
+    return Math.round((expDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
 };
 
 /**
@@ -219,6 +241,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
     const [exportDownloadUrl, setExportDownloadUrl] = useState<string | null>(null);
     const [exportFilename, setExportFilename] = useState<string | null>(null);
     const exportPollingRef = useRef<NodeJS.Timeout | null>(null);
+
+    // Management state (user-specific)
+    const [isManagementAction, setIsManagementAction] = useState(false);
+    const [confirmAction, setConfirmAction] = useState<'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | null>(null);
+    const [expirationType, setExpirationType] = useState<'both' | 'sro' | 'gbro'>('both');
 
     // Cleanup polling on unmount
     useEffect(() => {
@@ -487,6 +514,76 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
         );
     };
 
+    // Management action handler (user-specific)
+    const handleManagementAction = async (action: 'expire-all' | 'reset-expired' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro') => {
+        setIsManagementAction(true);
+        try {
+            // Special handling for recalculate-gbro using Inertia router
+            if (action === 'recalculate-gbro') {
+                router.post(
+                    attendancePointsRecalculateGbro({ user: user.id }).url,
+                    {},
+                    {
+                        preserveScroll: true,
+                        onSuccess: () => {
+                            // Flash message handled by useFlashMessage
+                        },
+                        onError: () => {
+                            toast.error('Failed to recalculate GBRO');
+                        },
+                        onFinish: () => {
+                            setIsManagementAction(false);
+                            setConfirmAction(null);
+                        },
+                    }
+                );
+                return;
+            }
+
+            const routeMap: Record<string, { url: string }> = {
+                'expire-all': managementRoutes.expireAll(),
+                'reset-expired': managementRoutes.resetExpired(),
+                'initialize-gbro-dates': managementRoutes.initializeGbroDates(),
+                'fix-gbro-dates': managementRoutes.fixGbroDates(),
+            };
+
+            // Build request body - always include this user's ID
+            const body: Record<string, string | string[]> = {
+                user_ids: [String(user.id)],
+            };
+
+            if (action === 'expire-all') {
+                body.expiration_type = expirationType;
+            }
+
+            const response = await fetch(routeMap[action].url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                },
+                credentials: 'same-origin',
+                body: JSON.stringify(body),
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                toast.success(data.message);
+                // Refresh the page to show updated data
+                router.reload({ only: ['points', 'totals', 'gbroStats'] });
+            } else {
+                toast.error(data.message || 'Action failed');
+            }
+        } catch {
+            toast.error('Failed to perform action');
+        } finally {
+            setIsManagementAction(false);
+            setConfirmAction(null);
+            setExpirationType('both');
+        }
+    };
+
     const formattedDateRange = showAll
         ? 'All Records'
         : `${formatDate(dateRange.start)} - ${formatDate(dateRange.end)}`;
@@ -702,7 +799,11 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             )}
 
                             <div className="text-xs text-muted-foreground">
-                                Last violation: {formatDate(gbroStats.last_violation_date)}
+                                {gbroStats.gbro_reference_type === 'gbro' ? (
+                                    <>Last GBRO applied: {formatDate(gbroStats.gbro_reference_date)} (60-day clock reset)</>
+                                ) : (
+                                    <>Last violation: {formatDate(gbroStats.last_violation_date)}</>
+                                )}
                             </div>
                         </CardContent>
                     </Card>
@@ -710,8 +811,42 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
 
                 {/* Points Table */}
                 <Card>
-                    <CardHeader>
+                    <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle>Point History</CardTitle>
+                        <HasRole role={['IT', 'Super Admin', 'Admin']}>
+                            <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                    <Button variant="outline" size="sm">
+                                        <Settings className="h-4 w-4 mr-2" />
+                                        Manage
+                                    </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
+                                    <DropdownMenuItem onClick={() => setConfirmAction('recalculate-gbro')}>
+                                        <RotateCcw className="mr-2 h-4 w-4" />
+                                        Recalculate GBRO Dates
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setConfirmAction('expire-all')}>
+                                        <AlertTriangle className="mr-2 h-4 w-4" />
+                                        Expire All Pending Points
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setConfirmAction('reset-expired')}>
+                                        <RefreshCw className="mr-2 h-4 w-4" />
+                                        Reset Expired Points
+                                    </DropdownMenuItem>
+                                    <DropdownMenuSeparator />
+                                    <DropdownMenuItem onClick={() => setConfirmAction('initialize-gbro-dates')}>
+                                        <Play className="mr-2 h-4 w-4" />
+                                        Initialize GBRO Dates
+                                    </DropdownMenuItem>
+                                    <DropdownMenuItem onClick={() => setConfirmAction('fix-gbro-dates')}>
+                                        <BellOff className="mr-2 h-4 w-4" />
+                                        Fix GBRO Dates
+                                    </DropdownMenuItem>
+                                </DropdownMenuContent>
+                            </DropdownMenu>
+                        </HasRole>
                     </CardHeader>
                     <CardContent>
                         {points.length === 0 ? (
@@ -729,6 +864,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                             <TableHead>Status</TableHead>
                                             <TableHead>Violation Details</TableHead>
                                             <TableHead>Expires</TableHead>
+                                            <TableHead>GBRO Date</TableHead>
                                             {can('attendance_points.excuse') && <TableHead className="text-right">Actions</TableHead>}
                                         </TableRow>
                                     </TableHeader>
@@ -822,6 +958,23 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                             </div>
                                                         ) : (
                                                             <span className="text-muted-foreground text-sm">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {point.is_excused ? (
+                                                            <span className="text-muted-foreground text-sm">-</span>
+                                                        ) : point.is_expired && point.expiration_type === 'gbro' ? (
+                                                            <span className="text-muted-foreground text-sm">{point.gbro_expires_at ? formatDate(point.gbro_expires_at) : '-'}</span>
+                                                        ) : point.is_expired ? (
+                                                            <span className="text-muted-foreground text-sm">-</span>
+                                                        ) : point.eligible_for_gbro && point.gbro_expires_at ? (
+                                                            <span className="font-medium text-green-600 dark:text-green-400 text-sm">
+                                                                {formatDate(point.gbro_expires_at)}
+                                                            </span>
+                                                        ) : point.eligible_for_gbro ? (
+                                                            <span className="text-muted-foreground text-sm">-</span>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">Not eligible</span>
                                                         )}
                                                     </TableCell>
                                                     {can('attendance_points.excuse') && (
@@ -1380,6 +1533,70 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Management Action Confirmation Dialog */}
+            <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>
+                            {confirmAction === 'recalculate-gbro' && 'Recalculate GBRO Dates'}
+                            {confirmAction === 'expire-all' && 'Expire All Pending Points'}
+                            {confirmAction === 'reset-expired' && 'Reset Expired Points'}
+                            {confirmAction === 'initialize-gbro-dates' && 'Initialize GBRO Dates'}
+                            {confirmAction === 'fix-gbro-dates' && 'Fix GBRO Dates'}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                            {confirmAction === 'recalculate-gbro' && (
+                                <p>This will perform a full cascade recalculation of all GBRO dates for <span className="font-semibold">{user.name}</span>. It resets all GBRO states and re-simulates the entire timeline chronologically. Use this when backdated points were added, edited, or deleted.</p>
+                            )}
+                            {confirmAction === 'expire-all' && (
+                                <div className="space-y-3">
+                                    <p>This will expire all pending points for <span className="font-semibold">{user.name}</span> that have passed their expiration date.</p>
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Expiration Type:</label>
+                                        <Select value={expirationType} onValueChange={(value: 'sro' | 'gbro' | 'both') => setExpirationType(value)}>
+                                            <SelectTrigger className="w-full">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="both">Both SRO & GBRO</SelectItem>
+                                                <SelectItem value="sro">SRO Only</SelectItem>
+                                                <SelectItem value="gbro">GBRO Only</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                            )}
+                            {confirmAction === 'reset-expired' && (
+                                <p>This will reset all expired points for <span className="font-semibold">{user.name}</span> back to active status. Only use this if points were expired incorrectly.</p>
+                            )}
+                            {confirmAction === 'initialize-gbro-dates' && (
+                                <p>This will calculate and set GBRO expiration dates for <span className="font-semibold">{user.name}</span>'s active points that don't have dates set yet.</p>
+                            )}
+                            {confirmAction === 'fix-gbro-dates' && (
+                                <p>This will recalculate GBRO expiration dates for <span className="font-semibold">{user.name}</span>'s points based on current violation history. Use this if dates appear incorrect.</p>
+                            )}
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isManagementAction}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => confirmAction && handleManagementAction(confirmAction)}
+                            disabled={isManagementAction}
+                            className={confirmAction === 'expire-all' || confirmAction === 'reset-expired' ? 'bg-destructive text-destructive-foreground hover:bg-destructive/90' : ''}
+                        >
+                            {isManagementAction ? (
+                                <>
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                    Processing...
+                                </>
+                            ) : (
+                                'Confirm'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </AppLayout>
     );
 };

@@ -36,6 +36,7 @@ class AttendancePoint extends Model
         'excused_at',
         'excuse_reason',
         'expires_at',
+        'gbro_expires_at',
         'expiration_type',
         'is_expired',
         'expired_at',
@@ -55,6 +56,7 @@ class AttendancePoint extends Model
         'is_manual' => 'boolean',
         'excused_at' => 'datetime',
         'expires_at' => 'date:Y-m-d',
+        'gbro_expires_at' => 'date:Y-m-d',
         'is_expired' => 'boolean',
         'expired_at' => 'date:Y-m-d',
         'eligible_for_gbro' => 'boolean',
@@ -149,8 +151,12 @@ class AttendancePoint extends Model
      */
     public function getFormattedTypeAttribute(): string
     {
+        // For whole_day_absence, show NCNS only if is_advised is false
+        if ($this->point_type === 'whole_day_absence') {
+            return $this->is_advised ? 'Whole Day Absence' : 'Whole Day Absence (NCNS)';
+        }
+
         return match ($this->point_type) {
-            'whole_day_absence' => 'Whole Day Absence (NCNS)',
             'half_day_absence' => 'Half-Day Absence',
             'undertime' => 'Undertime',
             'undertime_more_than_hour' => 'Undertime (>1 Hour)',

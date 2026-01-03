@@ -167,7 +167,16 @@ php artisan points:process-expirations
 
 # Dry run (see what would happen without changes)
 php artisan points:process-expirations --dry-run
+
+# Skip notifications to employees
+php artisan points:process-expirations --no-notify
+
+# Force GBRO processing even if already ran today
+php artisan points:process-expirations --force
 ```
+
+**Same-Day Protection:**
+The command includes a safeguard that prevents multiple GBRO cycles from running on the same day. This prevents cascading expirations where Pair 0 expires, then Pair 1 immediately becomes eligible and expires in the same run. Use `--force` to bypass this check if needed.
 
 ### Scheduled Task (✅ Configured)
 Automatically configured in `app/Console/Kernel.php`:

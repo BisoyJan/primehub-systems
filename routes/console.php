@@ -14,47 +14,47 @@ Artisan::command('inspire', function () {
 |--------------------------------------------------------------------------
 */
 
-// Clean old activity logs (older than 90 days) - runs daily at 1:00 AM
-Schedule::command('activitylog:clean')->dailyAt('01:00');
+// Clean old activity logs (older than 90 days) - runs daily at 1:00 PM
+Schedule::command('activitylog:clean')->dailyAt('13:00');
 
-// Clean biometric records based on retention policies - runs daily at 2:00 AM
+// Clean biometric records based on retention policies - runs daily at 2:00 PM
 Schedule::command('biometric:clean-old-records --force')
-    ->dailyAt('02:00')
+    ->dailyAt('14:00')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Clean form request records based on retention policies - runs daily at 2:30 AM
+// Clean form request records based on retention policies - runs daily at 2:30 PM
 Schedule::command('form-request:clean-old-records --force')
-    ->dailyAt('02:30')
+    ->dailyAt('14:30')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Process attendance point expirations (SRO and GBRO) - runs daily at 3:00 AM
+// Process attendance point expirations (SRO and GBRO) - runs daily at 3:00 PM
 Schedule::command('points:process-expirations')
-    ->dailyAt('04:10')
+    ->dailyAt('15:00')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Check biometric retention policy expiry and notify admins - runs daily at 4:00 AM
+// Check biometric retention policy expiry and notify admins - runs daily at 4:00 PM
 Schedule::command('retention:check-expiry --days=7')
-    ->dailyAt('04:15')
+    ->dailyAt('16:00')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Check form request retention policy expiry and notify admins - runs daily at 4:15 AM
+// Check form request retention policy expiry and notify admins - runs daily at 4:15 PM
 Schedule::command('form-request:check-expiry --days=7')
-    ->dailyAt('04:15')
+    ->dailyAt('16:15')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Check activity log expiry and notify admins - runs daily at 4:30 AM
+// Check activity log expiry and notify admins - runs daily at 4:30 PM
 Schedule::command('activitylog:check-expiry --days=7 --retention=90')
-    ->dailyAt('04:30')
+    ->dailyAt('16:30')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Accrue monthly leave credits - runs on last day of month at 11:00 PM
+// Accrue monthly leave credits - runs on last day of month at 1:00 AM
 Schedule::command('leave:accrue-credits')
-    ->monthlyOn((int) date('t'), '23:00')
+    ->monthlyOn((int) date('t'), '01:00')
     ->withoutOverlapping()
     ->onOneServer();

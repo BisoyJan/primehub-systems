@@ -279,10 +279,13 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/management/reset-expired', [AttendancePointController::class, 'resetExpired'])->name('management.reset-expired');
             Route::post('/management/regenerate', [AttendancePointController::class, 'regeneratePoints'])->name('management.regenerate');
             Route::post('/management/cleanup', [AttendancePointController::class, 'cleanup'])->name('management.cleanup');
+            Route::post('/management/initialize-gbro-dates', [AttendancePointController::class, 'initializeGbroDates'])->name('management.initialize-gbro-dates');
+            Route::post('/management/fix-gbro-dates', [AttendancePointController::class, 'fixGbroDates'])->name('management.fix-gbro-dates');
 
             Route::get('/{user}', [AttendancePointController::class, 'show'])->name('show');
             Route::get('/{user}/statistics', [AttendancePointController::class, 'statistics'])->name('statistics');
             Route::get('/{user}/export', [AttendancePointController::class, 'export'])->name('export');
+            Route::post('/{user}/recalculate-gbro', [AttendancePointController::class, 'recalculateGbro'])->name('recalculate-gbro');
 
             // Job-based Excel exports (single user)
             Route::post('/{user}/start-export-excel', [AttendancePointController::class, 'startExportExcel'])->name('start-export-excel');

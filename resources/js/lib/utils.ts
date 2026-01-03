@@ -98,7 +98,7 @@ export function formatDate(dateString: string | null | undefined): string {
 }
 
 /**
- * Format a date string to short format (Mon, Jan 1)
+ * Format a date string to short format (Mon, Jan 1, 2025)
  */
 export function formatDateShort(dateString: string | null | undefined): string {
     if (!dateString) return '-';
@@ -116,6 +116,7 @@ export function formatDateShort(dateString: string | null | undefined): string {
             weekday: 'short',
             month: 'short',
             day: 'numeric',
+            year: 'numeric',
         });
     }
 
@@ -126,5 +127,6 @@ export function formatDateShort(dateString: string | null | undefined): string {
         weekday: 'short',
         month: 'short',
         day: 'numeric',
+        year: 'numeric',
     });
 }
