@@ -84,9 +84,21 @@ class AttendancePointController extends Controller
                   ->where('is_expired', false);
         }
 
+        // Filter by campaign (via user's active employee schedule)
+        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') {
+            $campaignId = $request->campaign_id;
+            $query->whereHas('user.employeeSchedules', function ($q) use ($campaignId) {
+                $q->where('campaign_id', $campaignId)
+                  ->where('is_active', true);
+            });
+        }
+
         $points = $query->paginate(25);
 
         $users = User::orderBy('first_name')->get();
+
+        // Get all campaigns for filter
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
 
         // Pass user_id for stats calculation when restricted
         $statsUserId = in_array(auth()->user()->role, $restrictedRoles) ? auth()->id() : null;
@@ -95,9 +107,11 @@ class AttendancePointController extends Controller
         return Inertia::render('Attendance/Points/Index', [
             'points' => $points,
             'users' => $users,
+            'campaigns' => $campaigns,
             'stats' => $stats,
             'filters' => [
                 'user_id' => $request->user_id,
+                'campaign_id' => $request->campaign_id,
                 'point_type' => $request->point_type,
                 'status' => $request->status,
                 'date_from' => $request->date_from,

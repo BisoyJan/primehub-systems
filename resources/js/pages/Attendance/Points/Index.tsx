@@ -78,6 +78,11 @@ interface User {
     middle_name?: string;
 }
 
+interface Campaign {
+    id: number;
+    name: string;
+}
+
 // Helper function to format user name as "Last Name, First Name M."
 const formatUserName = (user: User | { first_name: string; last_name: string; middle_name?: string }): string => {
     const middleInitial = user.middle_name ? ` ${user.middle_name}.` : '';
@@ -164,6 +169,7 @@ interface HighPointsEmployee {
 
 interface Filters {
     user_id?: string;
+    campaign_id?: string;
     point_type?: string;
     status?: string;
     date_from?: string;
@@ -175,6 +181,7 @@ interface Filters {
 interface PageProps extends SharedData {
     points?: PointsPayload;
     users?: User[];
+    campaigns?: Campaign[];
     stats?: Stats;
     filters?: Filters;
     [key: string]: unknown;
@@ -220,7 +227,7 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-export default function AttendancePointsIndex({ points, users, stats, filters, auth }: PageProps) {
+export default function AttendancePointsIndex({ points, users, campaigns, stats, filters, auth }: PageProps) {
     useFlashMessage();
     const { title, breadcrumbs } = usePageMeta({
         title: defaultTitle,
@@ -235,6 +242,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
+    const [selectedCampaignId, setSelectedCampaignId] = useState(filters?.campaign_id || "");
     const [selectedPointType, setSelectedPointType] = useState(filters?.point_type || "");
     const [selectedStatus, setSelectedStatus] = useState(filters?.status || "");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
@@ -339,6 +347,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const buildFilterQuery = useCallback(() => {
         const query: Record<string, string> = {};
         if (selectedUserId) query.user_id = selectedUserId;
+        if (selectedCampaignId) query.campaign_id = selectedCampaignId;
         if (selectedPointType) query.point_type = selectedPointType;
         if (selectedStatus) query.status = selectedStatus;
         if (dateFrom) query.date_from = dateFrom;
@@ -346,7 +355,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         if (filterExpiringSoon) query.expiring_soon = 'true';
         if (filterGbroEligible) query.gbro_eligible = 'true';
         return query;
-    }, [selectedUserId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
+    }, [selectedUserId, selectedCampaignId, selectedPointType, selectedStatus, dateFrom, dateTo, filterExpiringSoon, filterGbroEligible]);
 
     const handleFilter = () => {
         router.get(
@@ -386,6 +395,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
     const handleReset = () => {
         setSelectedUserId("");
         setUserSearchQuery("");
+        setSelectedCampaignId("");
         setSelectedPointType("");
         setSelectedStatus("");
         setDateFrom("");
@@ -927,7 +937,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
         // Points are already loaded from the backend, no need to fetch
     };
 
-    const showClearFilters = selectedUserId || selectedPointType || selectedStatus || dateFrom || dateTo || userSearchQuery || filterExpiringSoon || filterGbroEligible;
+    const showClearFilters = selectedUserId || selectedCampaignId || selectedPointType || selectedStatus || dateFrom || dateTo || userSearchQuery || filterExpiringSoon || filterGbroEligible;
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -1129,7 +1139,7 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                         )}
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                         {!isRestrictedUser && (
                             <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                                 <PopoverTrigger asChild>
@@ -1210,6 +1220,22 @@ export default function AttendancePointsIndex({ points, users, stats, filters, a
                                     </Command>
                                 </PopoverContent>
                             </Popover>
+                        )}
+
+                        {!isRestrictedUser && (
+                            <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {campaigns?.map(campaign => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            {campaign.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         )}
 
                         <Select value={selectedPointType || undefined} onValueChange={(value) => setSelectedPointType(value || "")}>
