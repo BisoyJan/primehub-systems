@@ -7,8 +7,9 @@ use App\Http\Requests\UpdateAttendancePointRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Jobs\GenerateAttendancePointsExportExcel;
 use App\Jobs\GenerateAllAttendancePointsExportExcel;
-use App\Models\AttendancePoint;
 use App\Models\Attendance;
+use App\Models\AttendancePoint;
+use App\Models\Campaign;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
@@ -66,6 +67,12 @@ class AttendancePointController extends Controller
             }
         }
 
+        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') {
+            $query->whereHas('user.activeSchedule', function ($q) use ($request) {
+                $q->where('campaign_id', $request->campaign_id);
+            });
+        }
+
         if ($request->filled('date_from') && $request->filled('date_to')) {
             $query->dateRange($request->date_from, $request->date_to);
         }
@@ -87,6 +94,7 @@ class AttendancePointController extends Controller
         $points = $query->paginate(25);
 
         $users = User::orderBy('first_name')->get();
+        $campaigns = Campaign::orderBy('name')->get();
 
         // Pass user_id for stats calculation when restricted
         $statsUserId = in_array(auth()->user()->role, $restrictedRoles) ? auth()->id() : null;
@@ -95,9 +103,11 @@ class AttendancePointController extends Controller
         return Inertia::render('Attendance/Points/Index', [
             'points' => $points,
             'users' => $users,
+            'campaigns' => $campaigns,
             'stats' => $stats,
             'filters' => [
                 'user_id' => $request->user_id,
+                'campaign_id' => $request->campaign_id,
                 'point_type' => $request->point_type,
                 'status' => $request->status,
                 'date_from' => $request->date_from,
