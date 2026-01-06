@@ -864,7 +864,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                             <TableHead>Status</TableHead>
                                             <TableHead>Violation Details</TableHead>
                                             <TableHead>Expires</TableHead>
-                                            <TableHead>GBRO Date</TableHead>
                                             {can('attendance_points.excuse') && <TableHead className="text-right">Actions</TableHead>}
                                         </TableRow>
                                     </TableHeader>
@@ -937,44 +936,49 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                                             <div className="text-sm">
                                                                 <div className="text-muted-foreground italic">Excused (Won't Expire)</div>
                                                             </div>
-                                                        ) : point.expires_at ? (
-                                                            <div className="text-sm">
-                                                                <div className="font-medium">{formatDate(point.expires_at)}</div>
-                                                                {!point.is_expired && !isActuallyExpired(point.expires_at) && (
-                                                                    <div className="text-xs text-muted-foreground">
-                                                                        {getDaysRemaining(point.expires_at)} days left
+                                                        ) : point.is_expired ? (
+                                                            <div className="text-xs space-y-0.5">
+                                                                {point.expires_at && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className={`font-semibold ${point.expiration_type === 'sro' ? 'text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}`}>SRO:</span>
+                                                                        <span className={`${point.expiration_type === 'sro' ? 'font-medium' : 'text-muted-foreground line-through'}`}>{formatDate(point.expires_at)}</span>
                                                                     </div>
                                                                 )}
-                                                                {!point.is_expired && isActuallyExpired(point.expires_at) && (
+                                                                {point.gbro_expires_at && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className={`font-semibold ${point.expiration_type === 'gbro' ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>GBRO:</span>
+                                                                        <span className={`${point.expiration_type === 'gbro' ? 'font-medium' : 'text-muted-foreground line-through'}`}>{formatDate(point.gbro_expires_at)}</span>
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        ) : point.expires_at ? (
+                                                            <div className="text-xs space-y-0.5">
+                                                                {/* SRO Expiration */}
+                                                                <div className="flex items-center gap-1">
+                                                                    <span className={!point.eligible_for_gbro ? 'font-semibold text-blue-600 dark:text-blue-400' : 'text-muted-foreground'}>SRO:</span>
+                                                                    <span className={!point.eligible_for_gbro ? 'font-medium' : 'text-muted-foreground'}>{formatDate(point.expires_at)}</span>
+                                                                </div>
+                                                                {/* GBRO Expiration (if eligible) */}
+                                                                {point.eligible_for_gbro && point.gbro_expires_at && (
+                                                                    <div className="flex items-center gap-1">
+                                                                        <span className="font-semibold text-green-600 dark:text-green-400">GBRO:</span>
+                                                                        <span className="font-medium text-green-600 dark:text-green-400">{formatDate(point.gbro_expires_at)}</span>
+                                                                    </div>
+                                                                )}
+                                                                {/* Days remaining or pending status */}
+                                                                {!isActuallyExpired(point.expires_at) && (
+                                                                    <div className="text-xs text-muted-foreground">
+                                                                        {getDaysRemaining(point.expires_at)} days left (SRO)
+                                                                    </div>
+                                                                )}
+                                                                {isActuallyExpired(point.expires_at) && (
                                                                     <div className="text-xs text-orange-600 dark:text-orange-400">
                                                                         Pending expiration
-                                                                    </div>
-                                                                )}
-                                                                {point.is_expired && point.expired_at && (
-                                                                    <div className="text-xs text-muted-foreground">
-                                                                        Expired: {formatDate(point.expired_at)}
                                                                     </div>
                                                                 )}
                                                             </div>
                                                         ) : (
                                                             <span className="text-muted-foreground text-sm">-</span>
-                                                        )}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {point.is_excused ? (
-                                                            <span className="text-muted-foreground text-sm">-</span>
-                                                        ) : point.is_expired && point.expiration_type === 'gbro' ? (
-                                                            <span className="text-muted-foreground text-sm">{point.gbro_expires_at ? formatDate(point.gbro_expires_at) : '-'}</span>
-                                                        ) : point.is_expired ? (
-                                                            <span className="text-muted-foreground text-sm">-</span>
-                                                        ) : point.eligible_for_gbro && point.gbro_expires_at ? (
-                                                            <span className="font-medium text-green-600 dark:text-green-400 text-sm">
-                                                                {formatDate(point.gbro_expires_at)}
-                                                            </span>
-                                                        ) : point.eligible_for_gbro ? (
-                                                            <span className="text-muted-foreground text-sm">-</span>
-                                                        ) : (
-                                                            <span className="text-xs text-muted-foreground">Not eligible</span>
                                                         )}
                                                     </TableCell>
                                                     {can('attendance_points.excuse') && (
@@ -1200,7 +1204,22 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                 </div>
                             )}
 
-                            {selectedViolationPoint.expires_at && (
+                            {selectedViolationPoint.is_excused ? (
+                                <div className="grid grid-cols-2 gap-4 pt-4 border-t">
+                                    <div>
+                                        <Label className="text-sm font-medium text-muted-foreground">Expiration Date</Label>
+                                        <p className="text-sm text-muted-foreground italic mt-1">N/A (Excused)</p>
+                                    </div>
+                                    <div>
+                                        <Label className="text-sm font-medium text-muted-foreground">Status</Label>
+                                        <div className="mt-1">
+                                            <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border">
+                                                Excused
+                                            </Badge>
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : selectedViolationPoint.expires_at && (
                                 <div className="grid grid-cols-2 gap-4 pt-4 border-t">
                                     <div>
                                         <Label className="text-sm font-medium text-muted-foreground">Expiration Date</Label>
@@ -1222,10 +1241,6 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                             {selectedViolationPoint.is_expired ? (
                                                 <Badge className="bg-gray-100 text-gray-800 border-gray-200 dark:bg-gray-900 dark:text-gray-100 border">
                                                     {selectedViolationPoint.expiration_type === 'gbro' ? 'Expired (GBRO)' : 'Expired (SRO)'}
-                                                </Badge>
-                                            ) : selectedViolationPoint.is_excused ? (
-                                                <Badge className="bg-green-100 text-green-800 border-green-200 dark:bg-green-900 dark:text-green-100 border">
-                                                    Excused
                                                 </Badge>
                                             ) : (
                                                 <Badge className="bg-red-100 text-red-800 border-red-200 dark:bg-red-900 dark:text-red-100 border">

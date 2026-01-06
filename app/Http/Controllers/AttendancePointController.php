@@ -84,21 +84,9 @@ class AttendancePointController extends Controller
                   ->where('is_expired', false);
         }
 
-        // Filter by campaign (via user's active employee schedule)
-        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') {
-            $campaignId = $request->campaign_id;
-            $query->whereHas('user.employeeSchedules', function ($q) use ($campaignId) {
-                $q->where('campaign_id', $campaignId)
-                  ->where('is_active', true);
-            });
-        }
-
         $points = $query->paginate(25);
 
         $users = User::orderBy('first_name')->get();
-
-        // Get all campaigns for filter
-        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
 
         // Pass user_id for stats calculation when restricted
         $statsUserId = in_array(auth()->user()->role, $restrictedRoles) ? auth()->id() : null;
@@ -107,11 +95,9 @@ class AttendancePointController extends Controller
         return Inertia::render('Attendance/Points/Index', [
             'points' => $points,
             'users' => $users,
-            'campaigns' => $campaigns,
             'stats' => $stats,
             'filters' => [
                 'user_id' => $request->user_id,
-                'campaign_id' => $request->campaign_id,
                 'point_type' => $request->point_type,
                 'status' => $request->status,
                 'date_from' => $request->date_from,
@@ -532,9 +518,9 @@ class AttendancePointController extends Controller
         $batchId = 'cascade_' . now()->format('YmdHis');
 
         // Step 1: Get ALL GBRO-eligible points (including those expired via GBRO)
+        // Include excused points for DATE calculations, but they won't be expired
         $allPoints = AttendancePoint::where('user_id', $userId)
             ->where('eligible_for_gbro', true)
-            ->where('is_excused', false)
             ->orderBy('shift_date', 'asc')
             ->get();
 
@@ -543,7 +529,8 @@ class AttendancePointController extends Controller
         }
 
         // Step 2: Reset all GBRO-expired points to active (we'll recalculate which should be expired)
-        foreach ($allPoints as $point) {
+        // Only reset non-excused points (excused points don't get expired via GBRO)
+        foreach ($allPoints->where('is_excused', false) as $point) {
             if ($point->is_expired && $point->expiration_type === 'gbro') {
                 $point->update([
                     'is_expired' => false,
@@ -558,13 +545,16 @@ class AttendancePointController extends Controller
         }
 
         // Step 3: Simulate GBRO expirations chronologically
-        // Get fresh list of active points sorted by date ASC
-        $activePoints = AttendancePoint::where('user_id', $userId)
+        // ALL points (including excused) for date calculations
+        // But only non-excused points can be expired
+        $allActivePoints = AttendancePoint::where('user_id', $userId)
             ->where('eligible_for_gbro', true)
-            ->where('is_excused', false)
             ->where('is_expired', false)
             ->orderBy('shift_date', 'asc')
             ->get();
+
+        // Points eligible to be expired via GBRO (non-excused only)
+        $activePoints = $allActivePoints->where('is_excused', false)->values();
 
         $lastGbroDate = null; // Track the last GBRO date for calculating next trigger
 
@@ -573,19 +563,21 @@ class AttendancePointController extends Controller
             // After a GBRO, the next scheduled GBRO is lastGbroDate + 60
             // But if there's a NEW violation between lastGbroDate and (lastGbroDate+60),
             // the clock RESETS to that new violation's date.
+            // NOTE: Use ALL points (including excused) for date calculations
 
-            $gbroDate = $this->calculateNextGbroDate($activePoints, $lastGbroDate);
+            $gbroDate = $this->calculateNextGbroDate($allActivePoints, $lastGbroDate);
 
             if (!$gbroDate) {
                 break; // No more GBRO to apply
             }
 
-            // Get the newest 2 active points BEFORE the GBRO trigger date
+            // Get the newest 2 NON-EXCUSED active points BEFORE the GBRO trigger date
+            // Excused points are protected from GBRO expiration
             $pointsBeforeGbro = $activePoints->filter(function ($p) use ($gbroDate) {
                 return Carbon::parse($p->shift_date)->lessThan($gbroDate);
             })->sortByDesc('shift_date')->values();
 
-            // Expire the last 2 (newest) points
+            // Expire the last 2 (newest) non-excused points
             $toExpire = $pointsBeforeGbro->take(2);
 
             if ($toExpire->isEmpty()) {
@@ -608,6 +600,7 @@ class AttendancePointController extends Controller
 
             // Refresh active points list (exclude newly expired)
             $expiredIds = $toExpire->pluck('id')->toArray();
+            $allActivePoints = $allActivePoints->reject(fn($p) => in_array($p->id, $expiredIds))->values();
             $activePoints = $activePoints->reject(fn($p) => in_array($p->id, $expiredIds))->values();
         }
 
@@ -724,28 +717,31 @@ class AttendancePointController extends Controller
      */
     private function updateUserGbroExpirationDates(int $userId, ?Carbon $referenceDate = null): void
     {
-        // Get all active, non-excused, GBRO-eligible points ordered by shift_date DESC (newest first)
-        $activePoints = AttendancePoint::where('user_id', $userId)
+        // Get ALL active GBRO-eligible points (including excused) for date reference
+        $allActivePoints = AttendancePoint::where('user_id', $userId)
             ->where('is_expired', false)
-            ->where('is_excused', false)
             ->where('eligible_for_gbro', true)
             ->whereNull('gbro_applied_at')
             ->orderBy('shift_date', 'desc')
             ->get();
+
+        // Get only non-excused points that can receive GBRO dates
+        $activePoints = $allActivePoints->where('is_excused', false)->values();
 
         if ($activePoints->isEmpty()) {
             return;
         }
 
         // GBRO Rules:
-        // 1. Only the first 2 active points (newest) get a GBRO date
+        // 1. Only the first 2 active NON-EXCUSED points (newest) get a GBRO date
         // 2. GBRO date = reference_date + 60 days
-        // 3. Reference date is the newest violation date (or provided date)
+        // 3. Reference date is the newest violation date (INCLUDING excused) or provided date
         // 4. Points beyond the first 2 have NULL gbro_expires_at (not calculated)
         // 5. When first 2 expire, remaining points recalculate based on scheduled GBRO date
+        // 6. Excused points: their DATE counts for reference, but they don't get GBRO dates
 
-        // Use provided reference date or the newest violation date
-        $baseDate = $referenceDate ?? Carbon::parse($activePoints->first()->shift_date);
+        // Use provided reference date or the newest violation date (INCLUDING excused)
+        $baseDate = $referenceDate ?? Carbon::parse($allActivePoints->first()->shift_date);
         $gbroExpiresAt = $baseDate->copy()->addDays(60)->format('Y-m-d');
 
         foreach ($activePoints as $index => $point) {
@@ -1540,30 +1536,31 @@ class AttendancePointController extends Controller
         try {
             $totalUpdated = 0;
 
-            // Get all users with active GBRO-eligible points
+            // Get all users with active GBRO-eligible points (including excused for reference)
             $usersWithPoints = User::whereHas('attendancePoints', function ($query) {
                 $query->where('is_expired', false)
-                    ->where('is_excused', false)
                     ->where('eligible_for_gbro', true)
                     ->whereNull('gbro_applied_at');
             })->get();
 
             foreach ($usersWithPoints as $user) {
-                // Get active GBRO-eligible points
-                $activePoints = $user->attendancePoints()
+                // Get ALL active GBRO-eligible points (including excused) for date reference
+                $allActivePoints = $user->attendancePoints()
                     ->where('is_expired', false)
-                    ->where('is_excused', false)
                     ->where('eligible_for_gbro', true)
                     ->whereNull('gbro_applied_at')
                     ->orderBy('shift_date', 'desc')
                     ->get();
 
+                // Get only non-excused points that can receive GBRO dates
+                $activePoints = $allActivePoints->where('is_excused', false)->values();
+
                 if ($activePoints->isEmpty()) {
                     continue;
                 }
 
-                // Calculate GBRO reference date
-                $lastViolationDate = Carbon::parse($activePoints->first()->shift_date);
+                // Calculate GBRO reference date (using ALL points including excused)
+                $lastViolationDate = Carbon::parse($allActivePoints->first()->shift_date);
 
                 $lastGbroDate = $user->attendancePoints()
                     ->whereNotNull('gbro_applied_at')
@@ -1579,8 +1576,8 @@ class AttendancePointController extends Controller
 
                 $gbroPredictionDate = $gbroReferenceDate->copy()->addDays(60);
 
-                // GBRO Rule: Only the first 2 points (newest) get GBRO date
-                // Points beyond first 2 have NULL gbro_expires_at
+                // GBRO Rule: Only the first 2 NON-EXCUSED points (newest) get GBRO date
+                // Excused points' dates count for reference but they don't get GBRO dates
                 foreach ($activePoints as $index => $point) {
                     if ($index < 2) {
                         // First 2 points get the GBRO date
@@ -1647,16 +1644,18 @@ class AttendancePointController extends Controller
                 $scheduledGbroDate = Carbon::parse($expiredPoint->gbro_expires_at);
                 $newGbroPrediction = $scheduledGbroDate->copy()->addDays(60);
 
-                // Get remaining active GBRO-eligible points, ordered newest first
-                $activePoints = AttendancePoint::where('user_id', $userId)
+                // Get remaining active GBRO-eligible points (including excused for reference)
+                $allActivePoints = AttendancePoint::where('user_id', $userId)
                     ->where('is_expired', false)
-                    ->where('is_excused', false)
                     ->where('eligible_for_gbro', true)
                     ->whereNull('gbro_applied_at')
                     ->orderBy('shift_date', 'desc')
                     ->get();
 
-                // GBRO Rule: Only the first 2 points (newest) get GBRO date
+                // Get only non-excused points that can receive GBRO dates
+                $activePoints = $allActivePoints->where('is_excused', false)->values();
+
+                // GBRO Rule: Only the first 2 NON-EXCUSED points (newest) get GBRO date
                 foreach ($activePoints as $index => $point) {
                     if ($index < 2) {
                         $point->update(['gbro_expires_at' => $newGbroPrediction->format('Y-m-d')]);
@@ -1690,10 +1689,11 @@ class AttendancePointController extends Controller
     /**
      * Calculate the GBRO reference date for a user.
      * Returns the MORE RECENT of: last GBRO application date OR last violation date.
+     * Note: Excused points' dates still count for the reference calculation.
      */
     protected function calculateGbroReferenceDate(User $user, $activePoints): Carbon
     {
-        // Get the most recent violation date from active GBRO-eligible points
+        // Get the most recent violation date from active GBRO-eligible points (including excused)
         $lastViolationDate = Carbon::parse($activePoints->first()->shift_date);
 
         // Get the most recent GBRO application date for this user (if any)
