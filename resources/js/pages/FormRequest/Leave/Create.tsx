@@ -992,11 +992,10 @@ export default function Create({
                                                 <div className="flex items-center gap-2">
                                                     <Badge
                                                         variant="outline"
-                                                        className={`text-xs shrink-0 ${
-                                                            suggestion.conflicts === 0
+                                                        className={`text-xs shrink-0 ${suggestion.conflicts === 0
                                                                 ? 'bg-green-100 text-green-700 border-green-400 dark:bg-green-900 dark:text-green-300 dark:border-green-600'
                                                                 : 'bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-900 dark:text-yellow-300 dark:border-yellow-600'
-                                                        }`}
+                                                            }`}
                                                     >
                                                         {suggestion.conflicts === 0 ? (
                                                             <span className="flex items-center gap-1">
