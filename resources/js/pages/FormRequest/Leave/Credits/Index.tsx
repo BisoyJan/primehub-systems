@@ -475,10 +475,10 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                                     <TooltipProvider>
                                                         <Tooltip>
                                                             <TooltipTrigger asChild>
-                                                                <Badge 
-                                                                    variant="outline" 
-                                                                    className={employee.carryover.cash_converted 
-                                                                        ? "border-green-500 text-green-600 bg-green-50" 
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={employee.carryover.cash_converted
+                                                                        ? "border-green-500 text-green-600 bg-green-50"
                                                                         : employee.carryover.is_processed
                                                                             ? "border-amber-500 text-amber-600 bg-amber-50"
                                                                             : "border-blue-500 text-blue-600 bg-blue-50"
@@ -491,8 +491,8 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                                             <TooltipContent>
                                                                 <p>To {employee.carryover.to_year} (for cash)</p>
                                                                 <p className="text-xs text-muted-foreground">
-                                                                    {employee.carryover.cash_converted 
-                                                                        ? 'Cash converted' 
+                                                                    {employee.carryover.cash_converted
+                                                                        ? 'Cash converted'
                                                                         : employee.carryover.is_processed
                                                                             ? 'Pending conversion'
                                                                             : 'Projected (not yet processed)'}
@@ -583,23 +583,23 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
 
                                     {employee.carryover && (
                                         <div className={`flex items-center justify-between p-2 rounded-md border ${
-                                            employee.carryover.cash_converted 
-                                                ? 'bg-green-50 border-green-200' 
+                                            employee.carryover.cash_converted
+                                                ? 'bg-green-50 border-green-200'
                                                 : employee.carryover.is_processed
                                                     ? 'bg-amber-50 border-amber-200'
                                                     : 'bg-blue-50 border-blue-200'
                                         }`}>
                                             <div className="flex items-center gap-2">
                                                 <Banknote className={`h-4 w-4 ${
-                                                    employee.carryover.cash_converted 
-                                                        ? 'text-green-600' 
+                                                    employee.carryover.cash_converted
+                                                        ? 'text-green-600'
                                                         : employee.carryover.is_processed
                                                             ? 'text-amber-600'
                                                             : 'text-blue-600'
                                                 }`} />
                                                 <span className={`text-sm ${
-                                                    employee.carryover.cash_converted 
-                                                        ? 'text-green-700' 
+                                                    employee.carryover.cash_converted
+                                                        ? 'text-green-700'
                                                         : employee.carryover.is_processed
                                                             ? 'text-amber-700'
                                                             : 'text-blue-700'
@@ -607,10 +607,10 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                                     Carryover to {employee.carryover.to_year}
                                                 </span>
                                             </div>
-                                            <Badge 
-                                                variant="outline" 
-                                                className={employee.carryover.cash_converted 
-                                                    ? "border-green-500 text-green-600" 
+                                            <Badge
+                                                variant="outline"
+                                                className={employee.carryover.cash_converted
+                                                    ? "border-green-500 text-green-600"
                                                     : employee.carryover.is_processed
                                                         ? "border-amber-500 text-amber-600"
                                                         : "border-blue-500 text-blue-600"

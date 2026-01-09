@@ -1638,7 +1638,7 @@ export default function Show({
                                                                 </span>
                                                             </div>
                                                         </div>
-                                                        
+
                                                         <div className="flex items-start gap-2 text-sm ml-6">
                                                             <AlertTriangle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
                                                             <div>

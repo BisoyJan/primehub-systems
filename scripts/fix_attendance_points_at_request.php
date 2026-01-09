@@ -2,21 +2,21 @@
 
 /**
  * Fix Attendance Points at Request Data Inconsistency
- * 
+ *
  * This script recalculates the attendance_points_at_request field for all leave requests
  * based on the points that were ACTIVE at the time the leave request was submitted.
- * 
+ *
  * A point is considered "active at request time" if:
  * 1. The shift_date (violation date) was before the request was submitted
  * 2. AND either:
  *    - Still active today (not excused, not expired)
  *    - OR was excused AFTER the request was submitted
  *    - OR was expired AFTER the request was submitted
- * 
+ *
  * Usage:
  * 1. DRY RUN (see what would change):
  *    php artisan tinker scripts/fix_attendance_points_at_request.php
- * 
+ *
  * 2. ACTUAL UPDATE (apply changes):
  *    First create the flag file, then run the script:
  *    echo. > scripts/.apply_flag && php artisan tinker scripts/fix_attendance_points_at_request.php
@@ -57,7 +57,7 @@ $noChanges = [];
 
 foreach ($leaveRequests as $leaveRequest) {
     $requestSubmittedAt = $leaveRequest->created_at;
-    
+
     // Calculate points that were active at the time of submission
     $activePointsAtRequest = AttendancePoint::where('user_id', $leaveRequest->user_id)
         ->where('shift_date', '<', $requestSubmittedAt)
@@ -80,10 +80,10 @@ foreach ($leaveRequests as $leaveRequest) {
             });
         })
         ->get();
-    
+
     $calculatedPoints = $activePointsAtRequest->sum('points');
     $storedPoints = (float) $leaveRequest->attendance_points_at_request;
-    
+
     // Check if there's a difference (with small tolerance for floating point)
     if (abs($storedPoints - $calculatedPoints) > 0.001) {
         $changes[] = [
@@ -124,7 +124,7 @@ if (count($changes) > 0) {
     echo "-------------------------------------------------------------\n";
     echo "CHANGES TO BE MADE\n";
     echo "-------------------------------------------------------------\n\n";
-    
+
     foreach ($changes as $change) {
         echo "Leave Request #{$change['id']}\n";
         echo "  User:       {$change['user']}\n";
@@ -132,7 +132,7 @@ if (count($changes) > 0) {
         echo "  Stored:     {$change['stored']} points\n";
         echo "  Calculated: {$change['calculated']} points\n";
         echo "  Difference: " . ($change['difference'] > 0 ? '+' : '') . "{$change['difference']} points\n";
-        
+
         if (!empty($change['points_detail'])) {
             echo "  Points breakdown:\n";
             foreach ($change['points_detail'] as $detail) {
@@ -143,13 +143,13 @@ if (count($changes) > 0) {
         }
         echo "\n";
     }
-    
+
     // Apply changes if not dry run
     if (!$dryRun) {
         echo "-------------------------------------------------------------\n";
         echo "APPLYING CHANGES...\n";
         echo "-------------------------------------------------------------\n\n";
-        
+
         $updated = 0;
         foreach ($changes as $change) {
             LeaveRequest::where('id', $change['id'])
@@ -157,7 +157,7 @@ if (count($changes) > 0) {
             echo "✅ Updated Leave Request #{$change['id']}: {$change['stored']} -> {$change['calculated']}\n";
             $updated++;
         }
-        
+
         echo "\n✅ Successfully updated {$updated} leave requests.\n";
     } else {
         echo "-------------------------------------------------------------\n";

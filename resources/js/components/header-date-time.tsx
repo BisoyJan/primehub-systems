@@ -12,7 +12,7 @@ export function HeaderDateTime() {
 
     // Hide if on dashboard
     // Check for exactly /dashboard or simply / if that's the home
-    // Also handle possible query parameters or trailing slashes if necessary, 
+    // Also handle possible query parameters or trailing slashes if necessary,
     // but usually exact match on the path part is enough for 'dashboard' check.
     if (url === '/dashboard' || url === '/' || url.startsWith('/dashboard?')) {
         return null;

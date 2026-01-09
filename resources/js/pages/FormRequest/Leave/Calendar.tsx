@@ -205,7 +205,7 @@ export default function LeaveCalendar() {
                         const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
                         const hasLeaves = leavesOnDay.length > 0;
                         const isHoveredLeaveDay = hoveredLeaveId !== null && leavesOnDay.some(l => l.id === hoveredLeaveId);
-                        
+
                         // Count approved vs pending
                         const approvedCount = leavesOnDay.filter(l => l.status === 'approved').length;
                         const pendingCount = leavesOnDay.filter(l => l.status === 'pending').length;

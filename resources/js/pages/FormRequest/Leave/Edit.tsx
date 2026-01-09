@@ -236,27 +236,27 @@ export default function Edit({
     // Calculate future credits that will accrue by the leave start date
     const calculateFutureCredits = (startDate: string): number => {
         if (!startDate || !creditsSummary.is_eligible) return 0;
-        
+
         const today = new Date();
         const leaveStart = parseISO(startDate);
-        
+
         // Get the current month and year
         const currentMonth = today.getMonth(); // 0-indexed
         const currentYear = today.getFullYear();
-        
+
         // Get the leave start month and year
         const leaveMonth = leaveStart.getMonth();
         const leaveYear = leaveStart.getFullYear();
-        
+
         // Calculate how many full months will pass before the leave date
         // Credits accrue at the end of each month, so if leave is in Feb, Jan credits will be added
         let monthsToAccrue = 0;
-        
+
         if (leaveYear > currentYear || (leaveYear === currentYear && leaveMonth > currentMonth)) {
             // Calculate months difference
             monthsToAccrue = (leaveYear - currentYear) * 12 + (leaveMonth - currentMonth);
         }
-        
+
         return monthsToAccrue * creditsSummary.monthly_rate;
     };
 
@@ -282,7 +282,7 @@ export default function Edit({
                 }
 
                 setCalculatedDays(workingDays);
-                
+
                 // Calculate future credits based on start date
                 const projectedCredits = calculateFutureCredits(data.start_date);
                 setFutureCredits(projectedCredits);
@@ -294,7 +294,7 @@ export default function Edit({
             setCalculatedDays(0);
             setFutureCredits(0);
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate]);
 
     // Real-time validation warnings
