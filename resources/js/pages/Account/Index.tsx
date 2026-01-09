@@ -159,6 +159,13 @@ export default function AccountIndex() {
         );
     }, [allUsers, userSearchQuery]);
 
+    // Clear user search query when popover closes
+    useEffect(() => {
+        if (!isUserPopoverOpen) {
+            setUserSearchQuery("");
+        }
+    }, [isUserPopoverOpen]);
+
     // Auto-refresh every 30 seconds (only when enabled)
     useEffect(() => {
         if (!autoRefreshEnabled) return;
@@ -397,7 +404,6 @@ export default function AccountIndex() {
     const clearFilters = () => {
         setSearch("");
         setSelectedUserId("");
-        setUserSearchQuery("");
         setRoleFilter("all");
         setStatusFilter("all");
         setEmployeeStatusFilter("all");
@@ -523,7 +529,6 @@ export default function AccountIndex() {
                                                 onSelect={() => {
                                                     setSelectedUserId("");
                                                     setIsUserPopoverOpen(false);
-                                                    setUserSearchQuery("");
                                                 }}
                                                 className="cursor-pointer"
                                             >
@@ -539,7 +544,6 @@ export default function AccountIndex() {
                                                     onSelect={() => {
                                                         setSelectedUserId(user.id.toString());
                                                         setIsUserPopoverOpen(false);
-                                                        setUserSearchQuery("");
                                                     }}
                                                     className="cursor-pointer"
                                                 >

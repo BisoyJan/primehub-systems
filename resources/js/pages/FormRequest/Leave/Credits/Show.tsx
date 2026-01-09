@@ -19,7 +19,8 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText, Banknote, AlertCircle, CheckCircle } from 'lucide-react';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
@@ -46,6 +47,18 @@ interface LeaveRequestHistory {
     approved_at: string | null;
 }
 
+interface CarryoverSummary {
+    has_carryover: boolean;
+    is_processed: boolean;
+    carryover_credits: number;
+    credits_from_year?: number;
+    forfeited_credits: number;
+    cash_converted: boolean;
+    cash_converted_at: string | null;
+    from_year: number;
+    to_year: number;
+}
+
 interface Props {
     user: {
         id: number;
@@ -63,13 +76,14 @@ interface Props {
         total_used: number;
         balance: number;
     };
+    carryoverSummary?: CarryoverSummary;
     monthlyCredits: MonthlyCredit[];
     leaveRequests: LeaveRequestHistory[];
     availableYears: number[];
     canViewAll: boolean;
 }
 
-export default function Show({ user, year, summary, monthlyCredits, leaveRequests, availableYears, canViewAll }: Props) {
+export default function Show({ user, year, summary, carryoverSummary, monthlyCredits, leaveRequests, availableYears, canViewAll }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: canViewAll ? `Leave Credits - ${user.name}` : 'My Leave Credits',
         breadcrumbs: canViewAll
@@ -194,6 +208,79 @@ export default function Show({ user, year, summary, monthlyCredits, leaveRequest
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Carryover Credits Section - For Cash Conversion Only */}
+                {carryoverSummary && carryoverSummary.carryover_credits > 0 && (
+                    <Card className={`${carryoverSummary.is_processed
+                        ? 'border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20'
+                        : 'border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20'
+                        }`}>
+                        <CardHeader>
+                            <CardTitle className={`flex items-center gap-2 ${carryoverSummary.is_processed
+                                ? 'text-amber-700 dark:text-amber-400'
+                                : 'text-blue-700 dark:text-blue-400'
+                                }`}>
+                                <Banknote className="h-5 w-5" />
+                                Carryover Credits to {carryoverSummary.to_year} (For Cash Conversion)
+                                {!carryoverSummary.is_processed && (
+                                    <Badge variant="outline" className="ml-2 border-blue-500 text-blue-600">Projected</Badge>
+                                )}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                                <div className="p-3 rounded-lg bg-background border">
+                                    <p className="text-sm text-muted-foreground">Balance from {year}</p>
+                                    <p className="text-xl font-bold">{carryoverSummary.credits_from_year?.toFixed(2) || summary.balance.toFixed(2)}</p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-background border">
+                                    <p className="text-sm text-muted-foreground">Carryover for Cash (Max 4)</p>
+                                    <p className={`text-xl font-bold ${carryoverSummary.is_processed ? 'text-amber-600' : 'text-blue-600'}`}>
+                                        {carryoverSummary.carryover_credits.toFixed(2)}
+                                    </p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-background border">
+                                    <p className="text-sm text-muted-foreground">Forfeited</p>
+                                    <p className="text-xl font-bold text-red-600">{carryoverSummary.forfeited_credits.toFixed(2)}</p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-background border">
+                                    <p className="text-sm text-muted-foreground">Status</p>
+                                    {!carryoverSummary.is_processed ? (
+                                        <div className="flex items-center gap-1">
+                                            <AlertCircle className="h-4 w-4 text-blue-500" />
+                                            <span className="text-blue-600 font-medium">Not Processed</span>
+                                        </div>
+                                    ) : carryoverSummary.cash_converted ? (
+                                        <div className="flex items-center gap-1">
+                                            <CheckCircle className="h-4 w-4 text-green-500" />
+                                            <span className="text-green-600 font-medium">Cash Converted</span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-1">
+                                            <AlertCircle className="h-4 w-4 text-amber-500" />
+                                            <span className="text-amber-600 font-medium">Pending Conversion</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <Alert className={`${carryoverSummary.is_processed
+                                ? 'border-amber-300 bg-amber-100/50 dark:border-amber-700 dark:bg-amber-900/30'
+                                : 'border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30'
+                                }`}>
+                                <AlertCircle className={`h-4 w-4 ${carryoverSummary.is_processed ? 'text-amber-600' : 'text-blue-600'}`} />
+                                <AlertTitle className={carryoverSummary.is_processed ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}>
+                                    {carryoverSummary.is_processed ? 'Important Note' : 'Projected Carryover'}
+                                </AlertTitle>
+                                <AlertDescription className={carryoverSummary.is_processed ? 'text-amber-600 dark:text-amber-300' : 'text-blue-600 dark:text-blue-300'}>
+                                    {carryoverSummary.is_processed
+                                        ? <p> Carryover credits are for <strong>cash conversion only</strong> and cannot be used for applying leaves. Maximum of 4 credits can be carried over per year. </p>
+                                        : <p> This is a <strong>projected carryover</strong> based on the current balance. The actual carryover will be processed at year end (January 1st, {carryoverSummary.to_year}). </p>
+                                    }
+                                </AlertDescription>
+                            </Alert>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Two Tables Side by Side */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

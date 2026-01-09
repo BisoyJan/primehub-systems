@@ -13,6 +13,7 @@ import { UserMenuContent } from '@/components/user-menu-content';
 import { useInitials } from '@/hooks/use-initials';
 import { usePage } from '@inertiajs/react';
 import type { SharedData } from '@/types';
+import { HeaderDateTime } from '@/components/header-date-time';
 
 export function AppSidebarHeader({
     breadcrumbs = [],
@@ -30,6 +31,7 @@ export function AppSidebarHeader({
                 <Breadcrumbs breadcrumbs={breadcrumbs} />
             </div>
             <div className="flex items-center gap-2">
+                <HeaderDateTime />
                 <NotificationBell />
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>

@@ -1,9 +1,8 @@
 import React from "react";
-import { Head, router, usePage } from "@inertiajs/react";
+import { Head, router } from "@inertiajs/react";
 import { format } from 'date-fns';
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageMeta } from "@/hooks";
-import { formatDateTime } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -45,7 +44,6 @@ interface PageProps extends SharedData {
 
 const UploadShow: React.FC<PageProps> = ({ upload }) => {
     useFlashMessage();
-    const { auth } = usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Upload Details - ${upload.original_filename}`,

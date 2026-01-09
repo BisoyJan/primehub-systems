@@ -70,6 +70,11 @@ class LeaveRequest extends Model
         'cancelled_by',
         'cancelled_at',
         'cancellation_reason',
+        // Partial denial fields (when reviewer approves some dates but denies others)
+        'has_partial_denial',
+        'approved_days',
+        'sl_credits_applied',
+        'sl_no_credit_reason',
     ];
 
     protected function casts(): array
@@ -101,6 +106,10 @@ class LeaveRequest extends Model
             'cancelled_at' => 'datetime',
             'tl_approved_at' => 'datetime',
             'tl_rejected' => 'boolean',
+            // Partial denial
+            'has_partial_denial' => 'boolean',
+            'approved_days' => 'decimal:2',
+            'sl_credits_applied' => 'boolean',
         ];
     }
 
@@ -185,6 +194,14 @@ class LeaveRequest extends Model
     public function cancelledBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'cancelled_by');
+    }
+
+    /**
+     * Get the denied dates for partial denial requests.
+     */
+    public function deniedDates()
+    {
+        return $this->hasMany(LeaveRequestDeniedDate::class);
     }
 
     /**

@@ -93,6 +93,11 @@ interface PaginationMeta {
     total: number;
 }
 
+interface Employee {
+    id: number;
+    name: string;
+}
+
 interface Props {
     leaveRequests: {
         data: LeaveRequest[];
@@ -117,9 +122,10 @@ interface Props {
         };
     };
     campaigns?: string[];
+    allEmployees?: Employee[];
 }
 
-export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, hasPendingRequests, auth, campaigns = [] }: Props) {
+export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [] }: Props) {
     // Show employee column for admins and team leads (who can see other users' requests)
     const showEmployeeColumn = isAdmin || isTeamLead;
 
@@ -173,26 +179,22 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
         setShowMedicalCertDialog(true);
     };
 
-    // Get unique employee names from current data
-    const uniqueEmployees = React.useMemo(() => {
-        const employeeMap = new Map<number, string>();
-        leaveRequests.data.forEach(request => {
-            if (!employeeMap.has(request.user.id)) {
-                employeeMap.set(request.user.id, request.user.name);
-            }
-        });
-        return Array.from(employeeMap.entries()).map(([id, name]) => ({ id, name }));
-    }, [leaveRequests.data]);
-
-    // Filter employees based on search query
+    // Filter employees based on search query (from all employees list)
     const filteredEmployees = React.useMemo(() => {
-        if (!employeeSearchQuery) return uniqueEmployees;
-        return uniqueEmployees.filter(emp =>
+        if (!employeeSearchQuery) return allEmployees.slice(0, 50);
+        return allEmployees.filter(emp =>
             emp.name.toLowerCase().includes(employeeSearchQuery.toLowerCase())
-        );
-    }, [uniqueEmployees, employeeSearchQuery]);
+        ).slice(0, 50);
+    }, [allEmployees, employeeSearchQuery]);
 
     const showClearFilters = filterStatus !== 'all' || filterType !== 'all' || filterEmployeeName !== '' || (filterCampaign && filterCampaign !== 'all');
+
+    // Clear employee search query when popover closes
+    useEffect(() => {
+        if (!showEmployeeSearch) {
+            setEmployeeSearchQuery('');
+        }
+    }, [showEmployeeSearch]);
 
     const buildFilterParams = React.useCallback(() => {
         const params: Record<string, string> = {};
@@ -431,7 +433,9 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: JSON.stringify({ year: exportYear }),
             });
@@ -542,7 +546,6 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                                         onSelect={() => {
                                                             setFilterEmployeeName('');
                                                             setShowEmployeeSearch(false);
-                                                            setEmployeeSearchQuery('');
                                                         }}
                                                         className="cursor-pointer"
                                                     >
@@ -558,7 +561,6 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, has
                                                             onSelect={() => {
                                                                 setFilterEmployeeName(employee.name);
                                                                 setShowEmployeeSearch(false);
-                                                                setEmployeeSearchQuery('');
                                                             }}
                                                             className="cursor-pointer"
                                                         >

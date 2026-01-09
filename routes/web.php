@@ -307,6 +307,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::put('/{policy}', [BiometricRetentionPolicyController::class, 'update'])->name('update');
             Route::delete('/{policy}', [BiometricRetentionPolicyController::class, 'destroy'])->name('destroy');
             Route::post('/{policy}/toggle', [BiometricRetentionPolicyController::class, 'toggle'])->name('toggle');
+            Route::get('/{policy}/preview', [BiometricRetentionPolicyController::class, 'preview'])->name('preview');
         });
 
     // Leave Credits routes (separate permission check - handled in controller)
@@ -327,6 +328,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::get('/calendar', [LeaveRequestController::class, 'calendar'])->name('calendar');
             Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
             Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
+            Route::post('/api/check-campaign-conflicts', [LeaveRequestController::class, 'checkCampaignConflicts'])->name('api.check-campaign-conflicts');
             Route::post('/export/credits', [LeaveRequestController::class, 'exportCredits'])->name('export.credits');
             Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
             Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download');
@@ -338,6 +340,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/{leaveRequest}/approve', [LeaveRequestController::class, 'approve'])->name('approve');
             Route::post('/{leaveRequest}/force-approve', [LeaveRequestController::class, 'forceApprove'])->name('force-approve');
             Route::post('/{leaveRequest}/deny', [LeaveRequestController::class, 'deny'])->name('deny');
+            Route::post('/{leaveRequest}/partial-deny', [LeaveRequestController::class, 'partialDeny'])->name('partial-deny');
             Route::post('/{leaveRequest}/cancel', [LeaveRequestController::class, 'cancel'])->name('cancel');
             Route::post('/{leaveRequest}/adjust-for-work', [LeaveRequestController::class, 'adjustForWorkDay'])->name('adjust-for-work');
             Route::post('/{leaveRequest}/approve-tl', [LeaveRequestController::class, 'approveTL'])->name('approve-tl');
@@ -385,6 +388,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::put('/{policy}', [FormRequestRetentionPolicyController::class, 'update'])->name('update');
             Route::delete('/{policy}', [FormRequestRetentionPolicyController::class, 'destroy'])->name('destroy');
             Route::post('/{policy}/toggle', [FormRequestRetentionPolicyController::class, 'toggle'])->name('toggle');
+            Route::get('/{policy}/preview', [FormRequestRetentionPolicyController::class, 'preview'])->name('preview');
         });
 
     // Notifications

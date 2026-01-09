@@ -43,6 +43,7 @@ interface PageProps {
         month: string;
         campaign_id: string | null;
         leave_type: string | null;
+        status: string | null;
         view_mode: 'single' | 'multi';
     };
     isRestrictedRole: boolean;
@@ -65,6 +66,11 @@ const leaveTypeColors: Record<string, string> = {
     'ML': 'bg-pink-500',
     'PL': 'bg-purple-500',
     'BL': 'bg-gray-500',
+};
+
+const statusColors: Record<string, { bg: string; text: string; border: string }> = {
+    'approved': { bg: 'bg-green-500 dark:bg-green-600', text: 'text-white', border: 'border-green-600' },
+    'pending': { bg: 'bg-yellow-500 dark:bg-yellow-600', text: 'text-white', border: 'border-yellow-600' },
 };
 
 export default function LeaveCalendar() {
@@ -199,6 +205,12 @@ export default function LeaveCalendar() {
                         const isToday = day === today.getDate() && month === today.getMonth() && year === today.getFullYear();
                         const hasLeaves = leavesOnDay.length > 0;
                         const isHoveredLeaveDay = hoveredLeaveId !== null && leavesOnDay.some(l => l.id === hoveredLeaveId);
+                        
+                        // Count approved vs pending
+                        const approvedCount = leavesOnDay.filter(l => l.status === 'approved').length;
+                        const pendingCount = leavesOnDay.filter(l => l.status === 'pending').length;
+                        const hasApprovedLeaves = approvedCount > 0;
+                        const hasPendingLeaves = pendingCount > 0;
 
                         return (
                             <div
@@ -206,11 +218,14 @@ export default function LeaveCalendar() {
                                 className={`
                                     ${isCompact ? 'aspect-square p-0.5' : 'aspect-square p-1'}
                                     rounded flex items-center justify-center text-xs relative transition-all duration-150
-                                    ${hasLeaves ? 'bg-amber-500 dark:bg-amber-600 font-semibold text-white' : 'text-muted-foreground'}
+                                    ${hasApprovedLeaves ? 'bg-green-500 dark:bg-green-600 font-semibold text-white' : ''}
+                                    ${hasPendingLeaves && !hasApprovedLeaves ? 'bg-yellow-500 dark:bg-yellow-600 font-semibold text-white' : ''}
+                                    ${hasApprovedLeaves && hasPendingLeaves ? 'bg-gradient-to-br from-green-500 to-yellow-500 font-semibold text-white' : ''}
+                                    ${!hasLeaves ? 'text-muted-foreground' : ''}
                                     ${isToday ? 'ring-2 ring-primary' : ''}
-                                    ${isHoveredLeaveDay ? 'ring-2 ring-offset-1 ring-offset-background ring-primary bg-amber-400 dark:bg-amber-500 shadow-lg' : ''}
+                                    ${isHoveredLeaveDay ? 'ring-2 ring-offset-1 ring-offset-background ring-primary shadow-lg' : ''}
                                 `}
-                                title={hasLeaves ? `${leavesOnDay.length} employee(s) on leave` : undefined}
+                                title={hasLeaves ? `${approvedCount} approved, ${pendingCount} pending` : undefined}
                             >
                                 {day}
                                 {hasLeaves && leavesOnDay.length > 1 && (
@@ -285,6 +300,20 @@ export default function LeaveCalendar() {
                                     </SelectContent>
                                 </Select>
 
+                                <Select
+                                    value={filters.status || 'all'}
+                                    onValueChange={(value) => handleFilterChange('status', value)}
+                                >
+                                    <SelectTrigger className="w-[140px]">
+                                        <SelectValue placeholder="All Status" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Status</SelectItem>
+                                        <SelectItem value="approved">Approved</SelectItem>
+                                        <SelectItem value="pending">Pending</SelectItem>
+                                    </SelectContent>
+                                </Select>
+
                                 <div className="flex items-center border rounded-md">
                                     <Button
                                         variant={filters.view_mode === 'single' ? 'secondary' : 'ghost'}
@@ -335,7 +364,7 @@ export default function LeaveCalendar() {
                                 {filters.view_mode === 'multi' ? '3-Month View' : 'Monthly View'}
                             </CardTitle>
                             <CardDescription>
-                                {leaves.length} approved leave{leaves.length !== 1 ? 's' : ''} in view
+                                {leaves.filter(l => l.status === 'approved').length} approved, {leaves.filter(l => l.status === 'pending').length} pending in view
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -356,15 +385,23 @@ export default function LeaveCalendar() {
                             {/* Legend */}
                             <div className="flex flex-wrap gap-4 text-xs pt-4 mt-4 border-t">
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded bg-amber-500 dark:bg-amber-600" />
-                                    <span>On leave</span>
+                                    <div className="w-4 h-4 rounded bg-green-500 dark:bg-green-600" />
+                                    <span>Approved</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded bg-yellow-500 dark:bg-yellow-600" />
+                                    <span>Pending</span>
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <div className="w-4 h-4 rounded bg-gradient-to-br from-green-500 to-yellow-500" />
+                                    <span>Both</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <div className="w-4 h-4 rounded ring-2 ring-primary" />
                                     <span>Today</span>
                                 </div>
                                 <div className="flex items-center gap-2">
-                                    <div className="w-4 h-4 rounded bg-amber-500 relative">
+                                    <div className="w-4 h-4 rounded bg-green-500 relative">
                                         <div className="absolute -top-0.5 -right-0.5 w-2 h-2 bg-red-500 rounded-full" />
                                     </div>
                                     <span>Multiple employees</span>
@@ -376,14 +413,14 @@ export default function LeaveCalendar() {
                     {/* Leave List */}
                     <Card className="lg:col-span-2">
                         <CardHeader>
-                            <CardTitle>All Leaves ({leaves.length})</CardTitle>
+                            <CardTitle>Leave Requests ({leaves.length})</CardTitle>
                             <CardDescription>Hover to highlight dates</CardDescription>
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-2 max-h-[600px] overflow-y-auto pr-2">
                                 {leaves.length === 0 ? (
                                     <div className="text-center text-muted-foreground py-8">
-                                        No approved leaves in this period
+                                        No leaves in this period
                                     </div>
                                 ) : (
                                     leaves.map((leave) => (
@@ -399,12 +436,20 @@ export default function LeaveCalendar() {
                                                     <span className="font-medium">{leave.user_name}</span>
                                                     <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
                                                 </div>
-                                                <Badge
-                                                    variant="outline"
-                                                    className={`text-xs shrink-0 text-white border-0 ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
-                                                >
-                                                    {leave.leave_type}
-                                                </Badge>
+                                                <div className="flex flex-col items-end gap-1">
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={`text-xs shrink-0 text-white border-0 ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
+                                                    >
+                                                        {leave.leave_type}
+                                                    </Badge>
+                                                    <Badge
+                                                        variant="outline"
+                                                        className={`text-xs shrink-0 text-white border-0 ${leave.status === 'approved' ? 'bg-green-500' : 'bg-yellow-500'}`}
+                                                    >
+                                                        {leave.status === 'approved' ? 'Approved' : 'Pending'}
+                                                    </Badge>
+                                                </div>
                                             </div>
                                             <div className="text-xs text-muted-foreground">
                                                 {Number(leave.days_requested) === 1

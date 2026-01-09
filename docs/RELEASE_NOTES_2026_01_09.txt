@@ -1,0 +1,207 @@
+# PrimeHub Systems - Release Notes
+## January 9, 2026 Update
+
+---
+
+## What's New in This Release
+
+This update brings significant improvements to the Leave Management system, better tools for managers and HR, and enhanced user experience across the platform.
+
+---
+
+## 🏖️ Leave Request Improvements
+
+### Smarter Credit Calculations
+**What changed:** When you apply for leave in a future month, the system now automatically considers credits you'll earn before your leave starts.
+
+**Example:** If you have 2 credits now and earn 1 credit per month, applying for March leave will show you have 4 credits available (your current 2 + 2 more you'll earn in January and February).
+
+**Benefit:** More accurate leave planning without manual calculations.
+
+---
+
+### Team Scheduling Awareness
+**What changed:** When applying for Vacation Leave or Unpaid Time Off, you'll now see a warning if teammates from your campaign have already requested the same dates.
+
+**What you'll see:** A purple alert showing:
+- Who else requested time off
+- Their leave dates
+- Whether their request is approved or pending
+- When they submitted their request
+
+**Benefit:** Helps avoid scheduling conflicts and supports fair "first-come, first-served" leave allocation.
+
+---
+
+### 30-Day Absence Window Notice
+**What changed:** If you apply for Vacation Leave within 30 days of your last recorded absence, you'll see an informational notice.
+
+**Why this matters:** This helps you understand that your request may receive additional review, and shows you when you'll be eligible for VL without this notice.
+
+**Benefit:** More transparency in the leave approval process.
+
+---
+
+### Partial Leave Approvals (For Managers)
+**What changed:** Managers and HR can now approve some days of a leave request while denying others.
+
+**Example:** An employee requests 5 days off, but you can only approve 3 days due to workload. Instead of denying the whole request, you can approve the specific dates that work.
+
+**What approvers will see:**
+- A "Partial Deny" button for multi-day requests
+- Checkboxes to select which dates to approve
+- Required field to explain why some dates were denied
+
+**Benefit:** More flexible leave management without all-or-nothing decisions.
+
+---
+
+### Better Attendance Information (For Reviewers)
+**What changed:** When reviewing leave requests, managers now see clearer attendance point information.
+
+**Improvements:**
+- Attendance points only highlighted if they're at a concerning level (6 or more)
+- New "View Details" button to see breakdown of attendance issues
+- Shows whether points were active when the request was submitted
+
+**Benefit:** Helps managers make informed decisions without information overload.
+
+---
+
+## 💰 Leave Credits & Year-End Carryover
+
+### Carryover Credits for Cash Conversion
+**What's new:** The system now tracks unused leave credits that can be carried over to the next year for cash conversion.
+
+**How it works:**
+- Up to 4 unused credits can be carried over each year
+- These credits are for cash conversion only (not for additional leave)
+- Credits beyond 4 are forfeited at year-end
+
+**Where to see this:**
+- Leave Credits page shows a new "Carryover" column
+- Individual credit details page shows carryover breakdown
+- Color-coded status: Blue (projected), Amber (pending conversion), Green (converted)
+
+**Benefit:** Clear visibility into year-end benefits and cash conversion eligibility.
+
+---
+
+## 📅 Leave Calendar Updates
+
+### Status-Based Color Coding
+**What changed:** The leave calendar now uses different colors for different statuses:
+
+| Color | Meaning |
+|-------|---------|
+| 🟢 Green | Approved leaves |
+| 🟡 Yellow | Pending leaves |
+| 🟢🟡 Gradient | Both approved and pending |
+
+**New filter:** You can now filter the calendar to show only Approved, only Pending, or All requests.
+
+**Benefit:** Easier to see at a glance which days have confirmed vs. pending absences.
+
+---
+
+## 🗄️ Data Retention Improvements
+
+### Record Statistics Dashboard
+**What's new:** Administrators can now see statistics about how many records exist and their age:
+- Leave Requests
+- IT Concerns
+- Medication Requests
+- Leave Credits
+
+**Benefit:** Helps plan data cleanup and storage management.
+
+---
+
+### Preview Before Cleanup
+**What's new:** Before enforcing a retention policy, you can now preview exactly how many records would be deleted.
+
+**What you'll see:**
+- Total number of affected records
+- Breakdown by record type
+- Date range of affected records
+
+**Benefit:** No surprises when cleanup runs - you know exactly what will happen.
+
+---
+
+### Leave Credit Retention
+**What's new:** Retention policies can now be configured specifically for leave credit records, separate from other form requests.
+
+**Benefit:** More granular control over how long different types of data are kept.
+
+---
+
+## 🔔 Notifications
+
+### Improved Reliability
+**What changed:** System notifications are now more reliable with improved backend communication.
+
+**Benefit:** Fewer missed notifications and more consistent delivery.
+
+---
+
+## 🎨 User Experience Improvements
+
+### New Error Pages
+**What's new:** When something goes wrong (page not found, access denied, etc.), you'll see a friendlier, more helpful error page with:
+- Clear explanation of what happened
+- Helpful navigation options
+- Interactive animated background
+- Rotating inspirational quotes
+
+**Benefit:** Less frustrating experience when errors occur.
+
+---
+
+### Header Date & Time
+**What's new:** The application header now shows the current date and time (except on the dashboard).
+
+**Benefit:** Easy time reference while working in the system.
+
+---
+
+## 🔧 Behind the Scenes
+
+### Automatic Year-End Processing
+**What's new:** The system will automatically process leave credit carryovers on January 1st each year.
+
+**What happens:**
+- Calculates unused credits from the previous year
+- Carries over up to 4 credits for cash conversion
+- Records any forfeited credits (above the 4-credit limit)
+
+**Benefit:** No manual year-end processing required.
+
+---
+
+### Data Accuracy Improvements
+**What's new:** We've improved how attendance points are calculated for leave requests to ensure historical accuracy.
+
+**Benefit:** More reliable record-keeping and fairer evaluations.
+
+---
+
+## Summary of Key Benefits
+
+| For Employees | For Managers/HR | For Administrators |
+|--------------|-----------------|-------------------|
+| Smarter credit calculations | Partial approval option | Record statistics dashboard |
+| See team scheduling conflicts | Better attendance visibility | Retention policy preview |
+| Carryover credit visibility | Status-based calendar | Automatic year-end processing |
+| Clearer error messages | Conflict warnings for fair allocation | Leave credit retention control |
+
+---
+
+## Questions or Feedback?
+
+If you have questions about these changes or encounter any issues, please contact your IT administrator or submit an IT Concern through the system.
+
+---
+
+*Release Date: January 9, 2026*  
+*Version: 2026.01.09*

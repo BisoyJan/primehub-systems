@@ -208,6 +208,7 @@ return [
             'leave_credits.view_all', 'leave_credits.view_own',
             'it_concerns.view', 'it_concerns.create',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update',
+            'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],
 
@@ -231,7 +232,6 @@ return [
             'attendance_points.view', 'attendance_points.create', 'attendance_points.edit', 'attendance_points.delete', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan',
             'leave.view', 'leave.create', 'leave.edit', 'leave.approve', 'leave.deny', 'leave.delete', 'leave.view_all',
             'leave_credits.view_all', 'leave_credits.view_own',
-            'it_concerns.view', 'it_concerns.create',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',

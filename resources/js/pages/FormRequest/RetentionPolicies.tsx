@@ -1,11 +1,11 @@
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Shield, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Shield, Plus, Pencil, Trash2, Loader2, BarChart3, FileText, Laptop, Pill, Eye, AlertTriangle, Calendar } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -22,6 +22,7 @@ import {
     update as retentionPoliciesUpdateRoute,
     destroy as retentionPoliciesDestroyRoute,
     toggle as retentionPoliciesToggleRoute,
+    preview as retentionPoliciesPreviewRoute,
 } from '@/routes/form-requests/retention-policies';
 
 interface Site {
@@ -37,7 +38,7 @@ interface Policy {
     applies_to_type: 'global' | 'site';
     applies_to_id: number | null;
     site?: Site;
-    form_type: 'all' | 'leave_request' | 'it_concern' | 'medication_request';
+    form_type: 'all' | 'leave_request' | 'it_concern' | 'medication_request' | 'leave_credit';
     priority: number;
     is_active: boolean;
 }
@@ -48,12 +49,55 @@ interface FormData {
     retention_months: number;
     applies_to_type: 'global' | 'site';
     applies_to_id: number | null;
-    form_type: 'all' | 'leave_request' | 'it_concern' | 'medication_request';
+    form_type: 'all' | 'leave_request' | 'it_concern' | 'medication_request' | 'leave_credit';
     priority: number;
     is_active: boolean;
 }
 
-export default function RetentionPolicies({ policies, sites }: { policies: Policy[]; sites: Site[] }) {
+interface AgeRange {
+    range: string;
+    count: number;
+}
+
+interface FormTypeStats {
+    label: string;
+    total: number;
+    byAge: AgeRange[];
+}
+
+interface RetentionStats {
+    leave_request: FormTypeStats;
+    it_concern: FormTypeStats;
+    medication_request: FormTypeStats;
+    leave_credit: FormTypeStats;
+}
+
+interface PreviewData {
+    policy: {
+        id: number;
+        name: string;
+        retention_months: number;
+        applies_to_type: string;
+        form_type: string;
+    };
+    cutoff_date: string;
+    preview: {
+        form_type: string;
+        label: string;
+        count: number;
+        oldest_date: string | null;
+        newest_date: string | null;
+    }[];
+    total_affected: number;
+}
+
+interface Props {
+    policies: Policy[];
+    sites: Site[];
+    retentionStats?: RetentionStats;
+}
+
+export default function RetentionPolicies({ policies, sites, retentionStats }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Form Request Retention Policies',
         breadcrumbs: [
@@ -68,6 +112,9 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+    const [previewData, setPreviewData] = useState<PreviewData | null>(null);
     const [formData, setFormData] = useState<FormData>({
         name: '',
         description: '',
@@ -159,12 +206,29 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
         router.post(retentionPoliciesToggleRoute(policyId).url);
     };
 
+    const handlePreview = async (policyId: number) => {
+        setIsLoadingPreview(true);
+        setIsPreviewOpen(true);
+        setPreviewData(null);
+
+        try {
+            const response = await fetch(retentionPoliciesPreviewRoute(policyId).url);
+            const data = await response.json();
+            setPreviewData(data);
+        } catch (error) {
+            console.error('Failed to load preview:', error);
+        } finally {
+            setIsLoadingPreview(false);
+        }
+    };
+
     const getFormTypeBadge = (formType: string) => {
         const config: Record<string, { label: string; className: string }> = {
             all: { label: 'All Forms', className: 'bg-purple-500' },
             leave_request: { label: 'Leave Requests', className: 'bg-blue-500' },
             it_concern: { label: 'IT Concerns', className: 'bg-orange-500' },
             medication_request: { label: 'Medication Requests', className: 'bg-green-500' },
+            leave_credit: { label: 'Leave Credits', className: 'bg-cyan-500' },
         };
 
         const { label, className } = config[formType] || { label: formType, className: 'bg-gray-500' };
@@ -274,6 +338,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                 <SelectItem value="leave_request">Leave Requests Only</SelectItem>
                                                 <SelectItem value="it_concern">IT Concerns Only</SelectItem>
                                                 <SelectItem value="medication_request">Medication Requests Only</SelectItem>
+                                                <SelectItem value="leave_credit">Leave Credits Only</SelectItem>
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -369,12 +434,108 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                             <Shield className="h-4 w-4" />
                             <AlertDescription>
                                 Retention policies control how long form request records (Leave Requests, IT Concerns,
-                                Medication Requests) are kept. Higher priority policies override lower priority ones.
+                                Medication Requests, Leave Credits) are kept. Higher priority policies override lower priority ones.
                                 Global policies apply to all sites unless a site-specific policy exists.
+                                Policies with form type "All Forms" act as fallback when no specific policy matches.
                             </AlertDescription>
                         </Alert>
                     </CardContent>
                 </Card>
+
+                {/* Retention Stats */}
+                {retentionStats && (
+                    <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                            <h2 className="text-lg font-semibold">Record Statistics by Age</h2>
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            {/* Leave Requests Stats */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <FileText className="h-4 w-4 text-blue-500" />
+                                        Leave Requests
+                                    </CardTitle>
+                                    <p className="text-2xl font-bold">{retentionStats.leave_request.total.toLocaleString()}</p>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="space-y-1">
+                                        {retentionStats.leave_request.byAge.map((age) => (
+                                            <div key={age.range} className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">{age.range}</span>
+                                                <span className="font-medium">{age.count.toLocaleString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* IT Concerns Stats */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <Laptop className="h-4 w-4 text-orange-500" />
+                                        IT Concerns
+                                    </CardTitle>
+                                    <p className="text-2xl font-bold">{retentionStats.it_concern.total.toLocaleString()}</p>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="space-y-1">
+                                        {retentionStats.it_concern.byAge.map((age) => (
+                                            <div key={age.range} className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">{age.range}</span>
+                                                <span className="font-medium">{age.count.toLocaleString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Medication Requests Stats */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <Pill className="h-4 w-4 text-green-500" />
+                                        Medication Requests
+                                    </CardTitle>
+                                    <p className="text-2xl font-bold">{retentionStats.medication_request.total.toLocaleString()}</p>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="space-y-1">
+                                        {retentionStats.medication_request.byAge.map((age) => (
+                                            <div key={age.range} className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">{age.range}</span>
+                                                <span className="font-medium">{age.count.toLocaleString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Leave Credits Stats */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <Calendar className="h-4 w-4 text-cyan-500" />
+                                        Leave Credits
+                                    </CardTitle>
+                                    <p className="text-2xl font-bold">{retentionStats.leave_credit.total.toLocaleString()}</p>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="space-y-1">
+                                        {retentionStats.leave_credit.byAge.map((age) => (
+                                            <div key={age.range} className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">{age.range}</span>
+                                                <span className="font-medium">{age.count.toLocaleString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                )}
 
                 {/* Table */}
                 <Card>
@@ -440,6 +601,14 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handlePreview(policy.id)}
+                                                                title="Preview affected records"
+                                                            >
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
                                                             <Can permission="form_requests.retention">
                                                                 <Button
                                                                     variant="ghost"
@@ -521,6 +690,15 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                             </div>
 
                                             <div className="flex gap-2 pt-2 border-t">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex-1"
+                                                    onClick={() => handlePreview(policy.id)}
+                                                >
+                                                    <Eye className="mr-2 h-4 w-4" />
+                                                    Preview
+                                                </Button>
                                                 <Can permission="form_requests.retention">
                                                     <Button
                                                         variant="outline"
@@ -552,6 +730,94 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Preview Dialog */}
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogContent className="max-w-[95vw] sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Eye className="h-5 w-5" />
+                            Policy Impact Preview
+                        </DialogTitle>
+                        <DialogDescription>
+                            Records that would be affected by this retention policy
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {isLoadingPreview ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : previewData ? (
+                        <div className="space-y-4">
+                            <div className="rounded-lg bg-muted p-4">
+                                <div className="grid gap-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Policy:</span>
+                                        <span className="font-medium">{previewData.policy.name}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Retention Period:</span>
+                                        <span className="font-medium">{previewData.policy.retention_months} months</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Cutoff Date:</span>
+                                        <span className="font-medium">{previewData.cutoff_date}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {previewData.total_affected > 0 ? (
+                                <>
+                                    <Alert variant="destructive">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        <AlertDescription>
+                                            <strong>{previewData.total_affected.toLocaleString()}</strong> records would be deleted
+                                            when this policy is enforced.
+                                        </AlertDescription>
+                                    </Alert>
+
+                                    <div className="space-y-3">
+                                        {previewData.preview.map((item) => (
+                                            <div
+                                                key={item.form_type}
+                                                className="flex items-center justify-between rounded-lg border p-3"
+                                            >
+                                                <div>
+                                                    <p className="font-medium">{item.label}</p>
+                                                    {item.oldest_date && item.newest_date && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            From {new Date(item.oldest_date).toLocaleDateString()} to{' '}
+                                                            {new Date(item.newest_date).toLocaleDateString()}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <Badge variant={item.count > 0 ? 'destructive' : 'secondary'}>
+                                                    {item.count.toLocaleString()} records
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <Alert>
+                                    <Shield className="h-4 w-4" />
+                                    <AlertDescription>
+                                        No records would be affected by this policy. All current records are within the
+                                        retention period.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
+                            <div className="flex justify-end">
+                                <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+                                    Close
+                                </Button>
+                            </div>
+                        </div>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

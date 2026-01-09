@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { router } from '@inertiajs/react';
+import { router, usePage } from '@inertiajs/react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { toast } from 'sonner';
 import { NotificationDropdown } from './notification-dropdown';
+import { usePermission } from '@/hooks/use-permission';
 
 interface Notification {
     id: number;
@@ -41,6 +42,7 @@ export function NotificationBell() {
     const [notifications, setNotifications] = useState<Notification[]>([]);
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
+    const { can } = usePermission();
 
     // Fetch notifications when dropdown opens
     const fetchNotifications = async () => {
@@ -249,6 +251,7 @@ export function NotificationBell() {
                 <NotificationDropdown
                     notifications={notifications}
                     unreadCount={unreadCount}
+                    canSend={can('notifications.send')}
                     onMarkAsRead={handleMarkAsRead}
                     onMarkAllAsRead={handleMarkAllAsRead}
                     onDelete={handleDelete}

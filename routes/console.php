@@ -58,3 +58,10 @@ Schedule::command('leave:accrue-credits')
     ->monthlyOn((int) date('t'), '01:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+// Process year-end leave credit carryovers - runs on January 1st at 12:00 AM
+// Carries over up to 4 unused credits for cash conversion (not for leave applications)
+Schedule::command('leave:process-carryover --year=' . (date('Y') - 1))
+    ->yearlyOn(1, 1, '00:00')
+    ->withoutOverlapping()
+    ->onOneServer();

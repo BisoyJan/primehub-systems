@@ -92,7 +92,9 @@ class YearEndLeaveCreditsReminder extends Command
         $this->warn("⚠️  Total users with unused credits: " . count($usersWithCredits));
         $this->warn("⚠️  Total expiring credits: " . number_format($totalExpiringCredits, 2) . " days");
         $this->newLine();
-        $this->comment("💡 Reminder: Credits do NOT carry over to the next year.");
+        $this->comment("💡 Reminder: Credits do NOT carry over to the next year for leave applications.");
+        $this->comment("💡 However, up to 4 credits can be carried over for cash conversion.");
+        $this->comment("💡 Run 'php artisan leave:process-carryover' to process carryovers for cash conversion.");
         $this->comment("💡 Employees should use their remaining credits before December 31.");
 
         // Suggest running in November/December

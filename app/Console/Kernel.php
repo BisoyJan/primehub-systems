@@ -36,6 +36,13 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->onOneServer();
 
+        // Process year-end leave credit carryovers - runs on January 1st at midnight
+        // Carries over up to 4 unused credits for cash conversion (not for leave applications)
+        $schedule->command('leave:process-carryover --year=' . (date('Y') - 1))
+            ->yearlyOn(1, 1, '00:00') // January 1st at midnight
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Check biometric retention policy expiry and notify admins - runs daily at 4:00 AM
         $schedule->command('retention:check-expiry --days=7')
             ->dailyAt('04:00')

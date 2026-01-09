@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -38,8 +38,14 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipProvider,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
-import { Download, Eye, Filter, ChevronsUpDown, Check } from 'lucide-react';
+import { Download, Eye, Filter, ChevronsUpDown, Check, Banknote } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -48,6 +54,13 @@ import PaginationNav from '@/components/pagination-nav';
 import { index as leaveIndexRoute } from '@/routes/leave-requests';
 import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
+
+interface CarryoverData {
+    credits: number;
+    to_year: number;
+    is_processed: boolean;
+    cash_converted: boolean;
+}
 
 interface CreditData {
     id: number;
@@ -61,6 +74,7 @@ interface CreditData {
     total_earned: number;
     total_used: number;
     balance: number;
+    carryover: CarryoverData | null;
 }
 
 interface PaginationLink {
@@ -144,6 +158,13 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
 
     const showClearFilters = selectedEmployeeId || roleFilter !== 'all' || eligibilityFilter !== 'all' || yearFilter !== new Date().getFullYear().toString();
 
+    // Clear employee search query when popover closes
+    useEffect(() => {
+        if (!isEmployeePopoverOpen) {
+            setEmployeeSearchQuery('');
+        }
+    }, [isEmployeePopoverOpen]);
+
     const buildFilterParams = useCallback(() => {
         const params: Record<string, string> = {};
         if (selectedEmployeeId) params.search = selectedEmployeeId;
@@ -181,7 +202,9 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
                 body: JSON.stringify({ year: exportYear }),
             });
@@ -286,7 +309,6 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                                     onSelect={() => {
                                                         setSelectedEmployeeId('');
                                                         setIsEmployeePopoverOpen(false);
-                                                        setEmployeeSearchQuery('');
                                                     }}
                                                     className="cursor-pointer"
                                                 >
@@ -302,7 +324,6 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                                         onSelect={() => {
                                                             setSelectedEmployeeId(employee.id.toString());
                                                             setIsEmployeePopoverOpen(false);
-                                                            setEmployeeSearchQuery('');
                                                         }}
                                                         className="cursor-pointer"
                                                     >
@@ -404,13 +425,14 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                     <TableHead className="text-right">Earned</TableHead>
                                     <TableHead className="text-right">Used</TableHead>
                                     <TableHead className="text-right">Balance</TableHead>
+                                    <TableHead className="text-center">Carryover (Cash)</TableHead>
                                     <TableHead className="text-center">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
                                 {!creditsData?.data || creditsData.data.length === 0 ? (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                                        <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                                             No employees found
                                         </TableCell>
                                     </TableRow>
@@ -447,6 +469,40 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                             </TableCell>
                                             <TableCell className="text-right font-bold">
                                                 {employee.balance.toFixed(2)}
+                                            </TableCell>
+                                            <TableCell className="text-center">
+                                                {employee.carryover ? (
+                                                    <TooltipProvider>
+                                                        <Tooltip>
+                                                            <TooltipTrigger asChild>
+                                                                <Badge 
+                                                                    variant="outline" 
+                                                                    className={employee.carryover.cash_converted 
+                                                                        ? "border-green-500 text-green-600 bg-green-50" 
+                                                                        : employee.carryover.is_processed
+                                                                            ? "border-amber-500 text-amber-600 bg-amber-50"
+                                                                            : "border-blue-500 text-blue-600 bg-blue-50"
+                                                                    }
+                                                                >
+                                                                    <Banknote className="h-3 w-3 mr-1" />
+                                                                    {employee.carryover.credits.toFixed(2)}
+                                                                </Badge>
+                                                            </TooltipTrigger>
+                                                            <TooltipContent>
+                                                                <p>To {employee.carryover.to_year} (for cash)</p>
+                                                                <p className="text-xs text-muted-foreground">
+                                                                    {employee.carryover.cash_converted 
+                                                                        ? 'Cash converted' 
+                                                                        : employee.carryover.is_processed
+                                                                            ? 'Pending conversion'
+                                                                            : 'Projected (not yet processed)'}
+                                                                </p>
+                                                            </TooltipContent>
+                                                        </Tooltip>
+                                                    </TooltipProvider>
+                                                ) : (
+                                                    <span className="text-muted-foreground text-sm">—</span>
+                                                )}
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
@@ -524,6 +580,46 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                             <p className="font-bold">{employee.balance.toFixed(2)}</p>
                                         </div>
                                     </div>
+
+                                    {employee.carryover && (
+                                        <div className={`flex items-center justify-between p-2 rounded-md border ${
+                                            employee.carryover.cash_converted 
+                                                ? 'bg-green-50 border-green-200' 
+                                                : employee.carryover.is_processed
+                                                    ? 'bg-amber-50 border-amber-200'
+                                                    : 'bg-blue-50 border-blue-200'
+                                        }`}>
+                                            <div className="flex items-center gap-2">
+                                                <Banknote className={`h-4 w-4 ${
+                                                    employee.carryover.cash_converted 
+                                                        ? 'text-green-600' 
+                                                        : employee.carryover.is_processed
+                                                            ? 'text-amber-600'
+                                                            : 'text-blue-600'
+                                                }`} />
+                                                <span className={`text-sm ${
+                                                    employee.carryover.cash_converted 
+                                                        ? 'text-green-700' 
+                                                        : employee.carryover.is_processed
+                                                            ? 'text-amber-700'
+                                                            : 'text-blue-700'
+                                                }`}>
+                                                    Carryover to {employee.carryover.to_year}
+                                                </span>
+                                            </div>
+                                            <Badge 
+                                                variant="outline" 
+                                                className={employee.carryover.cash_converted 
+                                                    ? "border-green-500 text-green-600" 
+                                                    : employee.carryover.is_processed
+                                                        ? "border-amber-500 text-amber-600"
+                                                        : "border-blue-500 text-blue-600"
+                                                }
+                                            >
+                                                {employee.carryover.credits.toFixed(2)} credits
+                                            </Badge>
+                                        </div>
+                                    )}
 
                                     <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
                                         <Button variant="outline" size="sm" className="w-full">

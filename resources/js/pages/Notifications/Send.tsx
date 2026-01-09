@@ -52,6 +52,7 @@ interface User {
 interface Role {
     value: string;
     label: string;
+    count: number;
 }
 
 interface Props {
@@ -254,7 +255,7 @@ export default function SendNotification({ users, roles }: Props) {
                                         <SelectContent>
                                             {roles.map((role) => (
                                                 <SelectItem key={role.value} value={role.value}>
-                                                    {role.label} ({users.filter(u => u.role === role.value).length} users)
+                                                    {role.label} ({role.count} users)
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

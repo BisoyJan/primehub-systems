@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, addDays } from 'date-fns';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -19,7 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, Users, Info } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
@@ -58,6 +58,17 @@ interface ExistingLeaveRequest {
     status: string;
 }
 
+interface CampaignConflict {
+    id: number;
+    user_name: string;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    status: string;
+    created_at: string;
+    overlapping_dates: string[];
+}
+
 interface Props {
     creditsSummary: CreditsSummary;
     attendancePoints: number;
@@ -65,6 +76,7 @@ interface Props {
     hasRecentAbsence: boolean;
     hasPendingRequests: boolean;
     nextEligibleLeaveDate: string | null;
+    lastAbsenceDate: string | null;
     campaigns: string[];
     selectedCampaign: string | null;
     twoWeeksFromNow: string;
@@ -81,6 +93,7 @@ export default function Create({
     attendanceViolations,
     hasRecentAbsence,
     nextEligibleLeaveDate,
+    lastAbsenceDate,
     campaigns,
     selectedCampaign,
     twoWeeksFromNow,
@@ -106,12 +119,15 @@ export default function Create({
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [medicalCertPreview, setMedicalCertPreview] = useState<string | null>(null);
+    const [campaignConflicts, setCampaignConflicts] = useState<CampaignConflict[]>([]);
+    const [absenceWindowInfo, setAbsenceWindowInfo] = useState<string | null>(null);
 
     const [calculatedDays, setCalculatedDays] = useState<number>(0);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
     const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
+    const [futureCredits, setFutureCredits] = useState<number>(0);
 
     // Helper function to check if a date is a weekend
     const isWeekend = (dateString: string): boolean => {
@@ -192,6 +208,33 @@ export default function Create({
         });
     };
 
+    // Calculate future credits that will accrue by the leave start date
+    const calculateFutureCredits = (startDate: string): number => {
+        if (!startDate || !creditsSummary.is_eligible) return 0;
+
+        const today = new Date();
+        const leaveStart = parseISO(startDate);
+
+        // Get the current month and year
+        const currentMonth = today.getMonth(); // 0-indexed
+        const currentYear = today.getFullYear();
+
+        // Get the leave start month and year
+        const leaveMonth = leaveStart.getMonth();
+        const leaveYear = leaveStart.getFullYear();
+
+        // Calculate how many full months will pass before the leave date
+        // Credits accrue at the end of each month, so if leave is in Feb, Jan credits will be added
+        let monthsToAccrue = 0;
+
+        if (leaveYear > currentYear || (leaveYear === currentYear && leaveMonth > currentMonth)) {
+            // Calculate months difference
+            monthsToAccrue = (leaveYear - currentYear) * 12 + (leaveMonth - currentMonth);
+        }
+
+        return monthsToAccrue * creditsSummary.monthly_rate;
+    };
+
     // Calculate working days when dates change (excluding weekends)
     useEffect(() => {
         if (data.start_date && data.end_date) {
@@ -214,13 +257,20 @@ export default function Create({
                 }
 
                 setCalculatedDays(workingDays);
+
+                // Calculate future credits based on start date
+                const projectedCredits = calculateFutureCredits(data.start_date);
+                setFutureCredits(projectedCredits);
             } catch {
                 setCalculatedDays(0);
+                setFutureCredits(0);
             }
         } else {
             setCalculatedDays(0);
+            setFutureCredits(0);
         }
-    }, [data.start_date, data.end_date]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate]);
 
     // Real-time validation warnings
     useEffect(() => {
@@ -269,12 +319,13 @@ export default function Create({
         }
 
         // Check leave credits balance (only block for VL/BL, SL can proceed without credits)
-        // Use available balance (total balance - pending credits) for validation
+        // Use available balance (total balance - pending credits + future credits) for validation
         if (['VL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
-            const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits);
+            const projectedCredits = data.start_date ? calculateFutureCredits(data.start_date) : 0;
+            const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + projectedCredits);
             if (availableBalance < calculatedDays) {
                 warnings.push(
-                    `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} days, Requested: ${calculatedDays} days`
+                    `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} days${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} days`
                 );
             }
         }
@@ -338,6 +389,70 @@ export default function Create({
             setSlCreditInfo(null);
         }
     }, [data.leave_type, data.medical_cert_submitted, creditsSummary, calculatedDays]);
+
+    // Check for campaign conflicts (VL and UPTO)
+    useEffect(() => {
+        const checkConflicts = async () => {
+            // Only check for VL and UPTO with valid dates and campaign
+            if (!['VL', 'UPTO'].includes(data.leave_type) || !data.start_date || !data.end_date || !data.campaign_department) {
+                setCampaignConflicts([]);
+                return;
+            }
+
+            try {
+                const response = await fetch('/form-requests/leave-requests/api/check-campaign-conflicts', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Accept': 'application/json',
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                    body: JSON.stringify({
+                        campaign_department: data.campaign_department,
+                        start_date: data.start_date,
+                        end_date: data.end_date,
+                        exclude_user_id: selectedEmployeeId,
+                    }),
+                });
+
+                if (response.ok) {
+                    const conflicts = await response.json();
+                    setCampaignConflicts(conflicts);
+                }
+            } catch (error) {
+                console.error('Failed to check campaign conflicts:', error);
+            }
+        };
+
+        // Debounce the API call
+        const timeoutId = setTimeout(checkConflicts, 500);
+        return () => clearTimeout(timeoutId);
+    }, [data.leave_type, data.start_date, data.end_date, data.campaign_department, selectedEmployeeId]);
+
+    // Check 30-day absence window for VL
+    useEffect(() => {
+        if (data.leave_type !== 'VL' || !data.start_date || !lastAbsenceDate) {
+            setAbsenceWindowInfo(null);
+            return;
+        }
+
+        const startDate = parseISO(data.start_date);
+        const absenceDate = parseISO(lastAbsenceDate);
+        const windowEndDate = addDays(absenceDate, 30);
+
+        if (startDate <= windowEndDate) {
+            const absenceDateStr = format(absenceDate, 'MMMM d, yyyy');
+            const eligibleDateStr = format(addDays(windowEndDate, 1), 'MMMM d, yyyy');
+            setAbsenceWindowInfo(
+                `Your last recorded absence was on ${absenceDateStr}. ` +
+                `You can apply for VL starting ${eligibleDateStr} (30 days after absence). ` +
+                `You may still submit this request, but reviewers will see this information when approving.`
+            );
+        } else {
+            setAbsenceWindowInfo(null);
+        }
+    }, [data.leave_type, data.start_date, lastAbsenceDate]);
 
     // Handle medical certificate file selection
     const handleMedicalCertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -451,10 +566,18 @@ export default function Create({
                                         {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
                                     </p>
                                 </div>
+                                {futureCredits > 0 && (
+                                    <div>
+                                        <p className="text-sm text-muted-foreground">Future Credits</p>
+                                        <p className="text-2xl font-bold text-purple-600">
+                                            +{futureCredits.toFixed(2)}
+                                        </p>
+                                    </div>
+                                )}
                                 <div>
                                     <p className="text-sm text-muted-foreground">Available</p>
                                     <p className="text-2xl font-bold text-blue-600">
-                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits).toFixed(2)}
+                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + futureCredits).toFixed(2)}
                                     </p>
                                 </div>
                                 <div>
@@ -466,7 +589,7 @@ export default function Create({
                                 <div>
                                     <p className="text-sm text-muted-foreground">After Submit</p>
                                     <p className="text-2xl font-bold text-green-600">
-                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
+                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + futureCredits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
                                     </p>
                                 </div>
                                 <div>
@@ -474,6 +597,17 @@ export default function Create({
                                     <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
                                 </div>
                             </div>
+                            {/* Info about projected credits - only show when applying for future months */}
+                            {futureCredits > 0 && (
+                                <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-md">
+                                    <div className="flex items-start gap-2">
+                                        <Info className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                                        <p className="text-sm text-purple-800 dark:text-purple-200">
+                                            <strong>Future Credits Applied:</strong> Since your leave starts in a future month, {futureCredits.toFixed(2)} credits will accrue before your leave date ({creditsSummary.monthly_rate} per month). These are included in your available balance.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
                         </CardContent>
                     </Card>
                 )}
@@ -501,8 +635,8 @@ export default function Create({
                     </Alert>
                 )}
 
-                {/* Attendance Violations Display */}
-                {attendanceViolations.length > 0 && (
+                {/* Attendance Violations Display - Only show if points >= 6 */}
+                {attendanceViolations.length > 0 && attendancePoints >= 6 && (
                     <Card className="mb-6 border-orange-200 dark:border-orange-800">
                         <CardHeader className="pb-3">
                             <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
@@ -628,6 +762,69 @@ export default function Create({
                             >
                                 Remove Override
                             </Button>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* 30-Day Absence Window Warning (VL only) */}
+                {absenceWindowInfo && (
+                    <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                        <Info className="h-4 w-4 text-orange-600" />
+                        <AlertTitle className="text-orange-800 dark:text-orange-200">30-Day Absence Window Notice</AlertTitle>
+                        <AlertDescription className="text-orange-700 dark:text-orange-300">
+                            {absenceWindowInfo}
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* Campaign Conflicts Warning (VL and UPTO) */}
+                {campaignConflicts.length > 0 && (
+                    <Alert className="mb-6 border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
+                        <Users className="h-4 w-4 text-purple-600" />
+                        <AlertTitle className="text-purple-800 dark:text-purple-200 flex items-center gap-2">
+                            <span>Campaign Leave Conflicts</span>
+                            <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                                {campaignConflicts.length}
+                            </Badge>
+                        </AlertTitle>
+                        <AlertDescription className="text-purple-700 dark:text-purple-300">
+                            <p className="mb-3 text-sm">
+                                The following employees from your campaign have already applied for leave during the selected dates. You may still submit your request, but be aware of potential scheduling conflicts.
+                            </p>
+                            <div className="space-y-2 w-full max-w-3xl mx-auto">
+                                {campaignConflicts.map((conflict) => (
+                                    <div key={conflict.id} className="grid grid-cols-1 sm:grid-cols-[minmax(180px,1fr)_auto_minmax(160px,1fr)] items-center gap-x-6 gap-y-2 text-sm bg-purple-100 dark:bg-purple-900/50 p-3 rounded-md border border-purple-200 dark:border-purple-800/50 transition-colors hover:bg-purple-200/50 dark:hover:bg-purple-900/70">
+                                        <div className="flex items-center gap-3 justify-self-center sm:justify-self-start">
+                                            <span className="font-semibold text-purple-900 dark:text-purple-100">{conflict.user_name}</span>
+                                            <Badge variant="outline" className="text-[10px] px-1.5 h-5 text-purple-700 dark:text-purple-300 border-purple-400 bg-purple-50/50 dark:bg-purple-900/30">
+                                                {conflict.leave_type}
+                                            </Badge>
+                                        </div>
+
+                                        <div className="flex items-center gap-2 justify-self-center sm:justify-self-center">
+                                            <Calendar className="h-3.5 w-3.5 text-purple-500" />
+                                            <span className="text-purple-800 dark:text-purple-200 font-medium whitespace-nowrap">
+                                                {format(parseISO(conflict.start_date), 'MMM d')} - {format(parseISO(conflict.end_date), 'MMM d, yyyy')}
+                                            </span>
+                                        </div>
+
+                                        <div className="flex items-center gap-3 justify-self-center sm:justify-self-end">
+                                            <Badge
+                                                variant="outline"
+                                                className={`text-[10px] px-1.5 h-5 capitalize ${conflict.status === 'approved'
+                                                    ? 'text-green-700 border-green-400 dark:text-green-400 bg-green-50/50 dark:bg-green-900/20'
+                                                    : 'text-yellow-700 border-yellow-400 dark:text-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/20'
+                                                    }`}
+                                            >
+                                                {conflict.status}
+                                            </Badge>
+                                            <span className="text-xs text-purple-500 dark:text-purple-400 italic whitespace-nowrap">
+                                                Requested: {format(parseISO(conflict.created_at), 'MMM d, yyyy')}
+                                            </span>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
                         </AlertDescription>
                     </Alert>
                 )}

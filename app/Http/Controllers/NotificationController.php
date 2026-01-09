@@ -143,10 +143,17 @@ class NotificationController extends Controller
                 'role' => $user->role,
             ]);
 
-        // Get available roles
+        // Get user counts by role
+        $userCountsByRole = User::where('is_approved', true)
+            ->selectRaw('role, COUNT(*) as count')
+            ->groupBy('role')
+            ->pluck('count', 'role');
+
+        // Get available roles with user counts
         $roles = collect(config('permissions.roles'))->map(fn($label, $value) => [
             'value' => $value,
             'label' => $label,
+            'count' => $userCountsByRole->get($label, 0),
         ])->values();
 
         return Inertia::render('Notifications/Send', [

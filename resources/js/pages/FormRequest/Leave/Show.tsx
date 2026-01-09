@@ -1,16 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
-import { format, parseISO, isWithinInterval, eachDayOfInterval, isWeekend } from 'date-fns';
+import { format, parseISO, eachDayOfInterval, isWeekend } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
-import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Can } from '@/components/authorization';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -22,12 +22,20 @@ import {
 import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
     name: string;
     email: string;
+}
+
+interface DeniedDate {
+    id: number;
+    denied_date: string;
+    denial_reason: string | null;
+    denied_by: number;
+    denier?: User;
 }
 
 interface LeaveRequest {
@@ -72,6 +80,32 @@ interface LeaveRequest {
     short_notice_override_by?: number;
     short_notice_overrider?: User;
     medical_cert_path?: string;
+    // Partial denial fields
+    has_partial_denial?: boolean;
+    approved_days?: number;
+    sl_credits_applied?: boolean;
+    sl_no_credit_reason?: string;
+    denied_dates?: DeniedDate[];
+}
+
+interface AbsenceWindowInfo {
+    within_window: boolean;
+    last_absence_date: string | null;
+    window_end_date: string | null;
+}
+
+interface ActiveAttendancePoint {
+    id: number;
+    shift_date: string;
+    point_type: string;
+    points: number;
+    violation_details: string | null;
+    expires_at: string | null;
+    gbro_expires_at: string | null;
+    eligible_for_gbro: boolean;
+    current_status: 'active' | 'excused' | 'expired';
+    excused_at: string | null;
+    expired_at: string | null;
 }
 
 interface Props {
@@ -86,6 +120,20 @@ interface Props {
     canAdminCancel?: boolean;
     canEditApproved?: boolean;
     canViewMedicalCert?: boolean;
+    earlierConflicts?: EarlierConflict[];
+    absenceWindowInfo?: AbsenceWindowInfo | null;
+    activeAttendancePoints?: ActiveAttendancePoint[];
+}
+
+interface EarlierConflict {
+    id: number;
+    user_name: string;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    status: string;
+    created_at: string;
+    overlapping_dates: string[];
 }
 
 export default function Show({
@@ -98,9 +146,13 @@ export default function Show({
     canAdminCancel = false,
     canEditApproved = false,
     canViewMedicalCert = false,
+    earlierConflicts = [],
+    absenceWindowInfo = null,
+    activeAttendancePoints = [],
 }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
+    const [showPartialDenyDialog, setShowPartialDenyDialog] = useState(false);
     const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -109,10 +161,13 @@ export default function Show({
     const [showTLDenyDialog, setShowTLDenyDialog] = useState(false);
     const [showAdminCancelDialog, setShowAdminCancelDialog] = useState(false);
     const [showAdjustForWorkDialog, setShowAdjustForWorkDialog] = useState(false);
+    const [selectedApprovedDates, setSelectedApprovedDates] = useState<string[]>([]);
+    const [showAttendancePointsDialog, setShowAttendancePointsDialog] = useState(false);
     const { can } = usePermission();
 
     const approveForm = useForm({ review_notes: '' });
     const denyForm = useForm({ review_notes: '' });
+    const partialDenyForm = useForm({ denied_dates: [] as string[], denial_reason: '', review_notes: '' });
     const tlApproveForm = useForm({ review_notes: '' });
     const tlDenyForm = useForm({ review_notes: '' });
     const forceApproveForm = useForm({ review_notes: '' });
@@ -216,6 +271,29 @@ export default function Show({
         });
     };
 
+    // Helper function to format attendance point type
+    const formatPointType = (type: string) => {
+        const typeMap: Record<string, string> = {
+            'whole_day_absence': 'Whole Day Absence',
+            'half_day_absence': 'Half Day Absence',
+            'undertime': 'Undertime',
+            'undertime_more_than_hour': 'Undertime (>1 Hour)',
+            'tardy': 'Tardy',
+        };
+        return typeMap[type] || type;
+    };
+
+    // Get list of working days (Mon-Fri) in leave period
+    const workDays = useMemo(() => {
+        try {
+            const start = parseISO(leaveRequest.start_date);
+            const end = parseISO(leaveRequest.end_date);
+            return eachDayOfInterval({ start, end }).filter(date => !isWeekend(date));
+        } catch {
+            return [];
+        }
+    }, [leaveRequest.start_date, leaveRequest.end_date]);
+
     // Get list of dates in leave period for the adjust dialog
     const getLeaveDates = () => {
         try {
@@ -225,6 +303,48 @@ export default function Show({
         } catch {
             return [];
         }
+    };
+
+    // Handle partial approval - toggle date selection
+    const toggleApprovedDate = (dateStr: string) => {
+        setSelectedApprovedDates(prev => {
+            if (prev.includes(dateStr)) {
+                return prev.filter(d => d !== dateStr);
+            } else {
+                return [...prev, dateStr];
+            }
+        });
+    };
+
+    // Handle partial approval submission
+    const handlePartialDeny = () => {
+        if (selectedApprovedDates.length === 0) {
+            toast.error('Please select at least one date to approve');
+            return;
+        }
+
+        if (selectedApprovedDates.length === workDays.length) {
+            toast.error('You cannot approve all dates. Use full approve instead.');
+            return;
+        }
+
+        // Calculate denied dates (dates NOT selected for approval)
+        const deniedDates = workDays
+            .map(date => format(date, 'yyyy-MM-dd'))
+            .filter(dateStr => !selectedApprovedDates.includes(dateStr));
+
+        partialDenyForm.setData('denied_dates', deniedDates);
+        partialDenyForm.post(leavePartialDenyRoute(leaveRequest.id).url, {
+            onSuccess: () => {
+                setShowPartialDenyDialog(false);
+                setSelectedApprovedDates([]);
+                partialDenyForm.reset();
+                toast.success('Leave request partially approved');
+            },
+            onError: (errors) => {
+                toast.error(errors.error || 'Failed to process partial approval');
+            },
+        });
     };
 
     const handleDelete = () => {
@@ -278,6 +398,18 @@ export default function Show({
                                     <X className="mr-1 h-4 w-4" />
                                     <span className="hidden sm:inline">Reject (TL)</span>
                                 </Button>
+                                {/* Partial Deny for Team Lead - Only show for multi-day requests */}
+                                {workDays.length > 1 && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                                        onClick={() => setShowPartialDenyDialog(true)}
+                                    >
+                                        <Calendar className="mr-1 h-4 w-4" />
+                                        <span className="hidden sm:inline">Partial Deny (TL)</span>
+                                    </Button>
+                                )}
                             </>
                         )}
                         {/* Admin/HR Approval Buttons */}
@@ -295,6 +427,20 @@ export default function Show({
                                         <span className="hidden sm:inline">Deny</span>
                                     </Button>
                                 </Can>
+                                {/* Partial Deny - Only show for multi-day requests */}
+                                {workDays.length > 1 && (
+                                    <Can permission="leave.approve">
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                                            onClick={() => setShowPartialDenyDialog(true)}
+                                        >
+                                            <Calendar className="mr-1 h-4 w-4" />
+                                            <span className="hidden sm:inline">Partial Deny</span>
+                                        </Button>
+                                    </Can>
+                                )}
                             </>
                         )}
                         {/* Super Admin Force Approve Button - Shows when pending and not fully approved */}
@@ -398,9 +544,42 @@ export default function Show({
                             </div>
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Duration</p>
-                                <p className="text-base">{leaveRequest.days_requested} days</p>
+                                <p className="text-base">
+                                    {leaveRequest.has_partial_denial ? (
+                                        <>
+                                            <span className="text-green-600 font-medium">{leaveRequest.approved_days} days approved</span>
+                                            <span className="text-muted-foreground"> / {leaveRequest.days_requested} days requested</span>
+                                        </>
+                                    ) : (
+                                        <>{leaveRequest.days_requested} days</>
+                                    )}
+                                </p>
                             </div>
                         </div>
+
+                        {/* Partial Denial Info */}
+                        {Boolean(leaveRequest.has_partial_denial && leaveRequest.denied_dates && leaveRequest.denied_dates.length > 0) && (
+                            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                                <Calendar className="h-4 w-4 text-orange-600" />
+                                <AlertDescription className="text-orange-800 dark:text-orange-200">
+                                    <p className="font-medium mb-2">Partial Approval - Some dates were denied:</p>
+                                    <div className="space-y-1">
+                                        {leaveRequest.denied_dates?.map((dd) => (
+                                            <div key={dd.id} className="flex items-center gap-2 text-sm">
+                                                <Badge variant="destructive" className="text-xs">Denied</Badge>
+                                                <span>{format(parseISO(dd.denied_date), 'EEEE, MMM d, yyyy')}</span>
+                                                {dd.denial_reason && <span className="text-muted-foreground">- {dd.denial_reason}</span>}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {leaveRequest.denied_dates?.[0]?.denier && (
+                                        <p className="mt-2 text-xs text-muted-foreground">
+                                            Denied by: {leaveRequest.denied_dates[0].denier.name}
+                                        </p>
+                                    )}
+                                </AlertDescription>
+                            </Alert>
+                        )}
 
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                             <div>
@@ -422,6 +601,66 @@ export default function Show({
                             <p className="text-sm font-medium text-muted-foreground">Campaign/Department</p>
                             <p className="text-base">{leaveRequest.campaign_department}</p>
                         </div>
+
+                        {/* Earlier Conflicts Warning (First-Come-First-Serve for VL/UPTO) */}
+                        {Boolean(earlierConflicts && earlierConflicts.length > 0 && ['VL', 'UPTO'].includes(leaveRequest.leave_type)) && (
+                            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                <AlertDescription className="text-orange-800 dark:text-orange-200">
+                                    <div className="space-y-2">
+                                        <p className="font-semibold">
+                                            Date Conflict Detected (First-Come-First-Serve Policy)
+                                        </p>
+                                        <p className="text-sm">
+                                            The following leave requests from the same campaign were submitted earlier and have overlapping dates:
+                                        </p>
+                                        <div className="mt-2 max-h-60 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                                            {earlierConflicts.map((conflict) => (
+                                                <div
+                                                    key={conflict.id}
+                                                    className="bg-white/50 dark:bg-black/20 rounded-md p-2 border border-orange-200 dark:border-orange-700 text-sm"
+                                                >
+                                                    <div className="flex flex-wrap items-center justify-between gap-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="font-medium">{conflict.user_name}</span>
+                                                            <div className="flex gap-1">
+                                                                <Badge variant="outline" className="h-5 px-1.5 text-[10px]">
+                                                                    {conflict.leave_type}
+                                                                </Badge>
+                                                                <Badge
+                                                                    variant={conflict.status === 'approved' ? 'default' : 'secondary'}
+                                                                    className="h-5 px-1.5 text-[10px]"
+                                                                >
+                                                                    {conflict.status}
+                                                                </Badge>
+                                                            </div>
+                                                        </div>
+                                                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                                                            {format(parseISO(conflict.start_date), 'MMM d')} - {format(parseISO(conflict.end_date), 'MMM d')}
+                                                        </span>
+                                                    </div>
+
+                                                    <div className="flex flex-wrap justify-between items-end gap-2 mt-1">
+                                                        <span className="text-xs text-muted-foreground">
+                                                            Submitted: {format(parseISO(conflict.created_at), 'MM/dd h:mm a')}
+                                                        </span>
+
+                                                        {Boolean(conflict.overlapping_dates && conflict.overlapping_dates.length > 0) && (
+                                                            <span className="text-xs font-medium text-orange-600 dark:text-orange-400">
+                                                                Overlaps: {conflict.overlapping_dates.map(d => format(parseISO(d), 'MMM d')).join(', ')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        <p className="text-xs italic mt-1 opacity-80">
+                                            Note: Earlier submitted requests may take priority.
+                                        </p>
+                                    </div>
+                                </AlertDescription>
+                            </Alert>
+                        )}
 
                         {/* Medical Cert (if SL) */}
                         {leaveRequest.leave_type === 'SL' && (
@@ -467,24 +706,87 @@ export default function Show({
                         )}
 
                         {/* Credits Info */}
-                        {leaveRequest.credits_deducted && (
+                        {Boolean(leaveRequest.credits_deducted !== null && leaveRequest.credits_deducted !== undefined && Number(leaveRequest.credits_deducted) > 0) && (
                             <div>
                                 <p className="text-sm font-medium text-muted-foreground">Leave Credits Deducted</p>
                                 <p className="text-base">{leaveRequest.credits_deducted} days</p>
                             </div>
                         )}
 
-                        {/* Attendance Points at Request */}
+                        {/* SL No Credit Reason */}
+                        {leaveRequest.leave_type === 'SL' && leaveRequest.sl_credits_applied === false && leaveRequest.sl_no_credit_reason && (
+                            <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                <Info className="h-4 w-4 text-blue-600" />
+                                <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                    <strong>SL Credits Not Deducted:</strong> {leaveRequest.sl_no_credit_reason}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+
+
+                        {/* Attendance Points at Request - Highlighted if >= 6 */}
                         <div>
                             <p className="text-sm font-medium text-muted-foreground">
                                 Attendance Points at Request
                             </p>
-                            <p className="text-base">
-                                {leaveRequest.attendance_points_at_request
-                                    ? Number(leaveRequest.attendance_points_at_request).toFixed(1)
-                                    : '0'}
-                            </p>
+                            <div className="flex items-center gap-2 mt-1">
+                                {Number(leaveRequest.attendance_points_at_request || 0) >= 6 ? (
+                                    <Badge variant="destructive" className="text-sm font-semibold px-3 py-1">
+                                        <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                                        {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)} Points (High)
+                                    </Badge>
+                                ) : (
+                                    <p className="text-base">
+                                        {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)}
+                                    </p>
+                                )}
+                                {activeAttendancePoints && activeAttendancePoints.length > 0 && (
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() => setShowAttendancePointsDialog(true)}
+                                        className="h-8"
+                                    >
+                                        <Info className="h-4 w-4 mr-1" />
+                                        View Details
+                                    </Button>
+                                )}
+                            </div>
                         </div>
+
+                        {/* High Attendance Points Alert */}
+                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && (
+                            <Alert className="border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                <AlertDescription className="text-red-800 dark:text-red-200">
+                                    <strong>⚠️ High Attendance Points:</strong>  <p>This employee has{' '}
+                                        <span className="font-bold">{Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)} attendance points</span>{' '}
+                                        at the time of this request. Please review attendance history before approving.</p>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* 30-Day Absence Window Warning for VL */}
+                        {Boolean(absenceWindowInfo?.within_window && leaveRequest.leave_type === 'VL') && (
+                            <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <div className="space-y-1">
+                                        <p className="font-semibold">⚠️ 30-Day Absence Window Violation</p>
+                                        <p className="text-sm">
+                                            This VL application falls within 30 days of the employee's last recorded absence.
+                                        </p>
+                                        <div className="text-sm mt-2">
+                                            <p><strong>Last Absence Date:</strong> {absenceWindowInfo?.last_absence_date ? format(parseISO(absenceWindowInfo.last_absence_date), 'MMMM d, yyyy') : 'N/A'}</p>
+                                            <p><strong>Window Ends:</strong> {absenceWindowInfo?.window_end_date ? format(parseISO(absenceWindowInfo.window_end_date), 'MMMM d, yyyy') : 'N/A'}</p>
+                                        </div>
+                                        <p className="text-xs italic mt-1 opacity-80">
+                                            Note: VL applications within 30 days of last absence may require additional review.
+                                        </p>
+                                    </div>
+                                </AlertDescription>
+                            </Alert>
+                        )}
 
                         {/* Reason */}
                         <div>
@@ -836,6 +1138,107 @@ export default function Show({
                             disabled={denyForm.processing}
                         >
                             Deny Request
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Partial Deny Dialog */}
+            <Dialog open={showPartialDenyDialog} onOpenChange={(open) => {
+                setShowPartialDenyDialog(open);
+                if (!open) {
+                    setSelectedApprovedDates([]);
+                    partialDenyForm.reset();
+                }
+            }}>
+                <DialogContent className="max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle>Partial Approval - Select Dates to Approve</DialogTitle>
+                        <DialogDescription>
+                            Select specific dates to approve from this leave request. The remaining dates will be denied.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        <div>
+                            <Label className="text-sm font-medium mb-2 block">
+                                Leave Period: {format(parseISO(leaveRequest.start_date), 'MMM d, yyyy')} - {format(parseISO(leaveRequest.end_date), 'MMM d, yyyy')}
+                            </Label>
+                            <p className="text-sm text-muted-foreground mb-3">
+                                Total working days: {workDays.length} | Selected to approve: {selectedApprovedDates.length}
+                            </p>
+                            <div className="border rounded-md p-3 max-h-64 overflow-y-auto space-y-2">
+                                {workDays.map((date) => {
+                                    const dateStr = format(date, 'yyyy-MM-dd');
+                                    const isSelected = selectedApprovedDates.includes(dateStr);
+                                    return (
+                                        <div
+                                            key={dateStr}
+                                            className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 text-green-900' : 'hover:bg-muted'
+                                                }`}
+                                            onClick={() => toggleApprovedDate(dateStr)}
+                                        >
+                                            <Checkbox
+                                                checked={isSelected}
+                                                onCheckedChange={() => toggleApprovedDate(dateStr)}
+                                            />
+                                            <div className="flex-1">
+                                                <span className="font-medium">{format(date, 'EEEE, MMM d, yyyy')}</span>
+                                            </div>
+                                            {isSelected && (
+                                                <Badge className="text-xs bg-green-600 text-white">Will be approved</Badge>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                        <div>
+                            <Label className="text-sm font-medium">
+                                Reason for Partial Approval <span className="text-red-500">*</span>
+                            </Label>
+                            <Textarea
+                                value={partialDenyForm.data.denial_reason}
+                                onChange={(e) => partialDenyForm.setData('denial_reason', e.target.value)}
+                                placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
+                                rows={2}
+                            />
+                            {partialDenyForm.errors.denial_reason && (
+                                <p className="text-sm text-red-500 mt-1">{partialDenyForm.errors.denial_reason}</p>
+                            )}
+                        </div>
+                        <div>
+                            <Label className="text-sm font-medium">Additional Notes (Optional)</Label>
+                            <Textarea
+                                value={partialDenyForm.data.review_notes}
+                                onChange={(e) => partialDenyForm.setData('review_notes', e.target.value)}
+                                placeholder="Any additional notes..."
+                                rows={2}
+                            />
+                        </div>
+                        {selectedApprovedDates.length > 0 && selectedApprovedDates.length < workDays.length && (
+                            <Alert className="bg-green-50 border-green-200">
+                                <Check className="h-4 w-4 text-green-600" />
+                                <AlertDescription className="text-green-800">
+                                    <p>{selectedApprovedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - selectedApprovedDates.length} day(s) will be <strong>denied</strong>.</p>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => {
+                            setShowPartialDenyDialog(false);
+                            setSelectedApprovedDates([]);
+                            partialDenyForm.reset();
+                        }}>
+                            Cancel
+                        </Button>
+                        <Button
+                            variant="default"
+                            className="bg-orange-600 hover:bg-orange-700"
+                            onClick={handlePartialDeny}
+                            disabled={partialDenyForm.processing || selectedApprovedDates.length === 0 || selectedApprovedDates.length === workDays.length}
+                        >
+                            Partial Approve ({selectedApprovedDates.length} days)
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1193,6 +1596,151 @@ export default function Show({
                             </Button>
                         </a>
                         <Button onClick={() => setShowMedicalCertDialog(false)}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Attendance Points Details Dialog */}
+            <Dialog open={showAttendancePointsDialog} onOpenChange={setShowAttendancePointsDialog}>
+                <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Attendance Points at Time of Request</DialogTitle>
+                        <DialogDescription>
+                            Points that were active when {leaveRequest.user.name} submitted this leave request
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {activeAttendancePoints && activeAttendancePoints.length > 0 ? (
+                            <>
+                                <div className="bg-muted/50 p-3 rounded-lg">
+                                    <div className="flex items-center justify-between">
+                                        <span className="text-sm font-medium">Total Points at Request:</span>
+                                        <span className="text-2xl font-bold text-destructive">
+                                            {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)}
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="space-y-3">
+                                    {activeAttendancePoints.map((point, index) => (
+                                        <div key={point.id} className={`border rounded-lg p-4 ${point.current_status !== 'active' ? 'opacity-60 bg-muted/30' : ''}`}>
+                                            <div className="flex items-start justify-between gap-4">
+                                                <div className="space-y-3 flex-1">
+                                                    <div className="space-y-1">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-muted-foreground text-sm font-medium">#{index + 1}</span>
+                                                            <div className="flex items-center gap-2 text-sm font-medium">
+                                                                <Calendar className="h-4 w-4 text-muted-foreground" />
+                                                                <span>
+                                                                    {format(parseISO(point.shift_date), 'EEEE, MMMM d, yyyy')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        
+                                                        <div className="flex items-start gap-2 text-sm ml-6">
+                                                            <AlertTriangle className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                                                            <div>
+                                                                <p className="font-medium text-muted-foreground">
+                                                                    {formatPointType(point.point_type)}
+                                                                </p>
+                                                                {point.violation_details && (
+                                                                    <p className="text-xs text-muted-foreground mt-1">
+                                                                        {point.violation_details}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+
+                                                    <div className="ml-6 space-y-1">
+                                                        {point.current_status === 'active' && (point.expires_at || point.gbro_expires_at) && (
+                                                            <>
+                                                                {point.expires_at && (
+                                                                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                                                        <Clock className="h-3.5 w-3.5" />
+                                                                        <span>
+                                                                            SRO Expires: {format(parseISO(point.expires_at), 'MMM d, yyyy')}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                {point.eligible_for_gbro && point.gbro_expires_at && (
+                                                                    <div className="flex items-center gap-2 text-xs text-green-600 dark:text-green-400">
+                                                                        <CheckCircle className="h-3.5 w-3.5" />
+                                                                        <span>
+                                                                            GBRO Expires: {format(parseISO(point.gbro_expires_at), 'MMM d, yyyy')}
+                                                                        </span>
+                                                                    </div>
+                                                                )}
+                                                                {!point.eligible_for_gbro && (
+                                                                    <div className="flex items-center gap-2 text-xs text-orange-600 dark:text-orange-400">
+                                                                        <AlertTriangle className="h-3.5 w-3.5" />
+                                                                        <span>Not eligible for GBRO</span>
+                                                                    </div>
+                                                                )}
+                                                            </>
+                                                        )}
+                                                        {point.current_status === 'excused' && point.excused_at && (
+                                                            <div className="flex items-center gap-2 text-xs text-green-600">
+                                                                <CheckCircle className="h-3.5 w-3.5" />
+                                                                <span>
+                                                                    Excused on: {format(parseISO(point.excused_at), 'MMM d, yyyy')}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                        {point.current_status === 'expired' && point.expired_at && (
+                                                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                                                                <Clock className="h-3.5 w-3.5" />
+                                                                <span>
+                                                                    Expired on: {format(parseISO(point.expired_at), 'MMM d, yyyy')}
+                                                                </span>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="flex flex-col items-end gap-2 shrink-0">
+                                                    <Badge variant="destructive" className="text-sm px-3 py-1">
+                                                        {point.points} {point.points === 1 ? 'Point' : 'Points'}
+                                                    </Badge>
+                                                    {point.current_status === 'excused' && (
+                                                        <Badge variant="outline" className="text-xs bg-green-100 text-green-700 border-green-300">
+                                                            <CheckCircle className="h-3 w-3 mr-1" />
+                                                            Now Excused
+                                                        </Badge>
+                                                    )}
+                                                    {point.current_status === 'expired' && (
+                                                        <Badge variant="outline" className="text-xs bg-gray-100 text-gray-600 border-gray-300">
+                                                            <Clock className="h-3 w-3 mr-1" />
+                                                            Now Expired
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                {/* Show note if any points have changed status */}
+                                {activeAttendancePoints.some(p => p.current_status !== 'active') && (
+                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                        <Info className="h-4 w-4 text-blue-600" />
+                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-sm">
+                                            Some points shown above have been excused or expired since this request was submitted.
+                                            The grayed-out entries were active at the time of submission but are no longer counted.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                            </>
+                        ) : (
+                            <div className="text-center py-8 text-muted-foreground">
+                                No attendance points were recorded at the time of this request
+                            </div>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button onClick={() => setShowAttendancePointsDialog(false)}>
                             Close
                         </Button>
                     </DialogFooter>

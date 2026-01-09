@@ -193,7 +193,7 @@ const getNavigationConfig = (userId: number, userRole: string) => {
                     title: 'IT Concerns',
                     href: '/form-requests/it-concerns',
                     icon: AlertCircle,
-                    permission: 'it_concerns.create',
+                    permission: 'it_concerns.view',
                 },
                 {
                     title: 'Leave Requests',

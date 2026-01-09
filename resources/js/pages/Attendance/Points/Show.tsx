@@ -312,7 +312,9 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             });
 
@@ -560,7 +562,9 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
                 credentials: 'same-origin',
                 body: JSON.stringify(body),

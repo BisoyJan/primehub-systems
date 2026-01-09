@@ -10,6 +10,7 @@ use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\LeaveCredit;
 use App\Models\LeaveRequest;
+use App\Models\LeaveRequestDeniedDate;
 use App\Models\User;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
@@ -110,6 +111,29 @@ class LeaveRequestController extends Controller
         // Get list of campaigns/departments for filters (unique names from campaigns table)
         $campaigns = \App\Models\Campaign::orderBy('name')->pluck('name')->toArray();
 
+        // Get all employees who have leave requests (for admin/TL employee search dropdown)
+        $allEmployees = [];
+        if ($isAdmin || $isTeamLead) {
+            $employeeQuery = \App\Models\User::whereHas('leaveRequests');
+
+            // Team Leads only see employees whose requests they can view
+            if ($isTeamLead) {
+                $employeeQuery->where(function ($q) use ($user) {
+                    $q->where('id', $user->id)
+                      ->orWhereHas('leaveRequests', fn($lq) => $lq->where('requires_tl_approval', true));
+                });
+            }
+
+            $allEmployees = $employeeQuery
+                ->orderByRaw("CONCAT(first_name, ' ', last_name)")
+                ->get()
+                ->map(fn($u) => [
+                    'id' => $u->id,
+                    'name' => $u->name,
+                ])
+                ->toArray();
+        }
+
         // Check if current user has pending leave requests
         $hasPendingRequests = LeaveRequest::where('user_id', $user->id)
             ->where('status', 'pending')
@@ -119,6 +143,7 @@ class LeaveRequestController extends Controller
             'leaveRequests' => $leaveRequests,
             'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id', 'employee_name', 'campaign_department']),
             'campaigns' => $campaigns,
+            'allEmployees' => $allEmployees,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'hasPendingRequests' => $hasPendingRequests,
@@ -139,6 +164,7 @@ class LeaveRequestController extends Controller
         $month = $request->input('month', now()->format('Y-m'));
         $campaignId = $request->input('campaign_id');
         $leaveType = $request->input('leave_type');
+        $status = $request->input('status'); // 'approved', 'pending', or null for both
         $viewMode = $request->input('view_mode', 'single'); // 'single' or 'multi'
 
         // Parse month to get date range
@@ -153,11 +179,15 @@ class LeaveRequestController extends Controller
             $endOfRange = $calendarDate->copy()->endOfMonth();
         }
 
-        // Build query for approved leaves
+        // Build query for approved and pending leaves
         $query = LeaveRequest::with(['user:id,first_name,last_name,role', 'user.employeeSchedules' => function ($q) {
                 $q->where('is_active', true)->with('campaign:id,name');
             }])
-            ->where('status', 'approved')
+            ->when($status, function ($q) use ($status) {
+                $q->where('status', $status);
+            }, function ($q) {
+                $q->whereIn('status', ['approved', 'pending']);
+            })
             ->where(function ($q) use ($startOfRange, $endOfRange) {
                 $q->whereBetween('start_date', [$startOfRange, $endOfRange])
                     ->orWhereBetween('end_date', [$startOfRange, $endOfRange])
@@ -221,6 +251,7 @@ class LeaveRequestController extends Controller
                 'month' => $month,
                 'campaign_id' => $campaignId,
                 'leave_type' => $leaveType,
+                'status' => $status,
                 'view_mode' => $viewMode,
             ],
             'isRestrictedRole' => $isRestrictedRole,
@@ -281,6 +312,9 @@ class LeaveRequestController extends Controller
             ? $leaveCreditService->getNextEligibleLeaveDate($targetUser)
             : null;
 
+        // Get last absence date for 30-day window prompt
+        $lastAbsenceDate = $leaveCreditService->getLastAbsenceDate($targetUser);
+
         // Campaign/Department options - fetch from database + add Management
         $campaignsFromDb = Campaign::orderBy('name')->pluck('name')->toArray();
         $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
@@ -335,6 +369,7 @@ class LeaveRequestController extends Controller
             'hasRecentAbsence' => $hasRecentAbsence,
             'hasPendingRequests' => $hasPendingRequests,
             'nextEligibleLeaveDate' => $nextEligibleLeaveDate,
+            'lastAbsenceDate' => $lastAbsenceDate?->format('Y-m-d'),
             'campaigns' => $campaigns,
             'selectedCampaign' => $selectedCampaign,
             'twoWeeksFromNow' => $twoWeeksFromNow,
@@ -561,7 +596,7 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
         $isTeamLead = $user->role === 'Team Lead';
 
-        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'deniedDates.denier']);
 
         // Check if current user has already approved
         $hasUserApproved = false;
@@ -599,6 +634,71 @@ class LeaveRequestController extends Controller
         // Check if user can view medical certificate (Admin, HR, Super Admin only)
         $canViewMedicalCert = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
 
+        // Get earlier conflicts for VL/UPTO (first-come-first-serve)
+        $earlierConflicts = $this->getEarlierConflicts($leaveRequest);
+
+        // Check 30-day absence window for VL
+        $absenceWindowInfo = null;
+        if ($leaveRequest->leave_type === 'VL') {
+            $leaveCreditService = app(LeaveCreditService::class);
+            $absenceWindowInfo = $leaveCreditService->checkAbsenceWindowForDate(
+                $leaveRequest->user,
+                $leaveRequest->start_date
+            );
+        }
+
+        // Get attendance points that were active AT THE TIME of the leave request submission
+        // This includes points where:
+        // 1. The shift_date (violation date) was before the request was submitted AND
+        // 2. Either are still active OR were excused/expired AFTER the request was submitted
+        $requestSubmittedAt = $leaveRequest->created_at;
+
+        $activeAttendancePoints = AttendancePoint::where('user_id', $leaveRequest->user_id)
+            ->where('shift_date', '<', $requestSubmittedAt)
+            ->where(function ($query) use ($requestSubmittedAt) {
+                $query->where(function ($q) {
+                    // Currently active (not excused, not expired)
+                    $q->where('is_excused', false)->where('is_expired', false);
+                })
+                ->orWhere(function ($q) use ($requestSubmittedAt) {
+                    // Was excused AFTER the request was submitted
+                    $q->where('is_excused', true)
+                      ->where('excused_at', '>', $requestSubmittedAt);
+                })
+                ->orWhere(function ($q) use ($requestSubmittedAt) {
+                    // Was expired AFTER the request was submitted
+                    $q->where('is_expired', true)
+                      ->where('expired_at', '>', $requestSubmittedAt);
+                });
+            })
+            ->orderBy('shift_date', 'desc')
+            ->get()
+            ->map(function ($point) use ($requestSubmittedAt) {
+                // Determine status at request time
+                $wasActiveAtRequest = true;
+                $currentStatus = 'active';
+
+                if ($point->is_excused) {
+                    $currentStatus = 'excused';
+                } elseif ($point->is_expired) {
+                    $currentStatus = 'expired';
+                }
+
+                return [
+                    'id' => $point->id,
+                    'shift_date' => $point->shift_date,
+                    'point_type' => $point->point_type,
+                    'points' => $point->points,
+                    'violation_details' => $point->violation_details,
+                    'expires_at' => $point->expires_at,
+                    'gbro_expires_at' => $point->gbro_expires_at,
+                    'eligible_for_gbro' => $point->eligible_for_gbro,
+                    'current_status' => $currentStatus,
+                    'excused_at' => $point->excused_at,
+                    'expired_at' => $point->expired_at,
+                ];
+            });
+
         return Inertia::render('FormRequest/Leave/Show', [
             'leaveRequest' => $leaveRequestData,
             'isAdmin' => $isAdmin,
@@ -611,6 +711,9 @@ class LeaveRequestController extends Controller
             'canTlApprove' => $canTlApprove,
             'userRole' => $user->role,
             'canViewMedicalCert' => $canViewMedicalCert,
+            'earlierConflicts' => $earlierConflicts,
+            'absenceWindowInfo' => $absenceWindowInfo,
+            'activeAttendancePoints' => $activeAttendancePoints,
         ]);
     }
 
@@ -699,6 +802,9 @@ class LeaveRequestController extends Controller
             ? $leaveCreditService->getNextEligibleLeaveDate($targetUser)
             : null;
 
+        // Get last absence date for 30-day window prompt
+        $lastAbsenceDate = $leaveCreditService->getLastAbsenceDate($targetUser);
+
         // Campaign/Department options
         $campaignsFromDb = Campaign::orderBy('name')->pluck('name')->toArray();
         $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
@@ -744,6 +850,7 @@ class LeaveRequestController extends Controller
             'attendanceViolations' => $attendanceViolations,
             'hasRecentAbsence' => $hasRecentAbsence,
             'nextEligibleLeaveDate' => $nextEligibleLeaveDate,
+            'lastAbsenceDate' => $lastAbsenceDate?->format('Y-m-d'),
             'campaigns' => $campaigns,
             'twoWeeksFromNow' => $twoWeeksFromNow,
             'isAdmin' => $isAdmin,
@@ -1446,6 +1553,242 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Partial deny - approve some dates while denying others.
+     * This allows approvers to deny specific dates from a multi-day leave request.
+     *
+     * Example: Employee requests Mon-Fri (5 days) leave
+     * - Approver denies Wed-Thu (conflict with important meeting)
+     * - Mon-Tue and Fri are approved (3 days)
+     * - Credits are only deducted for approved days
+     */
+    public function partialDeny(Request $request, LeaveRequest $leaveRequest)
+    {
+        $user = auth()->user();
+
+        // Allow Team Lead, Admin, HR, Super Admin to partial deny
+        $isTeamLead = $user->role === 'Team Lead';
+        $isAdminOrHR = in_array($user->role, ['Admin', 'Super Admin', 'HR']);
+
+        // Team Lead can only partial deny if TL approval is required and not yet done
+        if ($isTeamLead) {
+            if (!$leaveRequest->requiresTlApproval() || $leaveRequest->isTlApproved() || $leaveRequest->isTlRejected()) {
+                return back()->withErrors(['error' => 'You cannot partially deny this request.']);
+            }
+        } else if ($isAdminOrHR) {
+            $this->authorize('approve', $leaveRequest);
+        } else {
+            return back()->withErrors(['error' => 'You do not have permission to partially deny this request.']);
+        }
+
+        if ($leaveRequest->status !== 'pending') {
+            return back()->withErrors(['error' => 'Only pending requests can be partially denied.']);
+        }
+
+        $validated = $request->validate([
+            'denied_dates' => 'required|array|min:1',
+            'denied_dates.*' => 'required|date',
+            'denial_reason' => 'required|string|min:10',
+            'review_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $deniedDates = collect($validated['denied_dates'])->map(fn($d) => Carbon::parse($d));
+
+        // Validate denied dates are within the leave period
+        foreach ($deniedDates as $date) {
+            if ($date->lt($startDate) || $date->gt($endDate)) {
+                return back()->withErrors(['error' => "Date {$date->format('M d, Y')} is not within the leave period."]);
+            }
+        }
+
+        // Calculate which dates are approved (total days minus denied dates)
+        $allWorkDays = [];
+        $current = $startDate->copy();
+        while ($current->lte($endDate)) {
+            // Only count weekdays
+            if ($current->dayOfWeek >= Carbon::MONDAY && $current->dayOfWeek <= Carbon::FRIDAY) {
+                $allWorkDays[] = $current->format('Y-m-d');
+            }
+            $current->addDay();
+        }
+
+        $deniedDateStrings = $deniedDates->map(fn($d) => $d->format('Y-m-d'))->toArray();
+        $approvedDates = array_diff($allWorkDays, $deniedDateStrings);
+
+        if (empty($approvedDates)) {
+            // All dates denied - use full deny instead
+            return $this->deny($request, $leaveRequest);
+        }
+
+        $approvedDaysCount = count($approvedDates);
+        $deniedDaysCount = count($deniedDateStrings);
+
+        DB::beginTransaction();
+        try {
+            // Store denied dates
+            foreach ($deniedDates as $date) {
+                LeaveRequestDeniedDate::create([
+                    'leave_request_id' => $leaveRequest->id,
+                    'denied_date' => $date,
+                    'denial_reason' => $validated['denial_reason'],
+                    'denied_by' => $user->id,
+                ]);
+            }
+
+            // Determine credits to deduct (only for approved days)
+            $creditsToDeduct = 0;
+            $creditsYear = Carbon::parse($leaveRequest->start_date)->year;
+
+            if ($leaveRequest->requiresCredits()) {
+                // For VL/SL, deduct credits only for approved days
+                $employee = $leaveRequest->user;
+                $balance = $this->leaveCreditService->getBalance($employee, $creditsYear);
+
+                // Deduct up to available credits
+                $creditsToDeduct = min($approvedDaysCount, $balance);
+
+                if ($creditsToDeduct > 0) {
+                    // Create a temporary copy with approved days for deduction
+                    $tempLeaveRequest = $leaveRequest->replicate();
+                    $tempLeaveRequest->days_requested = $creditsToDeduct;
+                    $this->leaveCreditService->deductCredits($tempLeaveRequest, $creditsYear);
+
+                    // Update the actual leave request with deduction info
+                    $leaveRequest->credits_deducted = $creditsToDeduct;
+                    $leaveRequest->credits_year = $creditsYear;
+                }
+            }
+
+            // Build review notes
+            $roleLabel = $user->role === 'Team Lead' ? 'Team Lead' : (in_array($user->role, ['Admin', 'Super Admin']) ? 'Admin' : 'HR');
+            $reviewNote = "{$roleLabel} partially approved: {$approvedDaysCount} day(s) approved, {$deniedDaysCount} day(s) denied. ";
+            $reviewNote .= "Denied dates: " . implode(', ', $deniedDates->map(fn($d) => $d->format('M d, Y'))->toArray()) . ". ";
+            $reviewNote .= "Reason: {$validated['denial_reason']}";
+
+            if ($validated['review_notes']) {
+                $reviewNote .= ". Additional notes: {$validated['review_notes']}";
+            }
+
+            // Update leave request
+            $updateData = [
+                'has_partial_denial' => true,
+                'approved_days' => $approvedDaysCount,
+            ];
+
+            // Determine which approval field to set based on user role
+            if ($user->role === 'Team Lead') {
+                $updateData['tl_approved_by'] = $user->id;
+                $updateData['tl_approved_at'] = now();
+                $updateData['tl_review_notes'] = $reviewNote;
+            } else if (in_array($user->role, ['Admin', 'Super Admin'])) {
+                $updateData['admin_approved_by'] = $user->id;
+                $updateData['admin_approved_at'] = now();
+                $updateData['admin_review_notes'] = $reviewNote;
+            } else if ($user->role === 'HR') {
+                $updateData['hr_approved_by'] = $user->id;
+                $updateData['hr_approved_at'] = now();
+                $updateData['hr_review_notes'] = $reviewNote;
+            }
+
+            // Check if this completes the dual approval
+            $leaveRequest->fill($updateData);
+
+            // Check if both Admin and HR have approved (and TL if required)
+            $adminApproved = $leaveRequest->admin_approved_by !== null;
+            $hrApproved = $leaveRequest->hr_approved_by !== null;
+            $tlApproved = $leaveRequest->tl_approved_by !== null;
+            $tlRequired = $leaveRequest->requires_tl_approval;
+
+            // For TL partial approval, just save and notify - still needs Admin/HR
+            if ($user->role === 'Team Lead') {
+                $leaveRequest->save();
+
+                // Notify Admin/HR that TL has partially approved
+                $this->notificationService->create(
+                    $leaveRequest->user_id,
+                    'leave_request',
+                    'Leave Request Partially Approved by Team Lead',
+                    "Your {$leaveRequest->leave_type} request has been partially approved by your Team Lead. {$approvedDaysCount} day(s) approved, {$deniedDaysCount} day(s) denied. Now pending Admin/HR approval.",
+                    ['leave_request_id' => $leaveRequest->id]
+                );
+
+                DB::commit();
+
+                return redirect()->route('leave-requests.show', $leaveRequest)
+                    ->with('success', "Partial approval recorded. {$approvedDaysCount} day(s) approved, {$deniedDaysCount} day(s) denied. Awaiting Admin/HR approval.");
+            }
+
+            // Check if fully approved (Admin + HR, and TL if required)
+            $fullyApproved = $adminApproved && $hrApproved && (!$tlRequired || $tlApproved);
+
+            if ($fullyApproved) {
+                // Both have approved - mark as approved
+                $leaveRequest->status = 'approved';
+                $leaveRequest->reviewed_by = $user->id;
+                $leaveRequest->reviewed_at = now();
+                $leaveRequest->review_notes = $reviewNote;
+
+                // Create attendance records only for approved dates
+                foreach ($approvedDates as $dateStr) {
+                    Attendance::updateOrCreate(
+                        [
+                            'user_id' => $leaveRequest->user_id,
+                            'shift_date' => $dateStr,
+                        ],
+                        [
+                            'status' => 'on_leave',
+                            'leave_request_id' => $leaveRequest->id,
+                            'admin_verified' => true,
+                            'remarks' => "On approved leave ({$leaveRequest->leave_type}) - Partial approval",
+                        ]
+                    );
+                }
+            }
+
+            $leaveRequest->save();
+
+            // Notify the employee about partial approval
+            $this->notificationService->create(
+                $leaveRequest->user_id,
+                'leave_request',
+                'Leave Request Partially Approved',
+                "Your {$leaveRequest->leave_type} request has been partially approved. {$approvedDaysCount} day(s) approved, {$deniedDaysCount} day(s) denied.",
+                ['leave_request_id' => $leaveRequest->id]
+            );
+
+            DB::commit();
+
+            // Send email notification
+            try {
+                $employee = $leaveRequest->user;
+                if ($employee && $employee->email && filter_var($employee->email, FILTER_VALIDATE_EMAIL)) {
+                    Mail::to($employee->email)->send(new LeaveRequestStatusUpdated($leaveRequest, $employee));
+                }
+            } catch (\Exception $mailException) {
+                \Log::warning('Failed to send leave request partial approval email', [
+                    'error' => $mailException->getMessage(),
+                    'leave_request_id' => $leaveRequest->id,
+                ]);
+            }
+
+            $statusMsg = ($leaveRequest->status === 'approved')
+                ? "Leave request partially approved. {$approvedDaysCount} day(s) will be used."
+                : "Partial approval recorded. Awaiting " . ($adminApproved ? 'HR' : 'Admin') . " approval.";
+
+            return redirect()->route('leave-requests.show', $leaveRequest)
+                ->with('success', $statusMsg);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Partial deny failed', [
+                'error' => $e->getMessage(),
+                'leave_request_id' => $leaveRequest->id,
+            ]);
+            return back()->withErrors(['error' => 'Failed to process partial denial. ' . $e->getMessage()]);
+        }
+    }
+
+    /**
      * Adjust leave dates when employee reported to work on specific day(s).
      * This allows HR/Admin to reduce leave duration and restore partial credits.
      *
@@ -1826,6 +2169,136 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Check for campaign conflicts (employees in the same campaign with overlapping leave dates).
+     * Returns informational data only - users can still apply.
+     *
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function checkCampaignConflicts(Request $request)
+    {
+        $request->validate([
+            'campaign_department' => 'required|string',
+            'start_date' => 'required|date',
+            'end_date' => 'required|date|after_or_equal:start_date',
+            'exclude_user_id' => 'nullable|integer',
+            'exclude_leave_id' => 'nullable|integer',
+        ]);
+
+        $campaign = $request->input('campaign_department');
+        $startDate = Carbon::parse($request->start_date);
+        $endDate = Carbon::parse($request->end_date);
+        $excludeUserId = $request->input('exclude_user_id');
+        $excludeLeaveId = $request->input('exclude_leave_id');
+
+        // Find all pending or approved leave requests in the same campaign that overlap
+        $query = LeaveRequest::with('user:id,first_name,middle_name,last_name')
+            ->where('campaign_department', $campaign)
+            ->whereIn('status', ['pending', 'approved'])
+            ->where(function ($q) use ($startDate, $endDate) {
+                $q->where('start_date', '<=', $endDate)
+                  ->where('end_date', '>=', $startDate);
+            });
+
+        // Exclude current user if specified
+        if ($excludeUserId) {
+            $query->where('user_id', '!=', $excludeUserId);
+        }
+
+        // Exclude current leave request if editing
+        if ($excludeLeaveId) {
+            $query->where('id', '!=', $excludeLeaveId);
+        }
+
+        $conflicts = $query->get()->map(function ($leave) use ($startDate, $endDate) {
+            // Calculate overlapping dates
+            $overlapStart = max($startDate->timestamp, Carbon::parse($leave->start_date)->timestamp);
+            $overlapEnd = min($endDate->timestamp, Carbon::parse($leave->end_date)->timestamp);
+            $overlappingDates = [];
+
+            $current = Carbon::createFromTimestamp($overlapStart);
+            $end = Carbon::createFromTimestamp($overlapEnd);
+            while ($current->lte($end)) {
+                // Only include weekdays
+                if ($current->isWeekday()) {
+                    $overlappingDates[] = $current->format('Y-m-d');
+                }
+                $current->addDay();
+            }
+
+            return [
+                'id' => $leave->id,
+                'user_name' => $leave->user->name ?? 'Unknown',
+                'leave_type' => $leave->leave_type,
+                'start_date' => $leave->start_date->format('Y-m-d'),
+                'end_date' => $leave->end_date->format('Y-m-d'),
+                'status' => $leave->status,
+                'created_at' => $leave->created_at->toISOString(),
+                'overlapping_dates' => $overlappingDates,
+            ];
+        });
+
+        return response()->json($conflicts);
+    }
+
+    /**
+     * Get earlier conflicts for a leave request (first-come-first-serve check for VL/UPTO).
+     * Returns leave requests from the same campaign that were submitted earlier and have overlapping dates.
+     *
+     * @param LeaveRequest $leaveRequest
+     * @return array
+     */
+    private function getEarlierConflicts(LeaveRequest $leaveRequest): array
+    {
+        // Only check for VL and UPTO (first-come-first-serve policy)
+        if (!in_array($leaveRequest->leave_type, ['VL', 'UPTO'])) {
+            return [];
+        }
+
+        return LeaveRequest::with('user:id,first_name,middle_name,last_name')
+            ->where('campaign_department', $leaveRequest->campaign_department)
+            ->where('id', '!=', $leaveRequest->id)
+            ->where('user_id', '!=', $leaveRequest->user_id)
+            ->whereIn('leave_type', ['VL', 'UPTO'])
+            ->whereIn('status', ['pending', 'approved'])
+            ->where('created_at', '<', $leaveRequest->created_at) // Submitted BEFORE this request
+            ->where(function ($q) use ($leaveRequest) {
+                $q->where('start_date', '<=', $leaveRequest->end_date)
+                  ->where('end_date', '>=', $leaveRequest->start_date);
+            })
+            ->get()
+            ->map(function ($leave) use ($leaveRequest) {
+                // Calculate overlapping dates
+                $startDate = $leaveRequest->start_date;
+                $endDate = $leaveRequest->end_date;
+                $overlapStart = max($startDate->timestamp, $leave->start_date->timestamp);
+                $overlapEnd = min($endDate->timestamp, $leave->end_date->timestamp);
+                $overlappingDates = [];
+
+                $current = Carbon::createFromTimestamp($overlapStart);
+                $end = Carbon::createFromTimestamp($overlapEnd);
+                while ($current->lte($end)) {
+                    if ($current->isWeekday()) {
+                        $overlappingDates[] = $current->format('Y-m-d');
+                    }
+                    $current->addDay();
+                }
+
+                return [
+                    'id' => $leave->id,
+                    'user_name' => $leave->user->name ?? 'Unknown',
+                    'leave_type' => $leave->leave_type,
+                    'start_date' => $leave->start_date->format('Y-m-d'),
+                    'end_date' => $leave->end_date->format('Y-m-d'),
+                    'status' => $leave->status,
+                    'created_at' => $leave->created_at->toISOString(),
+                    'overlapping_dates' => $overlappingDates,
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
      * Start export job for leave credits.
      */
     public function exportCredits(Request $request)
@@ -2147,8 +2620,13 @@ class LeaveRequestController extends Controller
         // Get leave credits data for each user
         $creditsData = $users->through(function ($user) use ($year) {
             $summary = $this->leaveCreditService->getSummary($user, $year);
+            // Get carryover FROM this year (what will be/was carried over to next year)
+            $carryoverSummary = $this->leaveCreditService->getCarryoverFromYearSummary($user, $year);
             $hireDate = Carbon::parse($user->hired_date);
             $eligibilityDate = $hireDate->copy()->addMonths(6);
+
+            // Only show carryover if there are credits to carry over
+            $showCarryover = $carryoverSummary['carryover_credits'] > 0;
 
             return [
                 'id' => $user->id,
@@ -2162,6 +2640,12 @@ class LeaveRequestController extends Controller
                 'total_earned' => $summary['total_earned'],
                 'total_used' => $summary['total_used'],
                 'balance' => $summary['balance'],
+                'carryover' => $showCarryover ? [
+                    'credits' => $carryoverSummary['carryover_credits'],
+                    'to_year' => $carryoverSummary['to_year'],
+                    'is_processed' => $carryoverSummary['is_processed'],
+                    'cash_converted' => $carryoverSummary['cash_converted'],
+                ] : null,
             ];
         });
 
@@ -2257,6 +2741,9 @@ class LeaveRequestController extends Controller
         // Get summary
         $summary = $this->leaveCreditService->getSummary($user, $year);
 
+        // Get carryover summary FROM this year (what will be/was carried over to next year)
+        $carryoverSummary = $this->leaveCreditService->getCarryoverFromYearSummary($user, $year);
+
         return Inertia::render('FormRequest/Leave/Credits/Show', [
             'user' => [
                 'id' => $user->id,
@@ -2274,6 +2761,7 @@ class LeaveRequestController extends Controller
                 'total_used' => $summary['total_used'],
                 'balance' => $summary['balance'],
             ],
+            'carryoverSummary' => $carryoverSummary,
             'monthlyCredits' => $monthlyCredits,
             'leaveRequests' => $leaveRequests,
             'availableYears' => range(now()->year, 2024, -1),

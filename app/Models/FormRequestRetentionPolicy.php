@@ -47,28 +47,65 @@ class FormRequestRetentionPolicy extends Model
 
     /**
      * Get the applicable retention period for a given context
+     *
+     * Resolution order (highest to lowest priority):
+     * 1. Site-specific policy for the exact form type
+     * 2. Global policy for the exact form type
+     * 3. Site-specific policy for 'all' form types
+     * 4. Global policy for 'all' form types
+     * 5. Default: 12 months
      */
     public static function getRetentionMonths(?int $siteId = null, ?string $formType = null): int
     {
-        $query = self::where('is_active', true);
+        // Get all active policies, sorted by priority (highest first)
+        $allPolicies = self::where('is_active', true)
+            ->orderByDesc('priority')
+            ->get();
 
-        if ($formType) {
-            $query->where('form_type', $formType);
-        }
+        // Try to find a matching policy for the specific form type first
+        if ($formType && $formType !== 'all') {
+            $specificPolicies = $allPolicies->where('form_type', $formType);
 
-        // Find matching policies
-        $policies = $query->get()->sortByDesc('priority');
+            // Check site-specific policy for this form type
+            if ($siteId) {
+                $sitePolicy = $specificPolicies
+                    ->where('applies_to_type', 'site')
+                    ->where('applies_to_id', $siteId)
+                    ->first();
+                if ($sitePolicy) {
+                    return $sitePolicy->retention_months;
+                }
+            }
 
-        foreach ($policies as $policy) {
-            if ($policy->applies_to_type === 'site' && $policy->applies_to_id == $siteId) {
-                return $policy->retention_months;
+            // Check global policy for this form type
+            $globalPolicy = $specificPolicies
+                ->where('applies_to_type', 'global')
+                ->first();
+            if ($globalPolicy) {
+                return $globalPolicy->retention_months;
             }
         }
 
-        // Fall back to global policy
-        $globalPolicy = $policies->where('applies_to_type', 'global')->first();
-        if ($globalPolicy) {
-            return $globalPolicy->retention_months;
+        // Fall back to 'all' form type policies
+        $allTypePolicies = $allPolicies->where('form_type', 'all');
+
+        // Check site-specific 'all' policy
+        if ($siteId) {
+            $siteAllPolicy = $allTypePolicies
+                ->where('applies_to_type', 'site')
+                ->where('applies_to_id', $siteId)
+                ->first();
+            if ($siteAllPolicy) {
+                return $siteAllPolicy->retention_months;
+            }
+        }
+
+        // Check global 'all' policy
+        $globalAllPolicy = $allTypePolicies
+            ->where('applies_to_type', 'global')
+            ->first();
+        if ($globalAllPolicy) {
+            return $globalAllPolicy->retention_months;
         }
 
         // Default: 12 months

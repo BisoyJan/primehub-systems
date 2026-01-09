@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\LeaveCredit;
+use App\Models\LeaveCreditCarryover;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use Carbon\Carbon;
@@ -68,6 +69,84 @@ class LeaveCreditService
     }
 
     /**
+     * Get projected leave credits balance for a user at a future date.
+     * This calculates the current balance + future accruals up to the target date.
+     *
+     * Credits accrue at end of each month. So for a leave in Feb 15:
+     * - If today is Jan 7, January's credits (accrued Jan 31) should be included
+     * - Current balance only has credits up to the last completed month
+     *
+     * @param User $user
+     * @param Carbon $targetDate The date to project credits to
+     * @param int|null $year The credit year to use
+     * @return array{current: float, projected: float, months_until: int, future_accrual: float}
+     */
+    public function getProjectedBalance(User $user, Carbon $targetDate, ?int $year = null): array
+    {
+        $year = $year ?? now()->year;
+        $currentBalance = $this->getBalance($user, $year);
+
+        // If target date is in the past or current month before month end, no projection needed
+        $today = now();
+        $currentMonthEnd = $today->copy()->endOfMonth();
+
+        // If target date is within current month and before month end, no future accrual
+        if ($targetDate->lte($currentMonthEnd)) {
+            return [
+                'current' => $currentBalance,
+                'projected' => $currentBalance,
+                'months_until' => 0,
+                'future_accrual' => 0,
+            ];
+        }
+
+        // Count months that will accrue before the target date
+        // Start from current month (credits accrue at end of month)
+        $monthlyRate = $this->getMonthlyRate($user);
+        $checkMonth = $today->month;
+        $checkYear = $today->year;
+
+        $monthsUntil = 0;
+
+        while (true) {
+            // Get the end of this month
+            $monthEnd = Carbon::create($checkYear, $checkMonth, 1)->endOfMonth();
+
+            // Only count if:
+            // 1. Month end is before target date (credits will be available)
+            // 2. Month is in the same credit year
+            if ($monthEnd->lt($targetDate) && $checkYear == $year) {
+                $monthsUntil++;
+            }
+
+            // Move to next month
+            $checkMonth++;
+            if ($checkMonth > 12) {
+                $checkMonth = 1;
+                $checkYear++;
+            }
+
+            // Stop if we've passed the credit year or reached the target month
+            if ($checkYear > $year) {
+                break;
+            }
+            if ($checkYear == $targetDate->year && $checkMonth > $targetDate->month) {
+                break;
+            }
+        }
+
+        $futureAccrual = $monthsUntil * $monthlyRate;
+        $projectedBalance = $currentBalance + $futureAccrual;
+
+        return [
+            'current' => $currentBalance,
+            'projected' => $projectedBalance,
+            'months_until' => $monthsUntil,
+            'future_accrual' => $futureAccrual,
+        ];
+    }
+
+    /**
      * Get total days from pending leave requests that require credits.
      * Note: We count ALL pending requests regardless of year, since they represent
      * credits that will be deducted from the user's balance when approved.
@@ -86,12 +165,13 @@ class LeaveCreditService
     public function getSummary(User $user, ?int $year = null): array
     {
         $year = $year ?? now()->year;
+        $monthlyRate = $this->getMonthlyRate($user);
 
         return [
             'year' => $year,
             'is_eligible' => $this->isEligible($user),
             'eligibility_date' => $this->getEligibilityDate($user),
-            'monthly_rate' => $this->getMonthlyRate($user),
+            'monthly_rate' => $monthlyRate,
             'total_earned' => LeaveCredit::getTotalEarned($user->id, $year),
             'total_used' => LeaveCredit::getTotalUsed($user->id, $year),
             'balance' => $this->getBalance($user, $year),
@@ -379,6 +459,12 @@ class LeaveCreditService
     }
 
     /**
+     * Absence statuses that count for the 30-day rule.
+     * Includes: absent, ncns (No Call No Show), half_day_absence, advised_absence
+     */
+    const ABSENCE_STATUSES = ['absent', 'ncns', 'half_day_absence', 'advised_absence'];
+
+    /**
      * Check if user had any absences in the last 30 days.
      */
     public function hasRecentAbsence(User $user, ?Carbon $fromDate = null): bool
@@ -389,7 +475,7 @@ class LeaveCreditService
         return Attendance::where('user_id', $user->id)
             ->where('shift_date', '>=', $thirtyDaysAgo)
             ->where('shift_date', '<=', $fromDate)
-            ->where('status', 'absent')
+            ->whereIn('status', self::ABSENCE_STATUSES)
             ->exists();
     }
 
@@ -399,7 +485,7 @@ class LeaveCreditService
     public function getNextEligibleLeaveDate(User $user): ?Carbon
     {
         $lastAbsence = Attendance::where('user_id', $user->id)
-            ->where('status', 'absent')
+            ->whereIn('status', self::ABSENCE_STATUSES)
             ->orderBy('shift_date', 'desc')
             ->first();
 
@@ -408,6 +494,52 @@ class LeaveCreditService
         }
 
         return Carbon::parse($lastAbsence->shift_date)->addDays(30);
+    }
+
+    /**
+     * Get the last absence date for a user.
+     */
+    public function getLastAbsenceDate(User $user): ?Carbon
+    {
+        $lastAbsence = Attendance::where('user_id', $user->id)
+            ->whereIn('status', self::ABSENCE_STATUSES)
+            ->orderBy('shift_date', 'desc')
+            ->first();
+
+        if (!$lastAbsence) {
+            return null;
+        }
+
+        return Carbon::parse($lastAbsence->shift_date);
+    }
+
+    /**
+     * Check if given date falls within 30-day absence window.
+     * Returns info about the restriction if applicable.
+     *
+     * @param User $user
+     * @param Carbon $checkDate The date to check
+     * @return array{within_window: bool, last_absence_date: string|null, window_end_date: string|null}
+     */
+    public function checkAbsenceWindowForDate(User $user, Carbon $checkDate): array
+    {
+        $lastAbsenceDate = $this->getLastAbsenceDate($user);
+
+        if (!$lastAbsenceDate) {
+            return [
+                'within_window' => false,
+                'last_absence_date' => null,
+                'window_end_date' => null,
+            ];
+        }
+
+        $windowEndDate = $lastAbsenceDate->copy()->addDays(30);
+
+        return [
+            'within_window' => $checkDate->lte($windowEndDate),
+            'last_absence_date' => $lastAbsenceDate->format('Y-m-d'),
+            'window_end_date' => $windowEndDate->format('Y-m-d'),
+        ];
     }
 
     /**
@@ -495,31 +627,18 @@ class LeaveCreditService
             }
         }
 
-        // Check attendance points for VL and BL (must be ≤6)
-        if (in_array($leaveType, ['VL', 'BL'])) {
-            $points = $this->getAttendancePoints($user);
-            if ($points > 6) {
-                $errors[] = "You cannot apply for Vacation Leave because you have {$points} attendance points (must be 6 or below).";
-            }
-        }
+        // NOTE: Attendance points > 6 is now informational only (shown in Create page)
+        // Reviewers can see the attendance points on the Show page to make approval decisions
+        // The rule is NOT enforced as a blocking validation anymore
 
-        // Check 30-day absence rule for VL and BL
-        if (in_array($leaveType, ['VL', 'BL'])) {
-            if ($this->hasRecentAbsence($user, $startDate)) {
-                $nextEligibleDate = $this->getNextEligibleLeaveDate($user);
-                $errors[] = "You had an absence in the last 30 days. You can apply for Vacation Leave starting {$nextEligibleDate->format('F j, Y')}.";
-            }
-        }
+        // NOTE: 30-day absence rule is now informational only (shown as warning on Create page)
+        // Reviewers can see the absence info on the Show page to make approval decisions
+        // The rule is NOT enforced as a blocking validation anymore
 
-        // Check leave credits balance for VL and BL only (SL can proceed without credits)
-        if (in_array($leaveType, ['VL', 'BL'])) {
-            $balance = $this->getBalance($user, $year);
-            $daysRequested = $this->calculateDays($startDate, $endDate);
-
-            if ($balance < $daysRequested) {
-                $errors[] = "Insufficient leave credits. You have {$balance} days available, but requested {$daysRequested} days.";
-            }
-        }
+        // NOTE: Insufficient credits is now informational only
+        // Users can submit leave requests even without sufficient credits
+        // Reviewers can see the credit balance on the Show page to make approval decisions
+        // Credits will only be deducted if approved AND user has sufficient balance
 
         return [
             'valid' => empty($errors),
@@ -573,5 +692,240 @@ class LeaveCreditService
         }
 
         return true;
+    }
+
+    /**
+     * Maximum credits that can be carried over to the next year.
+     * These are for cash conversion only, NOT for applying leaves.
+     */
+    const MAX_CARRYOVER_CREDITS = 4;
+
+    /**
+     * Process year-end carryover for a single user.
+     * Unused credits from the previous year (up to max 4) are carried over for cash conversion.
+     * 
+     * @param User $user
+     * @param int $fromYear The year to carry over from
+     * @param int|null $processedBy User ID who processed this carryover
+     * @param string|null $notes Optional notes
+     * @return LeaveCreditCarryover|null
+     */
+    public function processCarryover(User $user, int $fromYear, ?int $processedBy = null, ?string $notes = null): ?LeaveCreditCarryover
+    {
+        $toYear = $fromYear + 1;
+        
+        // Check if already processed for this year transition
+        $existing = LeaveCreditCarryover::forUser($user->id)
+            ->fromYear($fromYear)
+            ->first();
+            
+        if ($existing) {
+            return $existing; // Already processed
+        }
+        
+        // Get unused balance from the previous year
+        $unusedCredits = $this->getBalance($user, $fromYear);
+        
+        if ($unusedCredits <= 0) {
+            return null; // No credits to carry over
+        }
+        
+        // Calculate carryover (max 4 credits)
+        $carryoverCredits = min($unusedCredits, self::MAX_CARRYOVER_CREDITS);
+        $forfeitedCredits = max(0, $unusedCredits - self::MAX_CARRYOVER_CREDITS);
+        
+        return LeaveCreditCarryover::create([
+            'user_id' => $user->id,
+            'credits_from_previous_year' => $unusedCredits,
+            'carryover_credits' => $carryoverCredits,
+            'forfeited_credits' => $forfeitedCredits,
+            'from_year' => $fromYear,
+            'to_year' => $toYear,
+            'cash_converted' => false,
+            'processed_by' => $processedBy,
+            'notes' => $notes,
+        ]);
+    }
+
+    /**
+     * Process year-end carryover for all eligible users.
+     * 
+     * @param int $fromYear The year to carry over from
+     * @param int|null $processedBy User ID who triggered this process
+     * @return array{processed: int, skipped: int, total_carryover: float, total_forfeited: float}
+     */
+    public function processAllCarryovers(int $fromYear, ?int $processedBy = null): array
+    {
+        $users = User::whereNotNull('hired_date')->get();
+        
+        $processed = 0;
+        $skipped = 0;
+        $totalCarryover = 0;
+        $totalForfeited = 0;
+        
+        foreach ($users as $user) {
+            $carryover = $this->processCarryover($user, $fromYear, $processedBy);
+            
+            if ($carryover && $carryover->wasRecentlyCreated) {
+                $processed++;
+                $totalCarryover += $carryover->carryover_credits;
+                $totalForfeited += $carryover->forfeited_credits;
+            } else {
+                $skipped++;
+            }
+        }
+        
+        return [
+            'processed' => $processed,
+            'skipped' => $skipped,
+            'total_carryover' => $totalCarryover,
+            'total_forfeited' => $totalForfeited,
+        ];
+    }
+
+    /**
+     * Mark carryover credits as cash converted.
+     * 
+     * @param LeaveCreditCarryover $carryover
+     * @param int|null $processedBy User ID who processed the conversion
+     * @return bool
+     */
+    public function markAsCashConverted(LeaveCreditCarryover $carryover, ?int $processedBy = null): bool
+    {
+        return $carryover->update([
+            'cash_converted' => true,
+            'cash_converted_at' => now(),
+            'processed_by' => $processedBy,
+        ]);
+    }
+
+    /**
+     * Get carryover summary for a user (carryover TO a specific year).
+     * Use this when you want to see what was carried INTO a year.
+     * 
+     * @param User $user
+     * @param int|null $toYear The year to check carryovers for
+     * @return array
+     */
+    public function getCarryoverSummary(User $user, ?int $toYear = null): array
+    {
+        $toYear = $toYear ?? now()->year;
+        
+        $carryover = LeaveCreditCarryover::forUser($user->id)
+            ->toYear($toYear)
+            ->first();
+            
+        if (!$carryover) {
+            return [
+                'has_carryover' => false,
+                'carryover_credits' => 0,
+                'forfeited_credits' => 0,
+                'cash_converted' => false,
+                'cash_converted_at' => null,
+                'from_year' => $toYear - 1,
+                'to_year' => $toYear,
+            ];
+        }
+        
+        return [
+            'has_carryover' => true,
+            'carryover_credits' => (float) $carryover->carryover_credits,
+            'credits_from_previous_year' => (float) $carryover->credits_from_previous_year,
+            'forfeited_credits' => (float) $carryover->forfeited_credits,
+            'cash_converted' => $carryover->cash_converted,
+            'cash_converted_at' => $carryover->cash_converted_at?->format('Y-m-d'),
+            'from_year' => $carryover->from_year,
+            'to_year' => $carryover->to_year,
+        ];
+    }
+
+    /**
+     * Get carryover summary for credits FROM a specific year.
+     * Use this when viewing a year and want to see what will be/was carried over from that year.
+     * 
+     * @param User $user
+     * @param int $fromYear The year to check carryovers from
+     * @return array
+     */
+    public function getCarryoverFromYearSummary(User $user, int $fromYear): array
+    {
+        $carryover = LeaveCreditCarryover::forUser($user->id)
+            ->fromYear($fromYear)
+            ->first();
+            
+        if (!$carryover) {
+            // Calculate potential carryover if not processed yet
+            $balance = $this->getBalance($user, $fromYear);
+            $potentialCarryover = min($balance, self::MAX_CARRYOVER_CREDITS);
+            $potentialForfeited = max(0, $balance - self::MAX_CARRYOVER_CREDITS);
+            
+            return [
+                'has_carryover' => false,
+                'is_processed' => false,
+                'carryover_credits' => $potentialCarryover,
+                'credits_from_year' => $balance,
+                'forfeited_credits' => $potentialForfeited,
+                'cash_converted' => false,
+                'cash_converted_at' => null,
+                'from_year' => $fromYear,
+                'to_year' => $fromYear + 1,
+            ];
+        }
+        
+        return [
+            'has_carryover' => true,
+            'is_processed' => true,
+            'carryover_credits' => (float) $carryover->carryover_credits,
+            'credits_from_year' => (float) $carryover->credits_from_previous_year,
+            'forfeited_credits' => (float) $carryover->forfeited_credits,
+            'cash_converted' => $carryover->cash_converted,
+            'cash_converted_at' => $carryover->cash_converted_at?->format('Y-m-d'),
+            'from_year' => $carryover->from_year,
+            'to_year' => $carryover->to_year,
+        ];
+    }
+
+    /**
+     * Get all pending cash conversions for a specific year.
+     * 
+     * @param int $toYear
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getPendingCashConversions(int $toYear)
+    {
+        return LeaveCreditCarryover::with(['user', 'processedBy'])
+            ->toYear($toYear)
+            ->pendingCashConversion()
+            ->get();
+    }
+
+    /**
+     * Get carryover report for all users for a specific year transition.
+     * 
+     * @param int $fromYear
+     * @return array
+     */
+    public function getCarryoverReport(int $fromYear): array
+    {
+        $toYear = $fromYear + 1;
+        
+        $carryovers = LeaveCreditCarryover::with(['user', 'processedBy'])
+            ->fromYear($fromYear)
+            ->get();
+            
+        $summary = [
+            'from_year' => $fromYear,
+            'to_year' => $toYear,
+            'total_users' => $carryovers->count(),
+            'total_carryover_credits' => $carryovers->sum('carryover_credits'),
+            'total_forfeited_credits' => $carryovers->sum('forfeited_credits'),
+            'pending_cash_conversion' => $carryovers->where('cash_converted', false)->count(),
+            'completed_cash_conversion' => $carryovers->where('cash_converted', true)->count(),
+        ];
+        
+        return [
+            'summary' => $summary,
+            'carryovers' => $carryovers,
+        ];
     }
 }

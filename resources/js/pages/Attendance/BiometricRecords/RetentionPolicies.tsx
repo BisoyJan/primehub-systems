@@ -1,11 +1,11 @@
 import { Head, router } from '@inertiajs/react';
 import { useState } from 'react';
-import { Shield, Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Shield, Plus, Pencil, Trash2, Loader2, BarChart3, Fingerprint, AlertCircle, Eye, AlertTriangle } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -23,6 +23,7 @@ import {
     update as biometricRetentionPoliciesUpdate,
     destroy as biometricRetentionPoliciesDestroy,
     toggle as biometricRetentionPoliciesToggle,
+    preview as biometricRetentionPoliciesPreview,
 } from '@/routes/biometric-retention-policies';
 
 interface Site {
@@ -38,6 +39,7 @@ interface Policy {
     applies_to_type: 'global' | 'site';
     applies_to_id: number | null;
     site?: Site;
+    record_type: 'all' | 'biometric_record' | 'attendance_point';
     priority: number;
     is_active: boolean;
 }
@@ -48,11 +50,53 @@ interface FormData {
     retention_months: number;
     applies_to_type: 'global' | 'site';
     applies_to_id: number | null;
+    record_type: 'all' | 'biometric_record' | 'attendance_point';
     priority: number;
     is_active: boolean;
 }
 
-export default function RetentionPolicies({ policies, sites }: { policies: Policy[]; sites: Site[] }) {
+interface AgeRange {
+    range: string;
+    count: number;
+}
+
+interface RecordTypeStats {
+    label: string;
+    total: number;
+    byAge: AgeRange[];
+}
+
+interface RetentionStats {
+    biometric_record: RecordTypeStats;
+    attendance_point: RecordTypeStats;
+}
+
+interface PreviewData {
+    policy: {
+        id: number;
+        name: string;
+        retention_months: number;
+        applies_to_type: string;
+        record_type: string;
+    };
+    cutoff_date: string;
+    preview: {
+        record_type: string;
+        label: string;
+        count: number;
+        oldest_date: string | null;
+        newest_date: string | null;
+    }[];
+    total_affected: number;
+}
+
+interface Props {
+    policies: Policy[];
+    sites: Site[];
+    retentionStats?: RetentionStats;
+}
+
+export default function RetentionPolicies({ policies, sites, retentionStats }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Retention Policies',
         breadcrumbs: [
@@ -67,12 +111,16 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const [editingPolicy, setEditingPolicy] = useState<Policy | null>(null);
     const [isSubmitting, setIsSubmitting] = useState(false);
+    const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+    const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+    const [previewData, setPreviewData] = useState<PreviewData | null>(null);
     const [formData, setFormData] = useState<FormData>({
         name: '',
         description: '',
         retention_months: 12,
         applies_to_type: 'global',
         applies_to_id: null,
+        record_type: 'all',
         priority: 100,
         is_active: true,
     });
@@ -84,6 +132,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
             retention_months: 12,
             applies_to_type: 'global',
             applies_to_id: null,
+            record_type: 'all',
             priority: 100,
             is_active: true,
         });
@@ -103,6 +152,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
             retention_months: policy.retention_months,
             applies_to_type: policy.applies_to_type,
             applies_to_id: policy.applies_to_id,
+            record_type: policy.record_type || 'all',
             priority: policy.priority,
             is_active: policy.is_active,
         });
@@ -119,6 +169,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
             retention_months: formData.retention_months,
             applies_to_type: formData.applies_to_type,
             applies_to_id: formData.applies_to_id,
+            record_type: formData.record_type,
             priority: formData.priority,
             is_active: formData.is_active,
         };
@@ -154,34 +205,61 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
         router.post(biometricRetentionPoliciesToggle(policyId).url);
     };
 
+    const handlePreview = async (policyId: number) => {
+        setIsLoadingPreview(true);
+        setIsPreviewOpen(true);
+        setPreviewData(null);
+
+        try {
+            const response = await fetch(biometricRetentionPoliciesPreview(policyId).url);
+            const data = await response.json();
+            setPreviewData(data);
+        } catch (error) {
+            console.error('Failed to load preview:', error);
+        } finally {
+            setIsLoadingPreview(false);
+        }
+    };
+
+    const getRecordTypeBadge = (recordType: string) => {
+        const config: Record<string, { label: string; className: string }> = {
+            all: { label: 'All Records', className: 'bg-purple-500' },
+            biometric_record: { label: 'Biometric Records', className: 'bg-blue-500' },
+            attendance_point: { label: 'Attendance Points', className: 'bg-orange-500' },
+        };
+
+        const { label, className } = config[recordType] || { label: recordType, className: 'bg-gray-500' };
+        return <Badge className={className}>{label}</Badge>;
+    };
+
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
             <LoadingOverlay isLoading={isPageLoading} />
 
             <div className="container mx-auto px-4 py-8">
-                <div className="flex justify-between items-center mb-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
                     <div>
-                        <h1 className="text-3xl font-bold">Retention Policies</h1>
-                        <p className="text-muted-foreground mt-2">
-                            Manage data retention rules for biometric records
+                        <h1 className="text-2xl sm:text-3xl font-bold">Retention Policies</h1>
+                        <p className="text-muted-foreground mt-2 text-sm sm:text-base">
+                            Manage data retention rules for attendance records
                         </p>
                     </div>
                     <Can permission="biometric.retention">
                         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
                             <DialogTrigger asChild>
-                                <Button onClick={openCreateDialog}>
+                                <Button onClick={openCreateDialog} className="w-full sm:w-auto">
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Policy
                                 </Button>
                             </DialogTrigger>
-                            <DialogContent className="max-w-2xl">
+                            <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
                                 <DialogHeader>
                                     <DialogTitle>
                                         {editingPolicy ? 'Edit' : 'Create'} Retention Policy
                                     </DialogTitle>
                                     <DialogDescription>
-                                        Define rules for how long biometric records should be retained
+                                        Define rules for how long attendance records should be retained
                                     </DialogDescription>
                                 </DialogHeader>
                                 <form onSubmit={handleSubmit} className="space-y-4">
@@ -238,6 +316,26 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                 placeholder="Higher number = higher priority"
                                             />
                                         </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <Label htmlFor="record-type">Record Type *</Label>
+                                        <Select
+                                            value={formData.record_type}
+                                            onValueChange={(value) => setFormData({
+                                                ...formData,
+                                                record_type: value as FormData['record_type'],
+                                            })}
+                                        >
+                                            <SelectTrigger id="record-type" className="w-full">
+                                                <SelectValue placeholder="Select record type" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="all">All Record Types</SelectItem>
+                                                <SelectItem value="biometric_record">Biometric Records Only</SelectItem>
+                                                <SelectItem value="attendance_point">Attendance Points Only</SelectItem>
+                                            </SelectContent>
+                                        </Select>
                                     </div>
 
                                     <div className="space-y-2">
@@ -323,19 +421,75 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                     </Can>
                 </div>
 
+                {/* Info Alert */}
                 <Card className="mb-6">
                     <CardContent className="pt-6">
                         <Alert>
                             <Shield className="h-4 w-4" />
                             <AlertDescription>
-                                Retention policies control how long biometric scan records are kept. Higher priority
-                                policies override lower priority ones. Global policies apply to all sites unless a
-                                site-specific policy exists.
+                                Retention policies control how long attendance records (Biometric Records, Attendance Points)
+                                are kept. Higher priority policies override lower priority ones.
+                                Global policies apply to all sites unless a site-specific policy exists.
+                                Policies with record type "All Records" act as fallback when no specific policy matches.
                             </AlertDescription>
                         </Alert>
                     </CardContent>
                 </Card>
 
+                {/* Retention Stats */}
+                {retentionStats && (
+                    <div className="mb-6">
+                        <div className="flex items-center gap-2 mb-4">
+                            <BarChart3 className="h-5 w-5 text-muted-foreground" />
+                            <h2 className="text-lg font-semibold">Record Statistics by Age</h2>
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {/* Biometric Records Stats */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <Fingerprint className="h-4 w-4 text-blue-500" />
+                                        Biometric Records
+                                    </CardTitle>
+                                    <p className="text-2xl font-bold">{retentionStats.biometric_record.total.toLocaleString()}</p>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="space-y-1">
+                                        {retentionStats.biometric_record.byAge.map((age) => (
+                                            <div key={age.range} className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">{age.range}</span>
+                                                <span className="font-medium">{age.count.toLocaleString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+
+                            {/* Attendance Points Stats */}
+                            <Card>
+                                <CardHeader className="pb-2">
+                                    <CardTitle className="text-base flex items-center gap-2">
+                                        <AlertCircle className="h-4 w-4 text-orange-500" />
+                                        Attendance Points
+                                    </CardTitle>
+                                    <p className="text-2xl font-bold">{retentionStats.attendance_point.total.toLocaleString()}</p>
+                                </CardHeader>
+                                <CardContent className="pt-0">
+                                    <div className="space-y-1">
+                                        {retentionStats.attendance_point.byAge.map((age) => (
+                                            <div key={age.range} className="flex justify-between text-sm">
+                                                <span className="text-muted-foreground">{age.range}</span>
+                                                <span className="font-medium">{age.count.toLocaleString()}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </div>
+                    </div>
+                )}
+
+                {/* Table */}
                 <Card>
                     <CardContent className="pt-6">
                         {policies.length === 0 ? (
@@ -350,6 +504,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                         <TableHeader>
                                             <TableRow>
                                                 <TableHead>Name</TableHead>
+                                                <TableHead>Record Type</TableHead>
                                                 <TableHead>Retention Period</TableHead>
                                                 <TableHead>Applies To</TableHead>
                                                 <TableHead>Priority</TableHead>
@@ -370,6 +525,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                             )}
                                                         </div>
                                                     </TableCell>
+                                                    <TableCell>{getRecordTypeBadge(policy.record_type || 'all')}</TableCell>
                                                     <TableCell>
                                                         {policy.retention_months} {policy.retention_months === 1 ? 'month' : 'months'}
                                                     </TableCell>
@@ -396,6 +552,14 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                     </TableCell>
                                                     <TableCell className="text-right">
                                                         <div className="flex justify-end gap-2">
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handlePreview(policy.id)}
+                                                                title="Preview affected records"
+                                                            >
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
                                                             <Can permission="biometric.retention">
                                                                 <Button
                                                                     variant="ghost"
@@ -438,9 +602,7 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                         </p>
                                                     )}
                                                 </div>
-                                                <Badge variant={policy.is_active ? 'default' : 'secondary'}>
-                                                    {policy.is_active ? 'Active' : 'Inactive'}
-                                                </Badge>
+                                                {getRecordTypeBadge(policy.record_type || 'all')}
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-3 text-sm">
@@ -478,6 +640,14 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                                                     </span>
                                                 </div>
                                                 <div className="flex gap-2">
+                                                    <Button
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => handlePreview(policy.id)}
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-1" />
+                                                        Preview
+                                                    </Button>
                                                     <Can permission="biometric.retention">
                                                         <Button
                                                             variant="outline"
@@ -508,6 +678,94 @@ export default function RetentionPolicies({ policies, sites }: { policies: Polic
                     </CardContent>
                 </Card>
             </div>
+
+            {/* Preview Dialog */}
+            <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+                <DialogContent className="max-w-[95vw] sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Eye className="h-5 w-5" />
+                            Policy Impact Preview
+                        </DialogTitle>
+                        <DialogDescription>
+                            Records that would be affected by this retention policy
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    {isLoadingPreview ? (
+                        <div className="flex items-center justify-center py-8">
+                            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                        </div>
+                    ) : previewData ? (
+                        <div className="space-y-4">
+                            <div className="rounded-lg bg-muted p-4">
+                                <div className="grid gap-2 text-sm">
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Policy:</span>
+                                        <span className="font-medium">{previewData.policy.name}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Retention Period:</span>
+                                        <span className="font-medium">{previewData.policy.retention_months} months</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                        <span className="text-muted-foreground">Cutoff Date:</span>
+                                        <span className="font-medium">{previewData.cutoff_date}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {previewData.total_affected > 0 ? (
+                                <>
+                                    <Alert variant="destructive">
+                                        <AlertTriangle className="h-4 w-4" />
+                                        <AlertDescription>
+                                            <strong>{previewData.total_affected.toLocaleString()}</strong> records would be deleted
+                                            when this policy is enforced.
+                                        </AlertDescription>
+                                    </Alert>
+
+                                    <div className="space-y-3">
+                                        {previewData.preview.map((item) => (
+                                            <div
+                                                key={item.record_type}
+                                                className="flex items-center justify-between rounded-lg border p-3"
+                                            >
+                                                <div>
+                                                    <p className="font-medium">{item.label}</p>
+                                                    {item.oldest_date && item.newest_date && (
+                                                        <p className="text-xs text-muted-foreground">
+                                                            From {new Date(item.oldest_date).toLocaleDateString()} to{' '}
+                                                            {new Date(item.newest_date).toLocaleDateString()}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                                <Badge variant={item.count > 0 ? 'destructive' : 'secondary'}>
+                                                    {item.count.toLocaleString()} records
+                                                </Badge>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </>
+                            ) : (
+                                <Alert>
+                                    <Shield className="h-4 w-4" />
+                                    <AlertDescription>
+                                        No records would be affected by this policy. All current records are within the
+                                        retention period.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
+                            <div className="flex justify-end">
+                                <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+                                    Close
+                                </Button>
+                            </div>
+                        </div>
+                    ) : null}
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

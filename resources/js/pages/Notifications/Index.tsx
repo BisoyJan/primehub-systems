@@ -71,7 +71,9 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             });
             toast.success('Notification marked as read');
@@ -88,7 +90,9 @@ export default function NotificationsIndex({ notifications, unreadCount }: PageP
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector<HTMLMetaElement>('meta[name="csrf-token"]')?.content || '',
+                    'X-Requested-With': 'XMLHttpRequest',
                 },
             });
             toast.success('All notifications marked as read');

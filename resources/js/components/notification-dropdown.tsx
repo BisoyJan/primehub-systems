@@ -1,11 +1,13 @@
 import React from 'react';
 import { formatDistanceToNow } from 'date-fns';
-import { Bell, Check, X } from 'lucide-react';
+import { Bell, Check, X, Send } from 'lucide-react';
+import { Link } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
+import { send as notificationSendRoute } from '@/routes/notifications';
 
 interface Notification {
     id: number;
@@ -20,6 +22,7 @@ interface Notification {
 interface NotificationDropdownProps {
     notifications: Notification[];
     unreadCount: number;
+    canSend?: boolean;
     onMarkAsRead: (id: number) => void;
     onMarkAllAsRead: () => void;
     onDelete: (id: number) => void;
@@ -31,6 +34,7 @@ interface NotificationDropdownProps {
 export function NotificationDropdown({
     notifications,
     unreadCount,
+    canSend = false,
     onMarkAsRead,
     onMarkAllAsRead,
     onDelete,
@@ -185,10 +189,10 @@ export function NotificationDropdown({
             </ScrollArea>
 
             {/* Footer */}
-            {notifications.length > 0 && (
-                <>
-                    <Separator />
-                    <div className="p-2 grid grid-cols-2 gap-2">
+            <Separator />
+            <div className="p-2 flex flex-col gap-2">
+                {notifications.length > 0 && (
+                    <div className="grid grid-cols-2 gap-2">
                         <Button
                             variant="ghost"
                             size="sm"
@@ -206,8 +210,30 @@ export function NotificationDropdown({
                             View all
                         </Button>
                     </div>
-                </>
-            )}
+                )}
+                {notifications.length === 0 && (
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        className="w-full"
+                        onClick={onViewAll}
+                    >
+                        View all
+                    </Button>
+                )}
+                {canSend && (
+                    <Link href={notificationSendRoute().url}>
+                        <Button
+                            variant="default"
+                            size="sm"
+                            className="w-full"
+                        >
+                            <Send className="h-4 w-4 mr-2" />
+                            Send Notification
+                        </Button>
+                    </Link>
+                )}
+            </div>
         </div>
     );
 }
