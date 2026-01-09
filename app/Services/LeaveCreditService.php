@@ -703,7 +703,7 @@ class LeaveCreditService
     /**
      * Process year-end carryover for a single user.
      * Unused credits from the previous year (up to max 4) are carried over for cash conversion.
-     *
+     * 
      * @param User $user
      * @param int $fromYear The year to carry over from
      * @param int|null $processedBy User ID who processed this carryover
@@ -713,27 +713,27 @@ class LeaveCreditService
     public function processCarryover(User $user, int $fromYear, ?int $processedBy = null, ?string $notes = null): ?LeaveCreditCarryover
     {
         $toYear = $fromYear + 1;
-
+        
         // Check if already processed for this year transition
         $existing = LeaveCreditCarryover::forUser($user->id)
             ->fromYear($fromYear)
             ->first();
-
+            
         if ($existing) {
             return $existing; // Already processed
         }
-
+        
         // Get unused balance from the previous year
         $unusedCredits = $this->getBalance($user, $fromYear);
-
+        
         if ($unusedCredits <= 0) {
             return null; // No credits to carry over
         }
-
+        
         // Calculate carryover (max 4 credits)
         $carryoverCredits = min($unusedCredits, self::MAX_CARRYOVER_CREDITS);
         $forfeitedCredits = max(0, $unusedCredits - self::MAX_CARRYOVER_CREDITS);
-
+        
         return LeaveCreditCarryover::create([
             'user_id' => $user->id,
             'credits_from_previous_year' => $unusedCredits,
@@ -749,7 +749,7 @@ class LeaveCreditService
 
     /**
      * Process year-end carryover for all eligible users.
-     *
+     * 
      * @param int $fromYear The year to carry over from
      * @param int|null $processedBy User ID who triggered this process
      * @return array{processed: int, skipped: int, total_carryover: float, total_forfeited: float}
@@ -757,15 +757,15 @@ class LeaveCreditService
     public function processAllCarryovers(int $fromYear, ?int $processedBy = null): array
     {
         $users = User::whereNotNull('hired_date')->get();
-
+        
         $processed = 0;
         $skipped = 0;
         $totalCarryover = 0;
         $totalForfeited = 0;
-
+        
         foreach ($users as $user) {
             $carryover = $this->processCarryover($user, $fromYear, $processedBy);
-
+            
             if ($carryover && $carryover->wasRecentlyCreated) {
                 $processed++;
                 $totalCarryover += $carryover->carryover_credits;
@@ -774,7 +774,7 @@ class LeaveCreditService
                 $skipped++;
             }
         }
-
+        
         return [
             'processed' => $processed,
             'skipped' => $skipped,
@@ -785,7 +785,7 @@ class LeaveCreditService
 
     /**
      * Mark carryover credits as cash converted.
-     *
+     * 
      * @param LeaveCreditCarryover $carryover
      * @param int|null $processedBy User ID who processed the conversion
      * @return bool
@@ -802,7 +802,7 @@ class LeaveCreditService
     /**
      * Get carryover summary for a user (carryover TO a specific year).
      * Use this when you want to see what was carried INTO a year.
-     *
+     * 
      * @param User $user
      * @param int|null $toYear The year to check carryovers for
      * @return array
@@ -810,11 +810,11 @@ class LeaveCreditService
     public function getCarryoverSummary(User $user, ?int $toYear = null): array
     {
         $toYear = $toYear ?? now()->year;
-
+        
         $carryover = LeaveCreditCarryover::forUser($user->id)
             ->toYear($toYear)
             ->first();
-
+            
         if (!$carryover) {
             return [
                 'has_carryover' => false,
@@ -826,7 +826,7 @@ class LeaveCreditService
                 'to_year' => $toYear,
             ];
         }
-
+        
         return [
             'has_carryover' => true,
             'carryover_credits' => (float) $carryover->carryover_credits,
@@ -842,7 +842,7 @@ class LeaveCreditService
     /**
      * Get carryover summary for credits FROM a specific year.
      * Use this when viewing a year and want to see what will be/was carried over from that year.
-     *
+     * 
      * @param User $user
      * @param int $fromYear The year to check carryovers from
      * @return array
@@ -852,13 +852,13 @@ class LeaveCreditService
         $carryover = LeaveCreditCarryover::forUser($user->id)
             ->fromYear($fromYear)
             ->first();
-
+            
         if (!$carryover) {
             // Calculate potential carryover if not processed yet
             $balance = $this->getBalance($user, $fromYear);
             $potentialCarryover = min($balance, self::MAX_CARRYOVER_CREDITS);
             $potentialForfeited = max(0, $balance - self::MAX_CARRYOVER_CREDITS);
-
+            
             return [
                 'has_carryover' => false,
                 'is_processed' => false,
@@ -871,7 +871,7 @@ class LeaveCreditService
                 'to_year' => $fromYear + 1,
             ];
         }
-
+        
         return [
             'has_carryover' => true,
             'is_processed' => true,
@@ -887,7 +887,7 @@ class LeaveCreditService
 
     /**
      * Get all pending cash conversions for a specific year.
-     *
+     * 
      * @param int $toYear
      * @return \Illuminate\Database\Eloquent\Collection
      */
@@ -901,18 +901,18 @@ class LeaveCreditService
 
     /**
      * Get carryover report for all users for a specific year transition.
-     *
+     * 
      * @param int $fromYear
      * @return array
      */
     public function getCarryoverReport(int $fromYear): array
     {
         $toYear = $fromYear + 1;
-
+        
         $carryovers = LeaveCreditCarryover::with(['user', 'processedBy'])
             ->fromYear($fromYear)
             ->get();
-
+            
         $summary = [
             'from_year' => $fromYear,
             'to_year' => $toYear,
@@ -922,7 +922,7 @@ class LeaveCreditService
             'pending_cash_conversion' => $carryovers->where('cash_converted', false)->count(),
             'completed_cash_conversion' => $carryovers->where('cash_converted', true)->count(),
         ];
-
+        
         return [
             'summary' => $summary,
             'carryovers' => $carryovers,
