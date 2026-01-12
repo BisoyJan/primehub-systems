@@ -2384,12 +2384,26 @@ class LeaveRequestController extends Controller
         $startDate = Carbon::parse($leaveRequest->start_date);
         $endDate = Carbon::parse($leaveRequest->end_date);
 
-        // Check if we should deduct credits at all
-        $shouldDeduct = $leaveCreditService->shouldDeductSlCredits($user, $leaveRequest);
+        // Check if we should deduct credits at all and get the reason if not
+        $creditCheck = $leaveCreditService->checkSlCreditDeduction($user, $leaveRequest);
 
-        if (!$shouldDeduct) {
-            // No credits to deduct - just update attendance notes
-            $this->updateSlAttendanceWithoutDeduction($leaveRequest);
+        if (!$creditCheck['should_deduct']) {
+            // Check if this should be converted to UPTO (has med cert but no credits)
+            if ($creditCheck['convert_to_upto'] ?? false) {
+                // Convert SL to UPTO
+                $leaveRequest->update([
+                    'leave_type' => 'UPTO',
+                    'sl_credits_applied' => false,
+                    'sl_no_credit_reason' => $creditCheck['reason'],
+                    'credits_deducted' => 0,
+                ]);
+                // Update attendance for UPTO (unpaid leave)
+                $this->updateAttendanceForApprovedLeave($leaveRequest);
+                return;
+            }
+
+            // No credits to deduct - just update attendance notes and track reason
+            $this->updateSlAttendanceWithoutDeduction($leaveRequest, $creditCheck['reason']);
             return;
         }
 
@@ -2410,6 +2424,7 @@ class LeaveRequestController extends Controller
                 $attendance->update([
                     'notes' => $existingNotes . "SL applied but NCNS status preserved - Leave Request #{$leaveRequest->id}",
                     'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
                 ]);
             } else {
                 // Non-NCNS: update status to advised_absence and deduct credit
@@ -2418,6 +2433,7 @@ class LeaveRequestController extends Controller
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
                 ]);
             }
         }
@@ -2436,6 +2452,7 @@ class LeaveRequestController extends Controller
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
                 ]);
                 $daysToDeduct++;
             }
@@ -2452,16 +2469,30 @@ class LeaveRequestController extends Controller
             $leaveCreditService->deductCredits($leaveRequest, $year);
             $leaveRequest->days_requested = $originalDays;
 
-            // Update credits_deducted to reflect actual deduction
-            $leaveRequest->update(['credits_deducted' => $daysToDeduct]);
+            // Update credits_deducted and mark SL credits as applied
+            $leaveRequest->update([
+                'credits_deducted' => $daysToDeduct,
+                'sl_credits_applied' => true,
+                'sl_no_credit_reason' => null,
+            ]);
+        } else {
+            // All days were NCNS - no credits deducted
+            $leaveRequest->update([
+                'credits_deducted' => 0,
+                'sl_credits_applied' => false,
+                'sl_no_credit_reason' => 'All days in the leave period had NCNS status - no credits deducted',
+            ]);
         }
     }
 
     /**
      * Update attendance for Sick Leave when no credits are being deducted.
      * Still updates status and notes for tracking purposes.
+     *
+     * @param LeaveRequest $leaveRequest
+     * @param string|null $reason The reason why credits were not deducted
      */
-    protected function updateSlAttendanceWithoutDeduction(LeaveRequest $leaveRequest): void
+    protected function updateSlAttendanceWithoutDeduction(LeaveRequest $leaveRequest, ?string $reason = null): void
     {
         $user = $leaveRequest->user;
         $startDate = Carbon::parse($leaveRequest->start_date);
@@ -2480,6 +2511,7 @@ class LeaveRequestController extends Controller
                 $attendance->update([
                     'notes' => $existingNotes . "SL applied (no credits) - NCNS status preserved - Leave Request #{$leaveRequest->id}",
                     'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
                 ]);
             } else {
                 // Update to advised_absence
@@ -2487,6 +2519,7 @@ class LeaveRequestController extends Controller
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
                 ]);
             }
         }
@@ -2504,13 +2537,18 @@ class LeaveRequestController extends Controller
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
                 ]);
             }
             $currentDate->addDay();
         }
 
-        // Mark that no credits were deducted
-        $leaveRequest->update(['credits_deducted' => 0]);
+        // Mark that no credits were deducted and track the reason
+        $leaveRequest->update([
+            'credits_deducted' => 0,
+            'sl_credits_applied' => false,
+            'sl_no_credit_reason' => $reason,
+        ]);
     }
 
     /**

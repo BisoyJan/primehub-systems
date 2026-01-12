@@ -713,12 +713,22 @@ export default function Show({
                             </div>
                         )}
 
-                        {/* SL No Credit Reason */}
+                        {/* SL No Credit Reason - Show when SL has no credits applied */}
                         {leaveRequest.leave_type === 'SL' && leaveRequest.sl_credits_applied === false && leaveRequest.sl_no_credit_reason && (
                             <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
                                 <Info className="h-4 w-4 text-blue-600" />
                                 <AlertDescription className="text-blue-800 dark:text-blue-200">
                                     <strong>SL Credits Not Deducted:</strong> {leaveRequest.sl_no_credit_reason}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* SL Converted to UPTO - Show when UPTO was converted from SL due to insufficient credits */}
+                        {leaveRequest.leave_type === 'UPTO' && leaveRequest.sl_no_credit_reason && leaveRequest.sl_no_credit_reason.includes('Converted to UPTO') && (
+                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <strong>Originally filed as Sick Leave (SL):</strong> {leaveRequest.sl_no_credit_reason}
                                 </AlertDescription>
                             </Alert>
                         )}

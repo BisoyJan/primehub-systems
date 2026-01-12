@@ -670,28 +670,54 @@ class LeaveCreditService
      */
     public function shouldDeductSlCredits(User $user, LeaveRequest $leaveRequest): bool
     {
+        return $this->checkSlCreditDeduction($user, $leaveRequest)['should_deduct'];
+    }
+
+    /**
+     * Check if SL credits should be deducted and return detailed reason if not.
+     *
+     * @param User $user
+     * @param LeaveRequest $leaveRequest
+     * @return array{should_deduct: bool, reason: string|null}
+     */
+    public function checkSlCreditDeduction(User $user, LeaveRequest $leaveRequest): array
+    {
         if ($leaveRequest->leave_type !== 'SL') {
-            return true; // Non-SL follows normal rules
+            return ['should_deduct' => true, 'reason' => null];
         }
 
         // Must have medical certificate
         if (!$leaveRequest->medical_cert_submitted) {
-            return false;
+            return [
+                'should_deduct' => false,
+                'reason' => 'No medical certificate submitted',
+                'convert_to_upto' => false,
+            ];
         }
 
-        // Must be eligible
+        // Must be eligible (6+ months)
         if (!$this->isEligible($user)) {
-            return false;
+            $hireDate = $user->hired_date ? Carbon::parse($user->hired_date)->format('M d, Y') : 'unknown';
+            return [
+                'should_deduct' => false,
+                'reason' => "Not eligible for SL credits (less than 6 months of employment, hired: {$hireDate})",
+                'convert_to_upto' => false,
+            ];
         }
 
         // Must have sufficient credits
         $year = Carbon::parse($leaveRequest->start_date)->year;
         $balance = $this->getBalance($user, $year);
         if ($balance < $leaveRequest->days_requested) {
-            return false;
+            // Has medical cert but no credits - convert to UPTO
+            return [
+                'should_deduct' => false,
+                'reason' => "Insufficient SL credits (balance: {$balance} days, requested: {$leaveRequest->days_requested} days) - Converted to UPTO",
+                'convert_to_upto' => true,
+            ];
         }
 
-        return true;
+        return ['should_deduct' => true, 'reason' => null, 'convert_to_upto' => false];
     }
 
     /**

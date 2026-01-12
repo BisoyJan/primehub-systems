@@ -388,11 +388,15 @@ export default function Create({
         }
 
         if (!creditsSummary.is_eligible) {
-            setSlCreditInfo('Leave credits will NOT be deducted - You are not yet eligible for leave credits');
+            setSlCreditInfo('Leave credits will NOT be deducted - You are not yet eligible for leave credits (less than 6 months employment)');
         } else if (creditsSummary.balance < calculatedDays && calculatedDays > 0) {
-            setSlCreditInfo('Leave credits will NOT be deducted - Insufficient balance');
+            if (data.medical_cert_submitted) {
+                setSlCreditInfo(`⚠️ This SL will be converted to UPTO (Unpaid Time Off) - Insufficient credits (balance: ${creditsSummary.balance} days, requesting: ${calculatedDays} days)`);
+            } else {
+                setSlCreditInfo('Leave credits will NOT be deducted - Insufficient balance. Submit a medical certificate to convert to UPTO.');
+            }
         } else if (!data.medical_cert_submitted) {
-            setSlCreditInfo('Leave credits will NOT be deducted - No medical certificate');
+            setSlCreditInfo('Leave credits will NOT be deducted - No medical certificate submitted');
         } else {
             setSlCreditInfo(null);
         }
@@ -1345,9 +1349,18 @@ export default function Create({
                                     )}
 
                                     {slCreditInfo && (
-                                        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                                            <AlertCircle className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-                                            <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                        <Alert className={slCreditInfo.includes('converted to UPTO') 
+                                            ? "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
+                                            : "border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950"
+                                        }>
+                                            <AlertCircle className={slCreditInfo.includes('converted to UPTO')
+                                                ? "h-4 w-4 text-amber-600 dark:text-amber-400"
+                                                : "h-4 w-4 text-blue-600 dark:text-blue-400"
+                                            } />
+                                            <AlertDescription className={slCreditInfo.includes('converted to UPTO')
+                                                ? "text-amber-800 dark:text-amber-200"
+                                                : "text-blue-800 dark:text-blue-200"
+                                            }>
                                                 {slCreditInfo}
                                             </AlertDescription>
                                         </Alert>
