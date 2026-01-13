@@ -32,6 +32,8 @@ class LeaveCreditCarryover extends Model
         'forfeited_credits',
         'from_year',
         'to_year',
+        'is_first_regularization',
+        'regularization_date',
         'cash_converted',
         'cash_converted_at',
         'processed_by',
@@ -46,9 +48,29 @@ class LeaveCreditCarryover extends Model
             'forfeited_credits' => 'decimal:2',
             'from_year' => 'integer',
             'to_year' => 'integer',
+            'is_first_regularization' => 'boolean',
+            'regularization_date' => 'date',
             'cash_converted' => 'boolean',
             'cash_converted_at' => 'date',
         ];
+    }
+
+    /**
+     * Check if user has ever had a first regularization carryover processed.
+     */
+    public static function hasFirstRegularization(int $userId): bool
+    {
+        return static::forUser($userId)
+            ->where('is_first_regularization', true)
+            ->exists();
+    }
+
+    /**
+     * Scope for first regularization carryovers.
+     */
+    public function scopeFirstRegularization($query)
+    {
+        return $query->where('is_first_regularization', true);
     }
 
     /**

@@ -9,6 +9,7 @@ use App\Models\AttendancePoint;
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\LeaveCredit;
+use App\Models\LeaveCreditCarryover;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDeniedDate;
 use App\Models\User;
@@ -19,6 +20,7 @@ use App\Mail\LeaveRequestSubmitted;
 use App\Mail\LeaveRequestTLStatusUpdated;
 use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -2613,7 +2615,7 @@ class LeaveRequestController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        $year = $request->input('year', now()->year);
+        $year = (int) $request->input('year', now()->year);
         $search = $request->input('search', '');
         $roleFilter = $request->input('role', '');
         $eligibilityFilter = $request->input('eligibility', '');
@@ -2651,6 +2653,18 @@ class LeaveRequestController extends Controller
             $query->where('hired_date', '<=', $eligibilityCutoffDate);
         } elseif ($eligibilityFilter === 'not_eligible') {
             $query->where('hired_date', '>', $eligibilityCutoffDate);
+        } elseif ($eligibilityFilter === 'pending_regularization') {
+            // Filter for users with pending first regularization transfers
+            // These are users hired in a PREVIOUS year who regularize in the SELECTED year
+            // and haven't had their first regularization processed yet
+            $previousYear = $year - 1;
+            $query->whereRaw('YEAR(hired_date) = ?', [$previousYear])
+                ->whereRaw('YEAR(DATE_ADD(hired_date, INTERVAL 6 MONTH)) = ?', [$year])
+                ->whereNotIn('id', function ($subQuery) {
+                    $subQuery->select('user_id')
+                        ->from('leave_credit_carryovers')
+                        ->where('is_first_regularization', true);
+                });
         }
 
         $users = $query->orderBy('first_name')->orderBy('last_name')->paginate(20)->withQueryString();
@@ -2660,11 +2674,57 @@ class LeaveRequestController extends Controller
             $summary = $this->leaveCreditService->getSummary($user, $year);
             // Get carryover FROM this year (what will be/was carried over to next year)
             $carryoverSummary = $this->leaveCreditService->getCarryoverFromYearSummary($user, $year);
+            // Get carryover TO this year (what was received from previous year)
+            $carryoverReceived = LeaveCreditCarryover::forUser($user->id)
+                ->toYear($year)
+                ->first();
+            // Get regularization info for pending credit transfer display
+            $regularizationInfo = $this->leaveCreditService->getRegularizationInfo($user, $year);
             $hireDate = Carbon::parse($user->hired_date);
             $eligibilityDate = $hireDate->copy()->addMonths(6);
+            $hireYear = $hireDate->year;
 
-            // Only show carryover if there are credits to carry over
-            $showCarryover = $carryoverSummary['carryover_credits'] > 0;
+            // Only show carryover forward if:
+            // 1. It has been processed (year has ended)
+            // 2. Has credits > 0
+            // 3. User is regularized OR was already regularized before the carryover year
+            // For users hired in the carryover year who are NOT yet regularized,
+            // show as "Pending Transfer" instead of "Carryover Forward"
+            $showCarryoverForward = false;
+            if ($carryoverSummary['is_processed'] && $carryoverSummary['carryover_credits'] > 0) {
+                if ($hireYear === $year) {
+                    // User was hired in the carryover FROM year - only show if NOW regularized
+                    $showCarryoverForward = $regularizationInfo['is_regularized'];
+                } else {
+                    // User was already regularized before this year - always show
+                    $showCarryoverForward = true;
+                }
+            }
+
+            // Check if there are pending credits from previous year awaiting regularization
+            $pendingRegularizationCredits = $regularizationInfo['pending_credits'];
+            $showPendingRegularization = $pendingRegularizationCredits['credits'] > 0
+                && !$regularizationInfo['has_first_regularization'];
+
+            // For users hired in the displayed year who are NOT yet regularized,
+            // show their credits as pending transfer (from carryover record)
+            $showPendingTransferFromThisYear = false;
+            if ($hireYear === $year && !$regularizationInfo['is_regularized'] && $carryoverSummary['is_processed']) {
+                $showPendingTransferFromThisYear = true;
+            }
+
+            // Only show carryover received if user is regularized for that carryover
+            // For users hired in the carryover source year, only show after regularization
+            $showCarryoverReceived = false;
+            if ($carryoverReceived) {
+                if ($carryoverReceived->from_year === $hireYear) {
+                    // User was hired in the carryover source year - only show if NOW regularized
+                    $showCarryoverReceived = $regularizationInfo['is_regularized'];
+                } else {
+                    // User was already regularized before the carryover year - always show
+                    $showCarryoverReceived = true;
+                }
+            }
 
             return [
                 'id' => $user->id,
@@ -2678,12 +2738,52 @@ class LeaveRequestController extends Controller
                 'total_earned' => $summary['total_earned'],
                 'total_used' => $summary['total_used'],
                 'balance' => $summary['balance'],
-                'carryover' => $showCarryover ? [
+                // Carryover received INTO this year (from previous year)
+                // Only show if user is regularized (for first regularization carryovers)
+                'carryover_received' => $showCarryoverReceived && $carryoverReceived ? [
+                    'credits' => (float) $carryoverReceived->carryover_credits,
+                    'from_year' => $carryoverReceived->from_year,
+                    'is_first_regularization' => (bool) $carryoverReceived->is_first_regularization,
+                    'cash_converted' => (bool) $carryoverReceived->cash_converted,
+                ] : null,
+                // Carryover forward FROM this year (to next year)
+                'carryover_forward' => $showCarryoverForward ? [
                     'credits' => $carryoverSummary['carryover_credits'],
                     'to_year' => $carryoverSummary['to_year'],
                     'is_processed' => $carryoverSummary['is_processed'],
+                    'is_expired' => $carryoverSummary['is_expired'] ?? false,
                     'cash_converted' => $carryoverSummary['cash_converted'],
                 ] : null,
+                // Keep old 'carryover' key for backwards compatibility
+                'carryover' => $showCarryoverForward ? [
+                    'credits' => $carryoverSummary['carryover_credits'],
+                    'to_year' => $carryoverSummary['to_year'],
+                    'is_processed' => $carryoverSummary['is_processed'],
+                    'is_expired' => $carryoverSummary['is_expired'] ?? false,
+                    'cash_converted' => $carryoverSummary['cash_converted'],
+                ] : null,
+                // Regularization info for pending credit transfer
+                'regularization' => [
+                    'is_regularized' => $regularizationInfo['is_regularized'],
+                    'regularization_date' => $regularizationInfo['regularization_date'],
+                    'hire_year' => $regularizationInfo['hire_year'],
+                    'days_until_regularization' => $regularizationInfo['days_until_regularization'],
+                    'has_first_regularization' => $regularizationInfo['has_first_regularization'],
+                    // Show pending credits either from previous year OR from current year (if viewing hire year)
+                    // For first regularization, show ALL credits (not capped)
+                    'pending_credits' => $showPendingRegularization ? [
+                        'from_year' => $pendingRegularizationCredits['year'],
+                        'to_year' => $hireYear + 1, // Credits will transfer TO the year after hire (regularization year)
+                        'credits' => $pendingRegularizationCredits['credits'],
+                        'months_accrued' => $pendingRegularizationCredits['months_accrued'],
+                    ] : ($showPendingTransferFromThisYear ? [
+                        'from_year' => $year, // Credits are FROM the current view year
+                        'to_year' => $year + 1, // Credits will transfer TO next year
+                        // Show full earned credits (not capped) since first regularization transfers ALL
+                        'credits' => LeaveCredit::forUser($user->id)->forYear($year)->sum('credits_balance'),
+                        'months_accrued' => $summary['credits_by_month']->count(),
+                    ] : null),
+                ],
             ];
         });
 
@@ -2780,7 +2880,43 @@ class LeaveRequestController extends Controller
         $summary = $this->leaveCreditService->getSummary($user, $year);
 
         // Get carryover summary FROM this year (what will be/was carried over to next year)
-        $carryoverSummary = $this->leaveCreditService->getCarryoverFromYearSummary($user, $year);
+        $carryoverSummary = $this->leaveCreditService->getCarryoverFromYearSummary($user, (int) $year);
+
+        // Get carryover received INTO this year (from previous year)
+        $carryoverReceived = LeaveCreditCarryover::forUser($user->id)
+            ->toYear((int) $year)
+            ->first();
+
+        // Get regularization info
+        $regularizationInfo = $this->leaveCreditService->getRegularizationInfo($user, (int) $year);
+        $hireDate = Carbon::parse($user->hired_date);
+        $hireYear = $hireDate->year;
+
+        // Determine if carryover received should be shown (only if regularized or not first reg carryover)
+        $showCarryoverReceived = false;
+        if ($carryoverReceived) {
+            if ($carryoverReceived->from_year === $hireYear) {
+                // User was hired in the carryover source year - only show if NOW regularized
+                $showCarryoverReceived = $regularizationInfo['is_regularized'];
+            } else {
+                // User was already regularized before the carryover year - always show
+                $showCarryoverReceived = true;
+            }
+        }
+
+        // Determine if carryover forward (for cash conversion) should be shown
+        // - Don't show if user is viewing their hire year and not yet regularized (pending transfer)
+        // - Don't show if the carryover is a first regularization transfer (not for cash)
+        $showCarryoverForward = true;
+        if ($hireYear === (int) $year && !$regularizationInfo['is_regularized']) {
+            // User is viewing their hire year and not yet regularized - no carryover forward
+            $showCarryoverForward = false;
+        }
+
+        // Also don't show if the carryover is a first regularization (all credits transfer for leave, not cash)
+        if ($carryoverSummary && ($carryoverSummary['is_first_regularization'] ?? false)) {
+            $showCarryoverForward = false;
+        }
 
         return Inertia::render('FormRequest/Leave/Credits/Show', [
             'user' => [
@@ -2799,11 +2935,249 @@ class LeaveRequestController extends Controller
                 'total_used' => $summary['total_used'],
                 'balance' => $summary['balance'],
             ],
-            'carryoverSummary' => $carryoverSummary,
+            'carryoverSummary' => $showCarryoverForward ? $carryoverSummary : null,
+            'carryoverReceived' => $showCarryoverReceived && $carryoverReceived ? [
+                'credits' => (float) $carryoverReceived->carryover_credits,
+                'from_year' => $carryoverReceived->from_year,
+                'is_first_regularization' => (bool) $carryoverReceived->is_first_regularization,
+            ] : null,
+            'regularization' => [
+                'is_regularized' => $regularizationInfo['is_regularized'],
+                'regularization_date' => $regularizationInfo['regularization_date'],
+                'hire_year' => $hireYear,
+            ],
             'monthlyCredits' => $monthlyCredits,
             'leaveRequests' => $leaveRequests,
             'availableYears' => range(now()->year, 2024, -1),
             'canViewAll' => $canViewAll,
         ]);
+    }
+
+    /**
+     * Get regularization management statistics.
+     */
+    public function getRegularizationStats(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $year = $request->input('year', now()->year);
+
+        // Get users needing first regularization
+        $usersNeedingRegularization = $this->leaveCreditService->getUsersNeedingFirstRegularization($year);
+
+        // Count users with pending credits
+        $usersWithPendingCredits = $usersNeedingRegularization->filter(function ($user) {
+            $pendingCredits = $this->leaveCreditService->getPendingRegularizationCredits($user);
+            return $pendingCredits && $pendingCredits['credits'] > 0;
+        });
+
+        // Get already processed count
+        $alreadyProcessedCount = \App\Models\LeaveCreditCarryover::where('is_first_regularization', true)
+            ->where('to_year', $year)
+            ->count();
+
+        return response()->json([
+            'pending_count' => $usersWithPendingCredits->count(),
+            'total_eligible' => $usersNeedingRegularization->count(),
+            'already_processed' => $alreadyProcessedCount,
+            'year' => $year,
+        ]);
+    }
+
+    /**
+     * Process regularization credit transfers.
+     */
+    public function processRegularization(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $validated = $request->validate([
+            'year' => 'nullable|integer|min:2024',
+            'user_id' => 'nullable|integer|exists:users,id',
+            'dry_run' => 'nullable|boolean',
+        ]);
+
+        $year = $validated['year'] ?? now()->year;
+        $userId = $validated['user_id'] ?? null;
+        $dryRun = $validated['dry_run'] ?? false;
+
+        $results = [
+            'processed' => [],
+            'skipped' => [],
+            'errors' => [],
+        ];
+
+        try {
+            if ($userId) {
+                // Process single user
+                $user = User::findOrFail($userId);
+                $result = $this->processUserRegularization($user, $dryRun);
+
+                if ($result['status'] === 'processed') {
+                    $results['processed'][] = $result;
+                } elseif ($result['status'] === 'skipped') {
+                    $results['skipped'][] = $result;
+                } else {
+                    $results['errors'][] = $result;
+                }
+            } else {
+                // Process all eligible users
+                $usersNeedingRegularization = $this->leaveCreditService->getUsersNeedingFirstRegularization($year);
+
+                foreach ($usersNeedingRegularization as $user) {
+                    $result = $this->processUserRegularization($user, $dryRun);
+
+                    if ($result['status'] === 'processed') {
+                        $results['processed'][] = $result;
+                    } elseif ($result['status'] === 'skipped') {
+                        $results['skipped'][] = $result;
+                    } else {
+                        $results['errors'][] = $result;
+                    }
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'dry_run' => $dryRun,
+                'year' => $year,
+                'summary' => [
+                    'processed' => count($results['processed']),
+                    'skipped' => count($results['skipped']),
+                    'errors' => count($results['errors']),
+                ],
+                'results' => $results,
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Regularization processing error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to process regularization: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Process regularization for a single user.
+     */
+    private function processUserRegularization(User $user, bool $dryRun): array
+    {
+        $pendingCredits = $this->leaveCreditService->getPendingRegularizationCredits($user);
+
+        if (!$pendingCredits || $pendingCredits['credits'] <= 0) {
+            return [
+                'status' => 'skipped',
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'reason' => 'No pending credits or not eligible',
+            ];
+        }
+
+        if ($dryRun) {
+            return [
+                'status' => 'processed',
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'credits' => $pendingCredits['credits'],
+                'months' => $pendingCredits['months_accrued'],
+                'from_year' => $pendingCredits['year'],
+                'dry_run' => true,
+            ];
+        }
+
+        try {
+            $carryover = $this->leaveCreditService->processFirstRegularizationTransfer(
+                $user,
+                auth()->id()
+            );
+
+            if ($carryover) {
+                return [
+                    'status' => 'processed',
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'credits' => $carryover->carryover_credits,
+                    'from_year' => $carryover->from_year,
+                    'to_year' => $carryover->to_year,
+                ];
+            } else {
+                return [
+                    'status' => 'skipped',
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'reason' => 'Transfer returned null',
+                ];
+            }
+        } catch (\Exception $e) {
+            return [
+                'status' => 'error',
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'error' => $e->getMessage(),
+            ];
+        }
+    }
+
+    /**
+     * Process monthly accruals for all eligible users.
+     */
+    public function processMonthlyAccruals(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        try {
+            $result = $this->leaveCreditService->accrueCreditsForAllUsers();
+
+            return response()->json([
+                'success' => true,
+                'message' => "Monthly accruals processed successfully.",
+                'summary' => [
+                    'processed' => $result['processed'],
+                    'skipped' => $result['skipped'],
+                    'total_credits' => $result['total_credits'],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Monthly accruals processing error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to process monthly accruals: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Process year-end carryovers.
+     */
+    public function processYearEndCarryovers(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $validated = $request->validate([
+            'from_year' => 'required|integer|min:2024',
+        ]);
+
+        $fromYear = $validated['from_year'];
+
+        try {
+            $result = $this->leaveCreditService->processCarryoverForAllUsers($fromYear, auth()->id());
+
+            return response()->json([
+                'success' => true,
+                'message' => "Year-end carryovers from {$fromYear} to " . ($fromYear + 1) . " processed successfully.",
+                'summary' => [
+                    'processed' => $result['processed'],
+                    'skipped' => $result['skipped'],
+                    'total_carryover' => $result['total_carryover'],
+                    'total_forfeited' => $result['total_forfeited'],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Year-end carryover processing error: ' . $e->getMessage());
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to process year-end carryovers: ' . $e->getMessage(),
+            ], 500);
+        }
     }
 }

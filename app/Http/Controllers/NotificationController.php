@@ -151,7 +151,7 @@ class NotificationController extends Controller
 
         // Get available roles with user counts
         $roles = collect(config('permissions.roles'))->map(fn($label, $value) => [
-            'value' => $value,
+            'value' => $label, // Use label as value since that's what's stored in the database
             'label' => $label,
             'count' => $userCountsByRole->get($label, 0),
         ])->values();

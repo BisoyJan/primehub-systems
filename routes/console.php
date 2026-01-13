@@ -65,3 +65,33 @@ Schedule::command('leave:process-carryover --year=' . (date('Y') - 1))
     ->yearlyOn(1, 1, '00:00')
     ->withoutOverlapping()
     ->onOneServer();
+
+// Process first-time regularization credit transfers - runs daily at 1:00 AM
+// Transfers ALL credits from hire year to regularization year for newly regularized employees
+// Runs daily because users are regularized throughout the year (6 months after their hire date)
+Schedule::command('leave:process-regularization')
+    ->dailyAt('01:00')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Check biometric retention policy expiry and notify admins - runs daily at 4:00 AM
+Schedule::command('retention:check-expiry --days=7')
+    ->dailyAt('04:00')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Check form request retention policy expiry and notify admins - runs daily at 4:15 AM
+Schedule::command('form-request:check-expiry --days=7')
+    ->dailyAt('04:15')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Check activity log expiry and notify admins - runs daily at 4:30 AM
+Schedule::command('activitylog:check-expiry --days=7 --retention=90')
+    ->dailyAt('04:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Clean old activity logs (older than 90 days) - runs daily at 1:00 AM
+Schedule::command('activitylog:clean')->dailyAt('01:00')->withoutOverlapping()
+    ->onOneServer();

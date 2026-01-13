@@ -121,10 +121,13 @@ class ProcessLeaveCreditsCarryover extends Command
      */
     protected function processAllUsers(int $fromYear, bool $isDryRun): void
     {
-        $users = User::whereNotNull('hired_date')->get();
+        $users = User::whereNotNull('hired_date')
+            ->where('is_active', true) // Only active employees
+            ->get();
         $toProcess = [];
         $alreadyProcessed = 0;
         $noCredits = 0;
+        $skippedProbationary = [];
 
         $this->info("Analyzing {$users->count()} users...");
         $this->newLine();
@@ -134,6 +137,18 @@ class ProcessLeaveCreditsCarryover extends Command
             $existing = LeaveCreditCarryover::forUser($user->id)->fromYear($fromYear)->first();
             if ($existing) {
                 $alreadyProcessed++;
+                continue;
+            }
+
+            // Check if probationary employee who should wait for first regularization
+            if ($this->leaveCreditService->shouldSkipYearEndCarryover($user, $fromYear)) {
+                $balance = $this->leaveCreditService->getBalance($user, $fromYear);
+                if ($balance > 0) {
+                    $skippedProbationary[] = [
+                        'user' => $user,
+                        'balance' => $balance,
+                    ];
+                }
                 continue;
             }
 
@@ -160,8 +175,29 @@ class ProcessLeaveCreditsCarryover extends Command
         $this->info("Summary:");
         $this->info("- Already processed: {$alreadyProcessed}");
         $this->info("- No credits to carry over: {$noCredits}");
+        $this->info("- Skipped (probationary, awaiting first regularization): " . count($skippedProbationary));
         $this->info("- To be processed: " . count($toProcess));
         $this->newLine();
+
+        // Show skipped probationary employees
+        if (!empty($skippedProbationary)) {
+            $this->warn("The following probationary employees are skipped (will get first regularization transfer instead):");
+            $this->table(
+                ['ID', 'Name', 'Hired', 'Regularizes', 'Credits'],
+                array_map(function ($item) {
+                    $hireDate = \Carbon\Carbon::parse($item['user']->hired_date);
+                    $regDate = $hireDate->copy()->addMonths(6);
+                    return [
+                        $item['user']->id,
+                        $item['user']->name,
+                        $hireDate->format('M d, Y'),
+                        $regDate->format('M d, Y'),
+                        number_format($item['balance'], 2),
+                    ];
+                }, $skippedProbationary)
+            );
+            $this->newLine();
+        }
 
         if (empty($toProcess)) {
             $this->info("No carryovers to process.");

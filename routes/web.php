@@ -316,6 +316,10 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->middleware('permission:leave_credits.view_all,leave_credits.view_own')
         ->group(function () {
             Route::get('/', [LeaveRequestController::class, 'creditsIndex'])->name('index');
+            Route::get('/regularization/stats', [LeaveRequestController::class, 'getRegularizationStats'])->name('regularization.stats');
+            Route::post('/regularization/process', [LeaveRequestController::class, 'processRegularization'])->name('regularization.process');
+            Route::post('/accruals/process', [LeaveRequestController::class, 'processMonthlyAccruals'])->name('accruals.process');
+            Route::post('/carryovers/process', [LeaveRequestController::class, 'processYearEndCarryovers'])->name('carryovers.process');
             Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');
         });
 

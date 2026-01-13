@@ -10,6 +10,7 @@ use App\Models\LeaveRequest;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
+use Spatie\Activitylog\Facades\Activity;
 
 class LeaveCreditService
 {
@@ -59,13 +60,60 @@ class LeaveCreditService
     /**
      * Get current leave credits balance for a user in a specific year.
      *
-     * NOTE: Credits are year-specific and do NOT carry over to the next year.
-     * Each year starts with 0 balance and accrues monthly.
+     * Balance = Monthly credits earned + Carryover received - Credits used
+     *
+     * Note: For users still in probation who were hired in a previous year,
+     * do NOT include carryover credits - their credits are "pending transfer"
+     * until they are regularized.
+     *
+     * Regular carryover credits (max 4, not first regularization) can be used for leave
+     * until end of March, after which they expire.
      */
     public function getBalance(User $user, ?int $year = null): float
     {
         $year = $year ?? now()->year;
-        return LeaveCredit::getTotalBalance($user->id, $year);
+
+        // Get monthly credits balance
+        $monthlyBalance = LeaveCredit::getTotalBalance($user->id, $year);
+
+        // Add carryover received INTO this year (from previous year)
+        // But only if user is regularized OR the carryover is from a year they were already regularized
+        $carryoverReceived = 0;
+        $carryovers = LeaveCreditCarryover::forUser($user->id)
+            ->toYear($year)
+            ->get();
+
+        $hireDate = $user->hired_date ? Carbon::parse($user->hired_date) : null;
+        $hireYear = $hireDate ? $hireDate->year : null;
+
+        // Check if we're past March for the carryover year (carryover expires after March)
+        $now = now();
+        $isPastMarch = ($now->year > $year) || ($now->year === $year && $now->month > 3);
+
+        foreach ($carryovers as $carryover) {
+            // If user was hired in the year the carryover is FROM, they need to be regularized first
+            if ($hireYear && $carryover->from_year === $hireYear) {
+                // First regularization transfer - only include if NOW regularized
+                // These don't expire after February (full credit transfer for leave use)
+                if ($this->isRegularized($user)) {
+                    $carryoverReceived += $carryover->carryover_credits;
+                }
+                // If not regularized, credits are "pending" - don't include
+            } else {
+                // Regular carryover (max 4 credits) - can use for leave until end of March
+                // After March, these credits expire and cannot be used for leave
+                if ($carryover->is_first_regularization) {
+                    // First regularization transfers don't expire
+                    $carryoverReceived += $carryover->carryover_credits;
+                } elseif (!$isPastMarch && !$carryover->cash_converted) {
+                    // Regular carryover - only include if before end of March AND not yet converted
+                    $carryoverReceived += $carryover->carryover_credits;
+                }
+                // After March or if converted, regular carryover credits are not included in balance
+            }
+        }
+
+        return $monthlyBalance + $carryoverReceived;
     }
 
     /**
@@ -167,12 +215,42 @@ class LeaveCreditService
         $year = $year ?? now()->year;
         $monthlyRate = $this->getMonthlyRate($user);
 
+        // Get monthly credits earned
+        $monthlyEarned = LeaveCredit::getTotalEarned($user->id, $year);
+
+        // Get carryover received INTO this year
+        // But only include if user is regularized OR carryover is from a year they were already regularized
+        $carryoverReceived = 0;
+        $carryovers = LeaveCreditCarryover::forUser($user->id)
+            ->toYear($year)
+            ->get();
+
+        $hireDate = $user->hired_date ? Carbon::parse($user->hired_date) : null;
+        $hireYear = $hireDate ? $hireDate->year : null;
+
+        foreach ($carryovers as $carryover) {
+            // If user was hired in the year the carryover is FROM, they need to be regularized first
+            if ($hireYear && $carryover->from_year === $hireYear) {
+                // User was hired in the carryover source year - only include if NOW regularized
+                if ($this->isRegularized($user)) {
+                    $carryoverReceived += $carryover->carryover_credits;
+                }
+                // If not regularized, credits are "pending" - don't include
+            } else {
+                // User was already regularized before the carryover year - always include
+                $carryoverReceived += $carryover->carryover_credits;
+            }
+        }
+
+        // Total earned = monthly + carryover (if applicable)
+        $totalEarned = $monthlyEarned + $carryoverReceived;
+
         return [
             'year' => $year,
             'is_eligible' => $this->isEligible($user),
             'eligibility_date' => $this->getEligibilityDate($user),
             'monthly_rate' => $monthlyRate,
-            'total_earned' => LeaveCredit::getTotalEarned($user->id, $year),
+            'total_earned' => $totalEarned,
             'total_used' => LeaveCredit::getTotalUsed($user->id, $year),
             'balance' => $this->getBalance($user, $year),
             'pending_credits' => $this->getPendingCredits($user, $year),
@@ -185,6 +263,22 @@ class LeaveCreditService
 
     /**
      * Accrue monthly leave credits for a user.
+     *
+     * Accrual rules:
+     * - Probationary period (first 6 months): Credits accrue on hire date anniversary
+     *   (e.g., hired July 11 → Aug 11 +1.25, Sep 11 +1.25, etc.)
+     * - Post-regularization: Credits accrue at end of month
+     *   (first post-reg accrual is at end of the month AFTER regularization month)
+     * - Hire month does NOT get credit (first accrual is 1 month after hire)
+     *
+     * Example (hired July 11, 2025, regularized Jan 11, 2026):
+     * - Aug 11, 2025: +1.25 (probation month 1)
+     * - Sep 11, 2025: +1.25 (probation month 2)
+     * - Oct 11, 2025: +1.25 (probation month 3)
+     * - Nov 11, 2025: +1.25 (probation month 4)
+     * - Dec 11, 2025: +1.25 (probation month 5)
+     * - Jan 11, 2026: +1.25 (probation month 6 = regularization)
+     * - Feb 28, 2026: +1.25 (first post-reg at end of month)
      */
     public function accrueMonthly(User $user, ?int $year = null, ?int $month = null): ?LeaveCredit
     {
@@ -196,15 +290,45 @@ class LeaveCreditService
             return null;
         }
 
-        // Don't accrue if the month hasn't ended yet (run on last day of month)
-        $targetDate = Carbon::create($year, $month, 1)->endOfMonth();
-        if (now()->lt($targetDate)) {
+        $hireDate = Carbon::parse($user->hired_date);
+        $hireDay = $hireDate->day;
+        $regularizationDate = $this->getRegularizationDate($user);
+        $isRegularized = $this->isRegularized($user);
+
+        // The target month we're trying to accrue
+        $targetMonthStart = Carbon::create($year, $month, 1);
+        $targetMonthEnd = $targetMonthStart->copy()->endOfMonth();
+
+        // Calculate the hire anniversary date for this month
+        // Handle months with fewer days (e.g., hired on 31st, February only has 28)
+        $anniversaryDay = min($hireDay, $targetMonthStart->daysInMonth);
+        $anniversaryDate = Carbon::create($year, $month, $anniversaryDay);
+
+        // Don't accrue for the hire month - first accrual is 1 month after hire
+        if ($year == $hireDate->year && $month == $hireDate->month) {
             return null;
         }
 
         // Don't accrue before hire date
-        $hireDate = Carbon::parse($user->hired_date);
-        if ($targetDate->lt($hireDate)) {
+        if ($targetMonthEnd->lt($hireDate)) {
+            return null;
+        }
+
+        // Determine when this month's credit should accrue
+        // If regularization happens IN this month or hasn't happened yet, use anniversary date
+        // If already regularized BEFORE this month started, use end of month
+        $regularizedBeforeThisMonth = $regularizationDate && $regularizationDate->lt($targetMonthStart);
+
+        if ($regularizedBeforeThisMonth) {
+            // Regular employee: accrue at end of month
+            $accrualDate = $targetMonthEnd;
+        } else {
+            // Probationary or regularizing this month: accrue on anniversary
+            $accrualDate = $anniversaryDate;
+        }
+
+        // Check if accrual date has passed
+        if (now()->lt($accrualDate)) {
             return null;
         }
 
@@ -221,21 +345,35 @@ class LeaveCreditService
         $rate = $this->getMonthlyRate($user);
 
         // Create new credit record
-        return LeaveCredit::create([
+        $credit = LeaveCredit::create([
             'user_id' => $user->id,
             'credits_earned' => $rate,
             'credits_used' => 0,
             'credits_balance' => $rate,
             'year' => $year,
             'month' => $month,
-            'accrued_at' => $targetDate,
+            'accrued_at' => $accrualDate,
         ]);
+
+        // Log the activity
+        $this->logActivity('credit_accrued', $user, $credit, [
+            'credits_earned' => $rate,
+            'year' => $year,
+            'month' => $month,
+            'accrual_type' => $regularizedBeforeThisMonth ? 'end_of_month' : 'anniversary',
+            'accrued_at' => $accrualDate->format('Y-m-d'),
+        ]);
+
+        return $credit;
     }
 
     /**
      * Backfill missing leave credits for the current year only.
      * Only creates credits from January of current year to avoid database bloat
      * and confusion about expired credits from previous years.
+     *
+     * Note: Hire month does NOT get credit - first accrual is 1 month after hire.
+     * Example: hired July 11 → first credit is August, not July.
      *
      * Useful when adding existing employees or fixing missing accruals.
      */
@@ -250,12 +388,13 @@ class LeaveCreditService
         $currentYear = $today->year;
         $accrued = 0;
 
-        // Start from January of current year or hire month (whichever is later)
+        // Start from January of current year or the month AFTER hire month (whichever is later)
+        // Hire month doesn't get credit - first accrual is 1 month after hire
         $currentDate = Carbon::create($currentYear, 1, 1)->startOfMonth();
 
-        // If hired this year, start from hire month instead
+        // If hired this year, start from the month AFTER hire month
         if ($hireDate->year === $currentYear) {
-            $currentDate = $hireDate->copy()->startOfMonth();
+            $currentDate = $hireDate->copy()->addMonth()->startOfMonth();
         }
 
         // Don't backfill if hired after current date
@@ -279,6 +418,89 @@ class LeaveCreditService
         }
 
         return $accrued;
+    }
+
+    /**
+     * Backfill ALL missing leave credits for a user from hire date to now.
+     * Unlike backfillCredits which only does current year, this does all years.
+     *
+     * @param User $user
+     * @return int Number of credit records created
+     */
+    public function backfillAllCredits(User $user): int
+    {
+        if (!$user->hired_date) {
+            return 0;
+        }
+
+        $hireDate = Carbon::parse($user->hired_date);
+        $today = now();
+        $accrued = 0;
+
+        // Start from the month AFTER hire (hire month doesn't get credit)
+        $currentDate = $hireDate->copy()->addMonth()->startOfMonth();
+
+        // Don't backfill if not yet eligible
+        if ($currentDate->gt($today)) {
+            return 0;
+        }
+
+        // Loop through each month from hire to now
+        while ($currentDate->copy()->endOfMonth()->lte($today)) {
+            $year = $currentDate->year;
+            $month = $currentDate->month;
+
+            // Check if already exists
+            $exists = LeaveCredit::forUser($user->id)
+                ->forMonth($year, $month)
+                ->exists();
+
+            if (!$exists) {
+                $credit = $this->accrueMonthly($user, $year, $month);
+                if ($credit) {
+                    $accrued++;
+                }
+            }
+
+            $currentDate->addMonth();
+        }
+
+        return $accrued;
+    }
+
+    /**
+     * Process monthly accruals for all eligible users.
+     * This backfills all missing credits from hire date to now for each user.
+     *
+     * @return array{processed: int, skipped: int, total_credits: float}
+     */
+    public function accrueCreditsForAllUsers(): array
+    {
+        $users = User::whereNotNull('hired_date')
+            ->where('is_approved', true)
+            ->where('is_active', true)
+            ->get();
+
+        $processed = 0;
+        $skipped = 0;
+        $totalCredits = 0;
+
+        foreach ($users as $user) {
+            $creditsAdded = $this->backfillAllCredits($user);
+
+            if ($creditsAdded > 0) {
+                $processed++;
+                $totalCredits += $creditsAdded * $this->getMonthlyRate($user);
+            } else {
+                $skipped++;
+            }
+        }
+
+        return [
+            'processed' => $processed,
+            'skipped' => $skipped,
+            'total_credits' => $totalCredits,
+        ];
     }
 
     /**
@@ -327,6 +549,15 @@ class LeaveCreditService
             ]);
 
             DB::commit();
+
+            // Log the activity
+            $this->logActivity('credits_deducted', $leaveRequest->user, $leaveRequest, [
+                'credits_deducted' => $daysToDeduct,
+                'leave_request_id' => $leaveRequest->id,
+                'year' => $year,
+                'leave_type' => $leaveRequest->type,
+            ]);
+
             return true;
         } catch (\Exception $e) {
             DB::rollBack();
@@ -374,6 +605,15 @@ class LeaveCreditService
             }
 
             DB::commit();
+
+            // Log the activity
+            $this->logActivity('credits_restored', $leaveRequest->user, $leaveRequest, [
+                'credits_restored' => $daysToRestore,
+                'leave_request_id' => $leaveRequest->id,
+                'year' => $year,
+                'leave_type' => $leaveRequest->type,
+            ]);
+
             return true;
         } catch (\Exception $e) {
             DB::rollBack();
@@ -722,13 +962,15 @@ class LeaveCreditService
 
     /**
      * Maximum credits that can be carried over to the next year.
-     * These are for cash conversion only, NOT for applying leaves.
+     * These can be used for leave requests or conversion until end of March.
+     * After March, unused carryover credits expire.
      */
     const MAX_CARRYOVER_CREDITS = 4;
 
     /**
      * Process year-end carryover for a single user.
-     * Unused credits from the previous year (up to max 4) are carried over for cash conversion.
+     * Unused credits from the previous year (up to max 4) are carried over.
+     * These credits can be used for leave requests or conversion until end of March.
      *
      * @param User $user
      * @param int $fromYear The year to carry over from
@@ -879,6 +1121,12 @@ class LeaveCreditService
             ->fromYear($fromYear)
             ->first();
 
+        $toYear = $fromYear + 1;
+
+        // Check if carryover is expired (past March of the to_year)
+        $now = now();
+        $isExpired = ($now->year > $toYear) || ($now->year === $toYear && $now->month > 3);
+
         if (!$carryover) {
             // Calculate potential carryover if not processed yet
             $balance = $this->getBalance($user, $fromYear);
@@ -888,19 +1136,26 @@ class LeaveCreditService
             return [
                 'has_carryover' => false,
                 'is_processed' => false,
+                'is_first_regularization' => false,
+                'is_expired' => false, // Not processed yet, can't be expired
                 'carryover_credits' => $potentialCarryover,
                 'credits_from_year' => $balance,
                 'forfeited_credits' => $potentialForfeited,
                 'cash_converted' => false,
                 'cash_converted_at' => null,
                 'from_year' => $fromYear,
-                'to_year' => $fromYear + 1,
+                'to_year' => $toYear,
             ];
         }
+
+        // First regularization carryovers don't expire
+        $carryoverExpired = $isExpired && !$carryover->is_first_regularization && !$carryover->cash_converted;
 
         return [
             'has_carryover' => true,
             'is_processed' => true,
+            'is_first_regularization' => (bool) $carryover->is_first_regularization,
+            'is_expired' => $carryoverExpired,
             'carryover_credits' => (float) $carryover->carryover_credits,
             'credits_from_year' => (float) $carryover->credits_from_previous_year,
             'forfeited_credits' => (float) $carryover->forfeited_credits,
@@ -953,5 +1208,687 @@ class LeaveCreditService
             'summary' => $summary,
             'carryovers' => $carryovers,
         ];
+    }
+
+    // ============================================
+    // REGULARIZATION CREDIT TRANSFER METHODS
+    // ============================================
+
+    /**
+     * Get the regularization date for a user (6 months after hire date).
+     *
+     * @param User $user
+     * @return Carbon|null
+     */
+    public function getRegularizationDate(User $user): ?Carbon
+    {
+        if (!$user->hired_date) {
+            return null;
+        }
+
+        return Carbon::parse($user->hired_date)->addMonths(6);
+    }
+
+    /**
+     * Check if user is regularized (6 months after hire date has passed).
+     *
+     * @param User $user
+     * @return bool
+     */
+    public function isRegularized(User $user): bool
+    {
+        $regularizationDate = $this->getRegularizationDate($user);
+        if (!$regularizationDate) {
+            return false;
+        }
+
+        return now()->greaterThanOrEqualTo($regularizationDate);
+    }
+
+    /**
+     * Check if user needs first-time regularization credit transfer.
+     * This is for users hired in a previous year who have now been regularized (6 months after hire).
+     * The transfer happens when they become regularized, regardless of which day of the year.
+     *
+     * @param User $user
+     * @param int|null $toYear The year to transfer credits to (defaults to current year)
+     * @return bool
+     */
+    public function needsFirstRegularizationTransfer(User $user, ?int $toYear = null): bool
+    {
+        $toYear = $toYear ?? now()->year;
+
+        if (!$user->hired_date) {
+            return false;
+        }
+
+        $hireDate = Carbon::parse($user->hired_date);
+        $regularizationDate = $this->getRegularizationDate($user);
+
+        // Must be hired in a previous year (credits to transfer from)
+        $hiredInPreviousYear = $hireDate->year < $toYear;
+
+        // Must be regularized (6 months have passed since hire)
+        $isRegularized = $this->isRegularized($user);
+
+        // Has NOT already had first regularization carryover processed
+        $hasNotHadFirstRegularization = !LeaveCreditCarryover::hasFirstRegularization($user->id);
+
+        return $hiredInPreviousYear && $isRegularized && $hasNotHadFirstRegularization;
+    }
+
+    /**
+     * Get accrued credits from hire year that are pending transfer upon regularization.
+     * This is for users who:
+     * 1. Were hired in the PREVIOUS year
+     * 2. Will regularize (or just regularized) in the CURRENT year
+     * 3. Haven't had their first regularization transfer processed yet
+     *
+     * For example, in 2026:
+     * - User hired Jul 15, 2025 → Regularizes Jan 15, 2026 → HAS pending transfer
+     * - User hired Jan 15, 2025 → Regularized Jul 15, 2025 → NO pending transfer (already regularized in 2025)
+     *
+     * @param User $user
+     * @return array{year: int, credits: float, months_accrued: int, regularization_date: string|null, is_pending: bool}
+     */
+    public function getPendingRegularizationCredits(User $user): array
+    {
+        $defaultResult = [
+            'year' => 0,
+            'credits' => 0,
+            'months_accrued' => 0,
+            'regularization_date' => null,
+            'is_pending' => false,
+        ];
+
+        if (!$user->hired_date) {
+            return $defaultResult;
+        }
+
+        $hireDate = Carbon::parse($user->hired_date);
+        $regularizationDate = $this->getRegularizationDate($user);
+        $currentYear = now()->year;
+        $hireYear = $hireDate->year;
+        $previousYear = $currentYear - 1;
+        $regularizationYear = $regularizationDate?->year;
+
+        // Only applicable if:
+        // 1. Hired in the PREVIOUS year (e.g., 2025 for current year 2026)
+        // 2. Regularization happens in the CURRENT year (e.g., 2026)
+        // Users who regularized in their hire year already had their transfer done
+        if ($hireYear != $previousYear || $regularizationYear != $currentYear) {
+            return array_merge($defaultResult, [
+                'year' => $hireYear,
+                'regularization_date' => $regularizationDate?->format('Y-m-d'),
+            ]);
+        }
+
+        // Check if first regularization transfer already happened
+        if (LeaveCreditCarryover::hasFirstRegularization($user->id)) {
+            return array_merge($defaultResult, [
+                'year' => $hireYear,
+                'regularization_date' => $regularizationDate?->format('Y-m-d'),
+            ]);
+        }
+
+        // Calculate credits accrued in hire year (probation period)
+        $creditsFromHireYear = LeaveCredit::forUser($user->id)
+            ->forYear($hireYear)
+            ->sum('credits_balance'); // Use balance (earned - used)
+
+        $monthsAccrued = LeaveCredit::forUser($user->id)
+            ->forYear($hireYear)
+            ->count();
+
+        // Pending if they have credits from hire year and regularization is this year
+        $isPending = $creditsFromHireYear > 0;
+
+        return [
+            'year' => $hireYear,
+            'credits' => (float) $creditsFromHireYear,
+            'months_accrued' => $monthsAccrued,
+            'regularization_date' => $regularizationDate?->format('Y-m-d'),
+            'is_pending' => $isPending,
+        ];
+    }
+
+    /**
+     * Process first-time regularization credit transfer.
+     * Transfers ALL accrued credits from hire year to regularization year (no cap).
+     * If a carryover already exists (from year-end processing), update it to be first regularization.
+     *
+     * @param User $user
+     * @param int|null $processedBy User ID of the admin processing this (null for automatic)
+     * @return LeaveCreditCarryover|null
+     */
+    public function processFirstRegularizationTransfer(User $user, ?int $processedBy = null): ?LeaveCreditCarryover
+    {
+        if (!$this->needsFirstRegularizationTransfer($user)) {
+            return null;
+        }
+
+        $hireDate = Carbon::parse($user->hired_date);
+        $regularizationDate = $this->getRegularizationDate($user);
+        $hireYear = $hireDate->year;
+        $regularizationYear = $regularizationDate->year;
+
+        // Get total balance from hire year (earned - used)
+        $creditsFromHireYear = LeaveCredit::forUser($user->id)
+            ->forYear($hireYear)
+            ->sum('credits_balance');
+
+        if ($creditsFromHireYear <= 0) {
+            return null;
+        }
+
+        return DB::transaction(function () use ($user, $hireYear, $regularizationYear, $creditsFromHireYear, $regularizationDate, $processedBy) {
+            // Check if carryover already exists (from year-end processing)
+            $existingCarryover = LeaveCreditCarryover::forUser($user->id)
+                ->fromYear($hireYear)
+                ->toYear($regularizationYear)
+                ->first();
+
+            if ($existingCarryover) {
+                // Update existing carryover to be first regularization (no cap)
+                $previousCarryoverCredits = $existingCarryover->carryover_credits;
+
+                $existingCarryover->update([
+                    'credits_from_previous_year' => $creditsFromHireYear,
+                    'carryover_credits' => $creditsFromHireYear, // ALL credits now (no cap)
+                    'forfeited_credits' => 0, // Remove forfeiture for first regularization
+                    'is_first_regularization' => true,
+                    'regularization_date' => $regularizationDate,
+                    'processed_by' => $processedBy,
+                    'notes' => "First-time regularization credit transfer (updated). Hired {$hireYear}, regularized {$regularizationYear}. All {$creditsFromHireYear} credits transferred (was {$previousCarryoverCredits}).",
+                ]);
+
+                // Note: We do NOT create Month 0 LeaveCredit records anymore.
+                // Carryover is tracked in LeaveCreditCarryover table and
+                // getBalance() includes carryover_credits automatically.
+
+                \Log::info('First regularization credit transfer updated existing carryover', [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'hire_year' => $hireYear,
+                    'regularization_year' => $regularizationYear,
+                    'credits_transferred' => $creditsFromHireYear,
+                    'previous_credits' => $previousCarryoverCredits,
+                    'processed_by' => $processedBy,
+                ]);
+
+                // Log the activity
+                $this->logActivity('first_regularization_transfer_updated', $user, $existingCarryover, [
+                    'hire_year' => $hireYear,
+                    'regularization_year' => $regularizationYear,
+                    'regularization_date' => $regularizationDate->toDateString(),
+                    'credits_transferred' => $creditsFromHireYear,
+                    'previous_credits' => $previousCarryoverCredits,
+                    'processed_by' => $processedBy,
+                ], $processedBy ? User::find($processedBy) : null);
+
+                return $existingCarryover;
+            }
+
+            // Create new first regularization carryover record
+            // Note: For first regularization, ALL credits transfer (no forfeiture)
+            $carryover = LeaveCreditCarryover::create([
+                'user_id' => $user->id,
+                'credits_from_previous_year' => $creditsFromHireYear,
+                'carryover_credits' => $creditsFromHireYear, // ALL credits transfer
+                'forfeited_credits' => 0, // No forfeiture for first regularization
+                'from_year' => $hireYear,
+                'to_year' => $regularizationYear,
+                'is_first_regularization' => true,
+                'regularization_date' => $regularizationDate,
+                'cash_converted' => false,
+                'processed_by' => $processedBy,
+                'notes' => "First-time regularization credit transfer. Hired {$hireYear}, regularized {$regularizationYear}. All {$creditsFromHireYear} credits transferred.",
+            ]);
+
+            // Note: We do NOT create a Month 0 LeaveCredit record anymore.
+            // Carryover is tracked in LeaveCreditCarryover table and
+            // getBalance() includes carryover_credits automatically.
+
+            \Log::info('First regularization credit transfer processed', [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'hire_year' => $hireYear,
+                'regularization_year' => $regularizationYear,
+                'credits_transferred' => $creditsFromHireYear,
+                'processed_by' => $processedBy,
+            ]);
+
+            // Log the activity
+            $this->logActivity('first_regularization_transfer', $user, $carryover, [
+                'hire_year' => $hireYear,
+                'regularization_year' => $regularizationYear,
+                'regularization_date' => $regularizationDate->toDateString(),
+                'credits_transferred' => $creditsFromHireYear,
+                'processed_by' => $processedBy,
+            ], $processedBy ? User::find($processedBy) : null);
+
+            return $carryover;
+        });
+    }
+
+    /**
+     * Process carryover credits at year end.
+     * For first-time regularization: ALL credits transfer (no cap).
+     * For subsequent years: Capped at 4 credits.
+     *
+     * NOTE: This method will return null and skip processing for probationary employees
+     * who will regularize in the next year. They should wait for their first regularization
+     * transfer instead of getting a year-end carryover.
+     *
+     * @param User $user
+     * @param int $fromYear
+     * @param int|null $processedBy
+     * @return LeaveCreditCarryover|null
+     */
+    public function processYearEndCarryover(User $user, int $fromYear, ?int $processedBy = null): ?LeaveCreditCarryover
+    {
+        $toYear = $fromYear + 1;
+
+        // Check if already processed
+        $existing = LeaveCreditCarryover::forUser($user->id)
+            ->fromYear($fromYear)
+            ->toYear($toYear)
+            ->first();
+
+        if ($existing) {
+            return $existing;
+        }
+
+        // IMPORTANT: Skip probationary employees who will regularize in the next year
+        // They should wait for their first regularization transfer (which has no cap)
+        // instead of getting a year-end carryover (which has max 4 cap)
+        if ($this->shouldSkipYearEndCarryover($user, $fromYear)) {
+            \Log::info('Skipping year-end carryover for probationary employee', [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'from_year' => $fromYear,
+                'reason' => 'Will regularize in ' . $toYear . ', should wait for first regularization transfer',
+            ]);
+            return null;
+        }
+
+        // Get balance from the year being closed
+        $balanceFromYear = $this->getBalance($user, $fromYear);
+
+        if ($balanceFromYear <= 0) {
+            return null;
+        }
+
+        // Regular year-end carryover: Capped at MAX_CARRYOVER_CREDITS (4)
+        // Note: First regularization transfers are handled by processFirstRegularizationTransfer()
+        $carryoverCredits = min($balanceFromYear, LeaveCreditCarryover::MAX_CARRYOVER_CREDITS);
+        $forfeitedCredits = max(0, $balanceFromYear - LeaveCreditCarryover::MAX_CARRYOVER_CREDITS);
+
+        return DB::transaction(function () use ($user, $fromYear, $toYear, $balanceFromYear, $carryoverCredits, $forfeitedCredits, $processedBy) {
+            $carryover = LeaveCreditCarryover::create([
+                'user_id' => $user->id,
+                'credits_from_previous_year' => $balanceFromYear,
+                'carryover_credits' => $carryoverCredits,
+                'forfeited_credits' => $forfeitedCredits,
+                'from_year' => $fromYear,
+                'to_year' => $toYear,
+                'is_first_regularization' => false,
+                'regularization_date' => null,
+                'cash_converted' => false,
+                'processed_by' => $processedBy,
+                'notes' => $forfeitedCredits > 0
+                    ? "Regular carryover. {$carryoverCredits} credits carried over, {$forfeitedCredits} forfeited (max 4)."
+                    : "Regular carryover. All {$carryoverCredits} credits carried over.",
+            ]);
+
+            // Log the activity
+            $this->logActivity('year_end_carryover', $user, $carryover, [
+                'from_year' => $fromYear,
+                'to_year' => $toYear,
+                'credits_from_previous_year' => $balanceFromYear,
+                'carryover_credits' => $carryoverCredits,
+                'forfeited_credits' => $forfeitedCredits,
+                'processed_by' => $processedBy,
+            ], $processedBy ? User::find($processedBy) : null);
+
+            // Note: We do NOT create Month 0 LeaveCredit records anymore.
+            // Carryover is tracked in LeaveCreditCarryover table and
+            // getBalance() includes carryover_credits automatically.
+
+            return $carryover;
+        });
+    }
+
+    /**
+     * Check if a user should be skipped for year-end carryover.
+     * Returns true for probationary employees who were hired in the current year
+     * but will regularize in the next year (different year regularization).
+     *
+     * These users should wait for their first regularization transfer which
+     * transfers ALL credits without any cap, instead of getting the year-end
+     * carryover which caps at 4 credits.
+     *
+     * @param User $user
+     * @param int $fromYear The year being closed
+     * @return bool
+     */
+    public function shouldSkipYearEndCarryover(User $user, int $fromYear): bool
+    {
+        if (!$user->hired_date) {
+            return false;
+        }
+
+        $hireDate = Carbon::parse($user->hired_date);
+        $hireYear = $hireDate->year;
+        $regularizationDate = $this->getRegularizationDate($user);
+        $regularizationYear = $regularizationDate?->year;
+        $toYear = $fromYear + 1;
+
+        // Skip if:
+        // 1. Hired in the year being closed (fromYear)
+        // 2. Regularization happens in the next year (toYear)
+        // This means they should get first regularization transfer, not year-end carryover
+        return $hireYear === $fromYear && $regularizationYear === $toYear;
+    }
+
+    /**
+     * Get users who need first-time regularization credit transfer.
+     * These are users who:
+     * 1. Were hired in the PREVIOUS year (e.g., 2025 for current year 2026)
+     * 2. Regularize in the CURRENT year (hire + 6 months falls in current year)
+     * 3. Have reached their regularization date (6 months passed)
+     * 4. Haven't had first regularization processed yet
+     *
+     * Note: Users who hired and regularized in the SAME year get regular year-end carryover (max 4),
+     * not first regularization transfer.
+     *
+     * @param int|null $toYear The year to transfer credits to (defaults to current year)
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getUsersNeedingFirstRegularization(?int $toYear = null): \Illuminate\Database\Eloquent\Collection
+    {
+        $toYear = $toYear ?? now()->year;
+        $previousYear = $toYear - 1;
+        $today = now();
+
+        return User::whereNotNull('hired_date')
+            // Must be active (not terminated)
+            ->where('is_active', true)
+            // Hired in the PREVIOUS year specifically (e.g., 2025 for 2026)
+            ->whereRaw('YEAR(hired_date) = ?', [$previousYear])
+            // Regularization falls in the CURRENT year (hire + 6 months is in $toYear)
+            ->whereRaw('YEAR(DATE_ADD(hired_date, INTERVAL 6 MONTH)) = ?', [$toYear])
+            // Has reached regularization date (6 months have passed since hire)
+            ->whereRaw('DATE_ADD(hired_date, INTERVAL 6 MONTH) <= ?', [$today->format('Y-m-d')])
+            // Hasn't had first regularization processed yet
+            ->whereNotIn('id', function ($query) {
+                $query->select('user_id')
+                    ->from('leave_credit_carryovers')
+                    ->where('is_first_regularization', true);
+            })
+            ->get();
+    }
+
+    /**
+     * Get detailed regularization info for a user (for display).
+     *
+     * @param User $user
+     * @param int|null $year
+     * @return array
+     */
+    public function getRegularizationInfo(User $user, ?int $year = null): array
+    {
+        $year = $year ?? now()->year;
+        $regularizationDate = $this->getRegularizationDate($user);
+        $isRegularized = $this->isRegularized($user);
+        $hireDate = $user->hired_date ? Carbon::parse($user->hired_date) : null;
+
+        // Check for existing first regularization carryover
+        $firstRegularizationCarryover = LeaveCreditCarryover::forUser($user->id)
+            ->where('is_first_regularization', true)
+            ->first();
+
+        // Get pending credits if applicable
+        $pendingCredits = $this->getPendingRegularizationCredits($user);
+
+        return [
+            'hired_date' => $hireDate?->format('Y-m-d'),
+            'hire_year' => $hireDate?->year,
+            'regularization_date' => $regularizationDate?->format('Y-m-d'),
+            'regularization_year' => $regularizationDate?->year,
+            'is_regularized' => $isRegularized,
+            'days_until_regularization' => $regularizationDate && !$isRegularized
+                ? now()->diffInDays($regularizationDate, false)
+                : 0,
+            'needs_first_transfer' => $this->needsFirstRegularizationTransfer($user, $year),
+            'has_first_regularization' => (bool) $firstRegularizationCarryover,
+            'first_regularization_credits' => $firstRegularizationCarryover?->carryover_credits ?? 0,
+            'pending_credits' => $pendingCredits,
+        ];
+    }
+
+    /**
+     * Handle hire date change for a user.
+     * This validates the change and returns warnings about potential impacts.
+     *
+     * @param User $user The user whose hire date is being changed
+     * @param Carbon $newHireDate The new hire date
+     * @return array{valid: bool, warnings: array, impacts: array}
+     */
+    public function validateHireDateChange(User $user, Carbon $newHireDate): array
+    {
+        $warnings = [];
+        $impacts = [];
+
+        $oldHireDate = $user->hired_date ? Carbon::parse($user->hired_date) : null;
+
+        if (!$oldHireDate) {
+            // No previous hire date, nothing to validate
+            return ['valid' => true, 'warnings' => [], 'impacts' => []];
+        }
+
+        // Check for existing leave credits
+        $existingCredits = LeaveCredit::forUser($user->id)->count();
+        if ($existingCredits > 0) {
+            $warnings[] = "User has {$existingCredits} existing leave credit records that may become inconsistent with new hire date.";
+            $impacts[] = [
+                'type' => 'existing_credits',
+                'count' => $existingCredits,
+                'description' => 'May need to recalculate credits if hire year changed',
+            ];
+        }
+
+        // Check for existing carryovers
+        $existingCarryovers = LeaveCreditCarryover::forUser($user->id)->count();
+        if ($existingCarryovers > 0) {
+            $warnings[] = "User has {$existingCarryovers} existing carryover record(s) that may need review.";
+            $impacts[] = [
+                'type' => 'existing_carryovers',
+                'count' => $existingCarryovers,
+                'description' => 'Carryover records may reference incorrect years',
+            ];
+        }
+
+        // Check if regularization status would change
+        $oldRegularizationDate = $oldHireDate->copy()->addMonths(6);
+        $newRegularizationDate = $newHireDate->copy()->addMonths(6);
+
+        if ($oldRegularizationDate->year !== $newRegularizationDate->year) {
+            $warnings[] = "Regularization year would change from {$oldRegularizationDate->year} to {$newRegularizationDate->year}.";
+
+            // Check for first regularization carryover
+            $firstRegCarryover = LeaveCreditCarryover::forUser($user->id)
+                ->where('is_first_regularization', true)
+                ->first();
+
+            if ($firstRegCarryover) {
+                $warnings[] = "IMPORTANT: User already has a first regularization carryover. Year change may invalidate this record.";
+                $impacts[] = [
+                    'type' => 'first_regularization_affected',
+                    'carryover_id' => $firstRegCarryover->id,
+                    'from_year' => $firstRegCarryover->from_year,
+                    'to_year' => $firstRegCarryover->to_year,
+                    'description' => 'First regularization carryover may need to be recalculated or deleted',
+                ];
+            }
+        }
+
+        // Check if year of hire would change
+        if ($oldHireDate->year !== $newHireDate->year) {
+            $warnings[] = "Hire year would change from {$oldHireDate->year} to {$newHireDate->year}. This significantly impacts credit calculations.";
+        }
+
+        return [
+            'valid' => true,
+            'warnings' => $warnings,
+            'impacts' => $impacts,
+        ];
+    }
+
+    /**
+     * Recalculate credits after a hire date change.
+     * WARNING: This should only be called after admin confirmation.
+     *
+     * @param User $user The user to recalculate
+     * @param bool $deleteExisting Whether to delete existing credits and start fresh
+     * @return array{success: bool, message: string, details: array}
+     */
+    public function recalculateCreditsForUser(User $user, bool $deleteExisting = false): array
+    {
+        if (!$user->hired_date) {
+            return [
+                'success' => false,
+                'message' => 'User has no hire date',
+                'details' => [],
+            ];
+        }
+
+        $details = [];
+
+        if ($deleteExisting) {
+            // Delete all credits and carryovers for user (fresh start)
+            $deletedCredits = LeaveCredit::forUser($user->id)->delete();
+            $deletedCarryovers = LeaveCreditCarryover::forUser($user->id)->delete();
+
+            $details['deleted_credits'] = $deletedCredits;
+            $details['deleted_carryovers'] = $deletedCarryovers;
+
+            // Log the deletion
+            $this->logActivity('credits_recalculated', $user, null, [
+                'action' => 'full_reset',
+                'deleted_credits' => $deletedCredits,
+                'deleted_carryovers' => $deletedCarryovers,
+                'new_hire_date' => Carbon::parse($user->hired_date)->format('Y-m-d'),
+            ]);
+        }
+
+        // Backfill credits from hire date
+        $creditsAdded = $this->backfillAllCredits($user);
+        $details['credits_added'] = $creditsAdded;
+
+        return [
+            'success' => true,
+            'message' => $deleteExisting
+                ? "Recalculated credits from scratch. Added {$creditsAdded} credit records."
+                : "Backfilled missing credits. Added {$creditsAdded} credit records.",
+            'details' => $details,
+        ];
+    }
+
+    /**
+     * Log leave credit activity with standardized format.
+     *
+     * @param string $action The action being performed
+     * @param User $user The user affected
+     * @param mixed $subject The model being acted upon (LeaveCredit, LeaveCreditCarryover, etc.)
+     * @param array $properties Additional properties to log
+     * @param User|null $performedBy The user performing the action (null for system)
+     */
+    protected function logActivity(
+        string $action,
+        User $user,
+        $subject = null,
+        array $properties = [],
+        ?User $performedBy = null
+    ): void {
+        $activity = Activity::causedBy($performedBy)
+            ->performedOn($subject ?? $user)
+            ->useLog('leave-credits')
+            ->event($action)
+            ->withProperties(array_merge([
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+            ], $properties));
+
+        $activity->log($this->getActivityDescription($action, $user, $properties));
+    }
+
+    /**
+     * Generate human-readable activity description.
+     */
+    protected function getActivityDescription(string $action, User $user, array $properties): string
+    {
+        return match ($action) {
+            'credit_accrued' => sprintf(
+                'Leave credit accrued for %s: %.2f credits for %d-%02d',
+                $user->name,
+                $properties['credits_earned'] ?? 0,
+                $properties['year'] ?? 0,
+                $properties['month'] ?? 0
+            ),
+            'credits_deducted' => sprintf(
+                'Leave credits deducted for %s: %.2f credits for leave request #%d',
+                $user->name,
+                $properties['credits_deducted'] ?? 0,
+                $properties['leave_request_id'] ?? 0
+            ),
+            'credits_restored' => sprintf(
+                'Leave credits restored for %s: %.2f credits from cancelled leave request #%d',
+                $user->name,
+                $properties['credits_restored'] ?? 0,
+                $properties['leave_request_id'] ?? 0
+            ),
+            'year_end_carryover' => sprintf(
+                'Year-end carryover for %s: %.2f credits from %d to %d (%.2f forfeited)',
+                $user->name,
+                $properties['carryover_credits'] ?? 0,
+                $properties['from_year'] ?? 0,
+                $properties['to_year'] ?? 0,
+                $properties['forfeited_credits'] ?? 0
+            ),
+            'first_regularization_transfer' => sprintf(
+                'First regularization transfer for %s: %.2f credits from %d to %d (no cap)',
+                $user->name,
+                $properties['credits_transferred'] ?? 0,
+                $properties['hire_year'] ?? 0,
+                $properties['regularization_year'] ?? 0
+            ),
+            'first_regularization_transfer_updated' => sprintf(
+                'First regularization transfer updated for %s: %.2f credits from %d to %d (was %.2f)',
+                $user->name,
+                $properties['credits_transferred'] ?? 0,
+                $properties['hire_year'] ?? 0,
+                $properties['regularization_year'] ?? 0,
+                $properties['previous_credits'] ?? 0
+            ),
+            'bulk_accrual' => sprintf(
+                'Bulk credit accrual: %d users processed, %d credits created',
+                $properties['users_processed'] ?? 0,
+                $properties['credits_created'] ?? 0
+            ),
+            'credits_backfilled' => sprintf(
+                'Credits backfilled for %s: %d credit records created',
+                $user->name,
+                $properties['records_created'] ?? 0
+            ),
+            'credits_recalculated' => sprintf(
+                'Leave credits recalculated for %s: %s (deleted %d credits, %d carryovers)',
+                $user->name,
+                $properties['action'] ?? 'unknown',
+                $properties['deleted_credits'] ?? 0,
+                $properties['deleted_carryovers'] ?? 0
+            ),
+            default => "Leave credit action: {$action} for {$user->name}",
+        };
     }
 }

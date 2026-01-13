@@ -43,6 +43,14 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->onOneServer();
 
+        // Process first-time regularization credit transfers - runs daily at 1:00 AM
+        // Transfers ALL credits from hire year to regularization year for newly regularized employees
+        // Runs daily because users are regularized throughout the year (6 months after their hire date)
+        $schedule->command('leave:process-regularization')
+            ->dailyAt('01:00')
+            ->withoutOverlapping()
+            ->onOneServer();
+
         // Check biometric retention policy expiry and notify admins - runs daily at 4:00 AM
         $schedule->command('retention:check-expiry --days=7')
             ->dailyAt('04:00')
