@@ -388,6 +388,15 @@ configure_laravel() {
     chmod -R 775 $APP_DIR/storage
     chmod -R 775 $APP_DIR/bootstrap/cache
 
+    # Explicitly fix cache directories (critical for dashboard caching)
+    mkdir -p $APP_DIR/storage/framework/cache/data
+    mkdir -p $APP_DIR/storage/framework/sessions
+    mkdir -p $APP_DIR/storage/framework/views
+    chown -R $APP_USER:www-data $APP_DIR/storage/framework
+    chmod -R 775 $APP_DIR/storage/framework/cache
+    chmod -R 775 $APP_DIR/storage/framework/sessions
+    chmod -R 775 $APP_DIR/storage/framework/views
+
     # Ensure log file exists with correct permissions (prevents permission denied errors)
     mkdir -p $APP_DIR/storage/logs
     touch $APP_DIR/storage/logs/laravel.log
