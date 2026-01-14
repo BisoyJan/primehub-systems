@@ -29,6 +29,7 @@ interface Leave {
     days_requested: number;
     reason: string;
     status: string;
+    requested_at: string;
 }
 
 interface Campaign {
@@ -53,24 +54,23 @@ interface PageProps {
 const leaveTypes = [
     { value: 'VL', label: 'Vacation Leave' },
     { value: 'SL', label: 'Sick Leave' },
-    { value: 'EL', label: 'Emergency Leave' },
-    { value: 'ML', label: 'Maternity Leave' },
-    { value: 'PL', label: 'Paternity Leave' },
     { value: 'BL', label: 'Bereavement Leave' },
+    { value: 'SPL', label: 'Solo Parent Leave' },
+    { value: 'LOA', label: 'Leave of Absence' },
+    { value: 'LDV', label: 'Leave due to Domestic Violence' },
+    { value: 'UPTO', label: 'Unpaid Time Off' },
+    { value: 'ML', label: 'Maternity Leave' },
 ];
 
 const leaveTypeColors: Record<string, string> = {
     'VL': 'bg-blue-500',
     'SL': 'bg-red-500',
-    'EL': 'bg-orange-500',
-    'ML': 'bg-pink-500',
-    'PL': 'bg-purple-500',
     'BL': 'bg-gray-500',
-};
-
-const statusColors: Record<string, { bg: string; text: string; border: string }> = {
-    'approved': { bg: 'bg-green-500 dark:bg-green-600', text: 'text-white', border: 'border-green-600' },
-    'pending': { bg: 'bg-yellow-500 dark:bg-yellow-600', text: 'text-white', border: 'border-yellow-600' },
+    'SPL': 'bg-teal-500',
+    'LOA': 'bg-amber-500',
+    'LDV': 'bg-indigo-500',
+    'UPTO': 'bg-orange-500',
+    'ML': 'bg-pink-500',
 };
 
 export default function LeaveCalendar() {
@@ -456,6 +456,9 @@ export default function LeaveCalendar() {
                                                     ? `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (1 day)`
                                                     : `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(Number(leave.days_requested))} days)`
                                                 }
+                                            </div>
+                                            <div className="text-xs text-muted-foreground">
+                                                Requested: {new Date(leave.requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                                             </div>
                                             {leave.reason && (
                                                 <div className="text-xs text-muted-foreground mt-1 line-clamp-2">

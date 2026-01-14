@@ -931,31 +931,31 @@ export default function Edit({
                 {/* Campaign Leave Conflicts Warning (VL and UPTO only) */}
                 {campaignConflicts.length > 0 && ['VL', 'UPTO'].includes(data.leave_type) && (
                     <>
-                        <Alert className="mb-6 border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
-                            <Users className="h-4 w-4 text-purple-600" />
-                            <AlertTitle className="text-purple-800 dark:text-purple-200 flex items-center gap-2">
+                        <Alert className="mb-6 border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950">
+                            <Users className="h-4 w-4 text-yellow-600" />
+                            <AlertTitle className="text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
                                 <span>Campaign Leave Conflicts</span>
-                                <Badge variant="secondary" className="bg-purple-100 text-purple-700">
+                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
                                     {campaignConflicts.length}
                                 </Badge>
                             </AlertTitle>
-                            <AlertDescription className="text-purple-700 dark:text-purple-300">
+                            <AlertDescription className="text-yellow-700 dark:text-yellow-300">
                                 <p className="mb-3 text-sm">
                                     The following employees from your campaign have already applied for leave during the selected dates. You may still submit your request, but be aware of potential scheduling conflicts.
                                 </p>
                                 <div className="space-y-2 w-full max-w-3xl mx-auto">
                                     {campaignConflicts.map((conflict) => (
-                                        <div key={conflict.id} className="grid grid-cols-1 sm:grid-cols-[minmax(180px,1fr)_auto_minmax(160px,1fr)] items-center gap-x-6 gap-y-2 text-sm bg-purple-100 dark:bg-purple-900/50 p-3 rounded-md border border-purple-200 dark:border-purple-800/50 transition-colors hover:bg-purple-200/50 dark:hover:bg-purple-900/70">
+                                        <div key={conflict.id} className="grid grid-cols-1 sm:grid-cols-[minmax(180px,1fr)_auto_minmax(160px,1fr)] items-center gap-x-6 gap-y-2 text-sm bg-yellow-100 dark:bg-yellow-900/50 p-3 rounded-md border border-yellow-200 dark:border-yellow-800/50 transition-colors hover:bg-yellow-200/50 dark:hover:bg-yellow-900/70">
                                             <div className="flex items-center gap-3 justify-self-center sm:justify-self-start">
-                                                <span className="font-semibold text-purple-900 dark:text-purple-100">{conflict.user_name}</span>
-                                                <Badge variant="outline" className="text-[10px] px-1.5 h-5 text-purple-700 dark:text-purple-300 border-purple-400 bg-purple-50/50 dark:bg-purple-900/30">
+                                                <span className="font-semibold text-yellow-900 dark:text-yellow-100">{conflict.user_name}</span>
+                                                <Badge variant="outline" className="text-[10px] px-1.5 h-5 text-yellow-700 dark:text-yellow-300 border-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/30">
                                                     {conflict.leave_type}
                                                 </Badge>
                                             </div>
 
                                             <div className="flex items-center gap-2 justify-self-center sm:justify-self-center">
-                                                <Calendar className="h-3.5 w-3.5 text-purple-500" />
-                                                <span className="text-purple-800 dark:text-purple-200 font-medium whitespace-nowrap">
+                                                <Calendar className="h-3.5 w-3.5 text-yellow-500" />
+                                                <span className="text-yellow-800 dark:text-yellow-200 font-medium whitespace-nowrap">
                                                     {format(parseISO(conflict.start_date), 'MMM d')} - {format(parseISO(conflict.end_date), 'MMM d, yyyy')}
                                                 </span>
                                             </div>
@@ -965,12 +965,12 @@ export default function Edit({
                                                     variant="outline"
                                                     className={`text-[10px] px-1.5 h-5 capitalize ${conflict.status === 'approved'
                                                         ? 'text-green-700 border-green-400 dark:text-green-400 bg-green-50/50 dark:bg-green-900/20'
-                                                        : 'text-yellow-700 border-yellow-400 dark:text-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/20'
+                                                        : 'text-orange-700 border-orange-400 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-900/20'
                                                         }`}
                                                 >
                                                     {conflict.status}
                                                 </Badge>
-                                                <span className="text-xs text-purple-500 dark:text-purple-400 italic whitespace-nowrap">
+                                                <span className="text-xs text-yellow-600 dark:text-yellow-400 italic whitespace-nowrap">
                                                     Requested: {format(parseISO(conflict.created_at), 'MMM d, yyyy')}
                                                 </span>
                                             </div>

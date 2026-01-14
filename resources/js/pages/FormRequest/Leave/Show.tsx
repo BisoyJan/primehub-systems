@@ -51,6 +51,7 @@ interface LeaveRequest {
     days_requested: number;
     reason: string;
     campaign_department: string;
+    campaign_id?: number;
     medical_cert_submitted: boolean;
     status: string;
     reviewed_at: string | null;
@@ -602,15 +603,28 @@ export default function Show({
                             <p className="text-base">{leaveRequest.campaign_department}</p>
                         </div>
 
-                        {/* Earlier Conflicts Warning (First-Come-First-Serve for VL/UPTO) */}
-                        {Boolean(earlierConflicts && earlierConflicts.length > 0 && ['VL', 'UPTO'].includes(leaveRequest.leave_type)) && (
+                        {/* Earlier Conflicts Warning (First-Come-First-Serve for VL/UPTO) - Hidden for cancelled leaves */}
+                        {Boolean(earlierConflicts && earlierConflicts.length > 0 && ['VL', 'UPTO'].includes(leaveRequest.leave_type) && leaveRequest.status !== 'cancelled') && (
                             <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
                                 <AlertTriangle className="h-4 w-4 text-orange-600" />
                                 <AlertDescription className="text-orange-800 dark:text-orange-200">
                                     <div className="space-y-2">
-                                        <p className="font-semibold">
-                                            Date Conflict Detected (First-Come-First-Serve Policy)
-                                        </p>
+                                        <div className="flex items-center justify-between gap-2">
+                                            <p className="font-semibold">
+                                                Date Conflict Detected (First-Come-First-Serve Policy)
+                                            </p>
+                                            <a
+                                                href={`/form-requests/leave-requests/calendar?month=${leaveRequest.start_date.substring(0, 7)}${leaveRequest.campaign_id ? `&campaign_id=${leaveRequest.campaign_id}` : ''}&leave_type=${leaveRequest.leave_type}`}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <Button variant="outline" size="sm" className="h-7 text-xs bg-white dark:bg-gray-800">
+                                                    <Calendar className="mr-1 h-3 w-3" />
+                                                    View Calendar
+                                                    <ExternalLink className="ml-1 h-3 w-3" />
+                                                </Button>
+                                            </a>
+                                        </div>
                                         <p className="text-sm">
                                             The following leave requests from the same campaign were submitted earlier and have overlapping dates:
                                         </p>
@@ -765,8 +779,8 @@ export default function Show({
                             </div>
                         </div>
 
-                        {/* High Attendance Points Alert */}
-                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && (
+                        {/* High Attendance Points Alert - Hidden for cancelled leaves */}
+                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && leaveRequest.status !== 'cancelled' && (
                             <Alert className="border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                 <AlertDescription className="text-red-800 dark:text-red-200">
                                     <strong>⚠️ High Attendance Points:</strong>  <p>This employee has{' '}
@@ -776,8 +790,8 @@ export default function Show({
                             </Alert>
                         )}
 
-                        {/* 30-Day Absence Window Warning for VL */}
-                        {Boolean(absenceWindowInfo?.within_window && leaveRequest.leave_type === 'VL') && (
+                        {/* 30-Day Absence Window Warning for VL - Hidden for cancelled leaves */}
+                        {Boolean(absenceWindowInfo?.within_window && leaveRequest.leave_type === 'VL' && leaveRequest.status !== 'cancelled') && (
                             <Alert className="border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                                 <AlertDescription className="text-amber-800 dark:text-amber-200">
@@ -821,22 +835,31 @@ export default function Show({
                         )}
 
                         {/* Date Modification History */}
-                        {leaveRequest.original_start_date && leaveRequest.original_end_date && (
+                        {(leaveRequest.original_start_date && leaveRequest.original_end_date) || leaveRequest.date_modification_reason ? (
                             <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
                                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                                 <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <strong>Dates Modified:</strong> Original dates were{' '}
-                                    {format(parseISO(leaveRequest.original_start_date), 'MMM d, yyyy')} to{' '}
-                                    {format(parseISO(leaveRequest.original_end_date), 'MMM d, yyyy')}
-                                    {leaveRequest.date_modifier && (
-                                        <span>. Modified by {leaveRequest.date_modifier.name}</span>
+                                    {leaveRequest.original_start_date && leaveRequest.original_end_date && (
+                                        <div className="mb-2">
+                                            <strong>Dates Modified:</strong> Original dates were{' '}
+                                            {format(parseISO(leaveRequest.original_start_date), 'MMM d, yyyy')} to{' '}
+                                            {format(parseISO(leaveRequest.original_end_date), 'MMM d, yyyy')}
+                                            {leaveRequest.date_modifier && (
+                                                <span className="font-semibold">. Modified by {leaveRequest.date_modifier.name}</span>
+                                            )}
+                                        </div>
                                     )}
                                     {leaveRequest.date_modification_reason && (
-                                        <p className="mt-1 text-sm">Reason: {leaveRequest.date_modification_reason}</p>
+                                        <div className={leaveRequest.original_start_date ? "mt-3 pt-3 border-t border-amber-300 dark:border-amber-700" : ""}>
+                                            {!leaveRequest.original_start_date && <strong className="block mb-2">Adjustment Details:</strong>}
+                                            <div className="space-y-1 text-sm whitespace-pre-line">
+                                                {leaveRequest.date_modification_reason}
+                                            </div>
+                                        </div>
                                     )}
                                 </AlertDescription>
                             </Alert>
-                        )}
+                        ) : null}
 
                         {/* Cancellation Info */}
                         {leaveRequest.status === 'cancelled' && (

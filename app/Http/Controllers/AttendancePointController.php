@@ -91,7 +91,7 @@ class AttendancePointController extends Controller
                   ->where('is_expired', false);
         }
 
-        $points = $query->paginate(25);
+        $points = $query->paginate(25)->appends($request->except('page'));
 
         $users = User::orderBy('first_name')->get();
         $campaigns = Campaign::orderBy('name')->get();
@@ -112,6 +112,8 @@ class AttendancePointController extends Controller
                 'status' => $request->status,
                 'date_from' => $request->date_from,
                 'date_to' => $request->date_to,
+                'expiring_soon' => $request->boolean('expiring_soon') ? 'true' : null,
+                'gbro_eligible' => $request->boolean('gbro_eligible') ? 'true' : null,
             ],
         ]);
     }

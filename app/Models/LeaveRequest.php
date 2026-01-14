@@ -197,6 +197,22 @@ class LeaveRequest extends Model
     }
 
     /**
+     * Alias for cancelledBy for frontend compatibility.
+     */
+    public function canceller(): BelongsTo
+    {
+        return $this->cancelledBy();
+    }
+
+    /**
+     * Alias for shortNoticeOverrideBy for frontend compatibility.
+     */
+    public function shortNoticeOverrider(): BelongsTo
+    {
+        return $this->shortNoticeOverrideBy();
+    }
+
+    /**
      * Get the denied dates for partial denial requests.
      */
     public function deniedDates()
