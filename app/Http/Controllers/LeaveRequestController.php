@@ -1742,12 +1742,18 @@ class LeaveRequestController extends Controller
 
                 // Create attendance records only for approved dates
                 foreach ($approvedDates as $dateStr) {
+                    // Get the user's active schedule for this date
+                    $schedule = $this->getActiveScheduleForDate($leaveRequest->user_id, $dateStr);
+
                     Attendance::updateOrCreate(
                         [
                             'user_id' => $leaveRequest->user_id,
                             'shift_date' => $dateStr,
                         ],
                         [
+                            'employee_schedule_id' => $schedule?->id,
+                            'scheduled_time_in' => $schedule?->scheduled_time_in,
+                            'scheduled_time_out' => $schedule?->scheduled_time_out,
                             'status' => 'on_leave',
                             'leave_request_id' => $leaveRequest->id,
                             'admin_verified' => true,
@@ -2400,6 +2406,25 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Get the active employee schedule for a user on a specific date.
+     *
+     * @param int $userId
+     * @param string $date
+     * @return EmployeeSchedule|null
+     */
+    protected function getActiveScheduleForDate(int $userId, string $date): ?EmployeeSchedule
+    {
+        return EmployeeSchedule::where('user_id', $userId)
+            ->where('is_active', true)
+            ->where('effective_date', '<=', $date)
+            ->where(function ($query) use ($date) {
+                $query->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $date);
+            })
+            ->first();
+    }
+
+    /**
      * Handle Sick Leave approval with special credit deduction logic.
      * Credits are only deducted if:
      * - Employee is eligible (6+ months)
@@ -2474,10 +2499,16 @@ class LeaveRequestController extends Controller
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             if (!in_array($dateStr, $existingDates)) {
+                // Get the user's active schedule for this date
+                $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
+
                 // No attendance record exists - create one with advised_absence
                 Attendance::create([
                     'user_id' => $user->id,
+                    'employee_schedule_id' => $schedule?->id,
                     'shift_date' => $dateStr,
+                    'scheduled_time_in' => $schedule?->scheduled_time_in,
+                    'scheduled_time_out' => $schedule?->scheduled_time_out,
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
@@ -2560,9 +2591,15 @@ class LeaveRequestController extends Controller
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             if (!in_array($dateStr, $existingDates)) {
+                // Get the user's active schedule for this date
+                $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
+
                 Attendance::create([
                     'user_id' => $user->id,
+                    'employee_schedule_id' => $schedule?->id,
                     'shift_date' => $dateStr,
+                    'scheduled_time_in' => $schedule?->scheduled_time_in,
+                    'scheduled_time_out' => $schedule?->scheduled_time_out,
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
@@ -2590,7 +2627,7 @@ class LeaveRequestController extends Controller
         $endDate = Carbon::parse($leaveRequest->end_date);
         $leaveNote = "On approved {$leaveRequest->leave_type}" . ($leaveRequest->reason ? " - {$leaveRequest->reason}" : '');
 
-        // Update existing attendance records
+        // Update existing attendance records (these already have schedule data)
         Attendance::where('user_id', $user->id)
             ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->update([
@@ -2612,9 +2649,15 @@ class LeaveRequestController extends Controller
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             if (!in_array($dateStr, $existingDates)) {
+                // Get the user's active schedule for this date
+                $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
+
                 Attendance::create([
                     'user_id' => $user->id,
+                    'employee_schedule_id' => $schedule?->id,
                     'shift_date' => $dateStr,
+                    'scheduled_time_in' => $schedule?->scheduled_time_in,
+                    'scheduled_time_out' => $schedule?->scheduled_time_out,
                     'status' => 'on_leave',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
