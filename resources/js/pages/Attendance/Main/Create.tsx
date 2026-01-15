@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertCircle, Check, ChevronsUpDown, Sparkles, RefreshCw, Repeat } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, RefreshCw, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageMeta } from '@/hooks';
 import { index as attendanceIndex, create as attendanceCreate, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
@@ -191,7 +191,8 @@ export default function Create({ users, campaigns }: Props) {
 
             const earlyDepartureMinutes = (schedOutDate.getTime() - actualOutDateTime.getTime()) / (1000 * 60);
 
-            if (earlyDepartureMinutes >= 60) {
+            // Any early departure (1 minute or more) is undertime
+            if (earlyDepartureMinutes >= 1) {
                 hasUndertime = true;
                 undertimeMinutes = Math.round(earlyDepartureMinutes);
             }
@@ -218,20 +219,23 @@ export default function Create({ users, campaigns }: Props) {
             }
         } else if (isHalfDay && hasUndertime) {
             status = 'half_day_absence';
-            secondaryStatus = 'undertime';
+            // Determine undertime status based on minutes
+            secondaryStatus = undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
             reason = `Arrived ${Math.round(tardyMinutes)} minutes late AND left ${undertimeMinutes} minutes early`;
         } else if (isHalfDay) {
             status = 'half_day_absence';
             reason = `Arrived ${Math.round(tardyMinutes)} minutes late (more than ${gracePeriodMinutes}min grace period)`;
         } else if (isTardy && hasUndertime) {
             status = 'tardy';
-            secondaryStatus = 'undertime';
+            // Determine undertime status based on minutes
+            secondaryStatus = undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
             reason = `Arrived ${Math.round(tardyMinutes)} minutes late AND left ${undertimeMinutes} minutes early`;
         } else if (isTardy) {
             status = 'tardy';
             reason = `Arrived ${Math.round(tardyMinutes)} minutes late`;
         } else if (hasUndertime) {
-            status = 'undertime';
+            // Determine undertime status based on minutes
+            status = undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
             reason = `Left ${undertimeMinutes} minutes early`;
         } else {
             status = 'on_time';
@@ -1001,20 +1005,25 @@ export default function Create({ users, campaigns }: Props) {
 
                                     {/* Auto-suggested status indicator (single entry mode only) */}
                                     {!isBulkMode && suggestedStatus && (
-                                        <div className={`p-3 rounded-md border ${!isStatusManuallyOverridden
-                                            ? 'bg-green-50 border-green-200 dark:bg-green-950/30 dark:border-green-800'
-                                            : 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800'
-                                            }`}>
-                                            <div className="flex items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Sparkles className={`h-4 w-4 ${!isStatusManuallyOverridden ? 'text-green-600' : 'text-amber-600'}`} />
-                                                    <span className="text-sm font-medium">
-                                                        {!isStatusManuallyOverridden ? 'Auto-suggested: ' : 'Suggested: '}
-                                                        <span className="capitalize">{suggestedStatus.replace(/_/g, ' ')}</span>
-                                                        {suggestedSecondaryStatus && (
-                                                            <span className="text-muted-foreground"> + <span className="capitalize">{suggestedSecondaryStatus.replace(/_/g, ' ')}</span></span>
+                                        <div className={`p-3 rounded-lg border ${isStatusManuallyOverridden ? 'bg-amber-50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-800' : 'bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800'}`}>
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-2 mb-1">
+                                                        {isStatusManuallyOverridden ? (
+                                                            <AlertCircle className="h-4 w-4 text-amber-600" />
+                                                        ) : (
+                                                            <CheckCircle className="h-4 w-4 text-green-600" />
                                                         )}
-                                                    </span>
+                                                        <span className={`text-sm font-medium ${isStatusManuallyOverridden ? 'text-amber-800 dark:text-amber-400' : 'text-green-800 dark:text-green-400'}`}>
+                                                            {isStatusManuallyOverridden ? 'Manual Override Active' : 'Auto-Suggested Status'}
+                                                        </span>
+                                                    </div>
+                                                    <p className={`text-xs ${isStatusManuallyOverridden ? 'text-amber-700 dark:text-amber-500' : 'text-green-700 dark:text-green-500'}`}>
+                                                        {isStatusManuallyOverridden
+                                                            ? `Suggested: ${suggestedStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}${suggestedSecondaryStatus ? ` + ${suggestedSecondaryStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}` : ''} — Based on schedule and entered times`
+                                                            : `${suggestedStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}${suggestedSecondaryStatus ? ` + ${suggestedSecondaryStatus.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}` : ''} — Based on schedule and entered times`
+                                                        }
+                                                    </p>
                                                 </div>
                                                 {isStatusManuallyOverridden && (
                                                     <Button
@@ -1022,23 +1031,12 @@ export default function Create({ users, campaigns }: Props) {
                                                         variant="ghost"
                                                         size="sm"
                                                         onClick={resetToSuggestedStatus}
-                                                        className="h-7 text-xs"
+                                                        className="h-7 text-xs text-amber-700 hover:text-amber-900 hover:bg-amber-100"
                                                     >
-                                                        <RefreshCw className="h-3 w-3 mr-1" />
                                                         Use Suggested
                                                     </Button>
                                                 )}
                                             </div>
-                                            {!isStatusManuallyOverridden && (
-                                                <p className="text-xs text-muted-foreground mt-1">
-                                                    Based on schedule and entered times. You can override by selecting a different status below.
-                                                </p>
-                                            )}
-                                            {isStatusManuallyOverridden && (
-                                                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                                                    You've selected a different status. Click "Use Suggested" to revert.
-                                                </p>
-                                            )}
                                         </div>
                                     )}
 
@@ -1055,7 +1053,8 @@ export default function Create({ users, campaigns }: Props) {
                                             <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
                                             <SelectItem value="advised_absence">Advised Absence</SelectItem>
                                             <SelectItem value="ncns">NCNS (No Call No Show)</SelectItem>
-                                            <SelectItem value="undertime">Undertime</SelectItem>
+                                            <SelectItem value="undertime">Undertime (&lt;1hr)</SelectItem>
+                                            <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
                                             <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                             <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
                                             <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>

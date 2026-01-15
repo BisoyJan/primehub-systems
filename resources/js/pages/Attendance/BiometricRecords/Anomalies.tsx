@@ -1,4 +1,4 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import { AlertTriangle, Search, Loader2, AlertCircle, CheckCircle2, ChevronDown, ChevronUp, Flag } from 'lucide-react';

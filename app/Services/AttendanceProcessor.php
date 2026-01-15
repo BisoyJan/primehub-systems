@@ -1747,63 +1747,99 @@ class AttendanceProcessor
 
         // Get attendance records for this shift date that need points
         // ONLY process records that are admin verified
+        // Include records with secondary_status that may have point violations
         $attendances = Attendance::where('shift_date', $shiftDate)
-            ->whereIn('status', ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour'])
             ->where('admin_verified', true)
+            ->where(function ($query) {
+                $query->whereIn('status', ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour'])
+                    ->orWhereIn('secondary_status', ['undertime', 'undertime_more_than_hour']);
+            })
             ->get();
 
         $pointsCreated = 0;
         $pointsToInsert = [];
 
         foreach ($attendances as $attendance) {
-            // Check if point already exists for this attendance record
-            $existingPoint = AttendancePoint::where('user_id', $attendance->user_id)
-                ->where('shift_date', $attendance->shift_date)
-                ->where('point_type', $this->mapStatusToPointType($attendance->status))
-                ->first();
+            // Determine point types and values for both primary and secondary status
+            $primaryPointType = $this->mapStatusToPointType($attendance->status);
+            $primaryPointValue = AttendancePoint::POINT_VALUES[$primaryPointType] ?? 0;
 
-            if ($existingPoint) {
-                // Point already exists, skip
+            $secondaryPointType = $attendance->secondary_status
+                ? $this->mapStatusToPointType($attendance->secondary_status)
+                : null;
+            $secondaryPointValue = $secondaryPointType
+                ? (AttendancePoint::POINT_VALUES[$secondaryPointType] ?? 0)
+                : 0;
+
+            // Determine which violation to use (higher point value wins)
+            // This prevents double-penalty when user is both tardy AND has undertime in same shift
+            $pointType = $primaryPointType;
+            $pointValue = $primaryPointValue;
+            $usedStatus = $attendance->status;
+
+            if ($secondaryPointValue > $primaryPointValue) {
+                $pointType = $secondaryPointType;
+                $pointValue = $secondaryPointValue;
+                $usedStatus = $attendance->secondary_status;
+
+                \Log::info('Using secondary status for points (higher value)', [
+                    'user_id' => $attendance->user_id,
+                    'shift_date' => $attendance->shift_date->format('Y-m-d'),
+                    'primary_status' => $attendance->status,
+                    'primary_points' => $primaryPointValue,
+                    'secondary_status' => $attendance->secondary_status,
+                    'secondary_points' => $secondaryPointValue,
+                    'used' => $usedStatus,
+                ]);
+            }
+
+            // Skip if no valid point value
+            if ($pointValue <= 0) {
                 continue;
             }
 
-            // Determine point type and value
-            $pointType = $this->mapStatusToPointType($attendance->status);
-            $pointValue = AttendancePoint::POINT_VALUES[$pointType] ?? 0;
+            // Check if point already exists for this attendance record (any point type)
+            $existingPoint = AttendancePoint::where('user_id', $attendance->user_id)
+                ->where('shift_date', $attendance->shift_date)
+                ->where('attendance_id', $attendance->id)
+                ->first();
 
-            if ($pointValue > 0) {
-                // Determine if NCNS/FTN (whole day absence without advice)
-                $isNcnsOrFtn = $pointType === 'whole_day_absence' && !$attendance->is_advised;
-
-                // Calculate expiration date (6 months for standard, 1 year for NCNS/FTN)
-                $expiresAt = $isNcnsOrFtn
-                    ? $shiftDate->copy()->addYear()
-                    : $shiftDate->copy()->addMonths(6);
-
-                // Generate violation details
-                $violationDetails = $this->generateViolationDetails($attendance);
-
-                $pointsToInsert[] = [
-                    'user_id' => $attendance->user_id,
-                    'attendance_id' => $attendance->id,
-                    'shift_date' => $attendance->shift_date,
-                    'point_type' => $pointType,
-                    'points' => $pointValue,
-                    'status' => $attendance->status,
-                    'is_advised' => $attendance->is_advised ?? false,
-                    'is_excused' => false,
-                    'expires_at' => $expiresAt,
-                    'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
-                    'is_expired' => false,
-                    'violation_details' => $violationDetails,
-                    'tardy_minutes' => $attendance->tardy_minutes,
-                    'undertime_minutes' => $attendance->undertime_minutes,
-                    'eligible_for_gbro' => !$isNcnsOrFtn, // NCNS/FTN not eligible for GBRO
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ];
-                $pointsCreated++;
+            if ($existingPoint) {
+                // Point already exists for this shift, skip
+                continue;
             }
+
+            // Determine if NCNS/FTN (whole day absence without advice)
+            $isNcnsOrFtn = $pointType === 'whole_day_absence' && !$attendance->is_advised;
+
+            // Calculate expiration date (6 months for standard, 1 year for NCNS/FTN)
+            $expiresAt = $isNcnsOrFtn
+                ? $shiftDate->copy()->addYear()
+                : $shiftDate->copy()->addMonths(6);
+
+            // Generate violation details with info about which violation was used
+            $violationDetails = $this->generateViolationDetails($attendance, $usedStatus, $primaryPointType, $secondaryPointType);
+
+            $pointsToInsert[] = [
+                'user_id' => $attendance->user_id,
+                'attendance_id' => $attendance->id,
+                'shift_date' => $attendance->shift_date,
+                'point_type' => $pointType,
+                'points' => $pointValue,
+                'status' => $usedStatus, // Store the status that was used for points
+                'is_advised' => $attendance->is_advised ?? false,
+                'is_excused' => false,
+                'expires_at' => $expiresAt,
+                'expiration_type' => $isNcnsOrFtn ? 'none' : 'sro',
+                'is_expired' => false,
+                'violation_details' => $violationDetails,
+                'tardy_minutes' => $attendance->tardy_minutes,
+                'undertime_minutes' => $attendance->undertime_minutes,
+                'eligible_for_gbro' => !$isNcnsOrFtn, // NCNS/FTN not eligible for GBRO
+                'created_at' => now(),
+                'updated_at' => now(),
+            ];
+            $pointsCreated++;
         }
 
         // Bulk insert all points at once for performance
@@ -1845,10 +1881,21 @@ class AttendanceProcessor
      * Generate detailed violation description.
      *
      * @param Attendance $attendance
+     * @param string|null $usedStatus The status that was used for points (may differ from primary if secondary was higher)
+     * @param string|null $primaryPointType The primary point type
+     * @param string|null $secondaryPointType The secondary point type (if any)
      * @return string
      */
-    protected function generateViolationDetails(Attendance $attendance): string
+    protected function generateViolationDetails(
+        Attendance $attendance,
+        ?string $usedStatus = null,
+        ?string $primaryPointType = null,
+        ?string $secondaryPointType = null
+    ): string
     {
+        // Use the provided status or fall back to attendance status
+        $status = $usedStatus ?? $attendance->status;
+
         $scheduledIn = $attendance->scheduled_time_in ? Carbon::parse($attendance->scheduled_time_in)->format('H:i') : 'N/A';
         $scheduledOut = $attendance->scheduled_time_out ? Carbon::parse($attendance->scheduled_time_out)->format('H:i') : 'N/A';
         $actualIn = $attendance->actual_time_in ? $attendance->actual_time_in->format('H:i') : 'No scan';
@@ -1857,7 +1904,7 @@ class AttendanceProcessor
         // Get grace period from employee schedule
         $gracePeriod = $attendance->employeeSchedule?->grace_period_minutes ?? 15;
 
-        return match ($attendance->status) {
+        $details = match ($status) {
             'ncns' => $attendance->is_advised
                 ? "Failed to Notify (FTN): Employee did not report for work despite being advised. Scheduled: {$scheduledIn} - {$scheduledOut}. No biometric scans recorded."
                 : "No Call, No Show (NCNS): Employee did not report for work and did not provide prior notice. Scheduled: {$scheduledIn} - {$scheduledOut}. No biometric scans recorded.",
@@ -1893,11 +1940,56 @@ class AttendanceProcessor
 
             default => sprintf("Attendance violation on %s", Carbon::parse($attendance->shift_date)->format('Y-m-d')),
         };
+
+        // Add note about other violation that was skipped (if both primary and secondary had point values)
+        if ($primaryPointType && $secondaryPointType && $usedStatus !== $attendance->status) {
+            $skippedType = $attendance->status;
+            $skippedValue = AttendancePoint::POINT_VALUES[$primaryPointType] ?? 0;
+            $details .= sprintf(
+                " [Note: Also had %s violation (%.2f pts) - only higher point value applied per shift]",
+                $this->formatPointTypeLabel($skippedType),
+                $skippedValue
+            );
+        } elseif ($attendance->secondary_status && $usedStatus === $attendance->status) {
+            $skippedType = $attendance->secondary_status;
+            $skippedValue = AttendancePoint::POINT_VALUES[$this->mapStatusToPointType($skippedType)] ?? 0;
+            if ($skippedValue > 0) {
+                $details .= sprintf(
+                    " [Note: Also had %s violation (%.2f pts) - only higher point value applied per shift]",
+                    $this->formatPointTypeLabel($skippedType),
+                    $skippedValue
+                );
+            }
+        }
+
+        return $details;
+    }
+
+    /**
+     * Format point type as human-readable label.
+     *
+     * @param string $status
+     * @return string
+     */
+    protected function formatPointTypeLabel(string $status): string
+    {
+        return match ($status) {
+            'ncns' => 'NCNS',
+            'advised_absence' => 'Advised Absence',
+            'half_day_absence' => 'Half-Day Absence',
+            'tardy' => 'Tardy',
+            'undertime' => 'Undertime',
+            'undertime_more_than_hour' => 'Undertime (>1 Hour)',
+            default => ucfirst(str_replace('_', ' ', $status)),
+        };
     }
 
     /**
      * Regenerate attendance points for a single attendance record.
      * Used when attendance status is manually changed.
+     *
+     * When both primary and secondary status have point values,
+     * only the higher point value is applied (one violation per shift).
      *
      * @param Attendance $attendance
      * @return void
@@ -1908,18 +2000,58 @@ class AttendanceProcessor
             'attendance_id' => $attendance->id,
             'user_id' => $attendance->user_id,
             'status' => $attendance->status,
+            'secondary_status' => $attendance->secondary_status,
             'shift_date' => $attendance->shift_date,
         ]);
 
         // Only generate points for statuses that require them
-        if (!in_array($attendance->status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'])) {
-            \Log::info('Status does not require points', ['status' => $attendance->status]);
+        $pointableStatuses = ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'];
+
+        if (!in_array($attendance->status, $pointableStatuses) &&
+            !in_array($attendance->secondary_status, $pointableStatuses)) {
+            \Log::info('Neither status requires points', [
+                'status' => $attendance->status,
+                'secondary_status' => $attendance->secondary_status,
+            ]);
             return;
         }
 
-        // Determine point type and value
-        $pointType = $this->mapStatusToPointType($attendance->status);
-        $pointValue = AttendancePoint::POINT_VALUES[$pointType] ?? 0;
+        // Determine point type and value for PRIMARY status
+        $primaryPointType = $this->mapStatusToPointType($attendance->status);
+        $primaryPointValue = AttendancePoint::POINT_VALUES[$primaryPointType] ?? 0;
+
+        // Determine point type and value for SECONDARY status (if exists)
+        $secondaryPointType = null;
+        $secondaryPointValue = 0;
+        if ($attendance->secondary_status) {
+            $secondaryPointType = $this->mapStatusToPointType($attendance->secondary_status);
+            $secondaryPointValue = AttendancePoint::POINT_VALUES[$secondaryPointType] ?? 0;
+        }
+
+        // Compare and use the higher point value (only one violation per shift)
+        $usedStatus = $attendance->status;
+        $pointType = $primaryPointType;
+        $pointValue = $primaryPointValue;
+
+        if ($secondaryPointValue > $primaryPointValue) {
+            // Secondary status has higher point value, use it instead
+            $usedStatus = $attendance->secondary_status;
+            $pointType = $secondaryPointType;
+            $pointValue = $secondaryPointValue;
+            \Log::info('Using secondary status for points (higher value)', [
+                'primary_type' => $primaryPointType,
+                'primary_value' => $primaryPointValue,
+                'secondary_type' => $secondaryPointType,
+                'secondary_value' => $secondaryPointValue,
+            ]);
+        } elseif ($secondaryPointValue > 0) {
+            \Log::info('Using primary status for points (equal or higher value)', [
+                'primary_type' => $primaryPointType,
+                'primary_value' => $primaryPointValue,
+                'secondary_type' => $secondaryPointType,
+                'secondary_value' => $secondaryPointValue,
+            ]);
+        }
 
         if ($pointValue <= 0) {
             \Log::info('No point value for this type', ['point_type' => $pointType]);
@@ -1940,17 +2072,22 @@ class AttendanceProcessor
             ? $shiftDate->copy()->addYear()
             : $shiftDate->copy()->addMonths(6);
 
-        // Generate violation details
-        $violationDetails = $this->generateViolationDetails($attendance);
+        // Generate violation details with info about both violations if applicable
+        $violationDetails = $this->generateViolationDetails(
+            $attendance,
+            $usedStatus,
+            $primaryPointType,
+            $secondaryPointType
+        );
 
-        // Create the attendance point
+        // Create the attendance point (only ONE per shift - the higher value)
         AttendancePoint::create([
             'user_id' => $attendance->user_id,
             'attendance_id' => $attendance->id,
             'shift_date' => $attendance->shift_date,
             'point_type' => $pointType,
             'points' => $pointValue,
-            'status' => $attendance->status,
+            'status' => $usedStatus,
             'is_advised' => $attendance->is_advised ?? false,
             'is_excused' => false,
             'expires_at' => $expiresAt,
@@ -1962,10 +2099,12 @@ class AttendanceProcessor
             'eligible_for_gbro' => !$isNcns, // Only NCNS is not eligible for GBRO, Advised Absence is eligible
         ]);
 
-        \Log::info('Attendance point created', [
+        \Log::info('Attendance point created (higher value applied)', [
             'attendance_id' => $attendance->id,
             'point_type' => $pointType,
             'points' => $pointValue,
+            'used_status' => $usedStatus,
+            'had_secondary' => !empty($secondaryPointType),
         ]);
     }
 

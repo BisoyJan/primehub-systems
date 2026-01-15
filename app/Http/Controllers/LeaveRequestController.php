@@ -18,12 +18,14 @@ use App\Services\NotificationService;
 use App\Mail\LeaveRequestStatusUpdated;
 use App\Mail\LeaveRequestSubmitted;
 use App\Mail\LeaveRequestTLStatusUpdated;
+use App\Services\PermissionService;
 use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -599,7 +601,7 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
         $isTeamLead = $user->role === 'Team Lead';
 
-        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'deniedDates.denier', 'dateModifier', 'canceller', 'shortNoticeOverrider']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'deniedDates.denier']);
 
         // Check if current user has already approved
         $hasUserApproved = false;
@@ -620,14 +622,6 @@ class LeaveRequestController extends Controller
         $leaveRequestData = $leaveRequest->toArray();
         $leaveRequestData['start_date'] = $leaveRequest->start_date->format('Y-m-d');
         $leaveRequestData['end_date'] = $leaveRequest->end_date->format('Y-m-d');
-
-        // Format original dates if they exist (for date modification history)
-        if ($leaveRequest->original_start_date) {
-            $leaveRequestData['original_start_date'] = $leaveRequest->original_start_date->format('Y-m-d');
-        }
-        if ($leaveRequest->original_end_date) {
-            $leaveRequestData['original_end_date'] = $leaveRequest->original_end_date->format('Y-m-d');
-        }
 
         // Get campaign_id from user's active employee schedule
         $activeSchedule = $leaveRequest->user->employeeSchedules()
@@ -1355,9 +1349,6 @@ class LeaveRequestController extends Controller
 
                     // Update attendance records to on_leave status
                     $this->updateAttendanceForApprovedLeave($leaveRequest);
-                } else {
-                    // Non-credited leave types (SPL, LOA, LDV, UPTO, ML) - still create attendance records
-                    $this->updateAttendanceForApprovedLeave($leaveRequest);
                 }
 
                 // Notify the employee about full approval
@@ -1477,9 +1468,6 @@ class LeaveRequestController extends Controller
             } elseif ($leaveRequest->requiresCredits()) {
                 $year = $request->input('credits_year', now()->year);
                 $leaveCreditService->deductCredits($leaveRequest, $year);
-                $this->updateAttendanceForApprovedLeave($leaveRequest);
-            } else {
-                // Non-credited leave types (SPL, LOA, LDV, UPTO, ML) - still create attendance records
                 $this->updateAttendanceForApprovedLeave($leaveRequest);
             }
 
@@ -1899,14 +1887,14 @@ class LeaveRequestController extends Controller
                 );
             }
 
-            // Update leave request with formatted adjustment note
-            $adjustmentNote = "Reason: Employee reported to work on {$workDate->format('M d, Y')}\n";
-            $adjustmentNote .= "Original Period: {$startDate->format('M d')} - {$endDate->format('M d, Y')} ({$originalDays} days)\n";
-            $adjustmentNote .= "New Period: {$newStartDate->format('M d')} - {$newEndDate->format('M d, Y')} ({$newDays} days)\n";
-            $adjustmentNote .= "Credits Restored: {$daysReduced} day(s)";
+            // Update leave request
+            $adjustmentNote = "Adjusted: Employee reported to work on {$workDate->format('M d, Y')}. " .
+                "Original period: {$startDate->format('M d')} - {$endDate->format('M d, Y')} ({$originalDays} days). " .
+                "New period: {$newStartDate->format('M d')} - {$newEndDate->format('M d, Y')} ({$newDays} days). " .
+                "{$daysReduced} day(s) credit restored.";
 
             if ($validated['notes']) {
-                $adjustmentNote .= "\nNotes: {$validated['notes']}";
+                $adjustmentNote .= " Note: {$validated['notes']}";
             }
 
             $leaveRequest->update([
@@ -1937,6 +1925,7 @@ class LeaveRequestController extends Controller
                     'admin_verified' => true,
                     'leave_request_id' => null, // No longer a leave conflict
                     'verification_notes' => "Leave adjusted - employee worked this day. Verified by {$user->name}",
+                    'remarks' => null,
                 ]);
 
             // Notify employee
@@ -1978,10 +1967,9 @@ class LeaveRequestController extends Controller
             $this->leaveCreditService->restoreCredits($leaveRequest);
         }
 
-        $reason = "Reason: Employee reported to work on {$workDate->format('M d, Y')}\n";
-        $reason .= "Action: Leave cancelled and all credits restored";
+        $reason = "Employee reported to work on {$workDate->format('M d, Y')}. Leave cancelled and credits restored.";
         if ($notes) {
-            $reason .= "\nNotes: {$notes}";
+            $reason .= " Note: {$notes}";
         }
 
         $leaveRequest->update([
@@ -2002,6 +1990,7 @@ class LeaveRequestController extends Controller
                 'admin_verified' => true,
                 'leave_request_id' => null,
                 'verification_notes' => "Leave cancelled - employee worked. Verified by {$user->name}",
+                'remarks' => null,
             ]);
 
         // Notify employee
@@ -2139,11 +2128,6 @@ class LeaveRequestController extends Controller
             // Restore credits if it was approved and credits were deducted
             if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
                 $leaveCreditService->restoreCredits($leaveRequest);
-            }
-
-            // Delete attendance records associated with this leave request
-            if ($leaveRequest->status === 'approved') {
-                Attendance::where('leave_request_id', $leaveRequest->id)->delete();
             }
 
             $leaveRequest->delete();
@@ -2347,12 +2331,17 @@ class LeaveRequestController extends Controller
             'error' => false,
         ], 3600);
 
-        // Dispatch job
-        dispatch(new GenerateLeaveCreditsExportExcel($jobId, $year));
+        // Dispatch job synchronously (runs immediately without queue worker)
+        dispatch_sync(new GenerateLeaveCreditsExportExcel($jobId, $year));
+
+        // Get the final progress to return download URL
+        $progress = Cache::get("leave_credits_export_job:{$jobId}");
 
         return response()->json([
             'success' => true,
             'job_id' => $jobId,
+            'finished' => $progress['finished'] ?? false,
+            'downloadUrl' => $progress['downloadUrl'] ?? null,
         ]);
     }
 
@@ -2383,18 +2372,31 @@ class LeaveRequestController extends Controller
     /**
      * Download exported leave credits file.
      */
-    public function exportCreditsDownload(Request $request)
+    public function exportCreditsDownload(Request $request, string $filename)
     {
         $this->authorize('viewAny', LeaveRequest::class);
 
-        $filename = $request->route('filename');
+        // Sanitize filename to prevent directory traversal
+        $filename = basename($filename);
         $filePath = storage_path('app/temp/' . $filename);
 
+        Log::info('Leave credits download attempt', [
+            'filename' => $filename,
+            'filePath' => $filePath,
+            'exists' => file_exists($filePath),
+        ]);
+
         if (!file_exists($filePath)) {
-            abort(404, 'File not found or has expired.');
+            Log::warning('Leave credits file not found', ['filePath' => $filePath]);
+            return redirect()->route('leave-requests.credits.index')
+                ->with('flash', [
+                    'message' => 'File not found or has expired. Please try exporting again.',
+                    'type' => 'error',
+                ]);
         }
 
-        return response()->download($filePath, $filename)->deleteFileAfterSend(true);
+        // Don't delete immediately - let a cleanup job handle old files
+        return response()->download($filePath, $filename);
     }
 
     /**
@@ -2472,13 +2474,9 @@ class LeaveRequestController extends Controller
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             if (!in_array($dateStr, $existingDates)) {
-                // Get employee schedule for this date
-                $schedule = $this->getScheduleForDate($user, $currentDate);
-
                 // No attendance record exists - create one with advised_absence
                 Attendance::create([
                     'user_id' => $user->id,
-                    'employee_schedule_id' => $schedule?->id,
                     'shift_date' => $dateStr,
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
@@ -2562,12 +2560,8 @@ class LeaveRequestController extends Controller
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             if (!in_array($dateStr, $existingDates)) {
-                // Get employee schedule for this date
-                $schedule = $this->getScheduleForDate($user, $currentDate);
-
                 Attendance::create([
                     'user_id' => $user->id,
-                    'employee_schedule_id' => $schedule?->id,
                     'shift_date' => $dateStr,
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
@@ -2584,27 +2578,6 @@ class LeaveRequestController extends Controller
             'sl_credits_applied' => false,
             'sl_no_credit_reason' => $reason,
         ]);
-    }
-
-    /**
-     * Get the active employee schedule for a user on a specific date.
-     *
-     * @param User $user
-     * @param Carbon|string $date
-     * @return EmployeeSchedule|null
-     */
-    protected function getScheduleForDate(User $user, $date): ?EmployeeSchedule
-    {
-        $date = $date instanceof Carbon ? $date : Carbon::parse($date);
-
-        return $user->employeeSchedules()
-            ->where('is_active', true)
-            ->where('effective_date', '<=', $date)
-            ->where(function ($q) use ($date) {
-                $q->whereNull('end_date')
-                    ->orWhere('end_date', '>=', $date);
-            })
-            ->first();
     }
 
     /**
@@ -2639,12 +2612,8 @@ class LeaveRequestController extends Controller
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             if (!in_array($dateStr, $existingDates)) {
-                // Get employee schedule for this date
-                $schedule = $this->getScheduleForDate($user, $currentDate);
-
                 Attendance::create([
                     'user_id' => $user->id,
-                    'employee_schedule_id' => $schedule?->id,
                     'shift_date' => $dateStr,
                     'status' => 'on_leave',
                     'notes' => $leaveNote,
@@ -2665,9 +2634,9 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
 
         // Check if user has permission to view all leave credits
-        if (!app(\App\Services\PermissionService::class)->userHasPermission($user, 'leave_credits.view_all')) {
+        if (!app(PermissionService::class)->userHasPermission($user, 'leave_credits.view_all')) {
             // Redirect to their own credits page if they have view_own permission
-            if (app(\App\Services\PermissionService::class)->userHasPermission($user, 'leave_credits.view_own')) {
+            if (app(PermissionService::class)->userHasPermission($user, 'leave_credits.view_own')) {
                 return redirect()->route('leave-requests.credits.show', $user->id);
             }
             abort(403, 'Unauthorized action.');

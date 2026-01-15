@@ -22,7 +22,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause } from "lucide-react";
+import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause, Edit } from "lucide-react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -143,6 +143,7 @@ const getStatusBadge = (status: string) => {
         on_leave: { label: "On Leave", className: "bg-blue-600" },
         ncns: { label: "NCNS", className: "bg-red-500" },
         undertime: { label: "Undertime", className: "bg-orange-400" },
+        undertime_more_than_hour: { label: "UT >1hr", className: "bg-orange-600" },
         failed_bio_in: { label: "No Bio In", className: "bg-purple-500" },
         failed_bio_out: { label: "No Bio Out", className: "bg-purple-400" },
         needs_manual_review: { label: "Needs Review", className: "bg-amber-500" },
@@ -783,7 +784,7 @@ export default function AttendanceIndex() {
                                     <TableHead>Tardy/UT/OT</TableHead>
                                     <TableHead>Notes</TableHead>
                                     <TableHead>Verified</TableHead>
-                                    {can('attendance.approve') && <TableHead>Actions</TableHead>}
+                                    {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && <TableHead>Actions</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -872,31 +873,46 @@ export default function AttendanceIndex() {
                                                 <span className="text-muted-foreground text-xs">Pending</span>
                                             )}
                                         </TableCell>
-                                        {can('attendance.approve') && (
+                                        {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && (
                                             <TableCell>
-                                                <Can permission="attendance.approve">
-                                                    {canQuickApprove(record) ? (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => handleQuickApprove(record.id)}
-                                                            className="h-8"
-                                                        >
-                                                            <Check className="h-3 w-3 mr-1" />
-                                                            Approve
-                                                        </Button>
-                                                    ) : needsReview(record) ? (
-                                                        <Button
-                                                            size="sm"
-                                                            variant="outline"
-                                                            onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
-                                                            className="h-8 text-amber-600 border-amber-600"
-                                                        >
-                                                            <AlertCircle className="h-3 w-3 mr-1" />
-                                                            Review
-                                                        </Button>
-                                                    ) : null}
-                                                </Can>
+                                                <div className="flex items-center gap-2">
+                                                    <Can permission="attendance.approve">
+                                                        {canQuickApprove(record) ? (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => handleQuickApprove(record.id)}
+                                                                className="h-8"
+                                                            >
+                                                                <Check className="h-3 w-3 mr-1" />
+                                                                Approve
+                                                            </Button>
+                                                        ) : needsReview(record) ? (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                className="h-8 text-amber-600 border-amber-600"
+                                                            >
+                                                                <AlertCircle className="h-3 w-3 mr-1" />
+                                                                Review
+                                                            </Button>
+                                                        ) : null}
+                                                    </Can>
+                                                    <Can permission="attendance.verify">
+                                                        {!record.admin_verified && (
+                                                            <Button
+                                                                size="sm"
+                                                                variant="outline"
+                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                className="h-8"
+                                                            >
+                                                                <Edit className="h-3 w-3 mr-1" />
+                                                                Verify
+                                                            </Button>
+                                                        )}
+                                                    </Can>
+                                                </div>
                                             </TableCell>
                                         )}
                                     </TableRow>

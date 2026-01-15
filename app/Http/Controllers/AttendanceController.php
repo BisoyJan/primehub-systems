@@ -273,7 +273,8 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'user_id' => 'required|exists:users,id',
             'shift_date' => 'required|date',
-            'status' => 'nullable|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'status' => 'nullable|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out',
             'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
             'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
             'notes' => 'nullable|string|max:500',
@@ -308,7 +309,7 @@ class AttendanceController extends Controller
         $undertimeMinutes = null;
         $overtimeMinutes = null;
         $status = $validated['status'] ?? null;
-        $secondaryStatus = null;
+        $secondaryStatus = $validated['secondary_status'] ?? null;
 
         // Auto-set status to on_leave if there's an approved leave request
         if ($approvedLeave && !$status) {
@@ -330,11 +331,14 @@ class AttendanceController extends Controller
                     $scheduledTimeOut->addDay();
                 }
 
-                // Calculate tardy (late arrival)
+                // Calculate tardy (late arrival) - always calculate minutes, grace period only affects status
                 $gracePeriod = $schedule->grace_period_minutes ?? 0;
-                if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                if ($actualTimeIn->gt($scheduledTimeIn)) {
                     $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
-                    $isTardy = true;
+                    // Only mark as tardy if beyond grace period
+                    if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                        $isTardy = true;
+                    }
                 }
 
                 // Calculate undertime (early leave) and overtime (late leave)
@@ -349,9 +353,13 @@ class AttendanceController extends Controller
                 $shiftDate = Carbon::parse($validated['shift_date']);
                 $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
                 $gracePeriod = $schedule->grace_period_minutes ?? 0;
-                if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                // Always calculate minutes, grace period only affects status
+                if ($actualTimeIn->gt($scheduledTimeIn)) {
                     $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
-                    $isTardy = true;
+                    // Only mark as tardy if beyond grace period
+                    if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                        $isTardy = true;
+                    }
                 }
             }
 
@@ -389,10 +397,37 @@ class AttendanceController extends Controller
                 $scheduledTimeOut->addDay();
             }
 
-            // Calculate tardy (late arrival)
-            $gracePeriod = $schedule->grace_period_minutes ?? 0;
-            if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+            // Calculate tardy minutes (actual late arrival - no grace period check since status is already determined)
+            if ($actualTimeIn->gt($scheduledTimeIn)) {
                 $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+            }
+
+            // Calculate undertime (early leave) and overtime (late leave)
+            if ($actualTimeOut->lt($scheduledTimeOut)) {
+                $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+            } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+                $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+            }
+        } else if ($schedule && $actualTimeIn) {
+            // Status was manually provided with only time in - still calculate tardiness
+            $shiftDate = Carbon::parse($validated['shift_date']);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+
+            // Calculate tardy minutes (actual late arrival - no grace period check since status is already determined)
+            if ($actualTimeIn->gt($scheduledTimeIn)) {
+                $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+            }
+        } else if ($schedule && $actualTimeOut) {
+            // Status was manually provided with only time out - still calculate undertime/overtime
+            $shiftDate = Carbon::parse($validated['shift_date']);
+            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+
+            // Handle night shift (time out is next day)
+            if ($schedule->shift_type === 'night_shift' && $schedule->scheduled_time_in) {
+                $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+                if ($scheduledTimeOut->lt($scheduledTimeIn)) {
+                    $scheduledTimeOut->addDay();
+                }
             }
 
             // Calculate undertime (early leave) and overtime (late leave)
@@ -416,6 +451,7 @@ class AttendanceController extends Controller
             'tardy_minutes' => $tardyMinutes,
             'undertime_minutes' => $undertimeMinutes,
             'overtime_minutes' => $overtimeMinutes,
+            'is_advised' => $status === 'advised_absence', // Set is_advised flag for advised absence
             'admin_verified' => !$hasLeaveConflict, // Requires approval if leave conflict
             'leave_request_id' => $approvedLeave?->id,
             'verification_notes' => $hasLeaveConflict
@@ -426,6 +462,11 @@ class AttendanceController extends Controller
                 ? 'Leave conflict: Employee on approved leave but has attendance entry. Pending HR review.'
                 : null,
         ]);
+
+        // Generate attendance points if the record is admin_verified and has a violation status
+        if ($attendance->admin_verified && in_array($status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'])) {
+            $this->processor->regeneratePointsForAttendance($attendance);
+        }
 
         // Notify HR if there's a leave conflict
         if ($hasLeaveConflict) {
@@ -475,7 +516,8 @@ class AttendanceController extends Controller
             'user_ids' => 'required|array|min:1',
             'user_ids.*' => 'required|exists:users,id',
             'shift_date' => 'required|date',
-            'status' => 'nullable|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'status' => 'nullable|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out',
             'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
             'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
             'notes' => 'nullable|string|max:500',
@@ -512,7 +554,7 @@ class AttendanceController extends Controller
                 $undertimeMinutes = null;
                 $overtimeMinutes = null;
                 $status = $validated['status'] ?? null;
-                $secondaryStatus = null;
+                $secondaryStatus = $validated['secondary_status'] ?? null;
 
                 // Auto-set status to on_leave if there's an approved leave request
                 if ($approvedLeave && !$status) {
@@ -534,11 +576,14 @@ class AttendanceController extends Controller
                             $scheduledTimeOut->addDay();
                         }
 
-                        // Calculate tardy (late arrival)
+                        // Calculate tardy (late arrival) - always calculate minutes, grace period only affects status
                         $gracePeriod = $schedule->grace_period_minutes ?? 0;
-                        if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                        if ($actualTimeIn->gt($scheduledTimeIn)) {
                             $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
-                            $isTardy = true;
+                            // Only mark as tardy if beyond grace period
+                            if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                                $isTardy = true;
+                            }
                         }
 
                         // Calculate undertime (early leave) and overtime (late leave)
@@ -553,9 +598,13 @@ class AttendanceController extends Controller
                         $shiftDate = Carbon::parse($validated['shift_date']);
                         $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
                         $gracePeriod = $schedule->grace_period_minutes ?? 0;
-                        if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                        // Always calculate minutes, grace period only affects status
+                        if ($actualTimeIn->gt($scheduledTimeIn)) {
                             $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
-                            $isTardy = true;
+                            // Only mark as tardy if beyond grace period
+                            if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                                $isTardy = true;
+                            }
                         }
                     }
 
@@ -593,10 +642,37 @@ class AttendanceController extends Controller
                         $scheduledTimeOut->addDay();
                     }
 
-                    // Calculate tardy (late arrival)
-                    $gracePeriod = $schedule->grace_period_minutes ?? 0;
-                    if ($actualTimeIn->gt($scheduledTimeIn->copy()->addMinutes($gracePeriod))) {
+                    // Calculate tardy minutes (actual late arrival - no grace period check since status is already determined)
+                    if ($actualTimeIn->gt($scheduledTimeIn)) {
                         $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+                    }
+
+                    // Calculate undertime (early leave) and overtime (late leave)
+                    if ($actualTimeOut->lt($scheduledTimeOut)) {
+                        $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+                    } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+                        $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                    }
+                } else if ($schedule && $actualTimeIn) {
+                    // Status was manually provided with only time in - still calculate tardiness
+                    $shiftDate = Carbon::parse($validated['shift_date']);
+                    $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+
+                    // Calculate tardy minutes (actual late arrival - no grace period check since status is already determined)
+                    if ($actualTimeIn->gt($scheduledTimeIn)) {
+                        $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+                    }
+                } else if ($schedule && $actualTimeOut) {
+                    // Status was manually provided with only time out - still calculate undertime/overtime
+                    $shiftDate = Carbon::parse($validated['shift_date']);
+                    $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+
+                    // Handle night shift (time out is next day)
+                    if ($schedule->shift_type === 'night_shift' && $schedule->scheduled_time_in) {
+                        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+                        if ($scheduledTimeOut->lt($scheduledTimeIn)) {
+                            $scheduledTimeOut->addDay();
+                        }
                     }
 
                     // Calculate undertime (early leave) and overtime (late leave)
@@ -607,7 +683,7 @@ class AttendanceController extends Controller
                     }
                 }
 
-                Attendance::create([
+                $attendance = Attendance::create([
                     'user_id' => $userId,
                     'employee_schedule_id' => $schedule?->id,
                     'shift_date' => $validated['shift_date'],
@@ -620,10 +696,16 @@ class AttendanceController extends Controller
                     'tardy_minutes' => $tardyMinutes,
                     'undertime_minutes' => $undertimeMinutes,
                     'overtime_minutes' => $overtimeMinutes,
+                    'is_advised' => $status === 'advised_absence', // Set is_advised flag for advised absence
                     'admin_verified' => true, // Manual entries are pre-verified
                     'verification_notes' => 'Manually created by ' . auth()->user()->name,
                     'notes' => $validated['notes'],
                 ]);
+
+                // Generate attendance points if the record has a violation status
+                if (in_array($status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'])) {
+                    $this->processor->regeneratePointsForAttendance($attendance);
+                }
 
                 $createdCount++;
             } catch (\Exception $e) {
@@ -846,7 +928,8 @@ class AttendanceController extends Controller
         $attendance->load(['employeeSchedule', 'leaveRequest']);
 
         $request->validate([
-            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_out',
             'actual_time_in' => 'nullable|date',
             'actual_time_out' => 'nullable|date',
             'verification_notes' => 'required|string|max:1000',
@@ -876,6 +959,7 @@ class AttendanceController extends Controller
 
         $updates = [
             'status' => $request->status,
+            'secondary_status' => $request->secondary_status,
             'actual_time_in' => $request->actual_time_in,
             'actual_time_out' => $request->actual_time_out,
             'admin_verified' => true,
@@ -955,8 +1039,8 @@ class AttendanceController extends Controller
             // - Negative if actualTimeOut < scheduledTimeOut (undertime)
             $timeDiff = $scheduledTimeOut->diffInMinutes($actualTimeOut, false);
 
-            // If negative and more than 60 minutes (left early), it's undertime
-            if ($timeDiff < -60) {
+            // If negative (left early), it's undertime
+            if ($timeDiff < 0) {
                 $attendance->update([
                     'undertime_minutes' => abs($timeDiff),
                     'overtime_minutes' => null,
@@ -969,7 +1053,7 @@ class AttendanceController extends Controller
                     'overtime_minutes' => $timeDiff,
                 ]);
             }
-            // If within threshold (-60 to 60), clear both
+            // If within threshold (0 to 60), clear both
             else {
                 $attendance->update([
                     'undertime_minutes' => null,
@@ -984,7 +1068,7 @@ class AttendanceController extends Controller
         AttendancePoint::where('attendance_id', $attendance->id)->delete();
 
         // Generate points if the status requires them (and record is now verified)
-        if (in_array($request->status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'advised_absence'])) {
+        if (in_array($request->status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'])) {
             $this->processor->regeneratePointsForAttendance($attendance);
         }
 
@@ -1019,7 +1103,8 @@ class AttendanceController extends Controller
         $validated = $request->validate([
             'record_ids' => 'required|array|min:1',
             'record_ids.*' => 'required|exists:attendances,id',
-            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
+            'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_out',
             'verification_notes' => 'required|string|max:1000',
             'overtime_approved' => 'nullable|boolean',
         ]);
@@ -1037,6 +1122,7 @@ class AttendanceController extends Controller
 
             $updates = [
                 'status' => $validated['status'],
+                'secondary_status' => $validated['secondary_status'] ?? null,
                 'admin_verified' => true,
                 'verification_notes' => $validated['verification_notes'],
             ];
@@ -1065,7 +1151,7 @@ class AttendanceController extends Controller
             AttendancePoint::where('attendance_id', $attendance->id)->delete();
 
             // Generate points if the status requires them (and record is now verified)
-            if (in_array($validated['status'], ['ncns', 'half_day_absence', 'tardy', 'undertime', 'advised_absence'])) {
+            if (in_array($validated['status'], ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'])) {
                 $this->processor->regeneratePointsForAttendance($attendance);
             }
 

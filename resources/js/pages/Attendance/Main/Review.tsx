@@ -149,6 +149,7 @@ const getStatusBadge = (status: string) => {
         on_leave: { label: "On Leave", className: "bg-blue-600" },
         ncns: { label: "NCNS", className: "bg-red-500" },
         undertime: { label: "Undertime", className: "bg-orange-400" },
+        undertime_more_than_hour: { label: "UT >1hr", className: "bg-orange-600" },
         failed_bio_in: { label: "Failed Bio In", className: "bg-purple-500" },
         failed_bio_out: { label: "Failed Bio Out", className: "bg-purple-500" },
         needs_manual_review: { label: "Needs Review", className: "bg-amber-500" },
@@ -277,11 +278,15 @@ const calculateSuggestedStatus = (
     }
 
     // Calculate undertime (early leave) and overtime (late leave)
-    if (timeOutDate && timeInDate) {
+    if (timeOutDate) {
         const diffFromScheduledOut = Math.floor((timeOutDate.getTime() - scheduledTimeOut.getTime()) / (1000 * 60));
 
         if (diffFromScheduledOut < -60) {
-            // Left more than 60 minutes early
+            // Left more than 60 minutes early = undertime_more_than_hour
+            hasUndertime = true;
+            undertimeMinutes = Math.abs(diffFromScheduledOut);
+        } else if (diffFromScheduledOut < 0) {
+            // Left early but less than 60 minutes = undertime
             hasUndertime = true;
             undertimeMinutes = Math.abs(diffFromScheduledOut);
         } else if (diffFromScheduledOut > 60) {
@@ -311,20 +316,23 @@ const calculateSuggestedStatus = (
         }
     } else if (isHalfDay && hasUndertime) {
         status = 'half_day_absence';
-        secondaryStatus = 'undertime';
+        // Determine undertime status based on minutes
+        secondaryStatus = undertimeMinutes && undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
         reason = `Arrived ${tardyMinutes} minutes late AND left ${undertimeMinutes} minutes early`;
     } else if (isHalfDay) {
         status = 'half_day_absence';
         reason = `Arrived ${tardyMinutes} minutes late (more than ${gracePeriodMinutes}min grace period)`;
     } else if (isTardy && hasUndertime) {
         status = 'tardy';
-        secondaryStatus = 'undertime';
+        // Determine undertime status based on minutes
+        secondaryStatus = undertimeMinutes && undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
         reason = `Arrived ${tardyMinutes} minutes late AND left ${undertimeMinutes} minutes early`;
     } else if (isTardy) {
         status = 'tardy';
         reason = `Arrived ${tardyMinutes} minutes late`;
     } else if (hasUndertime) {
-        status = 'undertime';
+        // Determine undertime status based on minutes
+        status = undertimeMinutes && undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
         reason = `Left ${undertimeMinutes} minutes early`;
     } else {
         status = 'on_time';
@@ -420,6 +428,7 @@ export default function AttendanceReview() {
 
     const { data, setData, post, processing, errors, reset } = useForm({
         status: "",
+        secondary_status: "",
         actual_time_in: "",
         actual_time_out: "",
         notes: "",
@@ -430,6 +439,7 @@ export default function AttendanceReview() {
     const { data: batchData, setData: setBatchData, post: postBatch, processing: batchProcessing, errors: batchErrors, reset: resetBatch } = useForm({
         record_ids: [] as number[],
         status: "",
+        secondary_status: "",
         verification_notes: "",
         overtime_approved: false,
     });
@@ -501,6 +511,7 @@ export default function AttendanceReview() {
 
         setData({
             status: suggestion.status, // Start with suggested status
+            secondary_status: suggestion.secondaryStatus || "",
             actual_time_in: timeIn,
             actual_time_out: timeOut,
             notes: record.notes || "",
@@ -529,6 +540,7 @@ export default function AttendanceReview() {
         // Only auto-update status if user hasn't manually overridden it
         if (!isStatusManuallyOverridden) {
             setData('status', suggestion.status);
+            setData('secondary_status', suggestion.secondaryStatus || "");
         }
     };
 
@@ -546,6 +558,7 @@ export default function AttendanceReview() {
     const resetToSuggestedStatus = () => {
         if (suggestedStatus) {
             setData('status', suggestedStatus.status);
+            setData('secondary_status', suggestedStatus.secondaryStatus || "");
             setIsStatusManuallyOverridden(false);
         }
     };

@@ -264,8 +264,18 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
 
             if (!response.ok) throw new Error('Failed to start export');
 
-            const { job_id } = await response.json();
-            pollExportProgress(job_id);
+            const result = await response.json();
+
+            // If the job completed synchronously, download immediately
+            if (result.finished && result.downloadUrl) {
+                window.location.href = result.downloadUrl;
+                toast.success('Export completed! Download started.');
+                setIsExporting(false);
+                setShowExportDialog(false);
+            } else {
+                // Fall back to polling if needed (for async processing)
+                pollExportProgress(result.job_id);
+            }
         } catch {
             toast.error('Failed to start export');
             setIsExporting(false);

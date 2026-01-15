@@ -327,15 +327,17 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::prefix('form-requests/leave-requests')->name('leave-requests.')
         ->middleware('permission:leave.view,leave.create,leave.edit,leave.approve,leave.deny,leave.cancel,leave.delete')
         ->group(function () {
+            // Export routes first (before dynamic {leaveRequest} routes)
+            Route::post('/export/credits', [LeaveRequestController::class, 'exportCredits'])->name('export.credits');
+            Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
+            Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download')->where('filename', '.*');
+
             Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
             Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
             Route::get('/calendar', [LeaveRequestController::class, 'calendar'])->name('calendar');
             Route::get('/api/credits-balance', [LeaveRequestController::class, 'getCreditsBalance'])->name('api.credits-balance');
             Route::post('/api/calculate-days', [LeaveRequestController::class, 'calculateDays'])->name('api.calculate-days');
             Route::post('/api/check-campaign-conflicts', [LeaveRequestController::class, 'checkCampaignConflicts'])->name('api.check-campaign-conflicts');
-            Route::post('/export/credits', [LeaveRequestController::class, 'exportCredits'])->name('export.credits');
-            Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
-            Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download');
             Route::post('/', [LeaveRequestController::class, 'store'])->name('store');
             Route::get('/{leaveRequest}', [LeaveRequestController::class, 'show'])->name('show');
             Route::get('/{leaveRequest}/edit', [LeaveRequestController::class, 'edit'])->name('edit');
