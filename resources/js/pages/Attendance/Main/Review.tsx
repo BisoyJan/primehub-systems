@@ -461,7 +461,7 @@ export default function AttendanceReview() {
 
         const isNightShift = schedule.shift_type === 'night_shift' ||
             (schedule.scheduled_time_in && schedule.scheduled_time_out &&
-             schedule.scheduled_time_out < schedule.scheduled_time_in);
+                schedule.scheduled_time_out < schedule.scheduled_time_in);
 
         const hasTimeIn = record.actual_time_in !== undefined && record.actual_time_in !== null;
         const hasNoTimeOut = record.actual_time_out === undefined || record.actual_time_out === null;
