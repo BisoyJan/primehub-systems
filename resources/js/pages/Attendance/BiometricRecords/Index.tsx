@@ -8,6 +8,7 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { formatTime, formatDateShort } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import {
     Select,
     SelectContent,
@@ -363,21 +364,21 @@ export default function BiometricRecordsIndex() {
 
                         <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={dateFrom}
-                                onChange={(e) => setDateFrom(e.target.value)}
-                                className="w-full bg-transparent outline-none text-sm"
+                                onChange={(value) => setDateFrom(value)}
+                                placeholder="Start date"
+                                className="w-full"
                             />
                         </div>
 
                         <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">To:</span>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={dateTo}
-                                onChange={(e) => setDateTo(e.target.value)}
-                                className="w-full bg-transparent outline-none text-sm"
+                                onChange={(value) => setDateTo(value)}
+                                placeholder="End date"
+                                className="w-full"
                             />
                         </div>
                     </div>

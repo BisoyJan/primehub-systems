@@ -8,6 +8,7 @@ import { type SharedData } from "@/types";
 import { formatDateTime, formatDate, formatTime } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -952,22 +953,20 @@ export default function AttendanceReview() {
                                 {/* Date From */}
                                 <div className="space-y-2">
                                     <Label htmlFor="date-from">Date From</Label>
-                                    <Input
-                                        id="date-from"
-                                        type="date"
+                                    <DatePicker
                                         value={dateFrom}
-                                        onChange={(e) => setDateFrom(e.target.value)}
+                                        onChange={(value) => setDateFrom(value)}
+                                        placeholder="Select date"
                                     />
                                 </div>
 
                                 {/* Date To */}
                                 <div className="space-y-2">
                                     <Label htmlFor="date-to">Date To</Label>
-                                    <Input
-                                        id="date-to"
-                                        type="date"
+                                    <DatePicker
                                         value={dateTo}
-                                        onChange={(e) => setDateTo(e.target.value)}
+                                        onChange={(value) => setDateTo(value)}
+                                        placeholder="Select date"
                                     />
                                 </div>
                             </div>
@@ -1022,7 +1021,7 @@ export default function AttendanceReview() {
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow className="bg-muted/50">
+                                        <TableRow>
                                             <TableHead className="w-12">
                                                 <Input
                                                     type="checkbox"
@@ -1663,14 +1662,13 @@ export default function AttendanceReview() {
                             <Label htmlFor="actual_time_in">Actual Time In</Label>
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1">
-                                    <Input
-                                        type="date"
+                                    <DatePicker
                                         value={data.actual_time_in ? data.actual_time_in.slice(0, 10) : ""}
-                                        onChange={e => {
-                                            const date = e.target.value;
+                                        onChange={(date) => {
                                             const time = data.actual_time_in ? data.actual_time_in.slice(11, 16) : "00:00";
                                             setData("actual_time_in", date ? `${date}T${time}` : "");
                                         }}
+                                        placeholder="Date"
                                     />
                                 </div>
                                 <div className="space-y-1">
@@ -1694,14 +1692,13 @@ export default function AttendanceReview() {
                             <Label htmlFor="actual_time_out">Actual Time Out</Label>
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1">
-                                    <Input
-                                        type="date"
+                                    <DatePicker
                                         value={data.actual_time_out ? data.actual_time_out.slice(0, 10) : ""}
-                                        onChange={e => {
-                                            const date = e.target.value;
+                                        onChange={(date) => {
                                             const time = data.actual_time_out ? data.actual_time_out.slice(11, 16) : "00:00";
                                             setData("actual_time_out", date ? `${date}T${time}` : "");
                                         }}
+                                        placeholder="Date"
                                     />
                                 </div>
                                 <div className="space-y-1">
@@ -2037,14 +2034,13 @@ export default function AttendanceReview() {
                             <div className="grid grid-cols-2 gap-2">
                                 <div className="space-y-1">
                                     <Label className="text-xs text-muted-foreground">Date</Label>
-                                    <Input
-                                        type="date"
+                                    <DatePicker
                                         value={partialData.actual_time_out ? partialData.actual_time_out.slice(0, 10) : ""}
-                                        onChange={e => {
-                                            const date = e.target.value;
+                                        onChange={(date) => {
                                             const time = partialData.actual_time_out ? partialData.actual_time_out.slice(11, 16) : "07:00";
                                             setPartialData("actual_time_out", date ? `${date}T${time}` : "");
                                         }}
+                                        placeholder="Date"
                                     />
                                 </div>
                                 <div className="space-y-1">

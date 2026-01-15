@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/select";
 import { ArrowLeft, Award, AlertCircle, TrendingUp, Calendar, CheckCircle, XCircle, FileText, Download, BarChart3, RotateCcw, Search, Loader2, Settings, AlertTriangle, Play, RefreshCw, BellOff } from "lucide-react";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import type { SharedData } from "@/types";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
@@ -636,20 +637,20 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                         <p className="text-sm text-muted-foreground">{formattedDateRange}</p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={dateFrom}
-                            onChange={(e) => setDateFrom(e.target.value)}
-                            className="w-auto h-8 text-sm"
+                            onChange={(value) => setDateFrom(value)}
+                            placeholder="Start date"
                             disabled={showAll}
+                            className="w-auto h-8 text-sm"
                         />
                         <span className="text-muted-foreground text-sm">to</span>
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={dateTo}
-                            onChange={(e) => setDateTo(e.target.value)}
-                            className="w-auto h-8 text-sm"
+                            onChange={(value) => setDateTo(value)}
+                            placeholder="End date"
                             disabled={showAll}
+                            className="w-auto h-8 text-sm"
                         />
                         <Button onClick={handleFilter} size="sm" className="h-8" disabled={showAll}>
                             <Search className="h-3.5 w-3.5" />

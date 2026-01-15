@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
@@ -191,12 +192,10 @@ export default function AccountEdit() {
 
                                     <div>
                                         <Label htmlFor="hired_date">Hired Date</Label>
-                                        <Input
-                                            id="hired_date"
-                                            type="date"
+                                        <DatePicker
                                             value={data.hired_date}
-                                            onChange={e => setData("hired_date", e.target.value)}
-                                            required
+                                            onChange={(value) => setData("hired_date", value)}
+                                            placeholder="Select hired date"
                                         />
                                         {errors.hired_date && <p className="text-red-600 text-sm mt-1">{errors.hired_date}</p>}
                                     </div>

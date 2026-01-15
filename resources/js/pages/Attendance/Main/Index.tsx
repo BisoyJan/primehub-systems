@@ -10,7 +10,7 @@ import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 import { Button } from "@/components/ui/button";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { Input } from "@/components/ui/input"
+import { DatePicker } from "@/components/ui/date-picker"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
     Select,
@@ -21,8 +21,9 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause, Edit } from "lucide-react";
+import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause, Edit, Upload } from "lucide-react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -58,6 +59,12 @@ interface User {
     id: number;
     first_name: string;
     last_name: string;
+    name: string;
+    campaign?: Campaign;
+}
+
+interface Campaign {
+    id: number;
     name: string;
 }
 
@@ -114,6 +121,7 @@ interface PageProps extends SharedData {
     attendances?: AttendancePayload;
     users?: User[];
     sites?: Site[];
+    campaigns?: Campaign[];
     filters?: {
         search?: string;
         status?: string;
@@ -121,6 +129,7 @@ interface PageProps extends SharedData {
         end_date?: string;
         user_id?: string;
         site_id?: string;
+        campaign_id?: string;
         needs_verification?: boolean;
     };
     [key: string]: unknown;
@@ -189,7 +198,7 @@ const getShiftTypeBadge = (shiftType: string) => {
 };
 
 export default function AttendanceIndex() {
-    const { attendances, users = [], sites = [], filters, auth } = usePage<PageProps>().props;
+    const { attendances, users = [], sites = [], campaigns = [], filters, auth } = usePage<PageProps>().props;
 
     // Ensure we have proper data structure
     const attendanceData = {
@@ -213,6 +222,7 @@ export default function AttendanceIndex() {
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [selectedSiteId, setSelectedSiteId] = useState(appliedFilters.site_id || "");
+    const [selectedCampaignId, setSelectedCampaignId] = useState(appliedFilters.campaign_id || "");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
     const [startDate, setStartDate] = useState(appliedFilters.start_date || "");
     const [endDate, setEndDate] = useState(appliedFilters.end_date || "");
@@ -290,12 +300,13 @@ export default function AttendanceIndex() {
     useEffect(() => {
         setSelectedUserId(appliedFilters.user_id || "");
         setSelectedSiteId(appliedFilters.site_id || "");
+        setSelectedCampaignId(appliedFilters.campaign_id || "");
         setStatusFilter(appliedFilters.status || "all");
         setStartDate(appliedFilters.start_date || "");
         setEndDate(appliedFilters.end_date || "");
         setNeedsVerification(appliedFilters.needs_verification || false);
         // Don't clear selections when filters change
-    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
+    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
 
     const userId = auth.user?.id;
     const userRole = auth.user?.role;
@@ -323,6 +334,7 @@ export default function AttendanceIndex() {
         }
 
         if (selectedSiteId) params.site_id = selectedSiteId;
+        if (selectedCampaignId) params.campaign_id = selectedCampaignId;
         if (statusFilter !== "all") params.status = statusFilter;
         if (startDate) params.start_date = startDate;
         if (endDate) params.end_date = endDate;
@@ -355,6 +367,7 @@ export default function AttendanceIndex() {
             }
 
             if (selectedSiteId) params.site_id = selectedSiteId;
+            if (selectedCampaignId) params.campaign_id = selectedCampaignId;
             if (statusFilter !== "all") params.status = statusFilter;
             if (startDate) params.start_date = startDate;
             if (endDate) params.end_date = endDate;
@@ -370,7 +383,7 @@ export default function AttendanceIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, selectedUserId, selectedSiteId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
+    }, [autoRefreshEnabled, selectedUserId, selectedSiteId, selectedCampaignId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
 
     const showClearFilters =
         statusFilter !== "all" ||
@@ -378,12 +391,14 @@ export default function AttendanceIndex() {
         Boolean(endDate) ||
         needsVerification ||
         Boolean(selectedUserId) ||
-        Boolean(selectedSiteId);
+        Boolean(selectedSiteId) ||
+        Boolean(selectedCampaignId);
 
     const clearFilters = () => {
         setSelectedUserId("");
         setUserSearchQuery("");
         setSelectedSiteId("");
+        setSelectedCampaignId("");
         setStatusFilter("all");
         setStartDate("");
         setEndDate("");
@@ -512,7 +527,7 @@ export default function AttendanceIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-row lg:flex-wrap lg:items-center gap-3">
                         {!isRestrictedUser && (
                             <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                                 <PopoverTrigger asChild>
@@ -520,7 +535,7 @@ export default function AttendanceIndex() {
                                         variant="outline"
                                         role="combobox"
                                         aria-expanded={isUserPopoverOpen}
-                                        className="w-full justify-between font-normal"
+                                        className="w-full justify-between font-normal lg:w-auto lg:flex-1"
                                     >
                                         <span className="truncate">
                                             {selectedUserId
@@ -582,7 +597,7 @@ export default function AttendanceIndex() {
                         )}
 
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full">
+                            <SelectTrigger className="w-full lg:w-[180px]">
                                 <SelectValue placeholder="Filter by Status" />
                             </SelectTrigger>
                             <SelectContent>
@@ -601,7 +616,7 @@ export default function AttendanceIndex() {
                         </Select>
 
                         <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
-                            <SelectTrigger className="w-full">
+                            <SelectTrigger className="w-full lg:w-[180px]">
                                 <SelectValue placeholder="All Sites" />
                             </SelectTrigger>
                             <SelectContent>
@@ -614,143 +629,156 @@ export default function AttendanceIndex() {
                             </SelectContent>
                         </Select>
 
-                        <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground text-xs">From:</span>
-                            <Input
-                                type="date"
+                        <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
+                            <SelectTrigger className="w-full lg:w-auto lg:flex-1">
+                                <SelectValue placeholder="All Campaigns" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Campaigns</SelectItem>
+                                {campaigns.map((campaign) => (
+                                    <SelectItem key={campaign.id} value={campaign.id.toString()}>
+                                        {campaign.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+
+                        <div className="flex items-center gap-2 text-sm lg:w-auto lg:flex-1">
+                            <DatePicker
                                 value={startDate}
-                                onChange={event => setStartDate(event.target.value)}
-                                className="w-full bg-transparent outline-none text-sm"
+                                onChange={(value) => setStartDate(value)}
+                                placeholder="Start date"
+                                className="w-full"
                             />
                         </div>
 
-                        <div className="flex items-center gap-2 text-sm">
-                            <span className="text-muted-foreground text-xs">To:</span>
-                            <Input
-                                type="date"
+                        <div className="flex items-center gap-2 text-sm lg:w-auto lg:flex-1">
+                            <DatePicker
                                 value={endDate}
-                                onChange={event => setEndDate(event.target.value)}
-                                className="w-full bg-transparent outline-none text-sm"
+                                onChange={(value) => setEndDate(value)}
+                                placeholder="End date"
+                                className="w-full"
                             />
                         </div>
 
-                        <Button
-                            variant={needsVerification ? "default" : "outline"}
-                            onClick={() => setNeedsVerification(!needsVerification)}
-                            className="w-full"
-                        >
-                            <AlertCircle className="mr-2 h-4 w-4" />
-                            Needs Verification
-                        </Button>
+                        <div className="flex items-center gap-2 lg:w-auto">
+                            <TooltipProvider>
+                                <Tooltip>
+                                    <TooltipTrigger asChild>
+                                        <Button
+                                            variant={needsVerification ? "default" : "outline"}
+                                            onClick={() => setNeedsVerification(!needsVerification)}
+                                            size="icon"
+                                        >
+                                            <AlertCircle className="h-4 w-4" />
+                                        </Button>
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                        <p>Needs Verification</p>
+                                    </TooltipContent>
+                                </Tooltip>
+                            </TooltipProvider>
+                            <Button variant="default" onClick={handleSearch} className="whitespace-nowrap px-6">
+                                <Search className="mr-2 h-4 w-4" />
+                                Apply
+                            </Button>
+                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
+                                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                            </Button>
+                            <Button
+                                variant={autoRefreshEnabled ? "default" : "ghost"}
+                                size="icon"
+                                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                            >
+                                {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                            </Button>
+                        </div>
                     </div>
 
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                            <Can permission="attendance.create">
+                    {showClearFilters && (
+                        <div className="flex justify-end">
+                            <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
+                                Clear Filters
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Actions Row */}
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end border-t pt-3">
+                        {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
+                            <Can permission="attendance.approve">
                                 <Button
-                                    onClick={() => router.get(attendanceCreate().url)}
+                                    onClick={handleBulkQuickApprove}
+                                    variant="outline"
                                     className="w-full sm:w-auto"
-                                    variant="default"
                                 >
-                                    Add Manual Attendance
+                                    <Check className="mr-2 h-4 w-4" />
+                                    Quick Approve ({getEligibleQuickApproveCount()})
                                 </Button>
                             </Can>
+                        )}
+                        {selectedRecords.length > 0 && (
+                            <Can permission="attendance.delete">
+                                <Button
+                                    onClick={handleBulkDelete}
+                                    variant="destructive"
+                                    className="w-full sm:w-auto"
+                                >
+                                    <Trash2 className="mr-2 h-4 w-4" />
+                                    Delete Selected ({selectedRecords.length})
+                                </Button>
+                            </Can>
+                        )}
+                        <Button
+                            onClick={() => router.get(attendanceCalendar().url)}
+                            className="w-full sm:w-auto"
+                            variant="default"
+                        >
+                            <CalendarIcon className="mr-2 h-4 w-4" />
+                            Calendar View
+                        </Button>
+                        <Can permission="attendance.create">
                             <Button
-                                onClick={() => router.get(attendanceCalendar().url)}
+                                onClick={() => router.get(attendanceCreate().url)}
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                            >
+                                <Edit className="mr-2 h-4 w-4" />
+                                Manual Attendance
+                            </Button>
+                        </Can>
+                        <Can permission="attendance.import">
+                            <Button
+                                onClick={() => router.get(attendanceImport().url)}
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                            >
+                                <Upload className="mr-2 h-4 w-4" />
+                                Import Biometric
+                            </Button>
+                        </Can>
+                        <Can permission="attendance.create">
+                            <Button
+                                onClick={() => router.get(attendanceDailyRoster().url)}
                                 className="w-full sm:w-auto"
                                 variant="outline"
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
-                                Calendar View
+                                Daily Roster
                             </Button>
-                        </div>
-
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end sm:flex-1">
-                            <Button variant="default" onClick={handleSearch} className="w-full sm:w-auto">
-                                <Search className="mr-2 h-4 w-4" />
-                                Apply Filters
+                        </Can>
+                        <Can permission="attendance.review">
+                            <Button
+                                onClick={() => router.get(attendanceReview().url)}
+                                className="w-full sm:w-auto"
+                                variant="outline"
+                            >
+                                <AlertCircle className="mr-2 h-4 w-4" />
+                                Review Flagged
                             </Button>
-
-                            {showClearFilters && (
-                                <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
-                                    Clear Filters
-                                </Button>
-                            )}
-
-                            <div className="flex gap-2">
-                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
-                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                                </Button>
-                                <Button
-                                    variant={autoRefreshEnabled ? "default" : "ghost"}
-                                    size="icon"
-                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
-                                >
-                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                                </Button>
-                            </div>
-                        </div>
+                        </Can>
                     </div>
-
-                    {/* Bulk Actions Row */}
-                    {(selectedRecords.length > 0 || can('attendance.import') || can('attendance.review')) && (
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end border-t pt-3">
-                            {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
-                                <Can permission="attendance.approve">
-                                    <Button
-                                        onClick={handleBulkQuickApprove}
-                                        variant="outline"
-                                        className="w-full sm:w-auto"
-                                    >
-                                        <Check className="mr-2 h-4 w-4" />
-                                        Quick Approve ({getEligibleQuickApproveCount()})
-                                    </Button>
-                                </Can>
-                            )}
-                            {selectedRecords.length > 0 && (
-                                <Can permission="attendance.delete">
-                                    <Button
-                                        onClick={handleBulkDelete}
-                                        variant="destructive"
-                                        className="w-full sm:w-auto"
-                                    >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete Selected ({selectedRecords.length})
-                                    </Button>
-                                </Can>
-                            )}
-                            <Can permission="attendance.import">
-                                <Button
-                                    onClick={() => router.get(attendanceImport().url)}
-                                    className="w-full sm:w-auto"
-                                    variant="outline"
-                                >
-                                    Import Biometric File
-                                </Button>
-                            </Can>
-                            <Can permission="attendance.review">
-                                <Button
-                                    onClick={() => router.get(attendanceReview().url)}
-                                    className="w-full sm:w-auto"
-                                    variant="outline"
-                                >
-                                    <AlertCircle className="mr-2 h-4 w-4" />
-                                    Review Flagged
-                                </Button>
-                            </Can>
-                            <Can permission="attendance.create">
-                                <Button
-                                    onClick={() => router.get(attendanceDailyRoster().url)}
-                                    className="w-full sm:w-auto"
-                                    variant="outline"
-                                >
-                                    <CalendarIcon className="mr-2 h-4 w-4" />
-                                    Daily Roster
-                                </Button>
-                            </Can>
-                        </div>
-                    )}
                 </div>
 
                 <div className="flex justify-between items-center text-sm">
@@ -775,7 +803,7 @@ export default function AttendanceIndex() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow className="bg-muted/50">
+                                <TableRow>
                                     <TableHead className="w-12">
                                         <Checkbox
                                             checked={
@@ -786,6 +814,7 @@ export default function AttendanceIndex() {
                                         />
                                     </TableHead>
                                     <TableHead>Employee</TableHead>
+                                    <TableHead>Campaign</TableHead>
                                     <TableHead>Shift Date</TableHead>
                                     <TableHead>Shift Type</TableHead>
                                     <TableHead>Schedule</TableHead>
@@ -814,6 +843,9 @@ export default function AttendanceIndex() {
                                                     Cross-Site
                                                 </Badge>
                                             )}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                            {record.user.campaign?.name || <span className="text-muted-foreground">-</span>}
                                         </TableCell>
                                         <TableCell>{formatDate(record.shift_date)}</TableCell>
                                         <TableCell className="text-sm">
@@ -930,7 +962,7 @@ export default function AttendanceIndex() {
                                 ))}
                                 {attendanceData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={12} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={13} className="h-24 text-center text-muted-foreground">
                                             No attendance records found
                                         </TableCell>
                                     </TableRow>
@@ -966,6 +998,10 @@ export default function AttendanceIndex() {
                                     </div>
 
                                     <div className="space-y-2 text-sm mt-3">
+                                        <div>
+                                            <span className="font-medium">Campaign:</span>{" "}
+                                            {record.user.campaign?.name || "-"}
+                                        </div>
                                         <div>
                                             <span className="font-medium">Shift Type:</span>{" "}
                                             {record.employee_schedule?.shift_type ? (

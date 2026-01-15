@@ -33,6 +33,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1271,21 +1272,21 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
 
                         <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">From:</span>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={dateFrom}
-                                onChange={(e) => setDateFrom(e.target.value)}
-                                className="w-full bg-transparent outline-none text-sm"
+                                onChange={(value) => setDateFrom(value)}
+                                placeholder="Start date"
+                                className="w-full"
                             />
                         </div>
 
                         <div className="flex items-center gap-2 text-sm">
                             <span className="text-muted-foreground text-xs">To:</span>
-                            <Input
-                                type="date"
+                            <DatePicker
                                 value={dateTo}
-                                onChange={(e) => setDateTo(e.target.value)}
-                                className="w-full bg-transparent outline-none text-sm"
+                                onChange={(value) => setDateTo(value)}
+                                placeholder="End date"
+                                className="w-full"
                             />
                         </div>
                     </div>
@@ -1813,20 +1814,18 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     <div className="grid gap-4 py-4">
                         <div className="grid gap-2">
                             <Label htmlFor="rescan_date_from">From Date</Label>
-                            <Input
-                                id="rescan_date_from"
-                                type="date"
+                            <DatePicker
                                 value={rescanDateFrom}
-                                onChange={(e) => setRescanDateFrom(e.target.value)}
+                                onChange={(value) => setRescanDateFrom(value)}
+                                placeholder="Select start date"
                             />
                         </div>
                         <div className="grid gap-2">
                             <Label htmlFor="rescan_date_to">To Date</Label>
-                            <Input
-                                id="rescan_date_to"
-                                type="date"
+                            <DatePicker
                                 value={rescanDateTo}
-                                onChange={(e) => setRescanDateTo(e.target.value)}
+                                onChange={(value) => setRescanDateTo(value)}
+                                placeholder="Select end date"
                             />
                         </div>
                     </div>
@@ -2264,12 +2263,10 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             <Label htmlFor="manual_shift_date">
                                 Violation Date <span className="text-red-500">*</span>
                             </Label>
-                            <Input
-                                id="manual_shift_date"
-                                type="date"
+                            <DatePicker
                                 value={manualShiftDate}
-                                onChange={(e) => setManualShiftDate(e.target.value)}
-                                max={new Date().toISOString().split('T')[0]}
+                                onChange={(value) => setManualShiftDate(value)}
+                                placeholder="Select violation date"
                                 disabled={isManualSubmitting}
                             />
                         </div>
@@ -2939,21 +2936,19 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <div className="grid grid-cols-2 gap-2">
                                                 <div>
                                                     <Label htmlFor="mgmt_date_from" className="text-xs">From Date</Label>
-                                                    <Input
-                                                        id="mgmt_date_from"
-                                                        type="date"
+                                                    <DatePicker
                                                         value={mgmtDateFrom}
-                                                        onChange={(e) => setMgmtDateFrom(e.target.value)}
+                                                        onChange={(value) => setMgmtDateFrom(value)}
+                                                        placeholder="Start date"
                                                         className="h-8 text-sm"
                                                     />
                                                 </div>
                                                 <div>
                                                     <Label htmlFor="mgmt_date_to" className="text-xs">To Date</Label>
-                                                    <Input
-                                                        id="mgmt_date_to"
-                                                        type="date"
+                                                    <DatePicker
                                                         value={mgmtDateTo}
-                                                        onChange={(e) => setMgmtDateTo(e.target.value)}
+                                                        onChange={(value) => setMgmtDateTo(value)}
+                                                        placeholder="End date"
                                                         className="h-8 text-sm"
                                                     />
                                                 </div>

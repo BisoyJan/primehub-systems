@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { TimeInput } from '@/components/ui/time-input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { formatTime } from '@/lib/utils';
 import {
     Select,
@@ -573,7 +574,7 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
 
                 {/* Filters Row */}
                 <div className="flex flex-col gap-3">
-                    <div className="flex flex-col lg:flex-row gap-3">
+                    <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3">
                         {/* Search */}
                         <Input
                             type="text"
@@ -581,19 +582,19 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                             value={searchQuery}
                             onChange={(e) => setSearchQuery(e.target.value)}
                             onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
-                            className="lg:flex-1 lg:min-w-[200px]"
+                            className="lg:flex-1 lg:min-w-[180px]"
                         />
 
                         {/* Date Selection */}
-                        <Input
-                            type="date"
+                        <DatePicker
                             value={dateFilter}
-                            onChange={(e) => setDateFilter(e.target.value)}
-                            className="lg:w-[140px]"
+                            onChange={(value) => setDateFilter(value)}
+                            placeholder="Select date"
+                            className="lg:flex-1 lg:min-w-[160px]"
                         />
 
                         <Select value={siteFilter} onValueChange={setSiteFilter}>
-                            <SelectTrigger className="lg:w-[140px]">
+                            <SelectTrigger className="lg:flex-1 lg:min-w-[120px]">
                                 <SelectValue placeholder="All Sites" />
                             </SelectTrigger>
                             <SelectContent>
@@ -607,7 +608,7 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                         </Select>
 
                         <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                            <SelectTrigger className="lg:w-[160px]">
+                            <SelectTrigger className="lg:flex-1 lg:min-w-[140px]">
                                 <SelectValue placeholder="All Campaigns" />
                             </SelectTrigger>
                             <SelectContent>
@@ -621,7 +622,7 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                         </Select>
 
                         <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="lg:w-[150px]">
+                            <SelectTrigger className="lg:flex-1 lg:min-w-[130px]">
                                 <SelectValue placeholder="All Statuses" />
                             </SelectTrigger>
                             <SelectContent>
@@ -767,7 +768,7 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                                                     Generate
                                                 </Button>
                                             )}
-                                            {employee.existing_attendance && employee.schedule && (
+                                            {!employee.on_leave && employee.existing_attendance && employee.schedule && (
                                                 <Button
                                                     size="sm"
                                                     variant="ghost"
@@ -860,7 +861,7 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                                         Generate Attendance
                                     </Button>
                                 )}
-                                {employee.existing_attendance && employee.schedule && (
+                                {!employee.on_leave && employee.existing_attendance && employee.schedule && (
                                     <Button
                                         size="sm"
                                         variant="outline"
@@ -1056,13 +1057,13 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                         <div className="space-y-2">
                             <Label>Actual Time In</Label>
                             <div className="grid grid-cols-2 gap-2">
-                                <Input
-                                    type="date"
+                                <DatePicker
                                     value={data.actual_time_in?.split('T')[0] || ''}
-                                    onChange={(e) => {
+                                    onChange={(value) => {
                                         const time = data.actual_time_in?.split('T')[1] || '00:00';
-                                        setData('actual_time_in', `${e.target.value}T${time}`);
+                                        setData('actual_time_in', `${value}T${time}`);
                                     }}
+                                    placeholder="Date"
                                 />
                                 <TimeInput
                                     value={data.actual_time_in?.split('T')[1] || ''}
@@ -1081,13 +1082,13 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                         <div className="space-y-2">
                             <Label>Actual Time Out</Label>
                             <div className="grid grid-cols-2 gap-2">
-                                <Input
-                                    type="date"
+                                <DatePicker
                                     value={data.actual_time_out?.split('T')[0] || ''}
-                                    onChange={(e) => {
+                                    onChange={(value) => {
                                         const time = data.actual_time_out?.split('T')[1] || '00:00';
-                                        setData('actual_time_out', `${e.target.value}T${time}`);
+                                        setData('actual_time_out', `${value}T${time}`);
                                     }}
+                                    placeholder="Date"
                                 />
                                 <TimeInput
                                     value={data.actual_time_out?.split('T')[1] || ''}

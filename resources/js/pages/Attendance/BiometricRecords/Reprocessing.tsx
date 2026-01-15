@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -268,21 +269,18 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
                                     <Label htmlFor="start-date">Start Date</Label>
-                                    <Input
-                                        id="start-date"
-                                        type="date"
+                                    <DatePicker
                                         value={startDate}
-                                        onChange={(e) => setStartDate(e.target.value)}
+                                        onChange={(value) => setStartDate(value)}
+                                        placeholder="Select start date"
                                     />
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="end-date">End Date</Label>
-                                    <Input
-                                        id="end-date"
-                                        type="date"
+                                    <DatePicker
                                         value={endDate}
-                                        onChange={(e) => setEndDate(e.target.value)}
-                                        min={startDate}
+                                        onChange={(value) => setEndDate(value)}
+                                        placeholder="Select end date"
                                     />
                                 </div>
                             </div>

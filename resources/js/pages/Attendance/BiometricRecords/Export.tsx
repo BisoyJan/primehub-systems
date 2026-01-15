@@ -8,6 +8,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -723,20 +724,19 @@ export default function Export() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="flex items-center gap-2 text-sm">
                                         <span className="text-muted-foreground text-xs whitespace-nowrap">From:</span>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={startDate}
-                                            onChange={(e) => setStartDate(e.target.value)}
+                                            onChange={(value) => setStartDate(value)}
+                                            placeholder="Start date"
                                             className="w-full"
                                         />
                                     </div>
                                     <div className="flex items-center gap-2 text-sm">
                                         <span className="text-muted-foreground text-xs whitespace-nowrap">To:</span>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={endDate}
-                                            onChange={(e) => setEndDate(e.target.value)}
-                                            min={startDate}
+                                            onChange={(value) => setEndDate(value)}
+                                            placeholder="End date"
                                             className="w-full"
                                         />
                                     </div>
@@ -993,20 +993,19 @@ export default function Export() {
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                     <div className="flex items-center gap-2 text-sm">
                                         <span className="text-muted-foreground text-xs whitespace-nowrap">From:</span>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={pointsStartDate}
-                                            onChange={(e) => setPointsStartDate(e.target.value)}
+                                            onChange={(value) => setPointsStartDate(value)}
+                                            placeholder="Start date"
                                             className="w-full"
                                         />
                                     </div>
                                     <div className="flex items-center gap-2 text-sm">
                                         <span className="text-muted-foreground text-xs whitespace-nowrap">To:</span>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={pointsEndDate}
-                                            onChange={(e) => setPointsEndDate(e.target.value)}
-                                            min={pointsStartDate}
+                                            onChange={(value) => setPointsEndDate(value)}
+                                            placeholder="End date"
                                             className="w-full"
                                         />
                                     </div>

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
@@ -1166,13 +1167,10 @@ export default function Create({
                                     <Label htmlFor="start_date">
                                         Start Date <span className="text-red-500">*</span>
                                     </Label>
-                                    <Input
-                                        id="start_date"
-                                        type="date"
+                                    <DatePicker
                                         value={data.start_date}
-                                        onChange={(e) => handleStartDateChange(e.target.value)}
-                                        min={data.leave_type === 'SL' ? getSlMinDate() : new Date().toISOString().split('T')[0]}
-                                        max={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
+                                        onChange={(value) => handleStartDateChange(value)}
+                                        placeholder="Select start date"
                                         className={weekendError.start ? 'border-red-500' : ''}
                                     />
                                     {weekendError.start && (
@@ -1192,13 +1190,10 @@ export default function Create({
                                     <Label htmlFor="end_date">
                                         End Date <span className="text-red-500">*</span>
                                     </Label>
-                                    <Input
-                                        id="end_date"
-                                        type="date"
+                                    <DatePicker
                                         value={data.end_date}
-                                        onChange={(e) => handleEndDateChange(e.target.value)}
-                                        min={data.leave_type === 'SL' ? (data.start_date || getSlMinDate()) : (data.start_date || new Date().toISOString().split('T')[0])}
-                                        max={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
+                                        onChange={(value) => handleEndDateChange(value)}
+                                        placeholder="Select end date"
                                         className={weekendError.end ? 'border-red-500' : ''}
                                     />
                                     {weekendError.end && (

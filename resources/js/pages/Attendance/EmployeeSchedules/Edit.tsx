@@ -5,6 +5,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -456,10 +457,10 @@ export default function EmployeeScheduleEdit() {
                                 {/* Effective Date */}
                                 <div className="space-y-2">
                                     <Label htmlFor="effective_date">Hired Date</Label>
-                                    <Input
-                                        type="date"
+                                    <DatePicker
                                         value={canEditEffectiveDate ? data.effective_date : schedule.effective_date}
-                                        onChange={e => setData("effective_date", e.target.value)}
+                                        onChange={(value) => setData("effective_date", value)}
+                                        placeholder="Select date"
                                         disabled={!canEditEffectiveDate}
                                         className={!canEditEffectiveDate ? "bg-muted" : ""}
                                     />
@@ -476,10 +477,10 @@ export default function EmployeeScheduleEdit() {
                                 {/* End Date */}
                                 <div className="space-y-2">
                                     <Label htmlFor="end_date">End Date (Optional)</Label>
-                                    <Input
-                                        type="date"
+                                    <DatePicker
                                         value={data.end_date}
-                                        onChange={e => setData("end_date", e.target.value)}
+                                        onChange={(value) => setData("end_date", value)}
+                                        placeholder="Select date"
                                     />
                                     <p className="text-xs text-muted-foreground">
                                         Leave blank for indefinite schedule

@@ -7,6 +7,7 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -355,23 +356,20 @@ export default function AttendanceImport() {
                                             <Label htmlFor="date_from" className="text-xs text-muted-foreground">
                                                 From
                                             </Label>
-                                            <Input
-                                                id="date_from"
-                                                type="date"
+                                            <DatePicker
                                                 value={dateFrom}
-                                                onChange={e => setDateFrom(e.target.value)}
+                                                onChange={(value) => setDateFrom(value)}
+                                                placeholder="Start date"
                                             />
                                         </div>
                                         <div>
                                             <Label htmlFor="date_to" className="text-xs text-muted-foreground">
                                                 To
                                             </Label>
-                                            <Input
-                                                id="date_to"
-                                                type="date"
+                                            <DatePicker
                                                 value={dateTo}
-                                                onChange={e => setDateTo(e.target.value)}
-                                                min={dateFrom}
+                                                onChange={(value) => setDateTo(value)}
+                                                placeholder="End date"
                                             />
                                         </div>
                                     </div>

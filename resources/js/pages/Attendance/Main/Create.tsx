@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/app-layout';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { TimeInput } from '@/components/ui/time-input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -950,12 +951,10 @@ export default function Create({ users, campaigns }: Props) {
                                     <Label htmlFor="shift_date">
                                         Shift Date <span className="text-red-500">*</span>
                                     </Label>
-                                    <Input
-                                        id="shift_date"
-                                        type="date"
+                                    <DatePicker
                                         value={isBulkMode ? bulkData.shift_date : data.shift_date}
-                                        onChange={(e) => {
-                                            const newShiftDate = e.target.value;
+                                        onChange={(value) => {
+                                            const newShiftDate = value;
                                             if (isBulkMode) {
                                                 setBulkData('shift_date', newShiftDate);
                                                 // Auto-update time-in date
@@ -990,7 +989,7 @@ export default function Create({ users, campaigns }: Props) {
                                                 }
                                             }
                                         }}
-                                        max={new Date().toISOString().split('T')[0]}
+                                        placeholder="Select date"
                                     />
                                     {(isBulkMode ? bulkErrors.shift_date : errors.shift_date) && (
                                         <p className="text-sm text-red-500">{isBulkMode ? bulkErrors.shift_date : errors.shift_date}</p>
@@ -1083,18 +1082,16 @@ export default function Create({ users, campaigns }: Props) {
                                         </Label>
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1">
-                                                <Input
-                                                    id="actual_time_in_date"
-                                                    type="date"
-                                                    placeholder="Date"
+                                                <DatePicker
                                                     value={isBulkMode ? bulkData.actual_time_in_date : data.actual_time_in_date}
-                                                    onChange={(e) => {
+                                                    onChange={(value) => {
                                                         if (isBulkMode) {
-                                                            setBulkData('actual_time_in_date', e.target.value);
+                                                            setBulkData('actual_time_in_date', value);
                                                         } else {
-                                                            setData('actual_time_in_date', e.target.value);
+                                                            setData('actual_time_in_date', value);
                                                         }
                                                     }}
+                                                    placeholder="Date"
                                                 />
                                                 {(isBulkMode ? bulkData.actual_time_in_date : data.actual_time_in_date) && (
                                                     <p className="text-xs text-muted-foreground">
@@ -1130,18 +1127,16 @@ export default function Create({ users, campaigns }: Props) {
                                         </Label>
                                         <div className="grid grid-cols-2 gap-2">
                                             <div className="space-y-1">
-                                                <Input
-                                                    id="actual_time_out_date"
-                                                    type="date"
-                                                    placeholder="Date"
+                                                <DatePicker
                                                     value={isBulkMode ? bulkData.actual_time_out_date : data.actual_time_out_date}
-                                                    onChange={(e) => {
+                                                    onChange={(value) => {
                                                         if (isBulkMode) {
-                                                            setBulkData('actual_time_out_date', e.target.value);
+                                                            setBulkData('actual_time_out_date', value);
                                                         } else {
-                                                            setData('actual_time_out_date', e.target.value);
+                                                            setData('actual_time_out_date', value);
                                                         }
                                                     }}
+                                                    placeholder="Date"
                                                 />
                                                 {(isBulkMode ? bulkData.actual_time_out_date : data.actual_time_out_date) && (
                                                     <p className="text-xs text-muted-foreground">

@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { FileText, AlertTriangle, CheckCircle, Clock, XCircle, Eye, RefreshCw, Search, Filter, Play, Pause } from "lucide-react";
@@ -208,23 +209,23 @@ export default function UploadsIndex({ uploads, filters }: PageProps) {
                                 </SelectContent>
                             </Select>
 
-                            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                            <div className="flex items-center gap-2 text-sm">
                                 <span className="text-muted-foreground text-xs">From:</span>
-                                <Input
-                                    type="date"
+                                <DatePicker
                                     value={dateFrom}
-                                    onChange={(e) => setDateFrom(e.target.value)}
-                                    className="w-full bg-transparent outline-none text-sm h-auto p-0 border-0 focus-visible:ring-0"
+                                    onChange={(value) => setDateFrom(value)}
+                                    placeholder="Start date"
+                                    className="w-full"
                                 />
                             </div>
 
-                            <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
+                            <div className="flex items-center gap-2 text-sm">
                                 <span className="text-muted-foreground text-xs">To:</span>
-                                <Input
-                                    type="date"
+                                <DatePicker
                                     value={dateTo}
-                                    onChange={(e) => setDateTo(e.target.value)}
-                                    className="w-full bg-transparent outline-none text-sm h-auto p-0 border-0 focus-visible:ring-0"
+                                    onChange={(value) => setDateTo(value)}
+                                    placeholder="End date"
+                                    className="w-full"
                                 />
                             </div>
                         </div>

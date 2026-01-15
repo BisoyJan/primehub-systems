@@ -5,6 +5,7 @@ import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Textarea } from '@/components/ui/textarea';
 import {
     Select,
@@ -338,13 +339,10 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
                                     <Label htmlFor="last_maintenance_date">
                                         Last Maintenance Date <span className="text-red-500">*</span>
                                     </Label>
-                                    <Input
-                                        id="last_maintenance_date"
-                                        type="date"
+                                    <DatePicker
                                         value={formData.last_maintenance_date}
-                                        onChange={(e) => handleLastMaintenanceDateChange(e.target.value)}
-                                        required
-                                        max={new Date().toISOString().split('T')[0]}
+                                        onChange={(value) => handleLastMaintenanceDateChange(value)}
+                                        placeholder="Select last maintenance date"
                                     />
                                 </div>
 
@@ -353,13 +351,10 @@ export default function Create({ pcSpecs, sites }: CreateProps) {
                                         Next Due Date <span className="text-red-500">*</span>
                                         <span className="text-xs text-muted-foreground ml-2">(Auto: 4 months ahead)</span>
                                     </Label>
-                                    <Input
-                                        id="next_due_date"
-                                        type="date"
+                                    <DatePicker
                                         value={formData.next_due_date}
-                                        onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })}
-                                        required
-                                        min={formData.last_maintenance_date}
+                                        onChange={(value) => setFormData({ ...formData, next_due_date: value })}
+                                        placeholder="Select next due date"
                                     />
                                 </div>
 

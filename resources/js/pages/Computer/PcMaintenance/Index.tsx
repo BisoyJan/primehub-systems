@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { DatePicker } from '@/components/ui/date-picker';
 import {
     Table,
     TableBody,
@@ -800,11 +801,10 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <Label htmlFor="bulk-last-date">Last Maintenance Date</Label>
-                                    <Input
-                                        id="bulk-last-date"
-                                        type="date"
+                                    <DatePicker
                                         value={bulkUpdateForm.data.last_maintenance_date}
-                                        onChange={(e) => bulkUpdateForm.setData('last_maintenance_date', e.target.value)}
+                                        onChange={(value) => bulkUpdateForm.setData('last_maintenance_date', value)}
+                                        placeholder="Select date"
                                     />
                                     {bulkUpdateForm.errors.last_maintenance_date && (
                                         <p className="text-sm text-destructive">{bulkUpdateForm.errors.last_maintenance_date}</p>
@@ -812,11 +812,10 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                                 </div>
                                 <div className="space-y-2">
                                     <Label htmlFor="bulk-next-date">Next Due Date</Label>
-                                    <Input
-                                        id="bulk-next-date"
-                                        type="date"
+                                    <DatePicker
                                         value={bulkUpdateForm.data.next_due_date}
-                                        onChange={(e) => bulkUpdateForm.setData('next_due_date', e.target.value)}
+                                        onChange={(value) => bulkUpdateForm.setData('next_due_date', value)}
+                                        placeholder="Select date"
                                     />
                                     {bulkUpdateForm.errors.next_due_date && (
                                         <p className="text-sm text-destructive">{bulkUpdateForm.errors.next_due_date}</p>

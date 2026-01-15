@@ -21,7 +21,7 @@ import {
     SelectValue
 } from '@/components/ui/select';
 import { type SharedData } from '@/types';
-import { Input } from '@headlessui/react';
+import { DatePicker } from '@/components/ui/date-picker';
 import { index as attendanceIndex, review as attendanceReview } from '@/routes/attendance';
 import { index as biometricAnomaliesIndex, detect as biometricAnomaliesDetect } from '@/routes/biometric-anomalies';
 
@@ -262,24 +262,23 @@ export default function Anomalies({ stats, results }: PageProps) {
                     <CardContent className="space-y-4">
                         {/* Date Range */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                            <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                            <div className="flex items-center gap-2 text-sm">
                                 <span className="text-muted-foreground text-xs whitespace-nowrap">From:</span>
-                                <Input
-                                    type="date"
+                                <DatePicker
                                     value={startDate}
-                                    onChange={(e) => setStartDate(e.target.value)}
-                                    className="w-full bg-transparent outline-none text-sm"
+                                    onChange={(value) => setStartDate(value)}
+                                    placeholder="Start date"
+                                    className="w-full"
                                 />
                             </div>
 
-                            <div className="flex items-center gap-2 rounded-md border px-3 py-2">
+                            <div className="flex items-center gap-2 text-sm">
                                 <span className="text-muted-foreground text-xs whitespace-nowrap">To:</span>
-                                <Input
-                                    type="date"
+                                <DatePicker
                                     value={endDate}
-                                    onChange={(e) => setEndDate(e.target.value)}
-                                    min={startDate}
-                                    className="w-full bg-transparent outline-none text-sm"
+                                    onChange={(value) => setEndDate(value)}
+                                    placeholder="End date"
+                                    className="w-full"
                                 />
                             </div>
 

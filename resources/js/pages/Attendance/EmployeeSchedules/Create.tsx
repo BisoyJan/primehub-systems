@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import {
     Select,
@@ -637,10 +638,10 @@ export default function EmployeeScheduleCreate() {
                                         <Label htmlFor="effective_date">
                                             Hired Date <span className="text-red-500">*</span>
                                         </Label>
-                                        <Input
-                                            type="date"
+                                        <DatePicker
                                             value={data.effective_date}
-                                            onChange={e => setData("effective_date", e.target.value)}
+                                            onChange={(value) => setData("effective_date", value)}
+                                            placeholder="Select date"
                                             disabled={!isRestrictedRole && selectedUser?.has_schedule}
                                             className={!isRestrictedRole && selectedUser?.has_schedule ? "bg-muted" : ""}
                                         />
@@ -663,10 +664,10 @@ export default function EmployeeScheduleCreate() {
                                     {!isRestrictedRole && (
                                         <div className="space-y-2">
                                             <Label htmlFor="end_date">End Date (Optional)</Label>
-                                            <Input
-                                                type="date"
+                                            <DatePicker
                                                 value={data.end_date}
-                                                onChange={e => setData("end_date", e.target.value)}
+                                                onChange={(value) => setData("end_date", value)}
+                                                placeholder="Select date"
                                             />
                                             <p className="text-xs text-muted-foreground">
                                                 Leave blank for indefinite schedule

@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { DatePicker } from '@/components/ui/date-picker';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
@@ -1064,12 +1065,10 @@ export default function Dashboard({
                                                     >
                                                         Today
                                                     </Button>
-                                                    <input
-                                                        type="date"
+                                                    <DatePicker
                                                         value={presenceDate}
-                                                        onChange={(e) => handlePresenceDateChange(e.target.value)}
-                                                        className="h-9 px-3 border rounded-md text-sm"
-                                                        title="Select date"
+                                                        onChange={(value) => handlePresenceDateChange(value)}
+                                                        placeholder="Select date"
                                                     />
                                                 </div>
                                             </div>
@@ -1465,20 +1464,16 @@ export default function Dashboard({
                                                 <SelectItem value="non_verified">Non-Verified</SelectItem>
                                             </SelectContent>
                                         </Select>
-                                        <input
-                                            type="date"
+                                        <DatePicker
                                             value={dateRange.start}
-                                            onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })}
-                                            className="h-9 px-3 border rounded-md text-sm"
-                                            title="Start date"
+                                            onChange={(value) => setDateRange({ ...dateRange, start: value })}
+                                            placeholder="Start date"
                                         />
                                         <span className="text-muted-foreground text-sm">to</span>
-                                        <input
-                                            type="date"
+                                        <DatePicker
                                             value={dateRange.end}
-                                            onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })}
-                                            className="h-9 px-3 border rounded-md text-sm"
-                                            title="End date"
+                                            onChange={(value) => setDateRange({ ...dateRange, end: value })}
+                                            placeholder="End date"
                                         />
                                         <Button onClick={handleDateRangeChange} size="sm">
                                             Apply
