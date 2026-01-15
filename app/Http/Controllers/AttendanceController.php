@@ -932,7 +932,7 @@ class AttendanceController extends Controller
             'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_out',
             'actual_time_in' => 'nullable|date',
             'actual_time_out' => 'nullable|date',
-            'verification_notes' => 'required|string|max:1000',
+            'verification_notes' => 'nullable|string|max:1000',
             'overtime_approved' => 'nullable|boolean',
             'notes' => 'nullable|string|max:500',
             'adjust_leave' => 'nullable|boolean', // Flag to confirm leave adjustment
@@ -1105,7 +1105,7 @@ class AttendanceController extends Controller
             'record_ids.*' => 'required|exists:attendances,id',
             'status' => 'required|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day,on_leave',
             'secondary_status' => 'nullable|in:undertime,undertime_more_than_hour,failed_bio_out',
-            'verification_notes' => 'required|string|max:1000',
+            'verification_notes' => 'nullable|string|max:1000',
             'overtime_approved' => 'nullable|boolean',
         ]);
 
@@ -1610,5 +1610,408 @@ class AttendanceController extends Controller
                 'message' => 'Failed to adjust leave: ' . $e->getMessage(),
             ];
         }
+    }
+
+    /**
+     * Display daily roster - employees expected to work on a given date based on their schedules.
+     */
+    public function dailyRoster(Request $request)
+    {
+        $this->authorize('viewAny', Attendance::class);
+
+        // Use provided date or default to today
+        $selectedDate = $request->filled('date')
+            ? Carbon::parse($request->date)
+            : Carbon::today();
+        $dayName = strtolower($selectedDate->format('l')); // monday, tuesday, etc.
+
+        // Get all active employees with schedules that include the selected date
+        $employees = User::with(['employeeSchedules' => function ($query) use ($selectedDate) {
+            $query->where('is_active', true)
+                ->where('effective_date', '<=', $selectedDate)
+                ->where(function ($q) use ($selectedDate) {
+                    $q->whereNull('end_date')
+                        ->orWhere('end_date', '>=', $selectedDate);
+                });
+        }, 'employeeSchedules.site', 'employeeSchedules.campaign'])
+            ->whereHas('employeeSchedules', function ($query) use ($selectedDate) {
+                $query->where('is_active', true)
+                    ->where('effective_date', '<=', $selectedDate)
+                    ->where(function ($q) use ($selectedDate) {
+                        $q->whereNull('end_date')
+                            ->orWhere('end_date', '>=', $selectedDate);
+                    });
+            })
+            // Search filter
+            ->when($request->filled('search'), function ($query) use ($request) {
+                $search = $request->search;
+                $query->where(function ($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere('email', 'like', "%{$search}%")
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$search}%"]);
+                });
+            })
+            ->get()
+            ->filter(function ($user) use ($dayName) {
+                // Filter to only employees who work on the selected day
+                $schedule = $user->employeeSchedules->first();
+                return $schedule && $schedule->worksOnDay($dayName);
+            })
+            ->map(function ($user) use ($selectedDate) {
+                $schedule = $user->employeeSchedules->first();
+
+                // Check if attendance already exists for selected date
+                $existingAttendance = Attendance::where('user_id', $user->id)
+                    ->where('shift_date', $selectedDate->format('Y-m-d'))
+                    ->first();
+
+                // Check for approved leave
+                $approvedLeave = LeaveRequest::where('user_id', $user->id)
+                    ->where('status', 'approved')
+                    ->where('start_date', '<=', $selectedDate)
+                    ->where('end_date', '>=', $selectedDate)
+                    ->first();
+
+                return [
+                    'id' => $user->id,
+                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'email' => $user->email,
+                    'schedule' => $schedule ? [
+                        'id' => $schedule->id,
+                        'shift_type' => $schedule->shift_type,
+                        'scheduled_time_in' => $schedule->scheduled_time_in,
+                        'scheduled_time_out' => $schedule->scheduled_time_out,
+                        'site_id' => $schedule->site_id,
+                        'site_name' => $schedule->site?->name,
+                        'campaign_id' => $schedule->campaign_id,
+                        'campaign_name' => $schedule->campaign?->name,
+                        'grace_period_minutes' => $schedule->grace_period_minutes ?? 15,
+                        'work_days' => $schedule->work_days,
+                    ] : null,
+                    'existing_attendance' => $existingAttendance ? [
+                        'id' => $existingAttendance->id,
+                        'status' => $existingAttendance->status,
+                        'secondary_status' => $existingAttendance->secondary_status,
+                        'actual_time_in' => $existingAttendance->actual_time_in?->format('Y-m-d\TH:i'),
+                        'actual_time_out' => $existingAttendance->actual_time_out?->format('Y-m-d\TH:i'),
+                        'admin_verified' => $existingAttendance->admin_verified,
+                        'notes' => $existingAttendance->notes,
+                        'verification_notes' => $existingAttendance->verification_notes,
+                        'overtime_approved' => $existingAttendance->overtime_approved,
+                    ] : null,
+                    'on_leave' => $approvedLeave ? [
+                        'id' => $approvedLeave->id,
+                        'leave_type' => $approvedLeave->leave_type,
+                    ] : null,
+                ];
+            })
+            ->values();
+
+        // Get sites and campaigns for filter
+        $sites = Site::orderBy('name')->get(['id', 'name']);
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+
+        // Filter by site if provided
+        if ($request->filled('site_id')) {
+            $employees = $employees->filter(function ($emp) use ($request) {
+                return $emp['schedule'] && $emp['schedule']['site_id'] == $request->site_id;
+            })->values();
+        }
+
+        // Filter by campaign if provided
+        if ($request->filled('campaign_id')) {
+            $employees = $employees->filter(function ($emp) use ($request) {
+                return $emp['schedule'] && $emp['schedule']['campaign_id'] == $request->campaign_id;
+            })->values();
+        }
+
+        // Filter by status if provided
+        if ($request->filled('status')) {
+            $employees = $employees->filter(function ($emp) use ($request) {
+                if ($request->status === 'pending') {
+                    return !$emp['existing_attendance'] && !$emp['on_leave'];
+                } elseif ($request->status === 'recorded') {
+                    return $emp['existing_attendance'] !== null;
+                } elseif ($request->status === 'on_leave') {
+                    return $emp['on_leave'] !== null;
+                }
+                return true;
+            })->values();
+        }
+
+        return Inertia::render('Attendance/Main/DailyRoster', [
+            'employees' => $employees,
+            'sites' => $sites,
+            'campaigns' => $campaigns,
+            'selectedDate' => $selectedDate->format('Y-m-d'),
+            'dayName' => ucfirst($dayName),
+            'filters' => [
+                'site_id' => $request->site_id,
+                'campaign_id' => $request->campaign_id,
+                'status' => $request->status,
+                'search' => $request->search,
+                'date' => $request->date,
+            ],
+        ]);
+    }
+
+    /**
+     * Generate attendance record for an employee from expected today list.
+     * Creates unverified record that goes to Review page.
+     */
+    public function generateAttendance(Request $request)
+    {
+        $this->authorize('create', Attendance::class);
+
+        $validated = $request->validate([
+            'user_id' => 'required|exists:users,id',
+            'shift_date' => 'required|date',
+            'actual_time_in' => 'nullable|date_format:Y-m-d\\TH:i',
+            'actual_time_out' => 'nullable|date_format:Y-m-d\\TH:i',
+            'notes' => 'nullable|string|max:500',
+            'status' => 'nullable|string|in:on_time,tardy,half_day_absence,advised_absence,ncns,undertime,undertime_more_than_hour,failed_bio_in,failed_bio_out,present_no_bio,non_work_day',
+            'secondary_status' => 'nullable|string|in:undertime,undertime_more_than_hour,failed_bio_out',
+            'verification_notes' => 'nullable|string|max:1000',
+            'overtime_approved' => 'nullable|boolean',
+        ]);
+
+        // Check if attendance already exists for this date
+        $existingAttendance = Attendance::where('user_id', $validated['user_id'])
+            ->where('shift_date', $validated['shift_date'])
+            ->first();
+
+        if ($existingAttendance) {
+            return redirect()->back()
+                ->with('error', 'Attendance record already exists for this employee on this date.');
+        }
+
+        // Get employee schedule
+        $schedule = \App\Models\EmployeeSchedule::where('user_id', $validated['user_id'])
+            ->where('is_active', true)
+            ->where('effective_date', '<=', $validated['shift_date'])
+            ->where(function ($query) use ($validated) {
+                $query->whereNull('end_date')
+                    ->orWhere('end_date', '>=', $validated['shift_date']);
+            })
+            ->first();
+
+        if (!$schedule) {
+            return redirect()->back()
+                ->with('error', 'No active schedule found for this employee.');
+        }
+
+        // Parse times
+        $actualTimeIn = Carbon::parse($validated['actual_time_in']);
+        $actualTimeOut = Carbon::parse($validated['actual_time_out']);
+        $shiftDate = Carbon::parse($validated['shift_date']);
+
+        // Build scheduled times
+        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+
+        // Handle night shift (time out is next day)
+        if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
+            $scheduledTimeOut->addDay();
+        }
+
+        // Calculate violations
+        $tardyMinutes = null;
+        $undertimeMinutes = null;
+        $overtimeMinutes = null;
+        $calculatedStatus = 'on_time';
+        $calculatedSecondaryStatus = null;
+        $gracePeriod = $schedule->grace_period_minutes ?? 15;
+
+        // Calculate tardy (late arrival)
+        if ($actualTimeIn->gt($scheduledTimeIn)) {
+            $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
+            // More than grace period = half day absence
+            if ($tardyMinutes > $gracePeriod) {
+                $calculatedStatus = 'half_day_absence';
+            } else if ($tardyMinutes >= 1) {
+                $calculatedStatus = 'tardy';
+            }
+        }
+
+        // Calculate undertime (early leave) or overtime (late leave)
+        if ($actualTimeOut->lt($scheduledTimeOut)) {
+            $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+            if ($undertimeMinutes > 60) {
+                if ($calculatedStatus === 'on_time') {
+                    $calculatedStatus = 'undertime_more_than_hour';
+                } else {
+                    $calculatedSecondaryStatus = 'undertime_more_than_hour';
+                }
+            } else if ($undertimeMinutes > 0) {
+                if ($calculatedStatus === 'on_time') {
+                    $calculatedStatus = 'undertime';
+                } else {
+                    $calculatedSecondaryStatus = 'undertime';
+                }
+            }
+        } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+            $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+        }
+
+        // Use provided status or calculated status
+        $status = $validated['status'] ?? $calculatedStatus;
+        $secondaryStatus = $validated['secondary_status'] ?? $calculatedSecondaryStatus;
+
+        // Create attendance record - VERIFIED immediately
+        $attendance = Attendance::create([
+            'user_id' => $validated['user_id'],
+            'employee_schedule_id' => $schedule->id,
+            'shift_date' => $validated['shift_date'],
+            'scheduled_time_in' => $schedule->scheduled_time_in,
+            'scheduled_time_out' => $schedule->scheduled_time_out,
+            'actual_time_in' => $actualTimeIn,
+            'actual_time_out' => $actualTimeOut,
+            'status' => $status,
+            'secondary_status' => $secondaryStatus,
+            'tardy_minutes' => $tardyMinutes,
+            'undertime_minutes' => $undertimeMinutes,
+            'overtime_minutes' => $overtimeMinutes,
+            'overtime_approved' => $validated['overtime_approved'] ?? false,
+            'overtime_approved_at' => ($validated['overtime_approved'] ?? false) ? now() : null,
+            'overtime_approved_by' => ($validated['overtime_approved'] ?? false) ? auth()->id() : null,
+            'admin_verified' => true, // Auto-verified
+            'verification_notes' => $validated['verification_notes'],
+            'notes' => $validated['notes'],
+        ]);
+
+        // Generate attendance points if needed
+        if (in_array($status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence']) ||
+            in_array($secondaryStatus, ['undertime', 'undertime_more_than_hour'])) {
+            $this->processor->regeneratePointsForAttendance($attendance->fresh());
+        }
+
+        // Notify user of their attendance status
+        $user = User::find($validated['user_id']);
+        if ($status !== 'on_time') {
+            $pointRecord = AttendancePoint::where('attendance_id', $attendance->id)->first();
+            $points = $pointRecord ? $pointRecord->points : null;
+            $this->notificationService->notifyAttendanceStatus(
+                $attendance->user_id,
+                $status,
+                $shiftDate->format('M d, Y'),
+                $points
+            );
+        }
+
+        return redirect()->back()
+            ->with('success', "Attendance record created and verified for {$user->first_name} {$user->last_name}.");
+    }
+
+    /**
+     * Partial approve a night shift attendance by completing the time out.
+     * For night shifts where time out occurs on the next calendar day.
+     */
+    public function partialApprove(Request $request, Attendance $attendance)
+    {
+        $this->authorize('update', $attendance);
+
+        // Load relationships
+        $attendance->load('employeeSchedule');
+
+        // Validate this is appropriate for partial approval
+        if (!$attendance->employeeSchedule || !$attendance->employeeSchedule->isNightShift()) {
+            return redirect()->back()
+                ->with('error', 'Partial approval is only available for night shift records.');
+        }
+
+        if (!$attendance->actual_time_in) {
+            return redirect()->back()
+                ->with('error', 'Cannot complete night shift - no time in recorded.');
+        }
+
+        if ($attendance->actual_time_out) {
+            return redirect()->back()
+                ->with('error', 'This attendance record already has a time out.');
+        }
+
+        $validated = $request->validate([
+            'actual_time_out' => 'required|date_format:Y-m-d\\TH:i',
+            'verification_notes' => 'nullable|string|max:1000',
+            'status' => 'nullable|in:on_time,tardy,half_day_absence,undertime,undertime_more_than_hour',
+        ]);
+
+        $actualTimeOut = Carbon::parse($validated['actual_time_out']);
+        $shiftDate = Carbon::parse($attendance->shift_date);
+        $schedule = $attendance->employeeSchedule;
+
+        // Build scheduled time out (next day for night shift)
+        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+        if ($schedule->isNightShift()) {
+            $scheduledTimeOut->addDay();
+        }
+
+        // Calculate undertime/overtime
+        $undertimeMinutes = null;
+        $overtimeMinutes = null;
+
+        if ($actualTimeOut->lt($scheduledTimeOut)) {
+            $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
+        } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+            $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+        }
+
+        // Determine status if not provided
+        $status = $validated['status'] ?? $attendance->status;
+        $secondaryStatus = $attendance->secondary_status;
+
+        // If no status override provided, check for undertime
+        if (!$validated['status']) {
+            if ($undertimeMinutes && $undertimeMinutes > 60) {
+                if (in_array($attendance->status, ['on_time'])) {
+                    $status = 'undertime_more_than_hour';
+                } else {
+                    $secondaryStatus = 'undertime_more_than_hour';
+                }
+            } else if ($undertimeMinutes && $undertimeMinutes > 0) {
+                if (in_array($attendance->status, ['on_time'])) {
+                    $status = 'undertime';
+                } else {
+                    $secondaryStatus = 'undertime';
+                }
+            }
+        }
+
+        // Update the attendance record
+        $attendance->update([
+            'actual_time_out' => $actualTimeOut,
+            'undertime_minutes' => $undertimeMinutes,
+            'overtime_minutes' => $overtimeMinutes,
+            'status' => $status,
+            'secondary_status' => $secondaryStatus,
+            'admin_verified' => true,
+            'verification_notes' => $validated['verification_notes'],
+        ]);
+
+        // Delete existing points and regenerate
+        AttendancePoint::where('attendance_id', $attendance->id)->delete();
+
+        // Generate points if needed
+        if (in_array($status, ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence']) ||
+            in_array($secondaryStatus, ['undertime', 'undertime_more_than_hour'])) {
+            $this->processor->regeneratePointsForAttendance($attendance->fresh());
+        }
+
+        // Fetch points if any
+        $pointRecord = AttendancePoint::where('attendance_id', $attendance->id)->first();
+        $points = $pointRecord ? $pointRecord->points : null;
+
+        // Notify user
+        if ($status !== 'on_time') {
+            $this->notificationService->notifyAttendanceStatus(
+                $attendance->user_id,
+                $status,
+                $shiftDate->format('M d, Y'),
+                $points
+            );
+        }
+
+        return redirect()->back()
+            ->with('success', 'Night shift attendance completed and verified successfully.');
     }
 }

@@ -41,7 +41,7 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command";
-import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Edit, Search, UserCheck, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Edit, Moon, Search, UserCheck, X } from "lucide-react";
 import { TimeInput } from "@/components/ui/time-input";
 
 interface Site {
@@ -443,6 +443,67 @@ export default function AttendanceReview() {
         verification_notes: "",
         overtime_approved: false,
     });
+
+    // Partial approval dialog state (for night shift completion)
+    const [isPartialDialogOpen, setIsPartialDialogOpen] = useState(false);
+    const [partialRecord, setPartialRecord] = useState<AttendanceRecord | null>(null);
+
+    const { data: partialData, setData: setPartialData, post: postPartial, processing: partialProcessing, errors: partialErrors, reset: resetPartial } = useForm({
+        actual_time_out: "",
+        verification_notes: "",
+        status: "",
+    });
+
+    // Helper to check if a record is eligible for partial approval (night shift with missing time out)
+    const isNightShiftMissingTimeOut = (record: AttendanceRecord): boolean => {
+        const schedule = record.employee_schedule || record.user?.active_schedule;
+        if (!schedule) return false;
+
+        const isNightShift = schedule.shift_type === 'night_shift' ||
+            (schedule.scheduled_time_in && schedule.scheduled_time_out &&
+             schedule.scheduled_time_out < schedule.scheduled_time_in);
+
+        const hasTimeIn = record.actual_time_in !== undefined && record.actual_time_in !== null;
+        const hasNoTimeOut = record.actual_time_out === undefined || record.actual_time_out === null;
+
+        return Boolean(isNightShift) && hasTimeIn && hasNoTimeOut;
+    };
+
+    // Open partial approval dialog
+    const openPartialDialog = (record: AttendanceRecord) => {
+        setPartialRecord(record);
+        const schedule = record.employee_schedule || record.user?.active_schedule;
+
+        // Calculate the expected time out date (next day for night shift)
+        const shiftDate = new Date(record.shift_date);
+        const nextDay = new Date(shiftDate);
+        nextDay.setDate(nextDay.getDate() + 1);
+
+        const timeOutDate = nextDay.toISOString().split('T')[0];
+        const timeOutTime = schedule?.scheduled_time_out?.slice(0, 5) || "07:00";
+
+        setPartialData({
+            actual_time_out: `${timeOutDate}T${timeOutTime}`,
+            verification_notes: "",
+            status: record.status || "",
+        });
+        setIsPartialDialogOpen(true);
+    };
+
+    // Handle partial approval submit
+    const handlePartialApprove = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!partialRecord) return;
+
+        postPartial(`/attendance/${partialRecord.id}/partial-approve`, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsPartialDialogOpen(false);
+                resetPartial();
+                setPartialRecord(null);
+            },
+        });
+    };
 
     const handleSearch = () => {
         router.get(
@@ -1096,14 +1157,27 @@ export default function AttendanceReview() {
                                                     </div>
                                                 </TableCell>
                                                 <TableCell>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        onClick={() => openVerifyDialog(record)}
-                                                    >
-                                                        <Edit className="h-4 w-4 mr-1" />
-                                                        Verify
-                                                    </Button>
+                                                    <div className="flex gap-1">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            onClick={() => openVerifyDialog(record)}
+                                                        >
+                                                            <Edit className="h-4 w-4 mr-1" />
+                                                            Verify
+                                                        </Button>
+                                                        {isNightShiftMissingTimeOut(record) && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => openPartialDialog(record)}
+                                                                className="text-purple-600 border-purple-300 hover:bg-purple-50"
+                                                                title="Complete night shift by adding time out"
+                                                            >
+                                                                <Moon className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                             </TableRow>
                                         ))}
@@ -1227,6 +1301,17 @@ export default function AttendanceReview() {
                                         <Edit className="h-4 w-4 mr-2" />
                                         Verify Record
                                     </Button>
+                                    {isNightShiftMissingTimeOut(record) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => openPartialDialog(record)}
+                                            className="w-full mt-2 text-purple-600 border-purple-300 hover:bg-purple-50"
+                                        >
+                                            <Moon className="h-4 w-4 mr-2" />
+                                            Complete Night Shift
+                                        </Button>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -1891,6 +1976,177 @@ export default function AttendanceReview() {
                             </div>
                         </div>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Partial Approval Dialog (Night Shift Completion) */}
+            <Dialog open={isPartialDialogOpen} onOpenChange={setIsPartialDialogOpen}>
+                <DialogContent className="max-w-[95vw] sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Moon className="h-5 w-5 text-purple-600" />
+                            Complete Night Shift
+                        </DialogTitle>
+                        <DialogDescription>
+                            Add the time out for {partialRecord?.user.name}'s night shift on{" "}
+                            {partialRecord && formatDate(partialRecord.shift_date)}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handlePartialApprove} className="space-y-4">
+                        {/* Current Info */}
+                        {partialRecord && (() => {
+                            const schedule = partialRecord.employee_schedule || partialRecord.user?.active_schedule;
+                            return (
+                                <div className="bg-muted p-4 rounded-md space-y-2 text-sm">
+                                    <h4 className="font-semibold">Night Shift Information</h4>
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <div>
+                                            <span className="text-muted-foreground">Shift Date:</span>{" "}
+                                            {formatDate(partialRecord.shift_date)}
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Shift Type:</span>{" "}
+                                            {schedule?.shift_type?.replace('_', ' ') || "Night Shift"}
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Scheduled In:</span>{" "}
+                                            {formatTime(schedule?.scheduled_time_in) || "-"}
+                                        </div>
+                                        <div>
+                                            <span className="text-muted-foreground">Scheduled Out:</span>{" "}
+                                            {formatTime(schedule?.scheduled_time_out) || "-"} (next day)
+                                        </div>
+                                        <div className="col-span-2">
+                                            <span className="text-muted-foreground">Actual Time In:</span>{" "}
+                                            <span className="font-medium">{formatDateTime(partialRecord.actual_time_in)}</span>
+                                        </div>
+                                        {partialRecord.tardy_minutes && partialRecord.tardy_minutes > 0 && (
+                                            <div className="col-span-2 text-orange-600">
+                                                Tardy: {partialRecord.tardy_minutes} minutes late
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })()}
+
+                        {/* Time Out Input */}
+                        <div className="space-y-2">
+                            <Label>Actual Time Out <span className="text-red-500">*</span></Label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Date</Label>
+                                    <Input
+                                        type="date"
+                                        value={partialData.actual_time_out ? partialData.actual_time_out.slice(0, 10) : ""}
+                                        onChange={e => {
+                                            const date = e.target.value;
+                                            const time = partialData.actual_time_out ? partialData.actual_time_out.slice(11, 16) : "07:00";
+                                            setPartialData("actual_time_out", date ? `${date}T${time}` : "");
+                                        }}
+                                    />
+                                </div>
+                                <div className="space-y-1">
+                                    <Label className="text-xs text-muted-foreground">Time</Label>
+                                    <TimeInput
+                                        value={partialData.actual_time_out ? partialData.actual_time_out.slice(11, 16) : ""}
+                                        onChange={(time: string) => {
+                                            const date = partialData.actual_time_out ? partialData.actual_time_out.slice(0, 10) : "";
+                                            setPartialData("actual_time_out", date && time ? `${date}T${time}` : "");
+                                        }}
+                                    />
+                                </div>
+                            </div>
+                            {partialErrors.actual_time_out && (
+                                <p className="text-sm text-red-500">{partialErrors.actual_time_out}</p>
+                            )}
+                        </div>
+
+                        {/* Status Override (Optional) */}
+                        <div className="space-y-2">
+                            <Label>Status Override (Optional)</Label>
+                            <Select
+                                value={partialData.status || ""}
+                                onValueChange={value => setPartialData("status", value)}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Keep current status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="">Keep current status</SelectItem>
+                                    <SelectItem value="on_time">On Time</SelectItem>
+                                    <SelectItem value="tardy">Tardy</SelectItem>
+                                    <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
+                                    <SelectItem value="undertime">Undertime</SelectItem>
+                                    <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
+                                </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground">
+                                Leave empty to auto-calculate based on undertime
+                            </p>
+                        </div>
+
+                        {/* Verification Notes */}
+                        <div className="space-y-2">
+                            <Label>Verification Notes <span className="text-red-500">*</span></Label>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPartialData("verification_notes", "Night shift time out completed.")}
+                                    className="h-7 text-xs"
+                                >
+                                    Night shift completed
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setPartialData("verification_notes", "Time out from next day biometric upload.")}
+                                    className="h-7 text-xs"
+                                >
+                                    From biometric upload
+                                </Button>
+                            </div>
+                            <Textarea
+                                value={partialData.verification_notes}
+                                onChange={e => setPartialData("verification_notes", e.target.value)}
+                                placeholder="Explain why this night shift is being completed..."
+                                rows={3}
+                            />
+                            {partialErrors.verification_notes && (
+                                <p className="text-sm text-red-500">{partialErrors.verification_notes}</p>
+                            )}
+                        </div>
+
+                        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 p-3 rounded-md">
+                            <p className="text-sm text-purple-800 dark:text-purple-400">
+                                <strong>Note:</strong> This will complete the night shift record by adding the time out
+                                and automatically verify it. Attendance points will be generated if there are violations.
+                            </p>
+                        </div>
+
+                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsPartialDialogOpen(false)}
+                                disabled={partialProcessing}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={partialProcessing}
+                                className="bg-purple-600 hover:bg-purple-700"
+                            >
+                                <Moon className="h-4 w-4 mr-2" />
+                                {partialProcessing ? "Completing..." : "Complete & Verify"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
                 </DialogContent>
             </Dialog>
         </AppLayout>

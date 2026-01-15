@@ -193,6 +193,13 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('bulk-quick-approve', [AttendanceController::class, 'bulkQuickApprove'])->name('bulkQuickApprove')->middleware('permission:attendance.approve');
             Route::get('statistics', [AttendanceController::class, 'statistics'])->name('statistics')->middleware('permission:attendance.statistics');
             Route::delete('bulk-delete', [AttendanceController::class, 'bulkDelete'])->name('bulkDelete')->middleware('permission:attendance.delete');
+
+            // Daily Roster
+            Route::get('daily-roster', [AttendanceController::class, 'dailyRoster'])->name('dailyRoster')->middleware('permission:attendance.create');
+            Route::post('generate', [AttendanceController::class, 'generateAttendance'])->name('generate')->middleware('permission:attendance.create');
+
+            // Partial Approval (Night Shift completion)
+            Route::post('{attendance}/partial-approve', [AttendanceController::class, 'partialApprove'])->name('partialApprove')->middleware('permission:attendance.verify');
         });
 
     // First-time schedule setup for Agent/Team Lead (no permission check, just auth)

@@ -48,6 +48,7 @@ import {
     create as attendanceCreate,
     importMethod as attendanceImport,
     review as attendanceReview,
+    dailyRoster as attendanceDailyRoster,
     bulkDelete as attendanceBulkDelete,
     bulkQuickApprove as attendanceBulkQuickApprove,
     quickApprove as attendanceQuickApprove,
@@ -736,6 +737,16 @@ export default function AttendanceIndex() {
                                 >
                                     <AlertCircle className="mr-2 h-4 w-4" />
                                     Review Flagged
+                                </Button>
+                            </Can>
+                            <Can permission="attendance.create">
+                                <Button
+                                    onClick={() => router.get(attendanceDailyRoster().url)}
+                                    className="w-full sm:w-auto"
+                                    variant="outline"
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    Daily Roster
                                 </Button>
                             </Can>
                         </div>
