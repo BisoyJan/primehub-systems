@@ -500,7 +500,7 @@ export default function AttendanceImport() {
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow>
+                                        <TableRow className="bg-muted/50">
                                             <TableHead>File</TableHead>
                                             <TableHead>Shift Date</TableHead>
                                             <TableHead>Biometric Site</TableHead>

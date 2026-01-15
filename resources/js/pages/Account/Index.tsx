@@ -713,7 +713,7 @@ export default function AccountIndex() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <Can permission="accounts.edit">
                                         <TableHead className="w-12">
                                             <div className="flex flex-col gap-1">
@@ -745,7 +745,7 @@ export default function AccountIndex() {
                                     <TableHead>Account Status</TableHead>
                                     <TableHead>Hired Date</TableHead>
                                     <TableHead>Created At</TableHead>
-                                    <TableHead>Actions</TableHead>
+                                    <TableHead className="text-right">Actions</TableHead>
                                 </TableRow>
                             </TableHeader>
                             <TableBody>

@@ -209,7 +209,7 @@ export default function Index() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>Brand</TableHead>
                                     <TableHead>Model</TableHead>

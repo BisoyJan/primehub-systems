@@ -477,7 +477,7 @@ export default function Anomalies({ stats, results }: PageProps) {
                                 ) : (
                                     <Table>
                                         <TableHeader>
-                                            <TableRow>
+                                            <TableRow className="bg-muted/50">
                                                 <TableHead className="w-12"></TableHead>
                                                 <TableHead>Severity</TableHead>
                                                 <TableHead>Employee</TableHead>

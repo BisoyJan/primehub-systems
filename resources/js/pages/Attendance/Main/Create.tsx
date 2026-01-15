@@ -20,7 +20,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertCircle, Check, CheckCircle, ChevronsUpDown, RefreshCw, Repeat } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Repeat } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageMeta } from '@/hooks';
 import { index as attendanceIndex, create as attendanceCreate, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';

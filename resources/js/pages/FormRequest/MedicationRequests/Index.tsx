@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -93,7 +93,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
 
     const showClearFilters = Boolean(search) || status !== 'all' || medicationType !== 'all';
 
-    const buildFilterParams = () => {
+    const buildFilterParams = useCallback(() => {
         const params: Record<string, string> = {};
         if (search) {
             params.search = search;
@@ -105,7 +105,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
             params.medication_type = medicationType;
         }
         return params;
-    };
+    }, [search, status, medicationType]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         setLocalLoading(true);
@@ -175,7 +175,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, status, medicationType]);
+    }, [autoRefreshEnabled, buildFilterParams]);
 
     const clearFilters = () => {
         setSearch('');
@@ -304,7 +304,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>Employee Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Campaign</TableHead>

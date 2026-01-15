@@ -704,7 +704,7 @@ export default function StationIndex() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead className="w-12">
                                         <Checkbox
                                             checked={isAllRecordsSelected || isCurrentPageAllSelected}

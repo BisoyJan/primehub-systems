@@ -279,7 +279,7 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                     <div className="overflow-x-auto ">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>ID</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead>Actions</TableHead>

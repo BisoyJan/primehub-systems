@@ -861,7 +861,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow>
+                                        <TableRow className="bg-muted/50">
                                             <TableHead>Date</TableHead>
                                             <TableHead>Type</TableHead>
                                             <TableHead className="text-right">Points</TableHead>

@@ -550,7 +550,7 @@ export default function RetentionPolicies({ policies, sites, retentionStats }: P
                                 <div className="hidden md:block overflow-x-auto">
                                     <Table>
                                         <TableHeader>
-                                            <TableRow>
+                                            <TableRow className="bg-muted/50">
                                                 <TableHead>Name</TableHead>
                                                 <TableHead>Form Type</TableHead>
                                                 <TableHead>Retention Period</TableHead>

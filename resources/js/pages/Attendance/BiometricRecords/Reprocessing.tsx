@@ -400,7 +400,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                         <h4 className="mb-2 font-semibold">Processing Details</h4>
                                         <Table>
                                             <TableHeader>
-                                                <TableRow>
+                                                <TableRow className="bg-muted/50">
                                                     <TableHead>Employee</TableHead>
                                                     <TableHead>Shifts Processed</TableHead>
                                                     <TableHead>Records Count</TableHead>

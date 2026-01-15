@@ -415,7 +415,7 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
                         <div className="hidden md:block overflow-x-auto">
                             <Table>
                                 <TableHeader>
-                                    <TableRow>
+                                    <TableRow className="bg-muted/50">
                                         {bulkMode && <TableHead className="w-12">Select</TableHead>}
                                         <TableHead>Station</TableHead>
                                         <TableHead>Site</TableHead>

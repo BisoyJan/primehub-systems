@@ -775,7 +775,7 @@ export default function Transfer({ stations, pcSpecs, filters, preselectedStatio
                             <div className="border rounded-lg max-h-[600px] overflow-x-auto overflow-y-auto">
                                 <Table>
                                     <TableHeader className="sticky top-0 bg-background z-10">
-                                        <TableRow>
+                                        <TableRow className="bg-muted/50">
                                             <TableHead>PC Number</TableHead>
                                             <TableHead className="hidden md:table-cell">Model</TableHead>
                                             <TableHead>Status</TableHead>

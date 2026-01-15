@@ -490,7 +490,7 @@ export default function ItConcernsIndex() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>Date</TableHead>
                                     <TableHead>Priority</TableHead>
                                     <TableHead>Submitted By</TableHead>

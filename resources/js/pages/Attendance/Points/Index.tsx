@@ -1367,7 +1367,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Date</TableHead>
                                     <TableHead>Type</TableHead>

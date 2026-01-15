@@ -397,7 +397,7 @@ export default function Index() {
                                 Stock items for RAM, Disk, Processor and Monitor specs
                             </TableCaption>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead className="hidden lg:table-cell">ID</TableHead>
                                     <TableHead>Type</TableHead>
                                     <TableHead>Manufacturer / Brand</TableHead>

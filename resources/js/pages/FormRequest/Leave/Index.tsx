@@ -697,7 +697,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     {showEmployeeColumn && <TableHead>Employee</TableHead>}
                                     {showEmployeeColumn && <TableHead>Campaign</TableHead>}
                                     <TableHead>Type</TableHead>

@@ -193,7 +193,7 @@ export default function BiometricRecordsShow() {
                             <div className="rounded-md border">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow>
+                                        <TableRow className="bg-muted/50">
                                             <TableHead className="w-[50px]">#</TableHead>
                                             <TableHead>Timestamp</TableHead>
                                             <TableHead>Time</TableHead>

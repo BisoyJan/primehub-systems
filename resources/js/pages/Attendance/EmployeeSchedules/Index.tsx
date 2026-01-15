@@ -613,7 +613,7 @@ export default function EmployeeSchedulesIndex() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Campaign</TableHead>
                                     <TableHead>Site</TableHead>

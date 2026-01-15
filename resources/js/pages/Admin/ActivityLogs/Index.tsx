@@ -55,7 +55,6 @@ interface Props {
 export default function ActivityLogsIndex({ activities, filters }: Props) {
     const [search, setSearch] = useState(filters.search || '');
     const [event, setEvent] = useState(filters.event || 'all');
-    const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const debouncedSearch = useDebounce(search, 300);
     const isUserTyping = useRef(false);
@@ -87,7 +86,7 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
             router.get(
                 activityLogs.index().url,
                 { search: debouncedSearch, event: event === 'all' ? '' : event },
-                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'], onSuccess: () => setLastRefresh(new Date()) }
+                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'] }
             );
         }, 30000);
 
@@ -171,7 +170,7 @@ export default function ActivityLogsIndex({ activities, filters }: Props) {
                                     </Button>
                                 )}
                                 <div className="flex gap-1">
-                                    <Button variant="ghost" size="icon" onClick={() => router.reload({ only: ['activities'], onSuccess: () => setLastRefresh(new Date()) })} title="Refresh">
+                                    <Button variant="ghost" size="icon" onClick={() => router.reload({ only: ['activities'] })} title="Refresh">
                                         <RefreshCw className="h-4 w-4" />
                                     </Button>
                                     <Button

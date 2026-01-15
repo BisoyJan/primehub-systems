@@ -426,7 +426,7 @@ export default function BiometricRecordsIndex() {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>Date & Time</TableHead>
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Device Name</TableHead>

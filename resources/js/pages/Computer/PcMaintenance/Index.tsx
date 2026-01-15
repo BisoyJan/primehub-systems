@@ -558,7 +558,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     {can('pc_maintenance.edit') && (
                                         <TableHead className="w-12">
                                             <Checkbox

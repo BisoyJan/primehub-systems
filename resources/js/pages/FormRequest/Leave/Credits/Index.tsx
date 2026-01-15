@@ -631,7 +631,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Role</TableHead>
                                     <TableHead>Hire Date</TableHead>

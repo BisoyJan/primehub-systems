@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Head, router } from '@inertiajs/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -76,13 +76,13 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
 
     const showClearFilters = Boolean(search.trim());
 
-    const buildFilterParams = () => {
+    const buildFilterParams = useCallback(() => {
         const params: Record<string, string> = {};
         if (search.trim()) {
             params.search = search.trim();
         }
         return params;
-    };
+    }, [search]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         setIsFilterLoading(true);
@@ -122,7 +122,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search]);
+    }, [autoRefreshEnabled, buildFilterParams]);
 
     const openCreateDialog = () => {
         setEditingCampaign(null);
@@ -322,7 +322,7 @@ export default function CampaignManagement({ campaigns, filters = {} }: Campaign
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>ID</TableHead>
                                     <TableHead>Name</TableHead>
                                     <TableHead className="text-right">Actions</TableHead>

@@ -66,7 +66,7 @@ interface PageProps extends SharedData {
 // formatDateShort, formatDateTime are now imported from @/lib/utils
 const formatDate = formatDateShort; // Alias for backward compatibility
 
-export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
+export default function UploadsIndex({ uploads, filters }: PageProps) {
     useFlashMessage();
 
     const { title, breadcrumbs } = usePageMeta({
@@ -269,7 +269,7 @@ export default function UploadsIndex({ uploads, filters, auth }: PageProps) {
                     <div className="overflow-x-auto">
                         <Table>
                             <TableHeader>
-                                <TableRow>
+                                <TableRow className="bg-muted/50">
                                     <TableHead>File</TableHead>
                                     <TableHead>Shift Date</TableHead>
                                     <TableHead>Site</TableHead>
