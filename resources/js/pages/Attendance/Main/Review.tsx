@@ -1027,7 +1027,7 @@ export default function AttendanceReview() {
                             <div className="overflow-x-auto">
                                 <Table>
                                     <TableHeader>
-                                        <TableRow>
+                                        <TableRow className="bg-muted/50">
                                             <TableHead className="w-12">
                                                 <Input
                                                     type="checkbox"
