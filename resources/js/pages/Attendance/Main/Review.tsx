@@ -50,6 +50,11 @@ interface Site {
     name: string;
 }
 
+interface Campaign {
+    id: number;
+    name: string;
+}
+
 interface EmployeeSchedule {
     id: number;
     shift_type: string;
@@ -57,6 +62,7 @@ interface EmployeeSchedule {
     scheduled_time_out: string;
     grace_period_minutes?: number;
     site?: Site;
+    campaign?: Campaign;
 }
 
 interface User {
@@ -1031,8 +1037,9 @@ export default function AttendanceReview() {
                                                 />
                                             </TableHead>
                                             <TableHead>Employee</TableHead>
+                                            <TableHead>Campaign</TableHead>
+                                            <TableHead>Site</TableHead>
                                             <TableHead>Shift Date</TableHead>
-                                            <TableHead>Assigned Site</TableHead>
                                             <TableHead>Time In</TableHead>
                                             <TableHead>Time Out</TableHead>
                                             <TableHead>Status</TableHead>
@@ -1062,15 +1069,18 @@ export default function AttendanceReview() {
                                                     />
                                                 </TableCell>
                                                 <TableCell className="font-medium">{record.user.name}</TableCell>
-                                                <TableCell>{formatDate(record.shift_date)}</TableCell>
+                                                <TableCell className="text-sm">
+                                                    {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || <span className="text-muted-foreground">-</span>}
+                                                </TableCell>
                                                 <TableCell>
-                                                    {record.employee_schedule?.site?.name || "-"}
+                                                    {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || "-"}
                                                     {record.is_cross_site_bio && (
                                                         <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">
                                                             Cross-Site
                                                         </Badge>
                                                     )}
                                                 </TableCell>
+                                                <TableCell>{formatDate(record.shift_date)}</TableCell>
                                                 <TableCell className="text-sm">
                                                     {formatDateTime(record.actual_time_in)}
                                                     {record.bio_in_site && record.is_cross_site_bio && (
@@ -1215,8 +1225,12 @@ export default function AttendanceReview() {
 
                                     <div className="space-y-2 text-sm">
                                         <div>
+                                            <span className="font-medium">Campaign:</span>{" "}
+                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || "-"}
+                                        </div>
+                                        <div>
                                             <span className="font-medium">Assigned Site:</span>{" "}
-                                            {record.employee_schedule?.site?.name || "-"}
+                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || "-"}
                                             {record.is_cross_site_bio && (
                                                 <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
                                                     Cross-Site

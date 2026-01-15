@@ -42,8 +42,10 @@ class AttendanceController extends Controller
         $this->authorize('viewAny', Attendance::class);
 
         $query = Attendance::with([
-            'user',
+            'user.activeSchedule.site', // Fallback for site
+            'user.activeSchedule.campaign', // Fallback for campaign
             'employeeSchedule.site',
+            'employeeSchedule.campaign',
             'bioInSite',
             'bioOutSite'
         ]);
@@ -844,7 +846,9 @@ class AttendanceController extends Controller
     {
         $query = Attendance::with([
             'user.activeSchedule.site', // Include user's active schedule as fallback
+            'user.activeSchedule.campaign', // Include user's active schedule campaign as fallback
             'employeeSchedule.site',
+            'employeeSchedule.campaign',
             'bioInSite',
             'bioOutSite',
             'leaveRequest' // Include leave request info

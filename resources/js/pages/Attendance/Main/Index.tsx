@@ -60,7 +60,7 @@ interface User {
     first_name: string;
     last_name: string;
     name: string;
-    campaign?: Campaign;
+    active_schedule?: EmployeeSchedule; // Fallback for campaign/site
 }
 
 interface Campaign {
@@ -79,6 +79,7 @@ interface EmployeeSchedule {
     scheduled_time_in: string;
     scheduled_time_out: string;
     site?: Site;
+    campaign?: Campaign;
 }
 
 interface AttendanceRecord {
@@ -815,6 +816,7 @@ export default function AttendanceIndex() {
                                     </TableHead>
                                     <TableHead>Employee</TableHead>
                                     <TableHead>Campaign</TableHead>
+                                    <TableHead>Site</TableHead>
                                     <TableHead>Shift Date</TableHead>
                                     <TableHead>Shift Type</TableHead>
                                     <TableHead>Schedule</TableHead>
@@ -838,14 +840,17 @@ export default function AttendanceIndex() {
                                         </TableCell>
                                         <TableCell className="font-medium">
                                             {record.user.name}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || <span className="text-muted-foreground">-</span>}
+                                        </TableCell>
+                                        <TableCell className="text-sm">
+                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || <span className="text-muted-foreground">-</span>}
                                             {record.is_cross_site_bio && (
                                                 <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
                                                     Cross-Site
                                                 </Badge>
                                             )}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {record.user.campaign?.name || <span className="text-muted-foreground">-</span>}
                                         </TableCell>
                                         <TableCell>{formatDate(record.shift_date)}</TableCell>
                                         <TableCell className="text-sm">
@@ -962,7 +967,7 @@ export default function AttendanceIndex() {
                                 ))}
                                 {attendanceData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={13} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={14} className="h-24 text-center text-muted-foreground">
                                             No attendance records found
                                         </TableCell>
                                     </TableRow>
@@ -1000,7 +1005,16 @@ export default function AttendanceIndex() {
                                     <div className="space-y-2 text-sm mt-3">
                                         <div>
                                             <span className="font-medium">Campaign:</span>{" "}
-                                            {record.user.campaign?.name || "-"}
+                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || "-"}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Site:</span>{" "}
+                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || "-"}
+                                            {record.is_cross_site_bio && (
+                                                <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
+                                                    Cross-Site
+                                                </Badge>
+                                            )}
                                         </div>
                                         <div>
                                             <span className="font-medium">Shift Type:</span>{" "}
