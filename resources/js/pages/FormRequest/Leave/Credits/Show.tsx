@@ -62,6 +62,8 @@ interface CarryoverSummary {
 
 interface CarryoverReceived {
     credits: number;
+    credits_used?: number;
+    credits_balance?: number;
     from_year: number;
     is_first_regularization: boolean;
 }
@@ -353,11 +355,13 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                     <TableCell className="text-right text-green-600">
                                                         +{carryoverReceived.credits.toFixed(2)}
                                                     </TableCell>
-                                                    <TableCell className="text-right text-muted-foreground">
-                                                        —
+                                                    <TableCell className="text-right text-red-600">
+                                                        {carryoverReceived.credits_used && carryoverReceived.credits_used > 0 
+                                                            ? `-${carryoverReceived.credits_used.toFixed(2)}` 
+                                                            : '—'}
                                                     </TableCell>
                                                     <TableCell className="text-right font-medium text-green-600">
-                                                        {carryoverReceived.credits.toFixed(2)}
+                                                        {(carryoverReceived.credits_balance ?? carryoverReceived.credits).toFixed(2)}
                                                     </TableCell>
                                                 </TableRow>
                                             )}

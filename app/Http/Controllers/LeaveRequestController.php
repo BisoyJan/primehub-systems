@@ -1349,6 +1349,9 @@ class LeaveRequestController extends Controller
 
                     // Update attendance records to on_leave status
                     $this->updateAttendanceForApprovedLeave($leaveRequest);
+                } else {
+                    // Non-credited leave types (UPTO, LOA, BL, SPL, LDV, ML) - no credit deduction, but still update attendance
+                    $this->updateAttendanceForApprovedLeave($leaveRequest);
                 }
 
                 // Notify the employee about full approval
@@ -1468,6 +1471,9 @@ class LeaveRequestController extends Controller
             } elseif ($leaveRequest->requiresCredits()) {
                 $year = $request->input('credits_year', now()->year);
                 $leaveCreditService->deductCredits($leaveRequest, $year);
+                $this->updateAttendanceForApprovedLeave($leaveRequest);
+            } else {
+                // Non-credited leave types (UPTO, LOA, BL, SPL, LDV, ML) - no credit deduction, but still update attendance
                 $this->updateAttendanceForApprovedLeave($leaveRequest);
             }
 
@@ -2909,9 +2915,10 @@ class LeaveRequestController extends Controller
 
         $year = $request->input('year', now()->year);
 
-        // Get monthly credits
+        // Get monthly credits (excluding month 0 which is carryover - shown separately)
         $monthlyCredits = LeaveCredit::forUser($user->id)
             ->forYear($year)
+            ->where('month', '>', 0) // Exclude carryover (month 0)
             ->orderBy('month')
             ->get()
             ->map(function ($credit) {
@@ -2925,6 +2932,12 @@ class LeaveRequestController extends Controller
                     'accrued_at' => $credit->accrued_at->format('Y-m-d'),
                 ];
             });
+
+        // Get carryover credit record (month 0) to show deductions from carryover
+        $carryoverCredit = LeaveCredit::forUser($user->id)
+            ->forYear($year)
+            ->where('month', 0)
+            ->first();
 
         // Get leave requests that used credits this year
         $leaveRequests = LeaveRequest::where('user_id', $user->id)
@@ -3008,6 +3021,8 @@ class LeaveRequestController extends Controller
             'carryoverSummary' => $showCarryoverForward ? $carryoverSummary : null,
             'carryoverReceived' => $showCarryoverReceived && $carryoverReceived ? [
                 'credits' => (float) $carryoverReceived->carryover_credits,
+                'credits_used' => $carryoverCredit ? (float) $carryoverCredit->credits_used : 0,
+                'credits_balance' => $carryoverCredit ? (float) $carryoverCredit->credits_balance : (float) $carryoverReceived->carryover_credits,
                 'from_year' => $carryoverReceived->from_year,
                 'is_first_regularization' => (bool) $carryoverReceived->is_first_regularization,
             ] : null,

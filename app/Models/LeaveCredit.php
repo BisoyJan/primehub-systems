@@ -87,16 +87,19 @@ class LeaveCredit extends Model
 
     /**
      * Get total earned credits for a user in a specific year.
+     * Excludes carryover (month 0) since that's tracked separately in LeaveCreditCarryover.
      */
     public static function getTotalEarned(int $userId, int $year): float
     {
         return static::forUser($userId)
             ->forYear($year)
+            ->where('month', '>', 0) // Exclude carryover (month 0)
             ->sum('credits_earned');
     }
 
     /**
      * Get total used credits for a user in a specific year.
+     * Includes all months including carryover (month 0).
      */
     public static function getTotalUsed(int $userId, int $year): float
     {

@@ -512,19 +512,61 @@ class LeaveCreditService
             return true; // Non-credited leave types don't need deduction
         }
 
-        $year = $year ?? now()->year;
+        $year = $year ?? $leaveRequest->start_date->year;
         $daysToDeduct = $leaveRequest->days_requested;
+        $userId = $leaveRequest->user_id;
 
-        // Get all credit records for this year ordered by month
-        $credits = LeaveCredit::forUser($leaveRequest->user_id)
-            ->forYear($year)
-            ->orderBy('month')
-            ->get();
+        // Determine if carryover credits can be used
+        // Carryover credits expire at the end of March of the current year
+        $leaveStartDate = $leaveRequest->start_date;
+        $carryoverExpirationDate = Carbon::create($year, 3, 31)->endOfDay();
+        $canUseCarryover = $leaveStartDate->lte($carryoverExpirationDate);
+
+        // Ensure carryover credit record exists for this year (month 0)
+        // Only create if carryover is still valid
+        if ($canUseCarryover) {
+            $this->ensureCarryoverCreditRecord($userId, $year);
+        }
+
+        // Get all credit records for this year ordered by month (0 = carryover first)
+        // This ensures carryover is deducted first before monthly accruals (FIFO)
+        $creditsQuery = LeaveCredit::forUser($userId)
+            ->forYear($year);
+
+        // Exclude carryover (month 0) if leave is after March 31
+        if (!$canUseCarryover) {
+            $creditsQuery->where('month', '>', 0);
+        }
+
+        $credits = $creditsQuery->orderBy('month')->get();
+
+        // Calculate total available credits
+        $totalAvailableCredits = $credits->sum('credits_balance');
+
+        if ($totalAvailableCredits <= 0) {
+            // No credits available at all
+            \Log::warning('No leave credits available for deduction', [
+                'user_id' => $userId,
+                'leave_request_id' => $leaveRequest->id,
+                'year' => $year,
+                'days_requested' => $daysToDeduct,
+                'carryover_expired' => !$canUseCarryover,
+            ]);
+
+            $leaveRequest->update([
+                'credits_deducted' => 0,
+                'credits_year' => $year,
+            ]);
+
+            return false;
+        }
 
         $remainingToDeduct = $daysToDeduct;
+        $actuallyDeducted = 0;
 
         DB::beginTransaction();
         try {
+            // Deduct from carryover first (month 0), then monthly accruals (1, 2, 3...)
             foreach ($credits as $credit) {
                 if ($remainingToDeduct <= 0) {
                     break;
@@ -539,12 +581,13 @@ class LeaveCreditService
                     $credit->save();
 
                     $remainingToDeduct -= $deductFromThisMonth;
+                    $actuallyDeducted += $deductFromThisMonth;
                 }
             }
 
-            // Update leave request with deduction info
+            // Update leave request with actual deduction info
             $leaveRequest->update([
-                'credits_deducted' => $daysToDeduct,
+                'credits_deducted' => $actuallyDeducted,
                 'credits_year' => $year,
             ]);
 
@@ -552,17 +595,65 @@ class LeaveCreditService
 
             // Log the activity
             $this->logActivity('credits_deducted', $leaveRequest->user, $leaveRequest, [
-                'credits_deducted' => $daysToDeduct,
+                'credits_deducted' => $actuallyDeducted,
                 'leave_request_id' => $leaveRequest->id,
                 'year' => $year,
-                'leave_type' => $leaveRequest->type,
+                'leave_type' => $leaveRequest->leave_type,
             ]);
 
             return true;
         } catch (\Exception $e) {
             DB::rollBack();
+            \Log::error('Failed to deduct leave credits', [
+                'user_id' => $leaveRequest->user_id,
+                'leave_request_id' => $leaveRequest->id,
+                'error' => $e->getMessage(),
+            ]);
             return false;
         }
+    }
+
+    /**
+     * Ensure a LeaveCredit record exists for carryover credits (month 0) for the given year.
+     * This creates a LeaveCredit record with the carryover amount if one doesn't exist.
+     */
+    protected function ensureCarryoverCreditRecord(int $userId, int $year): void
+    {
+        // Check if carryover credit record already exists for this year
+        $existingCarryoverCredit = LeaveCredit::forUser($userId)
+            ->forYear($year)
+            ->where('month', 0)
+            ->first();
+
+        if ($existingCarryoverCredit) {
+            return; // Already exists
+        }
+
+        // Get the carryover amount from LeaveCreditCarryover table
+        $carryover = LeaveCreditCarryover::forUser($userId)
+            ->toYear($year)
+            ->first();
+
+        if (!$carryover || $carryover->carryover_credits <= 0) {
+            return; // No carryover to create
+        }
+
+        // Create LeaveCredit record for month 0 (carryover)
+        LeaveCredit::create([
+            'user_id' => $userId,
+            'year' => $year,
+            'month' => 0, // 0 represents carryover
+            'credits_earned' => $carryover->carryover_credits,
+            'credits_used' => 0,
+            'credits_balance' => $carryover->carryover_credits,
+            'accrued_at' => "{$year}-01-01", // Carryover is available from start of year
+        ]);
+
+        \Log::info('Created carryover credit record', [
+            'user_id' => $userId,
+            'year' => $year,
+            'carryover_credits' => $carryover->carryover_credits,
+        ]);
     }
 
     /**
