@@ -356,8 +356,8 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                         +{carryoverReceived.credits.toFixed(2)}
                                                     </TableCell>
                                                     <TableCell className="text-right text-red-600">
-                                                        {carryoverReceived.credits_used && carryoverReceived.credits_used > 0 
-                                                            ? `-${carryoverReceived.credits_used.toFixed(2)}` 
+                                                        {carryoverReceived.credits_used && carryoverReceived.credits_used > 0
+                                                            ? `-${carryoverReceived.credits_used.toFixed(2)}`
                                                             : '—'}
                                                     </TableCell>
                                                     <TableCell className="text-right font-medium text-green-600">

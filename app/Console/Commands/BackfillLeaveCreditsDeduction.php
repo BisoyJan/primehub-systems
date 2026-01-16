@@ -15,7 +15,7 @@ class BackfillLeaveCreditsDeduction extends Command
      *
      * @var string
      */
-    protected $signature = 'leave:backfill-credits-deduction 
+    protected $signature = 'leave:backfill-credits-deduction
                             {--dry-run : Show what would be deducted without making changes}
                             {--leave-id= : Backfill specific leave request ID only}';
 
@@ -55,7 +55,7 @@ class BackfillLeaveCreditsDeduction extends Command
         $affectedLeaves = $allVLLeaves->filter(function ($leave) {
             // Check if the credits were actually deducted from LeaveCredit table
             $creditsYear = $leave->credits_year ?? $leave->start_date->year;
-            
+
             // Check credits for the specified year
             $yearCredits = LeaveCredit::forUser($leave->user_id)
                 ->forYear($creditsYear)
@@ -67,7 +67,7 @@ class BackfillLeaveCreditsDeduction extends Command
                 $previousYearUsed = LeaveCredit::forUser($leave->user_id)
                     ->forYear($previousYear)
                     ->sum('credits_used');
-                
+
                 // If no usage in either year, this leave wasn't properly deducted
                 if ($previousYearUsed == 0 && $leave->days_requested > 0) {
                     return true;
@@ -130,7 +130,7 @@ class BackfillLeaveCreditsDeduction extends Command
             if (!$dryRun) {
                 // Temporarily set credits_year to the year we want to deduct from
                 $originalCreditsYear = $leave->credits_year;
-                
+
                 $result = $leaveCreditService->deductCredits($leave, $leaveYear);
 
                 if ($result) {

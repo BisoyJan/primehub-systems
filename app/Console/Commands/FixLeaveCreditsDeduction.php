@@ -15,7 +15,7 @@ class FixLeaveCreditsDeduction extends Command
      *
      * @var string
      */
-    protected $signature = 'leave:fix-credits-deduction 
+    protected $signature = 'leave:fix-credits-deduction
                             {--dry-run : Show what would be fixed without making changes}';
 
     /**

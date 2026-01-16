@@ -16,7 +16,7 @@ class BackfillLeaveAttendance extends Command
      *
      * @var string
      */
-    protected $signature = 'leave:backfill-attendance 
+    protected $signature = 'leave:backfill-attendance
                             {--dry-run : Show what would be created without making changes}
                             {--leave-id= : Backfill specific leave request ID only}';
 
