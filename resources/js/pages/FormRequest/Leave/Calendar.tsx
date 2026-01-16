@@ -424,9 +424,10 @@ export default function LeaveCalendar() {
                                     </div>
                                 ) : (
                                     leaves.map((leave) => (
-                                        <div
+                                        <Link
                                             key={leave.id}
-                                            className={`p-3 border rounded-lg cursor-pointer transition-colors text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'
+                                            href={`/form-requests/leave-requests/${leave.id}`}
+                                            className={`block p-3 border rounded-lg cursor-pointer transition-colors text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'
                                                 }`}
                                             onMouseEnter={() => setHoveredLeaveId(leave.id)}
                                             onMouseLeave={() => setHoveredLeaveId(null)}
@@ -465,7 +466,7 @@ export default function LeaveCalendar() {
                                                     {leave.reason}
                                                 </div>
                                             )}
-                                        </div>
+                                        </Link>
                                     ))
                                 )}
                             </div>
