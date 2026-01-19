@@ -243,16 +243,25 @@ export default function Show({
     };
 
     const handleForceApprove = () => {
+        // Build the data to submit
+        const submitData: {
+            review_notes: string;
+            denied_dates: string[];
+            denial_reason: string;
+        } = {
+            review_notes: forceApproveForm.data.review_notes,
+            denied_dates: [],
+            denial_reason: forceApproveForm.data.denial_reason
+        };
+
         // If partial mode is enabled and dates are selected, calculate denied dates
         if (forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length) {
-            const deniedDates = workDays
+            submitData.denied_dates = workDays
                 .map(date => format(date, 'yyyy-MM-dd'))
                 .filter(dateStr => !forceApproveSelectedDates.includes(dateStr));
-
-            forceApproveForm.setData('denied_dates', deniedDates);
         }
 
-        forceApproveForm.post(`/form-requests/leave-requests/${leaveRequest.id}/force-approve`, {
+        router.post(`/form-requests/leave-requests/${leaveRequest.id}/force-approve`, submitData, {
             onSuccess: () => {
                 setShowForceApproveDialog(false);
                 setForceApprovePartialMode(false);
@@ -1598,7 +1607,7 @@ export default function Show({
                             <Alert className="bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800">
                                 <AlertTriangle className="h-4 w-4 text-orange-600" />
                                 <AlertDescription className="text-orange-800 dark:text-orange-200">
-                                    {forceApproveSelectedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - forceApproveSelectedDates.length} day(s) will be <strong>denied</strong>.
+                                    <p> {forceApproveSelectedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - forceApproveSelectedDates.length} day(s) will be <strong>denied</strong>. </p>
                                 </AlertDescription>
                             </Alert>
                         )}

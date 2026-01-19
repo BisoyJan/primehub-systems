@@ -1511,6 +1511,7 @@ class LeaveRequestController extends Controller
                 $leaveRequest->end_date = max($approvedDates);
                 $leaveRequest->has_partial_denial = true;
                 $leaveRequest->approved_days = $approvedDaysCount;
+                $leaveRequest->save();
             }
 
             // Set both Admin and HR approval
@@ -1782,6 +1783,20 @@ class LeaveRequestController extends Controller
                 'approved_days' => $approvedDaysCount,
             ];
 
+            // Store original dates before updating (only on first partial denial)
+            if (!$leaveRequest->original_start_date) {
+                $updateData['original_start_date'] = $leaveRequest->start_date;
+            }
+            if (!$leaveRequest->original_end_date) {
+                $updateData['original_end_date'] = $leaveRequest->end_date;
+            }
+
+            // Update start and end dates to reflect only approved dates
+            if (!empty($approvedDates)) {
+                $updateData['start_date'] = min($approvedDates);
+                $updateData['end_date'] = max($approvedDates);
+            }
+
             // Determine which approval field to set based on user role
             if ($user->role === 'Team Lead') {
                 $updateData['tl_approved_by'] = $user->id;
@@ -1834,20 +1849,6 @@ class LeaveRequestController extends Controller
                 $leaveRequest->reviewed_by = $user->id;
                 $leaveRequest->reviewed_at = now();
                 $leaveRequest->review_notes = $reviewNote;
-
-                // Store original dates before updating
-                if (!$leaveRequest->original_start_date) {
-                    $leaveRequest->original_start_date = $leaveRequest->start_date;
-                }
-                if (!$leaveRequest->original_end_date) {
-                    $leaveRequest->original_end_date = $leaveRequest->end_date;
-                }
-
-                // Update start and end dates to reflect only approved dates
-                if (!empty($approvedDates)) {
-                    $leaveRequest->start_date = min($approvedDates);
-                    $leaveRequest->end_date = max($approvedDates);
-                }
 
                 // Create attendance records only for approved dates
                 foreach ($approvedDates as $dateStr) {
