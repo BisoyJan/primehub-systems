@@ -3112,6 +3112,8 @@ class LeaveRequestController extends Controller
                     'days_requested' => (float) $request->days_requested,
                     'credits_deducted' => (float) $request->credits_deducted,
                     'approved_at' => $request->reviewed_at?->format('Y-m-d'),
+                    'has_partial_denial' => (bool) $request->has_partial_denial,
+                    'approved_days' => $request->approved_days !== null ? (float) $request->approved_days : null,
                 ];
             });
 

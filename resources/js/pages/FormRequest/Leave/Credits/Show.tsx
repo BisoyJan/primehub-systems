@@ -45,6 +45,8 @@ interface LeaveRequestHistory {
     days_requested: number;
     credits_deducted: number;
     approved_at: string | null;
+    has_partial_denial: boolean;
+    approved_days: number | null;
 }
 
 interface CarryoverSummary {
@@ -428,7 +430,9 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        {leave.days_requested}
+                                                        {leave.has_partial_denial && leave.approved_days !== null
+                                                            ? leave.approved_days
+                                                            : leave.days_requested}
                                                     </TableCell>
                                                     <TableCell className="text-right text-red-600 font-medium">
                                                         -{leave.credits_deducted.toFixed(2)}
@@ -439,7 +443,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                             <TableRow className="bg-muted/50 font-medium">
                                                 <TableCell colSpan={2}>Total</TableCell>
                                                 <TableCell className="text-right">
-                                                    {leaveRequests.reduce((sum, l) => sum + l.days_requested, 0)}
+                                                    {leaveRequests.reduce((sum, l) => sum + (l.has_partial_denial && l.approved_days !== null ? l.approved_days : l.days_requested), 0)}
                                                 </TableCell>
                                                 <TableCell className="text-right text-red-600">
                                                     -{leaveRequests.reduce((sum, l) => sum + l.credits_deducted, 0).toFixed(2)}

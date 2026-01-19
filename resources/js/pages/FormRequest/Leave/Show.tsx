@@ -447,11 +447,11 @@ export default function Show({
                                     <Button
                                         variant="outline"
                                         size="sm"
-                                        className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                                        className="border-green-300 text-green-700 hover:bg-green-50"
                                         onClick={() => setShowPartialDenyDialog(true)}
                                     >
                                         <Calendar className="mr-1 h-4 w-4" />
-                                        <span className="hidden sm:inline">Partial Deny (TL)</span>
+                                        <span className="hidden sm:inline">Partial Approved (TL)</span>
                                     </Button>
                                 )}
                             </>
@@ -477,11 +477,11 @@ export default function Show({
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                                            className="border-green-300 text-green-700 hover:bg-green-50"
                                             onClick={() => setShowPartialDenyDialog(true)}
                                         >
                                             <Calendar className="mr-1 h-4 w-4" />
-                                            <span className="hidden sm:inline">Partial Deny</span>
+                                            <span className="hidden sm:inline">Partial Approved</span>
                                         </Button>
                                     </Can>
                                 )}
