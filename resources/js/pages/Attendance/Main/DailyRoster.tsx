@@ -84,6 +84,7 @@ interface Props {
     employees: Employee[];
     sites: Site[];
     campaigns: Campaign[];
+    teamLeadCampaignId?: number;
     selectedDate: string;
     dayName: string;
     filters: {
@@ -313,9 +314,12 @@ const calculateSuggestedStatus = (
     return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason, isPartial, violations };
 };
 
-export default function DailyRoster({ employees, sites, campaigns, selectedDate, dayName, filters }: Props) {
+export default function DailyRoster({ employees, sites, campaigns, teamLeadCampaignId, selectedDate, dayName, filters }: Props) {
     useFlashMessage();
     const isPageLoading = usePageLoading();
+
+    // Detect if user is a Team Lead (teamLeadCampaignId will be set if they are)
+    const isTeamLead = !!teamLeadCampaignId;
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Daily Roster - ${dayName}`,
@@ -338,7 +342,12 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
     } | null>(null);
     const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] = useState(false);
     const [siteFilter, setSiteFilter] = useState(filters.site_id || 'all');
-    const [campaignFilter, setCampaignFilter] = useState(filters.campaign_id || 'all');
+    // Auto-select Team Lead's campaign if no filter is applied
+    const [campaignFilter, setCampaignFilter] = useState(() => {
+        if (filters.campaign_id) return filters.campaign_id;
+        if (teamLeadCampaignId) return String(teamLeadCampaignId);
+        return 'all';
+    });
     const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
     const [searchQuery, setSearchQuery] = useState(filters.search || '');
     const [dateFilter, setDateFilter] = useState(filters.date || selectedDate);
@@ -549,7 +558,12 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
 
     const handleClearFilters = () => {
         setSiteFilter('all');
-        setCampaignFilter('all');
+        // For Team Leads, reset to their campaign instead of 'all'
+        if (teamLeadCampaignId) {
+            setCampaignFilter(String(teamLeadCampaignId));
+        } else {
+            setCampaignFilter('all');
+        }
         setStatusFilter('all');
         setSearchQuery('');
         setDateFilter(new Date().toISOString().split('T')[0]);
@@ -615,7 +629,7 @@ export default function DailyRoster({ employees, sites, campaigns, selectedDate,
                                 <SelectItem value="all">All Campaigns</SelectItem>
                                 {campaigns.map((campaign) => (
                                     <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}
+                                        {campaign.name}{isTeamLead && teamLeadCampaignId === campaign.id ? ' (Your Campaign)' : ''}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

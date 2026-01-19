@@ -17,6 +17,17 @@ class EmployeeScheduleController extends Controller
      */
     public function index(Request $request)
     {
+        $user = auth()->user();
+
+        // Determine Team Lead's campaign (if applicable)
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
         $query = EmployeeSchedule::with(['user', 'campaign', 'site']);
 
         // Search by employee name
@@ -39,8 +50,13 @@ class EmployeeScheduleController extends Controller
             });
         }
 
-        if ($request->has('campaign_id') && $request->campaign_id !== 'all') {
-            $query->where('campaign_id', $request->campaign_id);
+        // Campaign filter - auto-filter for Team Leads
+        $campaignIdToFilter = ($request->has('campaign_id') && $request->campaign_id !== 'all') ? $request->campaign_id : null;
+        if (!$campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
+            $campaignIdToFilter = $teamLeadCampaignId;
+        }
+        if ($campaignIdToFilter) {
+            $query->where('campaign_id', $campaignIdToFilter);
         }
 
         if ($request->has('is_active') && $request->is_active !== 'all') {
@@ -113,6 +129,7 @@ class EmployeeScheduleController extends Controller
             'campaigns' => $campaigns,
             'sites' => $sites,
             'roles' => $roles,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
             'usersWithoutSchedules' => $usersWithoutSchedules,
             'usersWithInactiveSchedules' => $usersWithInactiveSchedules,
             'usersWithMultipleSchedules' => $usersWithMultipleSchedules,

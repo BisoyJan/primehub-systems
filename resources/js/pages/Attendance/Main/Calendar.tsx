@@ -74,9 +74,12 @@ interface PageProps extends SharedData {
     attendances: Record<string, AttendanceRecord>;
     users: User[];
     selectedUser?: User | null;
+    campaigns?: Array<{ id: number; name: string }>;
+    teamLeadCampaignId?: number;
     month: number;
     year: number;
     verificationFilter: string;
+    campaignFilter?: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -112,7 +115,7 @@ const statusLabels: Record<string, string> = {
 // formatTime is now imported from @/lib/utils
 
 export default function AttendanceCalendar() {
-    const { attendances, users, selectedUser, month, year, verificationFilter: initialVerificationFilter } = usePage<PageProps>().props;
+    const { attendances, users, selectedUser, campaigns = [], teamLeadCampaignId, month, year, verificationFilter: initialVerificationFilter, campaignFilter: initialCampaignFilter } = usePage<PageProps>().props;
 
     useFlashMessage();
     const { can } = usePermission();
@@ -130,6 +133,11 @@ export default function AttendanceCalendar() {
     const [selectedDate, setSelectedDate] = useState<string | null>(null);
     const [isDetailDialogOpen, setIsDetailDialogOpen] = useState(false);
     const [verificationFilter, setVerificationFilter] = useState(initialVerificationFilter || 'all');
+    const [campaignFilter, setCampaignFilter] = useState(() => {
+        if (initialCampaignFilter) return initialCampaignFilter;
+        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return 'all';
+    });
 
     // Filter users based on search query
     const filteredUsers = useMemo(() => {
@@ -181,6 +189,9 @@ export default function AttendanceCalendar() {
         if (verificationFilter !== 'all') {
             params.verification_filter = verificationFilter;
         }
+        if (campaignFilter !== 'all') {
+            params.campaign_id = campaignFilter;
+        }
         router.get(attendanceCalendar().url, params, { preserveState: true });
     };
 
@@ -191,6 +202,9 @@ export default function AttendanceCalendar() {
         }
         if (verificationFilter !== 'all') {
             params.verification_filter = verificationFilter;
+        }
+        if (campaignFilter !== 'all') {
+            params.campaign_id = campaignFilter;
         }
         router.get(attendanceCalendar().url, params);
         setIsUserPopoverOpen(false);
@@ -205,6 +219,22 @@ export default function AttendanceCalendar() {
         }
         if (value !== 'all') {
             params.verification_filter = value;
+        }
+        if (campaignFilter !== 'all') {
+            params.campaign_id = campaignFilter;
+        }
+        router.get(attendanceCalendar().url, params, { preserveState: true });
+    };
+
+    const handleCampaignFilterChange = (value: string) => {
+        setCampaignFilter(value);
+        const params: Record<string, string | number> = { month, year };
+        // Clear selected user when campaign changes since user list will be filtered
+        if (verificationFilter !== 'all') {
+            params.verification_filter = verificationFilter;
+        }
+        if (value !== 'all') {
+            params.campaign_id = value;
         }
         router.get(attendanceCalendar().url, params, { preserveState: true });
     };
@@ -255,6 +285,23 @@ export default function AttendanceCalendar() {
                 {/* User Selection and Month Navigation */}
                 <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center justify-between">
                     <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+                        {campaigns.length > 0 && (
+                            <div className="w-full sm:w-60">
+                                <Select value={campaignFilter} onValueChange={handleCampaignFilterChange}>
+                                    <SelectTrigger>
+                                        <SelectValue placeholder="All Campaigns" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Campaigns</SelectItem>
+                                        {campaigns.map(campaign => (
+                                            <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                                {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                        )}
                         {users.length > 0 && (
                             <div className="w-full sm:w-80">
                                 <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>

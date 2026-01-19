@@ -40,6 +40,7 @@ interface Campaign {
 interface PageProps {
     leaves: Leave[];
     campaigns: Campaign[] | null;
+    teamLeadCampaignId?: number;
     filters: {
         month: string;
         campaign_id: string | null;
@@ -74,7 +75,7 @@ const leaveTypeColors: Record<string, string> = {
 };
 
 export default function LeaveCalendar() {
-    const { leaves, campaigns, filters, isRestrictedRole } = usePage<PageProps>().props;
+    const { leaves, campaigns, teamLeadCampaignId, filters, isRestrictedRole } = usePage<PageProps>().props;
     const [hoveredLeaveId, setHoveredLeaveId] = useState<number | null>(null);
 
     const { title, breadcrumbs } = usePageMeta({
@@ -276,7 +277,7 @@ export default function LeaveCalendar() {
                                             <SelectItem value="all">All Campaigns</SelectItem>
                                             {campaigns.map((campaign) => (
                                                 <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                    {campaign.name}
+                                                    {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>
@@ -423,51 +424,73 @@ export default function LeaveCalendar() {
                                         No leaves in this period
                                     </div>
                                 ) : (
-                                    leaves.map((leave) => (
-                                        <Link
-                                            key={leave.id}
-                                            href={`/form-requests/leave-requests/${leave.id}`}
-                                            className={`block p-3 border rounded-lg cursor-pointer transition-colors text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'
-                                                }`}
-                                            onMouseEnter={() => setHoveredLeaveId(leave.id)}
-                                            onMouseLeave={() => setHoveredLeaveId(null)}
-                                        >
-                                            <div className="flex items-start justify-between gap-2 mb-1">
-                                                <div>
-                                                    <span className="font-medium">{leave.user_name}</span>
-                                                    <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
+                                    leaves.map((leave) => {
+                                        const content = (
+                                            <>
+                                                <div className="flex items-start justify-between gap-2 mb-1">
+                                                    <div>
+                                                        <span className="font-medium">{leave.user_name}</span>
+                                                        <div className="text-xs text-muted-foreground">{leave.campaign_name}</div>
+                                                    </div>
+                                                    <div className="flex flex-col items-end gap-1">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`text-xs shrink-0 text-white border-0 ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
+                                                        >
+                                                            {leave.leave_type}
+                                                        </Badge>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`text-xs shrink-0 text-white border-0 ${leave.status === 'approved' ? 'bg-green-500' : 'bg-yellow-500'}`}
+                                                        >
+                                                            {leave.status === 'approved' ? 'Approved' : 'Pending'}
+                                                        </Badge>
+                                                    </div>
                                                 </div>
-                                                <div className="flex flex-col items-end gap-1">
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={`text-xs shrink-0 text-white border-0 ${leaveTypeColors[leave.leave_type] || 'bg-gray-500'}`}
-                                                    >
-                                                        {leave.leave_type}
-                                                    </Badge>
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={`text-xs shrink-0 text-white border-0 ${leave.status === 'approved' ? 'bg-green-500' : 'bg-yellow-500'}`}
-                                                    >
-                                                        {leave.status === 'approved' ? 'Approved' : 'Pending'}
-                                                    </Badge>
+                                                <div className="text-xs text-muted-foreground">
+                                                    {Number(leave.days_requested) === 1
+                                                        ? `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (1 day)`
+                                                        : `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(Number(leave.days_requested))} days)`
+                                                    }
                                                 </div>
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                {Number(leave.days_requested) === 1
-                                                    ? `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (1 day)`
-                                                    : `${new Date(leave.start_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} (${Math.round(Number(leave.days_requested))} days)`
-                                                }
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                Requested: {new Date(leave.requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
-                                            </div>
-                                            {leave.reason && (
-                                                <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
-                                                    {leave.reason}
+                                                <div className="text-xs text-muted-foreground">
+                                                    Requested: {new Date(leave.requested_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' })}
                                                 </div>
-                                            )}
-                                        </Link>
-                                    ))
+                                                {!isRestrictedRole && leave.reason && (
+                                                    <div className="text-xs text-muted-foreground mt-1 line-clamp-2">
+                                                        {leave.reason}
+                                                    </div>
+                                                )}
+                                            </>
+                                        );
+
+                                        // For restricted roles (Agent, Utility), render non-clickable div
+                                        if (isRestrictedRole) {
+                                            return (
+                                                <div
+                                                    key={leave.id}
+                                                    className={`block p-3 border rounded-lg text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : ''}`}
+                                                    onMouseEnter={() => setHoveredLeaveId(leave.id)}
+                                                    onMouseLeave={() => setHoveredLeaveId(null)}
+                                                >
+                                                    {content}
+                                                </div>
+                                            );
+                                        }
+
+                                        // For non-restricted roles (TL, HR, Admin, Super Admin), render clickable Link
+                                        return (
+                                            <Link
+                                                key={leave.id}
+                                                href={`/form-requests/leave-requests/${leave.id}`}
+                                                className={`block p-3 border rounded-lg cursor-pointer transition-colors text-sm ${hoveredLeaveId === leave.id ? 'bg-accent border-primary' : 'hover:bg-accent/50'}`}
+                                                onMouseEnter={() => setHoveredLeaveId(leave.id)}
+                                                onMouseLeave={() => setHoveredLeaveId(null)}
+                                            >
+                                                {content}
+                                            </Link>
+                                        );
+                                    })
                                 )}
                             </div>
                         </CardContent>

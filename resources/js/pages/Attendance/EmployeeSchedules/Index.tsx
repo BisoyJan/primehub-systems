@@ -101,6 +101,7 @@ interface PageProps extends SharedData {
     usersWithoutSchedules: Array<{ id: number; first_name: string; last_name: string }>;
     usersWithInactiveSchedules: Array<{ id: number; first_name: string; last_name: string }>;
     usersWithMultipleSchedules: Array<{ id: number; first_name: string; last_name: string; schedule_count: number }>;
+    teamLeadCampaignId?: number;
     filters?: {
         search?: string;
         user_id?: string;
@@ -153,7 +154,7 @@ const groupSchedulesByUser = (schedules: Schedule[]) => {
 };
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [] } = usePage<PageProps>().props;
+    const { schedules, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [], teamLeadCampaignId } = usePage<PageProps>().props;
     const scheduleData = {
         data: schedules?.data ?? [],
         links: schedules?.links ?? [],
@@ -186,7 +187,11 @@ export default function EmployeeSchedulesIndex() {
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [roleFilter, setRoleFilter] = useState(appliedFilters.role || "all");
-    const [campaignFilter, setCampaignFilter] = useState(appliedFilters.campaign_id || "all");
+    const [campaignFilter, setCampaignFilter] = useState(() => {
+        if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
+        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return "all";
+    });
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
     const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -519,7 +524,7 @@ export default function EmployeeSchedulesIndex() {
                                 <SelectItem value="all">All Campaigns</SelectItem>
                                 {campaigns.map(campaign => (
                                     <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}
+                                        {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

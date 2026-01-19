@@ -125,9 +125,10 @@ interface Props {
     };
     campaigns?: string[];
     allEmployees?: Employee[];
+    teamLeadCampaignName?: string;
 }
 
-export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [] }: Props) {
+export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [], teamLeadCampaignName }: Props) {
     // Show employee column for admins and team leads (who can see other users' requests)
     const showEmployeeColumn = isAdmin || isTeamLead;
 
@@ -146,7 +147,11 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
     const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
     const [filterType, setFilterType] = useState(filters.type || 'all');
     const [filterEmployeeName, setFilterEmployeeName] = useState(filters.employee_name || '');
-    const [filterCampaign, setFilterCampaign] = useState(filters.campaign_department || 'all');
+    const [filterCampaign, setFilterCampaign] = useState(() => {
+        if (filters.campaign_department) return filters.campaign_department;
+        if (teamLeadCampaignName) return teamLeadCampaignName;
+        return 'all';
+    });
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
@@ -619,7 +624,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
                                     {campaigns.map((c) => (
-                                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                                        <SelectItem key={c} value={c}>{c}{teamLeadCampaignName === c ? " (Your Campaign)" : ""}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

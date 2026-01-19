@@ -52,6 +52,17 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
         $isTeamLead = $user->role === 'Team Lead';
 
+        // Determine Team Lead's campaign (if applicable)
+        $teamLeadCampaignId = null;
+        $teamLeadCampaignName = null;
+        if ($isTeamLead) {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+                $teamLeadCampaignName = $activeSchedule->campaign?->name;
+            }
+        }
+
         $query = LeaveRequest::with(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover']);
 
         // Admins see all requests
@@ -103,9 +114,13 @@ class LeaveRequestController extends Controller
             });
         }
 
-        // Filter by campaign/department
-        if ($request->filled('campaign_department')) {
-            $query->where('campaign_department', $request->campaign_department);
+        // Filter by campaign/department - auto-filter for Team Leads
+        $campaignFilter = $request->filled('campaign_department') ? $request->campaign_department : null;
+        if (!$campaignFilter && $isTeamLead && $teamLeadCampaignName) {
+            $campaignFilter = $teamLeadCampaignName;
+        }
+        if ($campaignFilter) {
+            $query->where('campaign_department', $campaignFilter);
         }
 
         $leaveRequests = $query->orderBy('created_at', 'desc')
@@ -150,6 +165,7 @@ class LeaveRequestController extends Controller
             'allEmployees' => $allEmployees,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
+            'teamLeadCampaignName' => $teamLeadCampaignName,
             'hasPendingRequests' => $hasPendingRequests,
         ]);
     }
@@ -164,12 +180,26 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $isRestrictedRole = in_array($user->role, ['Agent', 'Utility']);
 
+        // Detect Team Lead's campaign for auto-filter
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
         // Get filters
         $month = $request->input('month', now()->format('Y-m'));
         $campaignId = $request->input('campaign_id');
         $leaveType = $request->input('leave_type');
         $status = $request->input('status'); // 'approved', 'pending', or null for both
         $viewMode = $request->input('view_mode', 'single'); // 'single' or 'multi'
+
+        // Auto-filter campaign for Team Leads when no campaign is specified
+        if (!$campaignId && $teamLeadCampaignId) {
+            $campaignId = $teamLeadCampaignId;
+        }
 
         // Parse month to get date range
         $calendarDate = Carbon::parse($month . '-01');
@@ -252,6 +282,7 @@ class LeaveRequestController extends Controller
         return Inertia::render('FormRequest/Leave/Calendar', [
             'leaves' => $leaves,
             'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
             'filters' => [
                 'month' => $month,
                 'campaign_id' => $campaignId,
@@ -2847,10 +2878,20 @@ class LeaveRequestController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
+        // Determine Team Lead's campaign (if applicable)
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
         $year = (int) $request->input('year', now()->year);
         $search = $request->input('search', '');
         $roleFilter = $request->input('role', '');
         $eligibilityFilter = $request->input('eligibility', '');
+        $campaignFilter = $request->input('campaign_id', '');
 
         // Calculate eligibility cutoff date (6 months ago from start of selected year)
         $eligibilityCutoffDate = Carbon::create($year, 1, 1)->subMonths(6);
@@ -2897,6 +2938,17 @@ class LeaveRequestController extends Controller
                         ->from('leave_credit_carryovers')
                         ->where('is_first_regularization', true);
                 });
+        }
+
+        // Apply campaign filter - auto-filter for Team Leads
+        $campaignIdToFilter = $campaignFilter ?: null;
+        if (!$campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
+            $campaignIdToFilter = $teamLeadCampaignId;
+        }
+        if ($campaignIdToFilter) {
+            $query->whereHas('activeSchedule', function ($q) use ($campaignIdToFilter) {
+                $q->where('campaign_id', $campaignIdToFilter);
+            });
         }
 
         $users = $query->orderBy('first_name')->orderBy('last_name')->paginate(20)->withQueryString();
@@ -3031,14 +3083,20 @@ class LeaveRequestController extends Controller
                 'email' => $user->email,
             ]);
 
+        // Get campaigns for filter dropdown
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('FormRequest/Leave/Credits/Index', [
             'creditsData' => $creditsData,
             'allEmployees' => $allEmployees,
+            'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
             'filters' => [
                 'year' => (int) $year,
                 'search' => $search,
                 'role' => $roleFilter,
                 'eligibility' => $eligibilityFilter,
+                'campaign_id' => $campaignFilter,
             ],
             'availableYears' => range(now()->year, 2024, -1),
         ]);

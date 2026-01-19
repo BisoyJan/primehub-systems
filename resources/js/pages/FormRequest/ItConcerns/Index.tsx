@@ -74,15 +74,23 @@ interface ConcernPayload {
     to: number;
 }
 
+interface Campaign {
+    id: number;
+    name: string;
+}
+
 interface PageProps extends SharedData {
     concerns: ConcernPayload;
     sites: Site[];
+    campaigns?: Campaign[];
+    teamLeadCampaignId?: number;
     filters?: {
         search?: string;
         site_id?: string;
         category?: string;
         status?: string;
         priority?: string;
+        campaign_id?: string;
     };
     [key: string]: unknown;
 }
@@ -150,7 +158,7 @@ const getPriorityBadge = (priority: string) => {
 };
 
 export default function ItConcernsIndex() {
-    const { concerns, sites, filters, auth } = usePage<PageProps>().props;
+    const { concerns, sites, campaigns = [], teamLeadCampaignId, filters, auth } = usePage<PageProps>().props;
     const concernData = {
         data: concerns?.data ?? [],
         links: concerns?.links ?? [],
@@ -180,6 +188,11 @@ export default function ItConcernsIndex() {
     const [categoryFilter, setCategoryFilter] = useState(appliedFilters.category || "all");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
     const [priorityFilter, setPriorityFilter] = useState(appliedFilters.priority || "all");
+    const [campaignFilter, setCampaignFilter] = useState(() => {
+        if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
+        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return "all";
+    });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
@@ -218,6 +231,7 @@ export default function ItConcernsIndex() {
             if (categoryFilter !== "all") params.category = categoryFilter;
             if (statusFilter !== "all") params.status = statusFilter;
             if (priorityFilter !== "all") params.priority = priorityFilter;
+            if (campaignFilter !== "all") params.campaign_id = campaignFilter;
 
             router.get("/form-requests/it-concerns", params, {
                 preserveState: true,
@@ -232,7 +246,7 @@ export default function ItConcernsIndex() {
         }, 30000); // 30 seconds
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter]);
+    }, [autoRefreshEnabled, debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter, campaignFilter]);
 
     useEffect(() => {
         const timer = setTimeout(() => setDebouncedSearch(search), 500);
@@ -253,6 +267,7 @@ export default function ItConcernsIndex() {
         if (categoryFilter !== "all") params.category = categoryFilter;
         if (statusFilter !== "all") params.status = statusFilter;
         if (priorityFilter !== "all") params.priority = priorityFilter;
+        if (campaignFilter !== "all") params.campaign_id = campaignFilter;
 
         setLoading(true);
         router.get("/form-requests/it-concerns", params, {
@@ -261,13 +276,14 @@ export default function ItConcernsIndex() {
             replace: true,
             onFinish: () => setLoading(false),
         });
-    }, [debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter]);
+    }, [debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter, campaignFilter]);
 
     const showClearFilters =
         siteFilter !== "all" ||
         categoryFilter !== "all" ||
         statusFilter !== "all" ||
         priorityFilter !== "all" ||
+        campaignFilter !== "all" ||
         Boolean(search);
 
     const clearFilters = () => {
@@ -276,6 +292,7 @@ export default function ItConcernsIndex() {
         setCategoryFilter("all");
         setStatusFilter("all");
         setPriorityFilter("all");
+        setCampaignFilter("all");
     };
 
     const handleManualRefresh = () => {
@@ -442,6 +459,20 @@ export default function ItConcernsIndex() {
                                     <SelectItem value="medium">Medium</SelectItem>
                                     <SelectItem value="high">High</SelectItem>
                                     <SelectItem value="urgent">Urgent</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Campaign" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {campaigns.map((campaign) => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>

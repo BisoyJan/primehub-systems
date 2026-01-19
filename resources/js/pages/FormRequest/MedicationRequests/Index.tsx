@@ -56,6 +56,11 @@ interface PaginationMeta {
     total: number;
 }
 
+interface Campaign {
+    id: number;
+    name: string;
+}
+
 interface Props {
     medicationRequests: {
         data: MedicationRequest[];
@@ -66,11 +71,14 @@ interface Props {
         search?: string;
         status?: string;
         medication_type?: string;
+        campaign_id?: string;
     };
     medicationTypes: string[];
+    campaigns?: Campaign[];
+    teamLeadCampaignId?: number;
 }
 
-export default function Index({ medicationRequests, filters, medicationTypes = [] }: Props) {
+export default function Index({ medicationRequests, filters, medicationTypes = [], campaigns = [], teamLeadCampaignId }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Medication Requests',
         breadcrumbs: [
@@ -85,13 +93,18 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const [search, setSearch] = useState(filters.search || '');
     const [status, setStatus] = useState(filters.status || 'all');
     const [medicationType, setMedicationType] = useState(filters.medication_type || 'all');
+    const [campaignFilter, setCampaignFilter] = useState(() => {
+        if (filters.campaign_id) return filters.campaign_id;
+        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return 'all';
+    });
     const [localLoading, setLocalLoading] = useState(false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [requestToDelete, setRequestToDelete] = useState<number | null>(null);
 
-    const showClearFilters = Boolean(search) || status !== 'all' || medicationType !== 'all';
+    const showClearFilters = Boolean(search) || status !== 'all' || medicationType !== 'all' || campaignFilter !== 'all';
 
     const buildFilterParams = useCallback(() => {
         const params: Record<string, string> = {};
@@ -104,8 +117,11 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
         if (medicationType !== 'all') {
             params.medication_type = medicationType;
         }
+        if (campaignFilter !== 'all') {
+            params.campaign_id = campaignFilter;
+        }
         return params;
-    }, [search, status, medicationType]);
+    }, [search, status, medicationType, campaignFilter]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         setLocalLoading(true);
@@ -181,6 +197,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
         setSearch('');
         setStatus('all');
         setMedicationType('all');
+        setCampaignFilter('all');
         requestWithFilters({});
     };
 
@@ -247,6 +264,20 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                     {medicationTypes.map((type) => (
                                         <SelectItem key={type} value={type}>
                                             {type}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {campaigns.map(campaign => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

@@ -32,6 +32,24 @@ class MedicationRequestController extends Controller
     {
         $this->authorize('viewAny', MedicationRequest::class);
 
+        $user = auth()->user();
+        $campaignFilter = $request->input('campaign_id', '');
+
+        // Detect Team Lead's campaign for auto-filter
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
+        // Auto-filter for Team Leads when no campaign is specified
+        $campaignIdToFilter = $campaignFilter ?: null;
+        if (!$campaignIdToFilter && $teamLeadCampaignId) {
+            $campaignIdToFilter = $teamLeadCampaignId;
+        }
+
         $query = MedicationRequest::with(['user.activeSchedule.campaign', 'user.activeSchedule.site', 'approvedBy'])
             ->when($request->search, function ($query, $search) {
                 $query->where(function ($q) use ($search) {
@@ -42,11 +60,25 @@ class MedicationRequestController extends Controller
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
             })
+            ->when($campaignIdToFilter, function ($query, $campaignId) {
+                $query->whereHas('user.activeSchedule', function ($q) use ($campaignId) {
+                    $q->where('campaign_id', $campaignId);
+                });
+            })
             ->latest();
+
+        // Get campaigns for filter dropdown
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('FormRequest/MedicationRequests/Index', [
             'medicationRequests' => $query->paginate(15)->withQueryString(),
-            'filters' => $request->only(['search', 'status']),
+            'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'status' => $request->input('status', ''),
+                'campaign_id' => $campaignFilter,
+            ],
         ]);
     }
 

@@ -25,11 +25,36 @@ class ItConcernController extends Controller
     {
         $this->authorize('viewAny', ItConcern::class);
 
-        $query = ItConcern::with(['user', 'site', 'resolvedBy']);
+        $user = auth()->user();
+        $campaignFilter = $request->input('campaign_id', '');
+
+        // Detect Team Lead's campaign for auto-filter
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
+        // Auto-filter campaign for Team Leads when no campaign is specified
+        $campaignIdToFilter = $campaignFilter ?: null;
+        if (!$campaignIdToFilter && $teamLeadCampaignId) {
+            $campaignIdToFilter = $teamLeadCampaignId;
+        }
+
+        $query = ItConcern::with(['user.activeSchedule.campaign', 'site', 'resolvedBy']);
 
         // If user is an Agent, only show their own concerns
-        if (auth()->user()->role === 'Agent' || auth()->user()->role === 'Admin') {
+        if ($user->role === 'Agent' || $user->role === 'Admin') {
             $query->where('user_id', auth()->id());
+        }
+
+        // Filter by campaign via user's active schedule
+        if ($campaignIdToFilter) {
+            $query->whereHas('user.activeSchedule', function ($q) use ($campaignIdToFilter) {
+                $q->where('campaign_id', $campaignIdToFilter);
+            });
         }
 
         // Search by station number or description
@@ -70,11 +95,21 @@ class ItConcernController extends Controller
             ->withQueryString();
 
         $sites = Site::orderBy('name')->get();
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('FormRequest/ItConcerns/Index', [
             'concerns' => $concerns,
             'sites' => $sites,
-            'filters' => $request->only(['search', 'site_id', 'category', 'status', 'priority']),
+            'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'filters' => [
+                'search' => $request->input('search', ''),
+                'site_id' => $request->input('site_id', ''),
+                'category' => $request->input('category', ''),
+                'status' => $request->input('status', ''),
+                'priority' => $request->input('priority', ''),
+                'campaign_id' => $campaignFilter,
+            ],
         ]);
     }
 

@@ -37,9 +37,20 @@ class AttendancePointController extends Controller
     {
         $this->authorize('viewAny', AttendancePoint::class);
 
+        $user = auth()->user();
+
+        // Determine Team Lead's campaign (if applicable)
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
         // Redirect restricted roles to their own show page
         $restrictedRoles = ['Agent', 'IT', 'Utility'];
-        if (in_array(auth()->user()->role, $restrictedRoles)) {
+        if (in_array($user->role, $restrictedRoles)) {
             return redirect()->route('attendance-points.show', ['user' => auth()->id()]);
         }
 
@@ -67,9 +78,14 @@ class AttendancePointController extends Controller
             }
         }
 
-        if ($request->filled('campaign_id') && $request->campaign_id !== 'all') {
-            $query->whereHas('user.activeSchedule', function ($q) use ($request) {
-                $q->where('campaign_id', $request->campaign_id);
+        // Campaign filter - auto-filter for Team Leads
+        $campaignIdToFilter = ($request->filled('campaign_id') && $request->campaign_id !== 'all') ? $request->campaign_id : null;
+        if (!$campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
+            $campaignIdToFilter = $teamLeadCampaignId;
+        }
+        if ($campaignIdToFilter) {
+            $query->whereHas('user.activeSchedule', function ($q) use ($campaignIdToFilter) {
+                $q->where('campaign_id', $campaignIdToFilter);
             });
         }
 
@@ -105,6 +121,7 @@ class AttendancePointController extends Controller
             'users' => $users,
             'campaigns' => $campaigns,
             'stats' => $stats,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
             'filters' => [
                 'user_id' => $request->user_id,
                 'campaign_id' => $request->campaign_id,

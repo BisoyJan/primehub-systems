@@ -41,9 +41,12 @@ class LeaveRequestPolicy
             return true;
         }
 
-        // Team Leads can view any agent leave requests that require TL approval
-        if ($user->role === 'Team Lead' && $leaveRequest->requiresTlApproval()) {
-            return true;
+        // Team Leads can view leave requests from their campaign
+        if ($user->role === 'Team Lead') {
+            $teamLeadCampaign = $user->activeSchedule?->campaign;
+            if ($teamLeadCampaign && $leaveRequest->campaign_department === $teamLeadCampaign->name) {
+                return true;
+            }
         }
 
         // Others need view_all permission

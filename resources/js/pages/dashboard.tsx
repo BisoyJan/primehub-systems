@@ -2389,7 +2389,7 @@ export default function Dashboard({
                                         <span>{new Date(leave.end_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
                                     </div>
                                 </div>
-                                {leave.reason && (
+                                {!isRestrictedRole && leave.reason && (
                                     <div>
                                         <div className="text-sm font-medium text-muted-foreground">Reason</div>
                                         <div className="mt-1 p-3 bg-muted rounded-md text-sm">

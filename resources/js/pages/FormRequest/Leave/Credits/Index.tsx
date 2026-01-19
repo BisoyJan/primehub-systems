@@ -141,6 +141,11 @@ interface Employee {
     email: string;
 }
 
+interface Campaign {
+    id: number;
+    name: string;
+}
+
 interface Props {
     creditsData: {
         data: CreditData[];
@@ -149,16 +154,19 @@ interface Props {
         total?: number;
     };
     allEmployees: Employee[];
+    campaigns: Campaign[];
+    teamLeadCampaignId?: number;
     filters: {
         year: number;
         search: string;
         role: string;
         eligibility: string;
+        campaign_id: string;
     };
     availableYears: number[];
 }
 
-export default function Index({ creditsData, allEmployees, filters, availableYears }: Props) {
+export default function Index({ creditsData, allEmployees, campaigns = [], teamLeadCampaignId, filters, availableYears }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Leave Credits',
         breadcrumbs: [
@@ -175,6 +183,11 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
     const [yearFilter, setYearFilter] = useState(filters.year.toString());
     const [roleFilter, setRoleFilter] = useState(filters.role || 'all');
     const [eligibilityFilter, setEligibilityFilter] = useState(filters.eligibility || 'all');
+    const [campaignFilter, setCampaignFilter] = useState(() => {
+        if (filters.campaign_id) return filters.campaign_id;
+        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return 'all';
+    });
 
     // Popover search state
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
@@ -209,7 +222,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
         return allEmployees.find(emp => emp.id.toString() === selectedEmployeeId);
     }, [allEmployees, selectedEmployeeId]);
 
-    const showClearFilters = selectedEmployeeId || roleFilter !== 'all' || eligibilityFilter !== 'all' || yearFilter !== new Date().getFullYear().toString();
+    const showClearFilters = selectedEmployeeId || roleFilter !== 'all' || eligibilityFilter !== 'all' || campaignFilter !== 'all' || yearFilter !== new Date().getFullYear().toString();
 
     // Clear employee search query when popover closes
     useEffect(() => {
@@ -224,8 +237,9 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
         if (yearFilter) params.year = yearFilter;
         if (roleFilter !== 'all') params.role = roleFilter;
         if (eligibilityFilter !== 'all') params.eligibility = eligibilityFilter;
+        if (campaignFilter !== 'all') params.campaign_id = campaignFilter;
         return params;
-    }, [selectedEmployeeId, yearFilter, roleFilter, eligibilityFilter]);
+    }, [selectedEmployeeId, yearFilter, roleFilter, eligibilityFilter, campaignFilter]);
 
     const applyFilters = useCallback(() => {
         router.get('/form-requests/leave-requests/credits', buildFilterParams(), {
@@ -239,6 +253,7 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
         setYearFilter(new Date().getFullYear().toString());
         setRoleFilter('all');
         setEligibilityFilter('all');
+        setCampaignFilter('all');
         router.get('/form-requests/leave-requests/credits', {}, {
             preserveState: true,
             preserveScroll: true,
@@ -588,10 +603,24 @@ export default function Index({ creditsData, allEmployees, filters, availableYea
                                     <SelectValue placeholder="Status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="all">All Employees</SelectItem>
+                                    <SelectItem value="all">All Status</SelectItem>
                                     <SelectItem value="eligible">Regularized</SelectItem>
                                     <SelectItem value="not_eligible">Probationary</SelectItem>
                                     <SelectItem value="pending_regularization">Pending Transfer</SelectItem>
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={campaignFilter} onValueChange={setCampaignFilter}>
+                                <SelectTrigger className="w-full sm:w-[180px]">
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {campaigns.map(campaign => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                        </SelectItem>
+                                    ))}
                                 </SelectContent>
                             </Select>
                         </div>

@@ -123,6 +123,7 @@ interface PageProps extends SharedData {
     users?: User[];
     sites?: Site[];
     campaigns?: Campaign[];
+    teamLeadCampaignId?: number;
     filters?: {
         search?: string;
         status?: string;
@@ -199,7 +200,7 @@ const getShiftTypeBadge = (shiftType: string) => {
 };
 
 export default function AttendanceIndex() {
-    const { attendances, users = [], sites = [], campaigns = [], filters, auth } = usePage<PageProps>().props;
+    const { attendances, users = [], sites = [], campaigns = [], teamLeadCampaignId, filters, auth } = usePage<PageProps>().props;
 
     // Ensure we have proper data structure
     const attendanceData = {
@@ -208,6 +209,8 @@ export default function AttendanceIndex() {
         meta: attendances?.meta ?? DEFAULT_META,
     };
     const appliedFilters = filters ?? {};
+    const userRole = auth.user?.role;
+    const isTeamLead = userRole === 'Team Lead';
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Attendance",
@@ -223,7 +226,12 @@ export default function AttendanceIndex() {
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [selectedSiteId, setSelectedSiteId] = useState(appliedFilters.site_id || "");
-    const [selectedCampaignId, setSelectedCampaignId] = useState(appliedFilters.campaign_id || "");
+    // Auto-select Team Lead's campaign if no filter is applied
+    const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
+        if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
+        if (isTeamLead && teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return "";
+    });
     const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
     const [startDate, setStartDate] = useState(appliedFilters.start_date || "");
     const [endDate, setEndDate] = useState(appliedFilters.end_date || "");
@@ -301,16 +309,22 @@ export default function AttendanceIndex() {
     useEffect(() => {
         setSelectedUserId(appliedFilters.user_id || "");
         setSelectedSiteId(appliedFilters.site_id || "");
-        setSelectedCampaignId(appliedFilters.campaign_id || "");
+        // For Team Leads, default to their campaign if no filter is applied
+        if (appliedFilters.campaign_id) {
+            setSelectedCampaignId(appliedFilters.campaign_id);
+        } else if (isTeamLead && teamLeadCampaignId) {
+            setSelectedCampaignId(teamLeadCampaignId.toString());
+        } else {
+            setSelectedCampaignId("");
+        }
         setStatusFilter(appliedFilters.status || "all");
         setStartDate(appliedFilters.start_date || "");
         setEndDate(appliedFilters.end_date || "");
         setNeedsVerification(appliedFilters.needs_verification || false);
         // Don't clear selections when filters change
-    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification]);
+    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification, isTeamLead, teamLeadCampaignId]);
 
     const userId = auth.user?.id;
-    const userRole = auth.user?.role;
     // Roles that should only see their own attendance records
     const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
     const isRestrictedUser = userRole && restrictedRoles.includes(userRole);
@@ -630,7 +644,11 @@ export default function AttendanceIndex() {
                             </SelectContent>
                         </Select>
 
-                        <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
+                        {/* Campaign Filter - Team Leads default to their campaign */}
+                        <Select
+                            value={selectedCampaignId || "all"}
+                            onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}
+                        >
                             <SelectTrigger className="w-full lg:w-auto lg:flex-1">
                                 <SelectValue placeholder="All Campaigns" />
                             </SelectTrigger>
@@ -638,7 +656,7 @@ export default function AttendanceIndex() {
                                 <SelectItem value="all">All Campaigns</SelectItem>
                                 {campaigns.map((campaign) => (
                                     <SelectItem key={campaign.id} value={campaign.id.toString()}>
-                                        {campaign.name}
+                                        {campaign.name}{isTeamLead && teamLeadCampaignId === campaign.id ? ' (Your Campaign)' : ''}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

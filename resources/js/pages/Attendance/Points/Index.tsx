@@ -185,6 +185,7 @@ interface PageProps extends SharedData {
     campaigns?: Campaign[];
     stats?: Stats;
     filters?: Filters;
+    teamLeadCampaignId?: number;
     [key: string]: unknown;
 }
 
@@ -228,7 +229,7 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-export default function AttendancePointsIndex({ points, users, campaigns, stats, filters, auth }: PageProps) {
+export default function AttendancePointsIndex({ points, users, campaigns, stats, filters, auth, teamLeadCampaignId }: PageProps) {
     useFlashMessage();
     const { title, breadcrumbs } = usePageMeta({
         title: defaultTitle,
@@ -243,7 +244,11 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
     const [userSearchQuery, setUserSearchQuery] = useState("");
-    const [selectedCampaignId, setSelectedCampaignId] = useState(filters?.campaign_id || "");
+    const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
+        if (filters?.campaign_id) return filters.campaign_id;
+        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return "";
+    });
     const [selectedPointType, setSelectedPointType] = useState(filters?.point_type || "");
     const [selectedStatus, setSelectedStatus] = useState(filters?.status || "");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
@@ -1238,7 +1243,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     <SelectItem value="all">All Campaigns</SelectItem>
                                     {campaigns?.map(campaign => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}
+                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

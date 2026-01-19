@@ -126,6 +126,8 @@ interface PageProps extends SharedData {
     attendances?: AttendancePayload;
     employees?: User[];
     sites?: Site[];
+    campaigns?: Campaign[];
+    teamLeadCampaignId?: number;
     filters?: {
         search?: string;
         user_id?: string;
@@ -134,6 +136,7 @@ interface PageProps extends SharedData {
         date_to?: string;
         verified?: string;
         site_id?: string;
+        campaign_id?: string;
     };
     [key: string]: unknown;
 }
@@ -350,18 +353,27 @@ const calculateSuggestedStatus = (
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, sites = [], filters } = usePage<PageProps>().props;
+    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, filters, auth } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
         meta: attendances?.meta ?? DEFAULT_META,
     };
 
+    const userRole = auth.user?.role;
+    const isTeamLead = userRole === 'Team Lead';
+
     // Employee search popover state
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
     const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
     const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
+    // Auto-select Team Lead's campaign if no filter is applied
+    const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
+        if (filters?.campaign_id) return filters.campaign_id;
+        if (isTeamLead && teamLeadCampaignId) return teamLeadCampaignId.toString();
+        return "";
+    });
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Review Flagged Records",
@@ -518,6 +530,7 @@ export default function AttendanceReview() {
             {
                 user_id: selectedUserId,
                 site_id: selectedSiteId,
+                campaign_id: selectedCampaignId,
                 status: statusFilter === "all" ? "" : statusFilter,
                 verified: verifiedFilter === "all" ? "" : verifiedFilter,
                 date_from: dateFrom,
@@ -534,6 +547,12 @@ export default function AttendanceReview() {
         setSelectedUserId("");
         setEmployeeSearchQuery("");
         setSelectedSiteId("");
+        // For Team Leads, reset to their campaign instead of empty
+        if (isTeamLead && teamLeadCampaignId) {
+            setSelectedCampaignId(teamLeadCampaignId.toString());
+        } else {
+            setSelectedCampaignId("");
+        }
         setStatusFilter("all");
         setVerifiedFilter("all");
         setDateFrom("");
@@ -935,6 +954,24 @@ export default function AttendanceReview() {
                                             {sites.map((site) => (
                                                 <SelectItem key={site.id} value={site.id.toString()}>
                                                     {site.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Campaign Filter */}
+                                <div className="space-y-2">
+                                    <Label htmlFor="campaign-filter">Campaign</Label>
+                                    <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
+                                        <SelectTrigger id="campaign-filter">
+                                            <SelectValue placeholder="All Campaigns" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Campaigns</SelectItem>
+                                            {campaigns.map((campaign) => (
+                                                <SelectItem key={campaign.id} value={campaign.id.toString()}>
+                                                    {campaign.name}{isTeamLead && teamLeadCampaignId === campaign.id ? ' (Your Campaign)' : ''}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

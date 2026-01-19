@@ -41,6 +41,17 @@ class AttendanceController extends Controller
     {
         $this->authorize('viewAny', Attendance::class);
 
+        $user = auth()->user();
+
+        // Determine Team Lead's campaign (if applicable)
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
         $query = Attendance::with([
             'user.activeSchedule.site', // Fallback for site
             'user.activeSchedule.campaign', // Fallback for campaign
@@ -52,8 +63,32 @@ class AttendanceController extends Controller
 
         // Restrict certain roles to only view their own attendance records
         $restrictedRoles = ['Agent', 'IT', 'Utility'];
-        if (in_array(auth()->user()->role, $restrictedRoles)) {
+        if (in_array($user->role, $restrictedRoles)) {
             $query->where('user_id', auth()->id());
+        } elseif ($user->role === 'Team Lead' && $teamLeadCampaignId) {
+            // Team Leads see only their campaign's attendance (unless they manually filter)
+            $campaignFilter = $request->input('campaign_id');
+            if (!$campaignFilter || $campaignFilter === 'all') {
+                // Default to Team Lead's campaign if no filter specified
+                $query->whereHas('employeeSchedule', function ($q) use ($teamLeadCampaignId) {
+                    $q->where('campaign_id', $teamLeadCampaignId);
+                });
+            }
+
+            // Search by employee name
+            if ($request->has('search') && $request->search) {
+                $search = $request->search;
+                $query->whereHas('user', function ($q) use ($search) {
+                    $q->where('first_name', 'like', "%{$search}%")
+                      ->orWhere('last_name', 'like', "%{$search}%")
+                      ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
+                });
+            }
+
+            // Allow user_id filter
+            if ($request->has('user_id') && $request->user_id !== 'all') {
+                $query->where('user_id', $request->user_id);
+            }
         } else {
             // Search by employee name (only for non-restricted roles)
             if ($request->has('search') && $request->search) {
@@ -91,6 +126,16 @@ class AttendanceController extends Controller
             });
         }
 
+        // Filter by campaign (via employee schedule) - for non-Team Leads or when Team Lead explicitly filters
+        if ($request->has('campaign_id') && $request->campaign_id !== 'all' && $request->campaign_id) {
+            // For Team Leads, allow filtering within their campaign or to 'all' if they have permission
+            if ($user->role !== 'Team Lead' || $request->campaign_id == $teamLeadCampaignId) {
+                $query->whereHas('employeeSchedule', function ($q) use ($request) {
+                    $q->where('campaign_id', $request->campaign_id);
+                });
+            }
+        }
+
         $attendances = $query->orderBy('shift_date', 'desc')
             ->orderBy('created_at', 'desc')
             ->paginate(25)
@@ -111,11 +156,16 @@ class AttendanceController extends Controller
         // Get all sites for site filter dropdown
         $sites = Site::orderBy('name')->get(['id', 'name']);
 
+        // Get all campaigns for campaign filter dropdown
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Attendance/Main/Index', [
             'attendances' => $attendances,
             'users' => $users,
             'sites' => $sites,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'site_id', 'needs_verification']),
+            'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'site_id', 'campaign_id', 'needs_verification']),
         ]);
     }
 
@@ -128,10 +178,28 @@ class AttendanceController extends Controller
         $month = $request->input('month', now()->month);
         $year = $request->input('year', now()->year);
         $verificationFilter = $request->input('verification_filter', 'all'); // all, verified, non_verified
+        $campaignFilter = $request->input('campaign_id', '');
+
+        $authUser = auth()->user();
+
+        // Detect Team Lead's campaign for auto-filter
+        $teamLeadCampaignId = null;
+        if ($authUser->role === 'Team Lead') {
+            $activeSchedule = $authUser->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
+        // Auto-filter campaign for Team Leads when no campaign is specified
+        $campaignIdToFilter = $campaignFilter ?: null;
+        if (!$campaignIdToFilter && $teamLeadCampaignId) {
+            $campaignIdToFilter = $teamLeadCampaignId;
+        }
 
         // Restrict certain roles to only view their own attendance records
         $restrictedRoles = ['Agent', 'IT', 'Utility'];
-        if (in_array(auth()->user()->role, $restrictedRoles)) {
+        if (in_array($authUser->role, $restrictedRoles)) {
             $userId = auth()->id();
         } else if (!$userId && $request->has('user_id')) {
             $userId = $request->user_id;
@@ -139,11 +207,19 @@ class AttendanceController extends Controller
 
         // Get all users for selection (if user has permission)
         $users = [];
-        if (!in_array(auth()->user()->role, $restrictedRoles)) {
-            $users = User::select('id', 'first_name', 'last_name')
+        if (!in_array($authUser->role, $restrictedRoles)) {
+            $usersQuery = User::select('id', 'first_name', 'last_name')
                 ->orderBy('first_name')
-                ->orderBy('last_name')
-                ->get()
+                ->orderBy('last_name');
+
+            // Filter users by campaign if specified
+            if ($campaignIdToFilter) {
+                $usersQuery->whereHas('activeSchedule', function ($q) use ($campaignIdToFilter) {
+                    $q->where('campaign_id', $campaignIdToFilter);
+                });
+            }
+
+            $users = $usersQuery->get()
                 ->map(function ($user) {
                     return [
                         'id' => $user->id,
@@ -197,13 +273,19 @@ class AttendanceController extends Controller
             }
         }
 
+        // Get campaigns for filter dropdown
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Attendance/Main/Calendar', [
             'attendances' => (object) $attendances, // Cast to object so it's treated as associative array in JS
             'users' => $users,
             'selectedUser' => $selectedUser,
+            'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
             'month' => (int) $month,
             'year' => (int) $year,
             'verificationFilter' => $verificationFilter,
+            'campaignFilter' => $campaignFilter,
         ]);
     }
 
@@ -844,6 +926,17 @@ class AttendanceController extends Controller
      */
     public function review(Request $request)
     {
+        $user = auth()->user();
+
+        // Determine Team Lead's campaign (if applicable)
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
         $query = Attendance::with([
             'user.activeSchedule.site', // Include user's active schedule as fallback
             'user.activeSchedule.campaign', // Include user's active schedule campaign as fallback
@@ -853,6 +946,17 @@ class AttendanceController extends Controller
             'bioOutSite',
             'leaveRequest' // Include leave request info
         ]);
+
+        // Auto-filter for Team Leads by their campaign
+        if ($user->role === 'Team Lead' && $teamLeadCampaignId) {
+            $campaignFilter = $request->input('campaign_id');
+            if (!$campaignFilter || $campaignFilter === 'all') {
+                // Default to Team Lead's campaign if no filter specified
+                $query->whereHas('employeeSchedule', function ($q) use ($teamLeadCampaignId) {
+                    $q->where('campaign_id', $teamLeadCampaignId);
+                });
+            }
+        }
 
         // Filter by verification status
         // Default behavior: show all records (matching frontend default "All Records")
@@ -891,6 +995,13 @@ class AttendanceController extends Controller
             });
         }
 
+        // Filter by campaign (via employee schedule)
+        if ($request->filled('campaign_id')) {
+            $query->whereHas('employeeSchedule', function ($q) use ($request) {
+                $q->where('campaign_id', $request->campaign_id);
+            });
+        }
+
         $attendances = $query->orderBy('shift_date', 'desc')->paginate(50)->withQueryString();
 
         // Get all employees for the dropdown
@@ -908,10 +1019,15 @@ class AttendanceController extends Controller
         // Get all sites for site filter dropdown
         $sites = Site::orderBy('name')->get(['id', 'name']);
 
+        // Get all campaigns for campaign filter dropdown
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Attendance/Main/Review', [
             'attendances' => $attendances,
             'employees' => $employees,
             'sites' => $sites,
+            'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
             'filters' => [
                 'user_id' => $request->user_id,
                 'status' => $request->status,
@@ -919,6 +1035,7 @@ class AttendanceController extends Controller
                 'date_from' => $request->date_from,
                 'date_to' => $request->date_to,
                 'site_id' => $request->site_id,
+                'campaign_id' => $request->campaign_id,
             ],
         ]);
     }
@@ -1623,6 +1740,17 @@ class AttendanceController extends Controller
     {
         $this->authorize('viewAny', Attendance::class);
 
+        $user = auth()->user();
+
+        // Determine Team Lead's campaign (if applicable)
+        $teamLeadCampaignId = null;
+        if ($user->role === 'Team Lead') {
+            $activeSchedule = $user->activeSchedule;
+            if ($activeSchedule && $activeSchedule->campaign_id) {
+                $teamLeadCampaignId = $activeSchedule->campaign_id;
+            }
+        }
+
         // Use provided date or default to today
         $selectedDate = $request->filled('date')
             ? Carbon::parse($request->date)
@@ -1723,10 +1851,15 @@ class AttendanceController extends Controller
             })->values();
         }
 
-        // Filter by campaign if provided
-        if ($request->filled('campaign_id')) {
-            $employees = $employees->filter(function ($emp) use ($request) {
-                return $emp['schedule'] && $emp['schedule']['campaign_id'] == $request->campaign_id;
+        // Filter by campaign if provided OR auto-filter for Team Leads
+        $campaignIdToFilter = $request->filled('campaign_id') ? $request->campaign_id : null;
+        if (!$campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
+            // Default to Team Lead's campaign if no filter specified
+            $campaignIdToFilter = $teamLeadCampaignId;
+        }
+        if ($campaignIdToFilter) {
+            $employees = $employees->filter(function ($emp) use ($campaignIdToFilter) {
+                return $emp['schedule'] && $emp['schedule']['campaign_id'] == $campaignIdToFilter;
             })->values();
         }
 
@@ -1748,6 +1881,7 @@ class AttendanceController extends Controller
             'employees' => $employees,
             'sites' => $sites,
             'campaigns' => $campaigns,
+            'teamLeadCampaignId' => $teamLeadCampaignId,
             'selectedDate' => $selectedDate->format('Y-m-d'),
             'dayName' => ucfirst($dayName),
             'filters' => [
