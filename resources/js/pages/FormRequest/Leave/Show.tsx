@@ -171,10 +171,10 @@ export default function Show({
     const partialDenyForm = useForm({ denied_dates: [] as string[], denial_reason: '', review_notes: '' });
     const tlApproveForm = useForm({ review_notes: '' });
     const tlDenyForm = useForm({ review_notes: '' });
-    const forceApproveForm = useForm({ 
-        review_notes: '', 
-        denied_dates: [] as string[], 
-        denial_reason: '' 
+    const forceApproveForm = useForm({
+        review_notes: '',
+        denied_dates: [] as string[],
+        denial_reason: ''
     });
     const [forceApprovePartialMode, setForceApprovePartialMode] = useState(false);
     const [forceApproveSelectedDates, setForceApproveSelectedDates] = useState<string[]>([]);
@@ -248,7 +248,7 @@ export default function Show({
             const deniedDates = workDays
                 .map(date => format(date, 'yyyy-MM-dd'))
                 .filter(dateStr => !forceApproveSelectedDates.includes(dateStr));
-            
+
             forceApproveForm.setData('denied_dates', deniedDates);
         }
 
@@ -258,8 +258,8 @@ export default function Show({
                 setForceApprovePartialMode(false);
                 setForceApproveSelectedDates([]);
                 forceApproveForm.reset();
-                toast.success(forceApprovePartialMode && forceApproveSelectedDates.length > 0 
-                    ? 'Leave request force approved with partial denial' 
+                toast.success(forceApprovePartialMode && forceApproveSelectedDates.length > 0
+                    ? 'Leave request force approved with partial denial'
                     : 'Leave request force approved by Super Admin');
             },
             onError: (errors) => {
@@ -1616,7 +1616,7 @@ export default function Show({
                             className="bg-purple-600 hover:bg-purple-700"
                             onClick={handleForceApprove}
                             disabled={
-                                forceApproveForm.processing || 
+                                forceApproveForm.processing ||
                                 (forceApprovePartialMode && forceApproveSelectedDates.length === 0) ||
                                 (forceApprovePartialMode && forceApproveSelectedDates.length === workDays.length)
                             }
