@@ -1345,7 +1345,20 @@ class LeaveRequestController extends Controller
                 } elseif ($leaveRequest->requiresCredits()) {
                     // Other credited leave types (VL, BL) - normal deduction
                     $year = $request->input('credits_year', now()->year);
-                    $leaveCreditService->deductCredits($leaveRequest, $year);
+
+                    // If partial denial, only deduct for approved days
+                    if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
+                        // Temporarily adjust days_requested for credit deduction
+                        $originalDays = $leaveRequest->days_requested;
+                        $leaveRequest->days_requested = $leaveRequest->approved_days;
+                        $leaveCreditService->deductCredits($leaveRequest, $year);
+                        $leaveRequest->days_requested = $originalDays;
+
+                        // Update credits_deducted to reflect actual deduction
+                        $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
+                    } else {
+                        $leaveCreditService->deductCredits($leaveRequest, $year);
+                    }
 
                     // Update attendance records to on_leave status
                     $this->updateAttendanceForApprovedLeave($leaveRequest);
@@ -1470,7 +1483,21 @@ class LeaveRequestController extends Controller
                 $this->handleSlApproval($leaveRequest, $leaveCreditService);
             } elseif ($leaveRequest->requiresCredits()) {
                 $year = $request->input('credits_year', now()->year);
-                $leaveCreditService->deductCredits($leaveRequest, $year);
+
+                // If partial denial, only deduct for approved days
+                if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
+                    // Temporarily adjust days_requested for credit deduction
+                    $originalDays = $leaveRequest->days_requested;
+                    $leaveRequest->days_requested = $leaveRequest->approved_days;
+                    $leaveCreditService->deductCredits($leaveRequest, $year);
+                    $leaveRequest->days_requested = $originalDays;
+
+                    // Update credits_deducted to reflect actual deduction
+                    $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
+                } else {
+                    $leaveCreditService->deductCredits($leaveRequest, $year);
+                }
+
                 $this->updateAttendanceForApprovedLeave($leaveRequest);
             } else {
                 // Non-credited leave types (UPTO, LOA, BL, SPL, LDV, ML) - no credit deduction, but still update attendance
@@ -1745,6 +1772,20 @@ class LeaveRequestController extends Controller
                 $leaveRequest->reviewed_by = $user->id;
                 $leaveRequest->reviewed_at = now();
                 $leaveRequest->review_notes = $reviewNote;
+
+                // Store original dates before updating
+                if (!$leaveRequest->original_start_date) {
+                    $leaveRequest->original_start_date = $leaveRequest->start_date;
+                }
+                if (!$leaveRequest->original_end_date) {
+                    $leaveRequest->original_end_date = $leaveRequest->end_date;
+                }
+
+                // Update start and end dates to reflect only approved dates
+                if (!empty($approvedDates)) {
+                    $leaveRequest->start_date = min($approvedDates);
+                    $leaveRequest->end_date = max($approvedDates);
+                }
 
                 // Create attendance records only for approved dates
                 foreach ($approvedDates as $dateStr) {
@@ -2444,6 +2485,15 @@ class LeaveRequestController extends Controller
         $startDate = Carbon::parse($leaveRequest->start_date);
         $endDate = Carbon::parse($leaveRequest->end_date);
 
+        // Get denied dates if this is a partial denial
+        $deniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $deniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
+        }
+
         // Check if we should deduct credits at all and get the reason if not
         $creditCheck = $leaveCreditService->checkSlCreditDeduction($user, $leaveRequest);
 
@@ -2467,10 +2517,15 @@ class LeaveRequestController extends Controller
             return;
         }
 
-        // Get attendance records for the leave period
-        $attendances = Attendance::where('user_id', $user->id)
-            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->get();
+        // Get attendance records for the leave period (excluding denied dates)
+        $attendanceQuery = Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+        if (!empty($deniedDates)) {
+            $attendanceQuery->whereNotIn('shift_date', $deniedDates);
+        }
+
+        $attendances = $attendanceQuery->get();
 
         // Count days that are NOT ncns (these will have credits deducted)
         $daysToDeduct = 0;
@@ -2499,12 +2554,14 @@ class LeaveRequestController extends Controller
         }
 
         // Also handle days with no attendance record yet (create advised_absence records)
+        // Excluding denied dates
         $existingDates = $attendances->pluck('shift_date')->map(fn($d) => $d->format('Y-m-d'))->toArray();
         $currentDate = $startDate->copy();
 
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
-            if (!in_array($dateStr, $existingDates)) {
+            // Skip denied dates and existing dates
+            if (!in_array($dateStr, $existingDates) && !in_array($dateStr, $deniedDates)) {
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
@@ -2523,6 +2580,11 @@ class LeaveRequestController extends Controller
                 $daysToDeduct++;
             }
             $currentDate->addDay();
+        }
+
+        // For partial denial, cap deduction at approved_days if set
+        if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
+            $daysToDeduct = min($daysToDeduct, $leaveRequest->approved_days);
         }
 
         // Deduct only the non-NCNS days
@@ -2565,10 +2627,24 @@ class LeaveRequestController extends Controller
         $endDate = Carbon::parse($leaveRequest->end_date);
         $leaveNote = "Covered by approved Sick Leave (SL) - No credits deducted - Leave Request #{$leaveRequest->id}";
 
-        // Update existing attendance records
-        $attendances = Attendance::where('user_id', $user->id)
-            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->get();
+        // Get denied dates if this is a partial denial
+        $deniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $deniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
+        }
+
+        // Update existing attendance records (excluding denied dates)
+        $attendanceQuery = Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+        if (!empty($deniedDates)) {
+            $attendanceQuery->whereNotIn('shift_date', $deniedDates);
+        }
+
+        $attendances = $attendanceQuery->get();
 
         foreach ($attendances as $attendance) {
             if ($attendance->status === 'ncns') {
@@ -2590,13 +2666,14 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Create attendance records for days without existing records
+        // Create attendance records for days without existing records (excluding denied dates)
         $existingDates = $attendances->pluck('shift_date')->map(fn($d) => $d->format('Y-m-d'))->toArray();
         $currentDate = $startDate->copy();
 
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
-            if (!in_array($dateStr, $existingDates)) {
+            // Skip denied dates and existing dates
+            if (!in_array($dateStr, $existingDates) && !in_array($dateStr, $deniedDates)) {
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
@@ -2633,15 +2710,30 @@ class LeaveRequestController extends Controller
         $endDate = Carbon::parse($leaveRequest->end_date);
         $leaveNote = "On approved {$leaveRequest->leave_type}" . ($leaveRequest->reason ? " - {$leaveRequest->reason}" : '');
 
+        // Get denied dates if this is a partial denial
+        $deniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $deniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
+        }
+
         // Update existing attendance records (these already have schedule data)
-        Attendance::where('user_id', $user->id)
-            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
-            ->update([
-                'status' => 'on_leave',
-                'notes' => $leaveNote,
-                'leave_request_id' => $leaveRequest->id,
-                'admin_verified' => true, // Auto-verify leave records
-            ]);
+        // Only update dates that are NOT denied
+        $updateQuery = Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+
+        if (!empty($deniedDates)) {
+            $updateQuery->whereNotIn('shift_date', $deniedDates);
+        }
+
+        $updateQuery->update([
+            'status' => 'on_leave',
+            'notes' => $leaveNote,
+            'leave_request_id' => $leaveRequest->id,
+            'admin_verified' => true, // Auto-verify leave records
+        ]);
 
         // Create attendance records for days without existing records
         $existingDates = Attendance::where('user_id', $user->id)
@@ -2654,7 +2746,8 @@ class LeaveRequestController extends Controller
 
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
-            if (!in_array($dateStr, $existingDates)) {
+            // Skip denied dates and existing dates
+            if (!in_array($dateStr, $existingDates) && !in_array($dateStr, $deniedDates)) {
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
