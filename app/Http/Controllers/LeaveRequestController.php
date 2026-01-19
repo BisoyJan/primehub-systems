@@ -1447,26 +1447,84 @@ class LeaveRequestController extends Controller
             return back()->withErrors(['error' => 'Only pending requests can be approved.']);
         }
 
-        $request->validate([
+        // Validate request - denied_dates is optional for partial approval
+        $validated = $request->validate([
             'review_notes' => 'required|string|min:10',
+            'denied_dates' => 'nullable|array',
+            'denied_dates.*' => 'date',
+            'denial_reason' => 'nullable|required_with:denied_dates|string|min:10',
         ]);
 
         $leaveCreditService = $this->leaveCreditService;
+        $hasDeniedDates = !empty($validated['denied_dates']);
 
         DB::beginTransaction();
         try {
+            // Handle partial denial if denied_dates are provided
+            if ($hasDeniedDates) {
+                $startDate = Carbon::parse($leaveRequest->start_date);
+                $endDate = Carbon::parse($leaveRequest->end_date);
+                $deniedDates = collect($validated['denied_dates'])->map(fn($d) => Carbon::parse($d));
+
+                // Validate denied dates are within the leave period
+                foreach ($deniedDates as $date) {
+                    if ($date->lt($startDate) || $date->gt($endDate)) {
+                        return back()->withErrors(['error' => "Date {$date->format('M d, Y')} is not within the leave period."]);
+                    }
+                }
+
+                // Calculate which dates are approved
+                $allWorkDays = [];
+                $current = $startDate->copy();
+                while ($current->lte($endDate)) {
+                    if ($current->dayOfWeek >= Carbon::MONDAY && $current->dayOfWeek <= Carbon::FRIDAY) {
+                        $allWorkDays[] = $current->format('Y-m-d');
+                    }
+                    $current->addDay();
+                }
+
+                $deniedDateStrings = $deniedDates->map(fn($d) => $d->format('Y-m-d'))->toArray();
+                $approvedDates = array_diff($allWorkDays, $deniedDateStrings);
+
+                if (empty($approvedDates)) {
+                    return back()->withErrors(['error' => 'Cannot deny all dates. Use full deny instead.']);
+                }
+
+                $approvedDaysCount = count($approvedDates);
+
+                // Store denied dates
+                foreach ($deniedDates as $date) {
+                    LeaveRequestDeniedDate::create([
+                        'leave_request_id' => $leaveRequest->id,
+                        'denied_date' => $date,
+                        'denial_reason' => $validated['denial_reason'],
+                        'denied_by' => $user->id,
+                    ]);
+                }
+
+                // Store original dates before updating
+                $leaveRequest->original_start_date = $leaveRequest->start_date;
+                $leaveRequest->original_end_date = $leaveRequest->end_date;
+
+                // Update start and end dates to reflect only approved dates
+                $leaveRequest->start_date = min($approvedDates);
+                $leaveRequest->end_date = max($approvedDates);
+                $leaveRequest->has_partial_denial = true;
+                $leaveRequest->approved_days = $approvedDaysCount;
+            }
+
             // Set both Admin and HR approval
             $leaveRequest->update([
                 'admin_approved_by' => $user->id,
                 'admin_approved_at' => now(),
-                'admin_review_notes' => $request->review_notes,
+                'admin_review_notes' => $validated['review_notes'],
                 'hr_approved_by' => $user->id,
                 'hr_approved_at' => now(),
-                'hr_review_notes' => $request->review_notes,
+                'hr_review_notes' => $validated['review_notes'],
                 'status' => 'approved',
                 'reviewed_by' => $user->id,
                 'reviewed_at' => now(),
-                'review_notes' => $request->review_notes,
+                'review_notes' => $validated['review_notes'],
             ]);
 
             // If TL approval was required but not done, mark it as approved too
@@ -1526,8 +1584,12 @@ class LeaveRequestController extends Controller
                 ]);
             }
 
+            $successMsg = $hasDeniedDates
+                ? "Leave request force approved with partial denial. {$leaveRequest->approved_days} day(s) approved."
+                : 'Leave request force approved by Super Admin.';
+
             return redirect()->route('leave-requests.show', $leaveRequest)
-                ->with('success', 'Leave request force approved by Super Admin.');
+                ->with('success', $successMsg);
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Leave request force approval failed', [

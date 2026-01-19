@@ -171,7 +171,13 @@ export default function Show({
     const partialDenyForm = useForm({ denied_dates: [] as string[], denial_reason: '', review_notes: '' });
     const tlApproveForm = useForm({ review_notes: '' });
     const tlDenyForm = useForm({ review_notes: '' });
-    const forceApproveForm = useForm({ review_notes: '' });
+    const forceApproveForm = useForm({ 
+        review_notes: '', 
+        denied_dates: [] as string[], 
+        denial_reason: '' 
+    });
+    const [forceApprovePartialMode, setForceApprovePartialMode] = useState(false);
+    const [forceApproveSelectedDates, setForceApproveSelectedDates] = useState<string[]>([]);
     const adminCancelForm = useForm({ cancellation_reason: '' });
     const adjustForWorkForm = useForm({
         work_date: '',
@@ -225,11 +231,39 @@ export default function Show({
         });
     };
 
+    // Handle force approve date selection toggle
+    const toggleForceApproveDate = (dateStr: string) => {
+        setForceApproveSelectedDates(prev => {
+            if (prev.includes(dateStr)) {
+                return prev.filter(d => d !== dateStr);
+            } else {
+                return [...prev, dateStr];
+            }
+        });
+    };
+
     const handleForceApprove = () => {
+        // If partial mode is enabled and dates are selected, calculate denied dates
+        if (forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length) {
+            const deniedDates = workDays
+                .map(date => format(date, 'yyyy-MM-dd'))
+                .filter(dateStr => !forceApproveSelectedDates.includes(dateStr));
+            
+            forceApproveForm.setData('denied_dates', deniedDates);
+        }
+
         forceApproveForm.post(`/form-requests/leave-requests/${leaveRequest.id}/force-approve`, {
             onSuccess: () => {
                 setShowForceApproveDialog(false);
-                toast.success('Leave request force approved by Super Admin');
+                setForceApprovePartialMode(false);
+                setForceApproveSelectedDates([]);
+                forceApproveForm.reset();
+                toast.success(forceApprovePartialMode && forceApproveSelectedDates.length > 0 
+                    ? 'Leave request force approved with partial denial' 
+                    : 'Leave request force approved by Super Admin');
+            },
+            onError: (errors) => {
+                toast.error(errors.error || 'Failed to force approve');
             },
         });
     };
@@ -1446,8 +1480,15 @@ export default function Show({
             </Dialog>
 
             {/* Force Approve Dialog (Super Admin Only) */}
-            <Dialog open={showForceApproveDialog} onOpenChange={setShowForceApproveDialog}>
-                <DialogContent>
+            <Dialog open={showForceApproveDialog} onOpenChange={(open) => {
+                setShowForceApproveDialog(open);
+                if (!open) {
+                    setForceApprovePartialMode(false);
+                    setForceApproveSelectedDates([]);
+                    forceApproveForm.reset();
+                }
+            }}>
+                <DialogContent className="max-w-lg">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-purple-600" />
@@ -1464,6 +1505,79 @@ export default function Show({
                         </AlertDescription>
                     </Alert>
                     <div className="space-y-4">
+                        {/* Partial Approval Toggle */}
+                        {workDays.length > 1 && (
+                            <div className="flex items-center space-x-2">
+                                <Checkbox
+                                    id="forceApprovePartialMode"
+                                    checked={forceApprovePartialMode}
+                                    onCheckedChange={(checked) => {
+                                        setForceApprovePartialMode(checked === true);
+                                        if (!checked) {
+                                            setForceApproveSelectedDates([]);
+                                            forceApproveForm.setData('denied_dates', []);
+                                            forceApproveForm.setData('denial_reason', '');
+                                        }
+                                    }}
+                                />
+                                <label htmlFor="forceApprovePartialMode" className="text-sm font-medium cursor-pointer">
+                                    Partial Approval (deny some dates)
+                                </label>
+                            </div>
+                        )}
+
+                        {/* Date Selection for Partial Approval */}
+                        {forceApprovePartialMode && workDays.length > 1 && (
+                            <div>
+                                <Label className="text-sm font-medium mb-2 block">
+                                    Select dates to APPROVE ({forceApproveSelectedDates.length} of {workDays.length} selected)
+                                </Label>
+                                <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                                    {workDays.map((date) => {
+                                        const dateStr = format(date, 'yyyy-MM-dd');
+                                        const isSelected = forceApproveSelectedDates.includes(dateStr);
+                                        return (
+                                            <div
+                                                key={dateStr}
+                                                className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800' : 'hover:bg-muted'}`}
+                                                onClick={() => toggleForceApproveDate(dateStr)}
+                                            >
+                                                <Checkbox
+                                                    checked={isSelected}
+                                                    onCheckedChange={() => toggleForceApproveDate(dateStr)}
+                                                />
+                                                <span className="font-medium text-sm">{format(date, 'EEE, MMM d, yyyy')}</span>
+                                                {isSelected && (
+                                                    <Badge className="text-xs bg-green-600 text-white ml-auto">Approve</Badge>
+                                                )}
+                                                {!isSelected && (
+                                                    <Badge variant="destructive" className="text-xs ml-auto">Deny</Badge>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Denial Reason for Partial Approval */}
+                        {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
+                            <div>
+                                <label className="text-sm font-medium">
+                                    Reason for Denying {workDays.length - forceApproveSelectedDates.length} Date(s) <span className="text-red-500">*</span>
+                                </label>
+                                <Textarea
+                                    value={forceApproveForm.data.denial_reason}
+                                    onChange={(e) => forceApproveForm.setData('denial_reason', e.target.value)}
+                                    placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
+                                    rows={2}
+                                />
+                                {forceApproveForm.errors.denial_reason && (
+                                    <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.denial_reason}</p>
+                                )}
+                            </div>
+                        )}
+
                         <div>
                             <label className="text-sm font-medium">
                                 Review Notes <span className="text-red-500">*</span>
@@ -1478,18 +1592,40 @@ export default function Show({
                                 <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.review_notes}</p>
                             )}
                         </div>
+
+                        {/* Summary for Partial Approval */}
+                        {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
+                            <Alert className="bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800">
+                                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                <AlertDescription className="text-orange-800 dark:text-orange-200">
+                                    {forceApproveSelectedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - forceApproveSelectedDates.length} day(s) will be <strong>denied</strong>.
+                                </AlertDescription>
+                            </Alert>
+                        )}
                     </div>
                     <DialogFooter>
-                        <Button variant="outline" onClick={() => setShowForceApproveDialog(false)}>
+                        <Button variant="outline" onClick={() => {
+                            setShowForceApproveDialog(false);
+                            setForceApprovePartialMode(false);
+                            setForceApproveSelectedDates([]);
+                            forceApproveForm.reset();
+                        }}>
                             Cancel
                         </Button>
                         <Button
                             className="bg-purple-600 hover:bg-purple-700"
                             onClick={handleForceApprove}
-                            disabled={forceApproveForm.processing}
+                            disabled={
+                                forceApproveForm.processing || 
+                                (forceApprovePartialMode && forceApproveSelectedDates.length === 0) ||
+                                (forceApprovePartialMode && forceApproveSelectedDates.length === workDays.length)
+                            }
                         >
                             <Shield className="mr-1 h-4 w-4" />
-                            Force Approve
+                            {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length
+                                ? `Force Approve (${forceApproveSelectedDates.length} days)`
+                                : 'Force Approve All'
+                            }
                         </Button>
                     </DialogFooter>
                 </DialogContent>
