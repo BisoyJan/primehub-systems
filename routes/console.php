@@ -19,9 +19,9 @@ Artisan::command('inspire', function () {
 // HEAVY DATA PROCESSING (1:00 AM - 1:45 AM)
 // ============================================================================
 
-// Clean old activity logs (older than 90 days) - runs daily at 1:00 AM
-// Priority: HIGH - Large volume of log records to process
-Schedule::command('activitylog:clean')
+// Process attendance point expirations (SRO and GBRO) - runs daily at 1:00 AM
+// Priority: MEDIUM - Processes all active attendance points
+Schedule::command('points:process-expirations')
     ->dailyAt('01:00')
     ->withoutOverlapping()
     ->onOneServer();
@@ -40,9 +40,9 @@ Schedule::command('form-request:clean-old-records --force')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Process attendance point expirations (SRO and GBRO) - runs daily at 1:45 AM
-// Priority: MEDIUM - Processes all active attendance points
-Schedule::command('points:process-expirations')
+// Clean old activity logs (older than 90 days) - runs daily at 1:45 AM
+// Priority: HIGH - Large volume of log records to process
+Schedule::command('activitylog:clean')
     ->dailyAt('01:45')
     ->withoutOverlapping()
     ->onOneServer();
