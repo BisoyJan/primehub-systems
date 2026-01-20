@@ -564,7 +564,8 @@ class LeaveCreditService
         $remainingToDeduct = $daysToDeduct;
         $actuallyDeducted = 0;
 
-        DB::beginTransaction();
+        // Note: No DB::beginTransaction() here - the caller (controller) handles the transaction
+        // This allows proper nesting when called from within an existing transaction
         try {
             // Deduct from carryover first (month 0), then monthly accruals (1, 2, 3...)
             foreach ($credits as $credit) {
@@ -591,8 +592,6 @@ class LeaveCreditService
                 'credits_year' => $year,
             ]);
 
-            DB::commit();
-
             // Log the activity
             $this->logActivity('credits_deducted', $leaveRequest->user, $leaveRequest, [
                 'credits_deducted' => $actuallyDeducted,
@@ -603,13 +602,12 @@ class LeaveCreditService
 
             return true;
         } catch (\Exception $e) {
-            DB::rollBack();
             \Log::error('Failed to deduct leave credits', [
                 'user_id' => $leaveRequest->user_id,
                 'leave_request_id' => $leaveRequest->id,
                 'error' => $e->getMessage(),
             ]);
-            return false;
+            throw $e; // Re-throw to let the caller handle the transaction rollback
         }
     }
 
@@ -679,7 +677,7 @@ class LeaveCreditService
 
         $remainingToRestore = $daysToRestore;
 
-        DB::beginTransaction();
+        // Note: No DB::beginTransaction() here - the caller (controller) handles the transaction
         try {
             foreach ($credits as $credit) {
                 if ($remainingToRestore <= 0) {
@@ -698,8 +696,6 @@ class LeaveCreditService
                 }
             }
 
-            DB::commit();
-
             // Log the activity
             $this->logActivity('credits_restored', $leaveRequest->user, $leaveRequest, [
                 'credits_restored' => $daysToRestore,
@@ -710,8 +706,12 @@ class LeaveCreditService
 
             return true;
         } catch (\Exception $e) {
-            DB::rollBack();
-            return false;
+            \Log::error('Failed to restore leave credits', [
+                'user_id' => $leaveRequest->user_id,
+                'leave_request_id' => $leaveRequest->id,
+                'error' => $e->getMessage(),
+            ]);
+            throw $e; // Re-throw to let the caller handle the transaction rollback
         }
     }
 
@@ -745,7 +745,7 @@ class LeaveCreditService
 
         $remainingToRestore = $daysToRestore;
 
-        DB::beginTransaction();
+        // Note: No DB::beginTransaction() here - the caller (controller) handles the transaction
         try {
             foreach ($credits as $credit) {
                 if ($remainingToRestore <= 0) {
@@ -773,15 +773,13 @@ class LeaveCreditService
                 }
             }
 
-            DB::commit();
             return true;
         } catch (\Exception $e) {
-            DB::rollBack();
             \Log::error('Failed to restore partial credits', [
                 'error' => $e->getMessage(),
                 'leave_request_id' => $leaveRequest->id,
             ]);
-            return false;
+            throw $e; // Re-throw to let the caller handle the transaction rollback
         }
     }
 
