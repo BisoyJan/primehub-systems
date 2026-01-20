@@ -905,10 +905,11 @@ export default function Edit({
 
                 {/* Validation Warnings */}
                 {validationWarnings.length > 0 && (
-                    <Alert variant="destructive" className="mb-6">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Validation Issues</AlertTitle>
-                        <AlertDescription>
+                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-800 dark:text-amber-200">Informational Warnings</AlertTitle>
+                        <AlertDescription className="text-amber-700 dark:text-amber-300">
+                            <p className="mb-2 text-sm">You may still submit this request. Reviewers will see this information when making approval decisions.</p>
                             <ul className="list-disc list-inside space-y-1">
                                 {validationWarnings.map((warning, idx) => (
                                     <li key={idx}>{warning}</li>
@@ -1416,7 +1417,6 @@ export default function Edit({
                                     type="submit"
                                     disabled={
                                         processing ||
-                                        (!isApprovedLeave && validationWarnings.length > 0) ||
                                         !!weekendError.start ||
                                         !!weekendError.end ||
                                         (isApprovedLeave && datesChanged && !data.date_modification_reason.trim())

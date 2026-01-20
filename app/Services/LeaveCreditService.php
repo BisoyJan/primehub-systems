@@ -658,6 +658,8 @@ class LeaveCreditService
 
     /**
      * Restore leave credits when a leave request is cancelled.
+     * Uses LIFO (Last-In-First-Out) order - restores to most recent months first,
+     * which is the reverse of the deduction order (FIFO).
      */
     public function restoreCredits(LeaveRequest $leaveRequest): bool
     {
@@ -668,10 +670,11 @@ class LeaveCreditService
         $year = $leaveRequest->credits_year;
         $daysToRestore = $leaveRequest->credits_deducted;
 
-        // Get all credit records for this year ordered by month (ascending)
+        // Get all credit records for this year ordered by month (descending - LIFO)
+        // This reverses the deduction order, restoring to most recent months first
         $credits = LeaveCredit::forUser($leaveRequest->user_id)
             ->forYear($year)
-            ->orderBy('month')
+            ->orderBy('month', 'desc')
             ->get();
 
         $remainingToRestore = $daysToRestore;
@@ -714,6 +717,8 @@ class LeaveCreditService
 
     /**
      * Restore partial leave credits when leave is shortened (e.g., employee reported on last day).
+     * Uses LIFO (Last-In-First-Out) order - restores to most recent months first,
+     * which is the reverse of the deduction order (FIFO).
      *
      * @param LeaveRequest $leaveRequest The leave request being adjusted
      * @param float $daysToRestore Number of days to restore
@@ -731,10 +736,11 @@ class LeaveCreditService
 
         $year = $leaveRequest->credits_year;
 
-        // Get all credit records for this year ordered by month (ascending)
+        // Get all credit records for this year ordered by month (descending - LIFO)
+        // This reverses the deduction order, restoring to most recent months first
         $credits = LeaveCredit::forUser($leaveRequest->user_id)
             ->forYear($year)
-            ->orderBy('month')
+            ->orderBy('month', 'desc')
             ->get();
 
         $remainingToRestore = $daysToRestore;
@@ -781,11 +787,13 @@ class LeaveCreditService
 
     /**
      * Get total attendance points for a user.
+     * Only counts active points (not excused, not expired).
      */
     public function getAttendancePoints(User $user): float
     {
         return AttendancePoint::where('user_id', $user->id)
             ->where('is_expired', false)
+            ->where('is_excused', false)
             ->sum('points');
     }
 
