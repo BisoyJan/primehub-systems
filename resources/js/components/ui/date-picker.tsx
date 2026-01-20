@@ -72,7 +72,7 @@ export function DatePicker({
     // Create disabled matcher for Calendar based on minDate/maxDate
     const disabledMatcher = React.useMemo((): Matcher | Matcher[] | undefined => {
         const matchers: Matcher[] = [];
-        
+
         if (minDate) {
             const min = parse(minDate, "yyyy-MM-dd", new Date());
             if (isValid(min)) {
@@ -80,7 +80,7 @@ export function DatePicker({
                 matchers.push({ before: min });
             }
         }
-        
+
         if (maxDate) {
             const max = parse(maxDate, "yyyy-MM-dd", new Date());
             if (isValid(max)) {
@@ -88,7 +88,7 @@ export function DatePicker({
                 matchers.push({ after: max });
             }
         }
-        
+
         return matchers.length > 0 ? matchers : undefined;
     }, [minDate, maxDate]);
 
