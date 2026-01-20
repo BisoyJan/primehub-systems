@@ -744,14 +744,25 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                     </TableCell>
                                     <TableCell>
                                         {employee.on_leave ? (
-                                            <Badge className="bg-blue-600">
-                                                On {employee.on_leave.leave_type}
-                                            </Badge>
+                                            <div className="flex items-center gap-1">
+                                                <Badge className="bg-blue-600">
+                                                    On {employee.on_leave.leave_type}
+                                                </Badge>
+                                                {employee.existing_attendance?.admin_verified && (
+                                                    <CheckCircle className="h-3.5 w-3.5 text-green-500" title="Attendance verified" />
+                                                )}
+                                            </div>
                                         ) : employee.existing_attendance ? (
                                             <div className="flex items-center gap-1">
-                                                {getStatusBadge(employee.existing_attendance.status)}
+                                                {employee.existing_attendance.status === 'on_leave' ? (
+                                                    <Badge className="bg-blue-500">
+                                                        On Leave (Manual)
+                                                    </Badge>
+                                                ) : (
+                                                    getStatusBadge(employee.existing_attendance.status)
+                                                )}
                                                 {employee.existing_attendance.admin_verified && (
-                                                    <CheckCircle className="h-3.5 w-3.5 text-green-500" />
+                                                    <CheckCircle className="h-3.5 w-3.5 text-green-500" title="Attendance verified" />
                                                 )}
                                             </div>
                                         ) : (
@@ -818,14 +829,25 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                     <div className="text-sm text-muted-foreground">{employee.email}</div>
                                 </div>
                                 {employee.on_leave ? (
-                                    <Badge className="bg-blue-600">
-                                        On {employee.on_leave.leave_type}
-                                    </Badge>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <Badge className="bg-blue-600">
+                                            On {employee.on_leave.leave_type}
+                                        </Badge>
+                                        {employee.existing_attendance?.admin_verified && (
+                                            <CheckCircle className="h-4 w-4 text-green-500" title="Attendance verified" />
+                                        )}
+                                    </div>
                                 ) : employee.existing_attendance ? (
                                     <div className="flex flex-col items-end gap-1">
-                                        {getStatusBadge(employee.existing_attendance.status)}
+                                        {employee.existing_attendance.status === 'on_leave' ? (
+                                            <Badge className="bg-blue-500">
+                                                On Leave (Manual)
+                                            </Badge>
+                                        ) : (
+                                            getStatusBadge(employee.existing_attendance.status)
+                                        )}
                                         {employee.existing_attendance.admin_verified && (
-                                            <CheckCircle className="h-4 w-4 text-green-500" />
+                                            <CheckCircle className="h-4 w-4 text-green-500" title="Attendance verified" />
                                         )}
                                     </div>
                                 ) : (
