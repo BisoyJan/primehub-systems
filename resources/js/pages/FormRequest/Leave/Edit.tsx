@@ -942,7 +942,7 @@ export default function Edit({
                                                     {format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}), but since your leave starts after this date,
                                                     you will have {getProjectedBalance().toFixed(2)} credits available by then.
                                                     {creditsSummary.pending_credits > 0 && (
-                                                        <> After subtracting {creditsSummary.pending_credits.toFixed(2)} pending credits, you'll have {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits).toFixed(2)} available.</>                                                    )}
+                                                        <> After subtracting {creditsSummary.pending_credits.toFixed(2)} pending credits, you'll have {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits).toFixed(2)} available.</>)}
                                                 </p>
                                                 {creditsSummary.pending_regularization_credits?.is_pending && (
                                                     <p className="mt-1 text-xs">
