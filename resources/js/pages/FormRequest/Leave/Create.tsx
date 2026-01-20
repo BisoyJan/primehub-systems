@@ -1,10 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import { format, parseISO, addDays, isWeekend as isWeekendDateFns, isBefore, startOfDay } from 'date-fns';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,6 +24,14 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
 
+interface PendingRegularizationCredits {
+    year: number;
+    credits: number;
+    months_accrued: number;
+    regularization_date: string | null;
+    is_pending: boolean;
+}
+
 interface CreditsSummary {
     year: number;
     is_eligible: boolean;
@@ -34,6 +41,7 @@ interface CreditsSummary {
     total_used: number;
     balance: number;
     pending_credits: number;
+    pending_regularization_credits?: PendingRegularizationCredits;
 }
 
 interface AttendanceViolation {
@@ -138,6 +146,45 @@ export default function Create({
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
     const [futureCredits, setFutureCredits] = useState<number>(0);
 
+    // Check if user will be eligible by the selected start date
+    const willBeEligibleByStartDate = (): boolean => {
+        if (creditsSummary.is_eligible) return true;
+        if (!data.start_date || !creditsSummary.eligibility_date) return false;
+        const startDate = parseISO(data.start_date);
+        const eligibilityDate = parseISO(creditsSummary.eligibility_date);
+        return startDate >= eligibilityDate;
+    };
+
+    // Calculate projected balance for users who will be eligible by their leave date
+    const getProjectedBalance = (): number => {
+        if (!data.start_date || !creditsSummary.eligibility_date) return 0;
+
+        const startDate = parseISO(data.start_date);
+        const eligibilityDate = parseISO(creditsSummary.eligibility_date);
+
+        // If not eligible by start date, no projected balance
+        if (startDate < eligibilityDate) return 0;
+
+        // Start with pending regularization credits (from probation period in previous year)
+        let projectedBalance = 0;
+        if (creditsSummary.pending_regularization_credits?.is_pending) {
+            projectedBalance += creditsSummary.pending_regularization_credits.credits;
+        }
+
+        // Calculate months from eligibility to leave start
+        // Credits accrue monthly starting from eligibility month
+        const eligMonth = eligibilityDate.getMonth();
+        const eligYear = eligibilityDate.getFullYear();
+        const leaveMonth = startDate.getMonth();
+        const leaveYear = startDate.getFullYear();
+
+        // Months of credit accrual between eligibility and leave (after regularization)
+        const monthsOfCredits = (leaveYear - eligYear) * 12 + (leaveMonth - eligMonth);
+        projectedBalance += Math.max(0, monthsOfCredits) * creditsSummary.monthly_rate;
+
+        return projectedBalance;
+    };
+
     // Helper function to check if a date is a weekend
     const isWeekend = (dateString: string): boolean => {
         if (!dateString) return false;
@@ -172,6 +219,18 @@ export default function Create({
         } else {
             setWeekendError(prev => ({ ...prev, start: null }));
         }
+
+        // Clear end date if it's now before the new start date
+        if (data.end_date && value) {
+            const start = parseISO(value);
+            const end = parseISO(data.end_date);
+            if (end < start) {
+                setData(prev => ({ ...prev, start_date: value, end_date: '' }));
+                setWeekendError(prev => ({ ...prev, end: null }));
+                return;
+            }
+        }
+
         setData('start_date', value);
     };
 
@@ -218,8 +277,18 @@ export default function Create({
     };
 
     // Calculate future credits that will accrue by the leave start date
-    const calculateFutureCredits = (startDate: string): number => {
-        if (!startDate || !creditsSummary.is_eligible) return 0;
+    const calculateFutureCredits = useCallback((startDate: string): number => {
+        if (!startDate) return 0;
+
+        // Check if user will be eligible by the start date (not just current eligibility)
+        if (!creditsSummary.is_eligible && creditsSummary.eligibility_date) {
+            const leaveStart = parseISO(startDate);
+            const eligibilityDate = parseISO(creditsSummary.eligibility_date);
+            // If leave start date is before eligibility, no future credits calculation
+            if (leaveStart < eligibilityDate) return 0;
+        } else if (!creditsSummary.is_eligible) {
+            return 0;
+        }
 
         const today = new Date();
         const leaveStart = parseISO(startDate);
@@ -242,7 +311,7 @@ export default function Create({
         }
 
         return monthsToAccrue * creditsSummary.monthly_rate;
-    };
+    }, [creditsSummary.is_eligible, creditsSummary.eligibility_date, creditsSummary.monthly_rate]);
 
     // Calculate working days when dates change (excluding weekends)
     useEffect(() => {
@@ -278,8 +347,7 @@ export default function Create({
             setCalculatedDays(0);
             setFutureCredits(0);
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate]);
+    }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate, calculateFutureCredits]);
 
     // Real-time validation warnings
     useEffect(() => {
@@ -287,13 +355,29 @@ export default function Create({
         let shortNotice: string | null = null;
 
         // Check eligibility (skip warning for SL - allow submission without credits)
+        // Check if user will be eligible BY the selected start date (not current date)
         if (!creditsSummary.is_eligible && ['VL', 'BL'].includes(data.leave_type)) {
             const eligibilityDateStr = creditsSummary.eligibility_date
                 ? format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')
                 : 'N/A';
-            warnings.push(
-                `You are not eligible to use leave credits yet. Eligible on ${eligibilityDateStr}.`
-            );
+
+            // Check if user will be eligible by the start date
+            if (data.start_date && creditsSummary.eligibility_date) {
+                const startDate = parseISO(data.start_date);
+                const eligibilityDate = parseISO(creditsSummary.eligibility_date);
+                // Only show warning if start date is BEFORE eligibility date
+                if (startDate < eligibilityDate) {
+                    warnings.push(
+                        `You will not be eligible by the leave start date. Eligible on ${eligibilityDateStr}.`
+                    );
+                }
+                // If start date is on or after eligibility date, user will be eligible - no warning needed
+            } else if (!data.start_date) {
+                // No start date selected yet, show general eligibility info
+                warnings.push(
+                    `You are not currently eligible for leave credits. Eligible on ${eligibilityDateStr}. Select a start date on or after this date.`
+                );
+            }
         }
 
         // Check 2-week notice (only for VL and BL, not SL as it's unpredictable)
@@ -379,6 +463,7 @@ export default function Create({
         calculatedDays,
         existingLeaveRequests,
         twoWeeksFromNow,
+        calculateFutureCredits,
     ]);
 
     // Update SL credit info message
@@ -449,6 +534,7 @@ export default function Create({
         // Debounce the API call
         const timeoutId = setTimeout(checkConflicts, 500);
         return () => clearTimeout(timeoutId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [data.leave_type, data.start_date, data.end_date, data.campaign_department, selectedEmployeeId]);
 
     // Calculate date suggestions with fewer or no conflicts
@@ -761,26 +847,97 @@ export default function Create({
                 )}
 
                 {!creditsSummary.is_eligible && (
-                    <Alert className="mb-6">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle>Not Eligible Yet</AlertTitle>
-                        <AlertDescription>
-                            {creditsSummary.eligibility_date ? (
-                                <>
-                                    You will be eligible to use leave credits on{' '}
-                                    <strong className="text-orange-600 dark:text-orange-400">
-                                        {format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')}
-                                    </strong>
-                                    You can still apply for non-credited leave types (SPL, LOA, LDV).
-                                </>
-                            ) : (
-                                <>
-                                    Eligibility date not set. Please contact HR to update your hire date. You can still
-                                    apply for non-credited leave types (SPL, LOA, LDV).
-                                </>
-                            )}
-                        </AlertDescription>
-                    </Alert>
+                    <>
+                        {/* Show projected balance when user will be eligible by start date */}
+                        {willBeEligibleByStartDate() && data.start_date ? (
+                            <Card className="mb-6 border-green-200 dark:border-green-800">
+                                <CardHeader>
+                                    <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
+                                        <CreditCard className="h-5 w-5" />
+                                        Projected Leave Credits Balance
+                                    </CardTitle>
+                                    <CardDescription>
+                                        Projected balance as of {format(parseISO(data.start_date), 'MMMM d, yyyy')} (when you will be eligible)
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Projected Balance</p>
+                                            <p className="text-2xl font-bold text-green-600">{getProjectedBalance().toFixed(2)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">This Request</p>
+                                            <p className="text-2xl font-bold text-orange-600">
+                                                {requiresCredits && calculatedDays > 0 ? `-${calculatedDays}` : '0'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">After Submit</p>
+                                            <p className="text-2xl font-bold text-blue-600">
+                                                {Math.max(0, getProjectedBalance() - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Monthly Rate</p>
+                                            <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
+                                        </div>
+                                    </div>
+                                    <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                                        <div className="flex items-start gap-2">
+                                            <Info className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                            <div className="text-sm text-green-800 dark:text-green-200">
+                                                <p>
+                                                    <strong>Future Eligibility:</strong> You are not yet eligible (eligible on{' '}
+                                                    {format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}), but since your leave starts after this date,
+                                                    you will have {getProjectedBalance().toFixed(2)} credits available by then.
+                                                </p>
+                                                {creditsSummary.pending_regularization_credits?.is_pending && (
+                                                    <p className="mt-1 text-xs">
+                                                        <strong>Breakdown:</strong>{' '}
+                                                        {creditsSummary.pending_regularization_credits.credits.toFixed(2)} credits from {creditsSummary.pending_regularization_credits.year} (probation period, {creditsSummary.pending_regularization_credits.months_accrued} months accrued)
+                                                        {(() => {
+                                                            const startDate = parseISO(data.start_date);
+                                                            const eligibilityDate = parseISO(creditsSummary.eligibility_date!);
+                                                            const monthsAfterReg = (startDate.getFullYear() - eligibilityDate.getFullYear()) * 12 + (startDate.getMonth() - eligibilityDate.getMonth());
+                                                            const postRegCredits = Math.max(0, monthsAfterReg) * creditsSummary.monthly_rate;
+                                                            return postRegCredits > 0 ? ` + ${postRegCredits.toFixed(2)} credits from ${creditsSummary.year} (${monthsAfterReg} months after regularization)` : '';
+                                                        })()}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Alert className="mb-6">
+                                <AlertCircle className="h-4 w-4" />
+                                <AlertTitle>Not Eligible Yet</AlertTitle>
+                                <AlertDescription>
+                                    {creditsSummary.eligibility_date ? (
+                                        <>
+                                            You will be eligible to use leave credits on{' '}
+                                            <strong className="text-orange-600 dark:text-orange-400">
+                                                {format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')}
+                                            </strong>
+                                            . {data.start_date ? (
+                                                <>Your selected leave date is before eligibility. Select a date on or after your eligibility date to use credits.</>
+                                            ) : (
+                                                <>Select a leave start date on or after this date to see your projected balance.</>
+                                            )}
+                                            {' '}You can still apply for non-credited leave types (SPL, LOA, LDV).
+                                        </>
+                                    ) : (
+                                        <>
+                                            Eligibility date not set. Please contact HR to update your hire date. You can still
+                                            apply for non-credited leave types (SPL, LOA, LDV).
+                                        </>
+                                    )}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                    </>
                 )}
 
                 {/* Attendance Violations Display - Only show if points >= 6 */}
@@ -1173,6 +1330,8 @@ export default function Create({
                                         onChange={(value) => handleStartDateChange(value)}
                                         placeholder="Select start date"
                                         className={weekendError.start ? 'border-red-500' : ''}
+                                        minDate={data.leave_type === 'SL' ? getSlMinDate() : undefined}
+                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
                                     />
                                     {weekendError.start && (
                                         <p className="text-sm text-red-500">{weekendError.start}</p>
@@ -1196,6 +1355,9 @@ export default function Create({
                                         onChange={(value) => handleEndDateChange(value)}
                                         placeholder="Select end date"
                                         className={weekendError.end ? 'border-red-500' : ''}
+                                        minDate={data.start_date || (data.leave_type === 'SL' ? getSlMinDate() : undefined)}
+                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
+                                        defaultMonth={data.start_date || undefined}
                                     />
                                     {weekendError.end && (
                                         <p className="text-sm text-red-500">{weekendError.end}</p>

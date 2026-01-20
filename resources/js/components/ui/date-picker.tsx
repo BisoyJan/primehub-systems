@@ -2,7 +2,8 @@
 
 import * as React from "react"
 import { CalendarIcon } from "lucide-react"
-import { format, parse, isValid } from "date-fns"
+import { format, parse, isValid, subDays } from "date-fns"
+import type { Matcher } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -20,6 +21,9 @@ interface DatePickerProps {
     placeholder?: string
     className?: string
     disabled?: boolean
+    minDate?: string // YYYY-MM-DD format - dates before this will be disabled
+    maxDate?: string // YYYY-MM-DD format - dates after this will be disabled
+    defaultMonth?: string // YYYY-MM-DD format - initial month to show when picker opens (useful for end date to match start date)
 }
 
 export function DatePicker({
@@ -28,6 +32,9 @@ export function DatePicker({
     placeholder = "Select date",
     className,
     disabled = false,
+    minDate,
+    maxDate,
+    defaultMonth,
 }: DatePickerProps) {
     const [open, setOpen] = React.useState(false)
 
@@ -38,14 +45,52 @@ export function DatePicker({
         return isValid(parsed) ? parsed : undefined
     }, [value])
 
-    const [month, setMonth] = React.useState<Date | undefined>(date)
+    // Parse defaultMonth for initial display
+    const initialMonth = React.useMemo(() => {
+        if (date) return date
+        if (defaultMonth) {
+            const parsed = parse(defaultMonth, "yyyy-MM-dd", new Date())
+            return isValid(parsed) ? parsed : undefined
+        }
+        return undefined
+    }, [date, defaultMonth])
 
-    // Update month when date changes externally
+    const [month, setMonth] = React.useState<Date | undefined>(initialMonth)
+
+    // Update month when date or defaultMonth changes externally
     React.useEffect(() => {
         if (date) {
             setMonth(date)
+        } else if (defaultMonth && !value) {
+            const parsed = parse(defaultMonth, "yyyy-MM-dd", new Date())
+            if (isValid(parsed)) {
+                setMonth(parsed)
+            }
         }
-    }, [date])
+    }, [date, defaultMonth, value])
+
+    // Create disabled matcher for Calendar based on minDate/maxDate
+    const disabledMatcher = React.useMemo((): Matcher | Matcher[] | undefined => {
+        const matchers: Matcher[] = [];
+        
+        if (minDate) {
+            const min = parse(minDate, "yyyy-MM-dd", new Date());
+            if (isValid(min)) {
+                // Disable all dates before minDate (exclusive, so we subtract 1 day)
+                matchers.push({ before: min });
+            }
+        }
+        
+        if (maxDate) {
+            const max = parse(maxDate, "yyyy-MM-dd", new Date());
+            if (isValid(max)) {
+                // Disable all dates after maxDate
+                matchers.push({ after: max });
+            }
+        }
+        
+        return matchers.length > 0 ? matchers : undefined;
+    }, [minDate, maxDate]);
 
     const handleSelect = (selectedDate: Date | undefined) => {
         if (selectedDate && onChange) {
@@ -89,6 +134,7 @@ export function DatePicker({
                         month={month}
                         onMonthChange={setMonth}
                         captionLayout="dropdown"
+                        disabled={disabledMatcher}
                     />
                     <div className="border-t p-2 flex gap-2">
                         <Button

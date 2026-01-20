@@ -358,7 +358,13 @@ export default function AttendanceImport() {
                                             </Label>
                                             <DatePicker
                                                 value={dateFrom}
-                                                onChange={(value) => setDateFrom(value)}
+                                                onChange={(value) => {
+                                                    // Clear end date if it's before the new start date
+                                                    if (dateTo && value && new Date(dateTo) < new Date(value)) {
+                                                        setDateTo('');
+                                                    }
+                                                    setDateFrom(value);
+                                                }}
                                                 placeholder="Start date"
                                             />
                                         </div>
@@ -370,6 +376,8 @@ export default function AttendanceImport() {
                                                 value={dateTo}
                                                 onChange={(value) => setDateTo(value)}
                                                 placeholder="End date"
+                                                minDate={dateFrom || undefined}
+                                                defaultMonth={dateFrom || undefined}
                                             />
                                         </div>
                                     </div>

@@ -34,15 +34,20 @@ class LeaveCreditService
 
     /**
      * Check if user is eligible to use leave credits (6 months after hire date).
+     *
+     * @param User $user The user to check eligibility for
+     * @param Carbon|null $asOfDate Optional date to check eligibility as of (defaults to now)
+     *                              This allows checking future eligibility for leave dates
      */
-    public function isEligible(User $user): bool
+    public function isEligible(User $user, ?Carbon $asOfDate = null): bool
     {
         if (!$user->hired_date) {
             return false;
         }
 
+        $checkDate = $asOfDate ?? now();
         $sixMonthsAfterHire = Carbon::parse($user->hired_date)->addMonths(6);
-        return now()->greaterThanOrEqualTo($sixMonthsAfterHire);
+        return $checkDate->greaterThanOrEqualTo($sixMonthsAfterHire);
     }
 
     /**
@@ -245,6 +250,9 @@ class LeaveCreditService
         // Total earned = monthly + carryover (if applicable)
         $totalEarned = $monthlyEarned + $carryoverReceived;
 
+        // Get pending regularization credits for probationary users
+        $pendingRegularizationCredits = $this->getPendingRegularizationCredits($user);
+
         return [
             'year' => $year,
             'is_eligible' => $this->isEligible($user),
@@ -254,6 +262,7 @@ class LeaveCreditService
             'total_used' => LeaveCredit::getTotalUsed($user->id, $year),
             'balance' => $this->getBalance($user, $year),
             'pending_credits' => $this->getPendingCredits($user, $year),
+            'pending_regularization_credits' => $pendingRegularizationCredits,
             'credits_by_month' => LeaveCredit::forUser($user->id)
                 ->forYear($year)
                 ->orderBy('month')
@@ -935,10 +944,11 @@ class LeaveCreditService
         }
 
         // Check eligibility (6 months rule) for VL and BL only (SL can proceed without eligibility)
+        // Check if user will be eligible BY the leave start date (not current date)
         if (in_array($leaveType, ['VL', 'BL'])) {
-            if (!$this->isEligible($user)) {
+            if (!$this->isEligible($user, $startDate)) {
                 $eligibilityDate = $this->getEligibilityDate($user);
-                $errors[] = "You are not eligible to use leave credits yet. You will be eligible on {$eligibilityDate->format('F j, Y')}.";
+                $errors[] = "You will not be eligible to use leave credits by the leave start date. You will be eligible on {$eligibilityDate->format('F j, Y')}.";
             }
         }
 
@@ -1032,8 +1042,9 @@ class LeaveCreditService
             ];
         }
 
-        // Must be eligible (6+ months)
-        if (!$this->isEligible($user)) {
+        // Must be eligible (6+ months) - check eligibility based on leave start date
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        if (!$this->isEligible($user, $startDate)) {
             $hireDate = $user->hired_date ? Carbon::parse($user->hired_date)->format('M d, Y') : 'unknown';
             return [
                 'should_deduct' => false,
