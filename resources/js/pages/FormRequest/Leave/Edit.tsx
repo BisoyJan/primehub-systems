@@ -833,48 +833,55 @@ export default function Edit({
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Total Balance</p>
-                                    <p className="text-2xl font-bold">{creditsSummary.balance.toFixed(2)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Pending Requests</p>
-                                    <p className="text-2xl font-bold text-yellow-600">
-                                        {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
-                                    </p>
-                                </div>
-                                {futureCredits > 0 && (
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Future Credits</p>
-                                        <p className="text-2xl font-bold text-purple-600">
-                                            +{futureCredits.toFixed(2)}
-                                        </p>
+                            {/* Calculate other pending credits (excluding current request being edited) */}
+                            {(() => {
+                                const currentRequestCredits = (leaveRequest.leave_type === 'VL' || leaveRequest.leave_type === 'SL' || leaveRequest.leave_type === 'BL') ? leaveRequest.days_requested : 0;
+                                const otherPendingCredits = Math.max(0, creditsSummary.pending_credits - currentRequestCredits);
+                                return (
+                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Total Balance</p>
+                                            <p className="text-2xl font-bold">{creditsSummary.balance.toFixed(2)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Other Pending</p>
+                                            <p className="text-2xl font-bold text-yellow-600">
+                                                {otherPendingCredits > 0 ? `-${otherPendingCredits.toFixed(2)}` : '0'}
+                                            </p>
+                                        </div>
+                                        {futureCredits > 0 && (
+                                            <div>
+                                                <p className="text-sm text-muted-foreground">Future Credits</p>
+                                                <p className="text-2xl font-bold text-purple-600">
+                                                    +{futureCredits.toFixed(2)}
+                                                </p>
+                                            </div>
+                                        )}
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Available</p>
+                                            <p className="text-2xl font-bold text-blue-600">
+                                                {Math.max(0, creditsSummary.balance - otherPendingCredits + futureCredits).toFixed(2)}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">This Request</p>
+                                            <p className="text-2xl font-bold text-orange-600">
+                                                {requiresCredits && calculatedDays > 0 ? `-${calculatedDays}` : '0'}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">After Update</p>
+                                            <p className="text-2xl font-bold text-green-600">
+                                                {Math.max(0, creditsSummary.balance - otherPendingCredits + futureCredits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
+                                            </p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Monthly Rate</p>
+                                            <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
+                                        </div>
                                     </div>
-                                )}
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Available</p>
-                                    <p className="text-2xl font-bold text-blue-600">
-                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + futureCredits).toFixed(2)}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">This Request</p>
-                                    <p className="text-2xl font-bold text-orange-600">
-                                        {requiresCredits && calculatedDays > 0 ? `-${calculatedDays}` : '0'}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">After Update</p>
-                                    <p className="text-2xl font-bold text-green-600">
-                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + futureCredits - (requiresCredits ? calculatedDays : 0) + (requiresCredits ? leaveRequest.days_requested : 0)).toFixed(2)}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Monthly Rate</p>
-                                    <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
-                                </div>
-                            </div>
+                                );
+                            })()}
                             {/* Info about projected credits - only show when applying for future months */}
                             {futureCredits > 0 && (
                                 <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-md">
@@ -905,61 +912,70 @@ export default function Edit({
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Projected Balance</p>
-                                            <p className="text-2xl font-bold text-green-600">{getProjectedBalance().toFixed(2)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Pending Requests</p>
-                                            <p className="text-2xl font-bold text-yellow-600">
-                                                {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">This Request</p>
-                                            <p className="text-2xl font-bold text-orange-600">
-                                                {requiresCredits && calculatedDays > 0 ? `-${calculatedDays}` : '0'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">After Submit</p>
-                                            <p className="text-2xl font-bold text-blue-600">
-                                                {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Monthly Rate</p>
-                                            <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
-                                        <div className="flex items-start gap-2">
-                                            <Info className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                                            <div className="text-sm text-green-800 dark:text-green-200">
-                                                <p>
-                                                    <strong>Future Eligibility:</strong> You are not yet eligible (eligible on{' '}
-                                                    {format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}), but since your leave starts after this date,
-                                                    you will have {getProjectedBalance().toFixed(2)} credits available by then.
-                                                    {creditsSummary.pending_credits > 0 && (
-                                                        <> After subtracting {creditsSummary.pending_credits.toFixed(2)} pending credits, you'll have {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits).toFixed(2)} available.</>)}
-                                                </p>
-                                                {creditsSummary.pending_regularization_credits?.is_pending && (
-                                                    <p className="mt-1 text-xs">
-                                                        <strong>Breakdown:</strong>{' '}
-                                                        {creditsSummary.pending_regularization_credits.credits.toFixed(2)} credits from {creditsSummary.pending_regularization_credits.year} (probation period, {creditsSummary.pending_regularization_credits.months_accrued} months accrued)
-                                                        {(() => {
-                                                            const startDate = parseISO(data.start_date);
-                                                            const eligibilityDate = parseISO(creditsSummary.eligibility_date!);
-                                                            const monthsAfterReg = (startDate.getFullYear() - eligibilityDate.getFullYear()) * 12 + (startDate.getMonth() - eligibilityDate.getMonth());
-                                                            const postRegCredits = Math.max(0, monthsAfterReg) * creditsSummary.monthly_rate;
-                                                            return postRegCredits > 0 ? ` + ${postRegCredits.toFixed(2)} credits from ${creditsSummary.year} (${monthsAfterReg} months after regularization)` : '';
-                                                        })()}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {/* Calculate other pending credits (excluding current request) */}
+                                    {(() => {
+                                        const otherPendingCredits = Math.max(0, creditsSummary.pending_credits - (leaveRequest.leave_type === 'VL' || leaveRequest.leave_type === 'SL' || leaveRequest.leave_type === 'BL' ? leaveRequest.days_requested : 0));
+                                        return (
+                                            <>
+                                                <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">Projected Balance</p>
+                                                        <p className="text-2xl font-bold text-green-600">{getProjectedBalance().toFixed(2)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">Other Pending</p>
+                                                        <p className="text-2xl font-bold text-yellow-600">
+                                                            {otherPendingCredits > 0 ? `-${otherPendingCredits.toFixed(2)}` : '0'}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">This Request</p>
+                                                        <p className="text-2xl font-bold text-orange-600">
+                                                            {requiresCredits && calculatedDays > 0 ? `-${calculatedDays}` : '0'}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">After Submit</p>
+                                                        <p className="text-2xl font-bold text-blue-600">
+                                                            {Math.max(0, getProjectedBalance() - otherPendingCredits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
+                                                        </p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-sm text-muted-foreground">Monthly Rate</p>
+                                                        <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
+                                                    </div>
+                                                </div>
+                                                <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                                                    <div className="flex items-start gap-2">
+                                                        <Info className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                                        <div className="text-sm text-green-800 dark:text-green-200">
+                                                            <p>
+                                                                <strong>Future Eligibility:</strong> You are not yet eligible (eligible on{' '}
+                                                                {format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}), but since your leave starts after this date,
+                                                                you will have {getProjectedBalance().toFixed(2)} credits available by then.
+                                                                {otherPendingCredits > 0 && (
+                                                                    <> After subtracting {otherPendingCredits.toFixed(2)} other pending credits, you'll have {Math.max(0, getProjectedBalance() - otherPendingCredits).toFixed(2)} available.</>
+                                                                )}
+                                                            </p>
+                                                            {creditsSummary.pending_regularization_credits?.is_pending && (
+                                                                <p className="mt-1 text-xs">
+                                                                    <strong>Breakdown:</strong>{' '}
+                                                                    {creditsSummary.pending_regularization_credits.credits.toFixed(2)} credits from {creditsSummary.pending_regularization_credits.year} (probation period, {creditsSummary.pending_regularization_credits.months_accrued} months accrued)
+                                                                    {(() => {
+                                                                        const startDate = parseISO(data.start_date);
+                                                                        const eligibilityDate = parseISO(creditsSummary.eligibility_date!);
+                                                                        const monthsAfterReg = (startDate.getFullYear() - eligibilityDate.getFullYear()) * 12 + (startDate.getMonth() - eligibilityDate.getMonth());
+                                                                        const postRegCredits = Math.max(0, monthsAfterReg) * creditsSummary.monthly_rate;
+                                                                        return postRegCredits > 0 ? ` + ${postRegCredits.toFixed(2)} credits from ${creditsSummary.year} (${monthsAfterReg} months after regularization)` : '';
+                                                                    })()}
+                                                                </p>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            </>
+                                        );
+                                    })()}
                                 </CardContent>
                             </Card>
                         ) : (
