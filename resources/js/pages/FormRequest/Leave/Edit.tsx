@@ -905,10 +905,16 @@ export default function Edit({
                                     </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                                         <div>
                                             <p className="text-sm text-muted-foreground">Projected Balance</p>
                                             <p className="text-2xl font-bold text-green-600">{getProjectedBalance().toFixed(2)}</p>
+                                        </div>
+                                        <div>
+                                            <p className="text-sm text-muted-foreground">Pending Requests</p>
+                                            <p className="text-2xl font-bold text-yellow-600">
+                                                {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
+                                            </p>
                                         </div>
                                         <div>
                                             <p className="text-sm text-muted-foreground">This Request</p>
@@ -919,7 +925,7 @@ export default function Edit({
                                         <div>
                                             <p className="text-sm text-muted-foreground">After Submit</p>
                                             <p className="text-2xl font-bold text-blue-600">
-                                                {Math.max(0, getProjectedBalance() - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
+                                                {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
                                             </p>
                                         </div>
                                         <div>
@@ -935,6 +941,8 @@ export default function Edit({
                                                     <strong>Future Eligibility:</strong> You are not yet eligible (eligible on{' '}
                                                     {format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}), but since your leave starts after this date,
                                                     you will have {getProjectedBalance().toFixed(2)} credits available by then.
+                                                    {creditsSummary.pending_credits > 0 && (
+                                                        <> After subtracting {creditsSummary.pending_credits.toFixed(2)} pending credits, you'll have {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits).toFixed(2)} available.</>                                                    )}
                                                 </p>
                                                 {creditsSummary.pending_regularization_credits?.is_pending && (
                                                     <p className="mt-1 text-xs">
