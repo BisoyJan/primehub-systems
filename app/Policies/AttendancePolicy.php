@@ -92,4 +92,20 @@ class AttendancePolicy
     {
         return $this->permissionService->userHasPermission($user, 'attendance.delete');
     }
+
+    /**
+     * Determine whether the user can request undertime approval.
+     */
+    public function requestUndertimeApproval(User $user): bool
+    {
+        return $this->permissionService->userHasPermission($user, 'attendance.request_undertime_approval');
+    }
+
+    /**
+     * Determine whether the user can approve/reject undertime requests.
+     */
+    public function approveUndertime(User $user): bool
+    {
+        return $this->permissionService->userHasPermission($user, 'attendance.approve_undertime');
+    }
 }

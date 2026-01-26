@@ -99,6 +99,8 @@ return [
         'attendance.approve' => 'Approve Attendance',
         'attendance.statistics' => 'View Attendance Statistics',
         'attendance.delete' => 'Delete Attendance Records',
+        'attendance.request_undertime_approval' => 'Request Undertime Approval',
+        'attendance.approve_undertime' => 'Approve/Reject Undertime Requests',
 
         // Employee Schedules
         'schedules.view' => 'View Employee Schedules',
@@ -185,7 +187,7 @@ return [
             'sites.view', 'sites.create', 'sites.edit', 'sites.delete',
             'campaigns.view', 'campaigns.create', 'campaigns.edit', 'campaigns.delete',
             'stations.view',
-            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.verify', 'attendance.approve', 'attendance.statistics', 'attendance.delete',
+            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.verify', 'attendance.approve', 'attendance.statistics', 'attendance.delete', 'attendance.request_undertime_approval', 'attendance.approve_undertime',
             'schedules.view', 'schedules.create', 'schedules.edit', 'schedules.delete', 'schedules.toggle',
             'biometric.view', 'biometric.reprocess', 'biometric.anomalies', 'biometric.export', 'biometric.retention',
             'attendance_points.view', 'attendance_points.create', 'attendance_points.edit', 'attendance_points.delete', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan',
@@ -200,7 +202,7 @@ return [
 
         'team_lead' => [
             'dashboard.view',
-            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.approve', 'attendance.statistics', 'attendance.delete',
+            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.approve', 'attendance.statistics', 'attendance.delete', 'attendance.request_undertime_approval',
             'schedules.view', 'schedules.create', 'schedules.edit', 'schedules.delete', 'schedules.toggle',
             'biometric.view', 'biometric.reprocess',
             'attendance_points.view', 'attendance_points.create', 'attendance_points.export',
@@ -226,7 +228,7 @@ return [
         'hr' => [
             'dashboard.view',
             'accounts.view', 'accounts.create', 'accounts.edit', 'accounts.delete',
-            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.verify', 'attendance.approve', 'attendance.statistics', 'attendance.delete',
+            'attendance.view', 'attendance.create', 'attendance.import', 'attendance.review', 'attendance.verify', 'attendance.approve', 'attendance.statistics', 'attendance.delete', 'attendance.request_undertime_approval', 'attendance.approve_undertime',
             'schedules.view', 'schedules.create', 'schedules.edit', 'schedules.delete', 'schedules.toggle',
             'biometric.view', 'biometric.reprocess', 'biometric.anomalies', 'biometric.export', 'biometric.retention',
             'attendance_points.view', 'attendance_points.create', 'attendance_points.edit', 'attendance_points.delete', 'attendance_points.excuse', 'attendance_points.export', 'attendance_points.rescan',

@@ -4,7 +4,6 @@ import { format } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
 import { PageHeader } from '@/components/PageHeader';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { DatePicker } from '@/components/ui/date-picker';
 import { TimeInput } from '@/components/ui/time-input';
 import { Label } from '@/components/ui/label';
@@ -21,9 +20,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Repeat } from 'lucide-react';
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Clock, Repeat, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { useFlashMessage, usePageMeta } from '@/hooks';
+import { useFlashMessage, usePageMeta, usePermission } from '@/hooks';
 import { index as attendanceIndex, create as attendanceCreate, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
 import { Switch } from '@/components/ui/switch';
 
@@ -54,6 +53,10 @@ interface Props {
 
 export default function Create({ users, campaigns }: Props) {
     useFlashMessage();
+    const { can } = usePermission();
+
+    // Pre-compute permission checks for undertime approval
+    const canApproveUndertime = can('attendance.approve_undertime');
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Manual Attendance',
@@ -75,6 +78,9 @@ export default function Create({ users, campaigns }: Props) {
         actual_time_out_date: '',
         actual_time_out_time: '',
         notes: '',
+        is_set_home: false,
+        undertime_approval_status: '' as '' | 'approved',
+        undertime_approval_reason: '' as '' | 'generate_points' | 'skip_points' | 'lunch_used',
     });
 
     const { data: bulkData, setData: setBulkData, post: bulkPost, processing: bulkProcessing, errors: bulkErrors } = useForm({
@@ -89,6 +95,9 @@ export default function Create({ users, campaigns }: Props) {
         actual_time_out_date: '',
         actual_time_out_time: '',
         notes: '',
+        is_set_home: false,
+        undertime_approval_status: '' as '' | 'approved',
+        undertime_approval_reason: '' as '' | 'generate_points' | 'skip_points' | 'lunch_used',
     });
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -111,6 +120,7 @@ export default function Create({ users, campaigns }: Props) {
     // Auto-status selection state (single entry mode only)
     const [suggestedStatus, setSuggestedStatus] = useState<string>('');
     const [suggestedSecondaryStatus, setSuggestedSecondaryStatus] = useState<string>('');
+    const [suggestedUndertimeMinutes, setSuggestedUndertimeMinutes] = useState<number>(0);
     const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] = useState(false);
 
     // Define selectedUser early so it can be used in callbacks
@@ -124,7 +134,7 @@ export default function Create({ users, campaigns }: Props) {
         timeInTime: string,
         timeOutDate: string,
         timeOutTime: string
-    ): { status: string; secondaryStatus?: string; reason: string } => {
+    ): { status: string; secondaryStatus?: string; reason: string; undertimeMinutes?: number } => {
         // If no schedule, can't calculate - return empty to let backend handle
         if (!schedule) return { status: '', reason: 'No schedule found' };
 
@@ -243,7 +253,7 @@ export default function Create({ users, campaigns }: Props) {
             reason = 'Arrived on time';
         }
 
-        return { status, secondaryStatus, reason };
+        return { status, secondaryStatus, reason, undertimeMinutes };
     }, []);
 
     // Recalculate suggested status when relevant fields change (single entry mode)
@@ -251,6 +261,7 @@ export default function Create({ users, campaigns }: Props) {
         if (isBulkMode || !selectedUser?.schedule) {
             setSuggestedStatus('');
             setSuggestedSecondaryStatus('');
+            setSuggestedUndertimeMinutes(0);
             return;
         }
 
@@ -264,6 +275,7 @@ export default function Create({ users, campaigns }: Props) {
 
         setSuggestedStatus(result.status);
         setSuggestedSecondaryStatus(result.secondaryStatus || '');
+        setSuggestedUndertimeMinutes(result.undertimeMinutes || 0);
 
         // If status hasn't been manually overridden, auto-update it
         if (!isStatusManuallyOverridden && result.status) {
@@ -1169,6 +1181,107 @@ export default function Create({ users, campaigns }: Props) {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Set Home & Undertime Options - for undertime > 30 minutes (single entry mode only) */}
+                                {!isBulkMode && suggestedUndertimeMinutes > 30 && (
+                                    <div className="space-y-3 p-4 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                        {/* Undertime Header */}
+                                        <div className="flex items-center justify-between">
+                                            <div className="flex items-center gap-2">
+                                                <Clock className="h-4 w-4 text-amber-600" />
+                                                <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                                                    Undertime: {suggestedUndertimeMinutes} min
+                                                </span>
+                                            </div>
+                                            {/* Set Home Toggle - inline */}
+                                            <div className="flex items-center gap-2">
+                                                <Label htmlFor="is_set_home" className="text-xs text-amber-700 dark:text-amber-300 cursor-pointer">
+                                                    Set Home
+                                                </Label>
+                                                <Switch
+                                                    id="is_set_home"
+                                                    checked={data.is_set_home}
+                                                    onCheckedChange={(checked) => setData('is_set_home', checked)}
+                                                />
+                                            </div>
+                                        </div>
+
+                                        {data.is_set_home ? (
+                                            <p className="text-xs text-green-700 dark:text-green-400">
+                                                ✓ Employee sent home early - no undertime points
+                                            </p>
+                                        ) : canApproveUndertime ? (
+                                            /* Admin/HR: Approval options */
+                                            <div className="space-y-2">
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={data.undertime_approval_reason === 'generate_points' ? 'default' : 'outline'}
+                                                        onClick={() => {
+                                                            setData('undertime_approval_reason', 'generate_points');
+                                                            setData('undertime_approval_status', 'approved');
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Check className="h-3 w-3 mr-1" />
+                                                        Generate Points
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={data.undertime_approval_reason === 'skip_points' ? 'default' : 'outline'}
+                                                        onClick={() => {
+                                                            setData('undertime_approval_reason', 'skip_points');
+                                                            setData('undertime_approval_status', 'approved');
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <X className="h-3 w-3 mr-1" />
+                                                        Skip Points
+                                                    </Button>
+                                                    <Button
+                                                        type="button"
+                                                        size="sm"
+                                                        variant={data.undertime_approval_reason === 'lunch_used' ? 'default' : 'outline'}
+                                                        onClick={() => {
+                                                            setData('undertime_approval_reason', 'lunch_used');
+                                                            setData('undertime_approval_status', 'approved');
+                                                        }}
+                                                        className="h-7 text-xs"
+                                                    >
+                                                        <Clock className="h-3 w-3 mr-1" />
+                                                        Lunch Used
+                                                    </Button>
+                                                    {data.undertime_approval_reason && (
+                                                        <Button
+                                                            type="button"
+                                                            size="sm"
+                                                            variant="ghost"
+                                                            onClick={() => {
+                                                                setData('undertime_approval_reason', '');
+                                                                setData('undertime_approval_status', '');
+                                                            }}
+                                                            className="h-7 text-xs text-muted-foreground"
+                                                        >
+                                                            Clear
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                    {data.undertime_approval_reason === 'skip_points' && '✓ No points will be generated'}
+                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ Lunch time credited (-1hr)'}
+                                                    {data.undertime_approval_reason === 'generate_points' && '• Points will be generated'}
+                                                    {!data.undertime_approval_reason && '• Select option or leave blank for default (generate points)'}
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                • Undertime points will be generated. Request approval after creating record.
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Notes */}
                                 <div className="space-y-2">

@@ -356,6 +356,14 @@ class AttendancePointController extends Controller
                 $isAdvised = $request->boolean('is_advised', false);
                 $shiftDate = Carbon::parse($request->shift_date);
 
+                // Delete any existing points for the same user and date to prevent duplicates
+                // This handles cases where:
+                // 1. A manual point already exists for this date
+                // 2. An auto-generated point exists from attendance verification
+                AttendancePoint::where('user_id', $request->user_id)
+                    ->where('shift_date', $request->shift_date)
+                    ->delete();
+
                 // Determine if this is a NCNS/FTN type (1-year expiration, not GBRO eligible)
                 $isNcnsOrFtn = $pointType === 'whole_day_absence' && !$isAdvised;
                 $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);

@@ -19,7 +19,41 @@ class AttendanceFileParser
     {
         $content = file_get_contents($filePath);
 
+        // Convert to UTF-8 if not already (handles Windows-1252, Latin-1 from biometric devices)
+        $content = $this->convertToUtf8($content);
+
         return $this->parseContent($content);
+    }
+
+    /**
+     * Convert content to UTF-8 encoding.
+     * Biometric devices often export in Windows-1252 or Latin-1 encoding.
+     *
+     * @param string $content
+     * @return string
+     */
+    protected function convertToUtf8(string $content): string
+    {
+        // Check if already valid UTF-8
+        if (mb_check_encoding($content, 'UTF-8')) {
+            // Even if it claims to be UTF-8, ensure it's clean
+            return mb_convert_encoding($content, 'UTF-8', 'UTF-8');
+        }
+
+        // Detect encoding and convert
+        $encoding = mb_detect_encoding($content, ['UTF-8', 'Windows-1252', 'ISO-8859-1', 'ASCII'], true);
+
+        if ($encoding && $encoding !== 'UTF-8') {
+            $content = mb_convert_encoding($content, 'UTF-8', $encoding);
+        } else {
+            // Fallback: assume Windows-1252 (common for biometric devices on Windows)
+            $content = mb_convert_encoding($content, 'UTF-8', 'Windows-1252');
+        }
+
+        // Remove any invalid UTF-8 sequences that might remain
+        $content = mb_convert_encoding($content, 'UTF-8', 'UTF-8');
+
+        return $content;
     }
 
     /**
@@ -30,6 +64,11 @@ class AttendanceFileParser
      */
     public function parseContent(string $content): Collection
     {
+        // Ensure UTF-8 encoding for content passed directly
+        if (!mb_check_encoding($content, 'UTF-8')) {
+            $content = $this->convertToUtf8($content);
+        }
+
         // Remove null bytes and other non-printable characters
         $content = str_replace("\0", '', $content);
         $content = preg_replace('/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/', '', $content);
@@ -438,6 +477,69 @@ class AttendanceFileParser
             'date_range' => [
                 'start' => $records->min('datetime'),
                 'end' => $records->max('datetime'),
+            ],
+        ];
+    }
+
+    /**
+     * Filter records by date range.
+     * Returns records within the range and records outside the range separately.
+     * Includes +1 day buffer for night shift time-outs.
+     *
+     * @param Collection $records Collection of parsed records
+     * @param Carbon $dateFrom Start date of the range
+     * @param Carbon $dateTo End date of the range
+     * @return array ['within_range' => Collection, 'outside_range' => Collection, 'summary' => array]
+     */
+    public function filterByDateRange(Collection $records, Carbon $dateFrom, Carbon $dateTo): array
+    {
+        // Include +1 day for night shift time-outs (e.g., shift on Jan 20 may have time-out on Jan 21)
+        $extendedDateTo = $dateTo->copy()->addDay();
+
+        $withinRange = collect();
+        $outsideRange = collect();
+        $dateBreakdown = [];
+
+        foreach ($records as $record) {
+            $recordDate = $record['datetime']->format('Y-m-d');
+            $recordDateTime = $record['datetime'];
+
+            // Check if record falls within the extended range
+            if ($recordDateTime->between($dateFrom->copy()->startOfDay(), $extendedDateTo->copy()->endOfDay())) {
+                $withinRange->push($record);
+
+                // Track dates within range
+                if (!isset($dateBreakdown[$recordDate])) {
+                    $dateBreakdown[$recordDate] = ['count' => 0, 'in_range' => true];
+                }
+                $dateBreakdown[$recordDate]['count']++;
+            } else {
+                $outsideRange->push($record);
+
+                // Track dates outside range
+                if (!isset($dateBreakdown[$recordDate])) {
+                    $dateBreakdown[$recordDate] = ['count' => 0, 'in_range' => false];
+                }
+                $dateBreakdown[$recordDate]['count']++;
+            }
+        }
+
+        // Sort date breakdown by date
+        ksort($dateBreakdown);
+
+        return [
+            'within_range' => $withinRange,
+            'outside_range' => $outsideRange,
+            'summary' => [
+                'total_records' => $records->count(),
+                'within_range_count' => $withinRange->count(),
+                'outside_range_count' => $outsideRange->count(),
+                'date_from' => $dateFrom->format('Y-m-d'),
+                'date_to' => $dateTo->format('Y-m-d'),
+                'extended_date_to' => $extendedDateTo->format('Y-m-d'),
+                'unique_employees_in_range' => $withinRange->pluck('normalized_name')->unique()->count(),
+                'unique_employees_outside_range' => $outsideRange->pluck('normalized_name')->unique()->count(),
+                'date_breakdown' => $dateBreakdown,
             ],
         ];
     }

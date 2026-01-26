@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { Head, router, useForm, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { usePermission } from "@/hooks/use-permission";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { type SharedData } from "@/types";
@@ -32,6 +33,7 @@ import {
 } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { getStatusBadges } from "@/components/attendance";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -42,8 +44,10 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command";
-import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Edit, Moon, Search, UserCheck, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Clock, Edit, Moon, Search, Send, UserCheck, X } from "lucide-react";
 import { TimeInput } from "@/components/ui/time-input";
+import { Switch } from "@/components/ui/switch";
+import { requestUndertimeApproval, approveUndertime } from "@/routes/attendance";
 
 interface Site {
     id: number;
@@ -107,6 +111,11 @@ interface AttendanceRecord {
     verification_notes?: string;
     notes?: string;
     warnings?: string[];
+    is_set_home?: boolean;
+    // Undertime approval fields
+    undertime_approval_status?: 'pending' | 'approved' | 'rejected' | null;
+    undertime_approval_reason?: 'generate_points' | 'skip_points' | 'lunch_used' | null;
+    undertime_approval_notes?: string;
 }
 
 interface Meta {
@@ -149,45 +158,6 @@ const DEFAULT_META: Meta = {
 };
 
 // formatDateTime, formatDate are now imported from @/lib/utils
-
-const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; className: string }> = {
-        on_time: { label: "On Time", className: "bg-green-500" },
-        tardy: { label: "Tardy", className: "bg-yellow-500" },
-        half_day_absence: { label: "Half Day", className: "bg-orange-500" },
-        advised_absence: { label: "Advised Absence", className: "bg-blue-500" },
-        on_leave: { label: "On Leave", className: "bg-blue-600" },
-        ncns: { label: "NCNS", className: "bg-red-500" },
-        undertime: { label: "Undertime", className: "bg-orange-400" },
-        undertime_more_than_hour: { label: "UT >1hr", className: "bg-orange-600" },
-        failed_bio_in: { label: "Failed Bio In", className: "bg-purple-500" },
-        failed_bio_out: { label: "Failed Bio Out", className: "bg-purple-500" },
-        needs_manual_review: { label: "Needs Review", className: "bg-amber-500" },
-        present_no_bio: { label: "Present (No Bio)", className: "bg-gray-500" },
-        non_work_day: { label: "Non-Work Day", className: "bg-slate-500" },
-    };
-    const config = statusConfig[status] || { label: status, className: "bg-gray-500" };
-    return <Badge className={config.className}>{config.label}</Badge>;
-};
-
-const getStatusBadges = (record: AttendanceRecord) => {
-    return (
-        <div className="flex gap-1 flex-wrap items-center">
-            {getStatusBadge(record.status)}
-            {record.secondary_status && getStatusBadge(record.secondary_status)}
-            {record.overtime_minutes && record.overtime_minutes > 0 && (
-                <Badge className={record.overtime_approved ? "bg-green-500" : "bg-blue-500"}>
-                    Overtime{record.overtime_approved && " ✓"}
-                </Badge>
-            )}
-            {record.warnings && record.warnings.length > 0 && (
-                <span title="Has warnings - see Issue column">
-                    <AlertCircle className="h-4 w-4 text-amber-500" />
-                </span>
-            )}
-        </div>
-    );
-};
 
 /**
  * Calculate the suggested attendance status based on actual times and employee schedule.
@@ -385,6 +355,12 @@ export default function AttendanceReview() {
 
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { can } = usePermission();
+
+    // Check if user can approve undertime (includes Super Admin, Admin, HR)
+    const canApproveUndertime = can('attendance.approve_undertime');
+    // Check if user can request undertime approval (includes Team Lead)
+    const canRequestUndertimeApproval = can('attendance.request_undertime_approval');
 
     const [selectedRecord, setSelectedRecord] = useState<AttendanceRecord | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -398,6 +374,9 @@ export default function AttendanceReview() {
     const highlightedRowRef = React.useRef<HTMLTableRowElement | HTMLDivElement>(null);
     const [noteDialogOpen, setNoteDialogOpen] = useState(false);
     const [selectedNoteRecord, setSelectedNoteRecord] = useState<AttendanceRecord | null>(null);
+    const [isRequestingUndertimeApproval, setIsRequestingUndertimeApproval] = useState(false);
+    const [isApprovingUndertime, setIsApprovingUndertime] = useState(false);
+    const [undertimeApprovalReason, setUndertimeApprovalReason] = useState<'generate_points' | 'skip_points' | 'lunch_used'>('skip_points');
 
     // Helper to display notes - show dialog with both notes and verification notes
     const NotesDisplay = ({ record }: { record: AttendanceRecord }) => {
@@ -453,6 +432,7 @@ export default function AttendanceReview() {
         notes: "",
         verification_notes: "",
         overtime_approved: false,
+        is_set_home: false,
     });
 
     const { data: batchData, setData: setBatchData, post: postBatch, processing: batchProcessing, errors: batchErrors, reset: resetBatch } = useForm({
@@ -461,6 +441,7 @@ export default function AttendanceReview() {
         secondary_status: "",
         verification_notes: "",
         overtime_approved: false,
+        is_set_home: false,
     });
 
     // Partial approval dialog state (for night shift completion)
@@ -604,6 +585,7 @@ export default function AttendanceReview() {
             notes: record.notes || "",
             verification_notes: record.verification_notes || "",
             overtime_approved: record.overtime_approved || false,
+            is_set_home: record.is_set_home || false,
         });
         setIsDialogOpen(true);
     };
@@ -769,6 +751,12 @@ export default function AttendanceReview() {
             .some(record => record.overtime_minutes && record.overtime_minutes > 0);
     };
 
+    const hasUndertimeRecords = () => {
+        return attendanceData.data
+            .filter(r => selectedRecords.has(r.id))
+            .some(record => record.undertime_minutes && record.undertime_minutes > 30);
+    };
+
     const handleSelectAll = () => {
         if (selectedRecords.size === attendanceData.data.length) {
             setSelectedRecords(new Set());
@@ -856,7 +844,7 @@ export default function AttendanceReview() {
                 <Card>
                     <CardContent className="pt-6">
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
                                 {/* Employee Search */}
                                 <div className="space-y-2">
                                     <Label>Employee</Label>
@@ -937,6 +925,7 @@ export default function AttendanceReview() {
                                             <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
                                             <SelectItem value="tardy">Tardy</SelectItem>
                                             <SelectItem value="undertime">Undertime</SelectItem>
+                                            <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
                                             <SelectItem value="on_leave">On Leave</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -998,7 +987,13 @@ export default function AttendanceReview() {
                                     <Label htmlFor="date-from">Date From</Label>
                                     <DatePicker
                                         value={dateFrom}
-                                        onChange={(value) => setDateFrom(value)}
+                                        onChange={(value) => {
+                                            setDateFrom(value);
+                                            // If end date is empty or before start date, set it to start date
+                                            if (!dateTo || value > dateTo) {
+                                                setDateTo(value);
+                                            }
+                                        }}
                                         placeholder="Select date"
                                     />
                                 </div>
@@ -1010,6 +1005,8 @@ export default function AttendanceReview() {
                                         value={dateTo}
                                         onChange={(value) => setDateTo(value)}
                                         placeholder="Select date"
+                                        minDate={dateFrom || undefined}
+                                        defaultMonth={dateFrom || undefined}
                                     />
                                 </div>
                             </div>
@@ -1074,11 +1071,9 @@ export default function AttendanceReview() {
                                                 />
                                             </TableHead>
                                             <TableHead>Employee</TableHead>
-                                            <TableHead>Campaign</TableHead>
-                                            <TableHead>Site</TableHead>
+                                            <TableHead>Site / Campaign</TableHead>
                                             <TableHead>Shift Date</TableHead>
-                                            <TableHead>Time In</TableHead>
-                                            <TableHead>Time Out</TableHead>
+                                            <TableHead>Time In / Out</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Tardy/UT/OT</TableHead>
                                             <TableHead>Notes</TableHead>
@@ -1106,33 +1101,39 @@ export default function AttendanceReview() {
                                                     />
                                                 </TableCell>
                                                 <TableCell className="font-medium">{record.user.name}</TableCell>
-                                                <TableCell className="text-sm">
-                                                    {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || <span className="text-muted-foreground">-</span>}
-                                                </TableCell>
                                                 <TableCell>
-                                                    {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || "-"}
-                                                    {record.is_cross_site_bio && (
-                                                        <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">
-                                                            Cross-Site
-                                                        </Badge>
-                                                    )}
+                                                    <div>
+                                                        <div className="font-medium truncate">
+                                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
+                                                            {record.is_cross_site_bio && (
+                                                                <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">
+                                                                    Cross-Site
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                        {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                                            <div className="text-xs text-muted-foreground">
+                                                                {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                            </div>
+                                                        )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>{formatDate(record.shift_date)}</TableCell>
                                                 <TableCell className="text-sm">
-                                                    {formatDateTime(record.actual_time_in)}
-                                                    {record.bio_in_site && record.is_cross_site_bio && (
-                                                        <div className="text-xs text-muted-foreground">
-                                                            @ {record.bio_in_site.name}
+                                                    <div>
+                                                        <div>
+                                                            {formatDateTime(record.actual_time_in) || '-'}
+                                                            {record.bio_in_site && record.is_cross_site_bio && (
+                                                                <span className="text-xs text-muted-foreground ml-1">@ {record.bio_in_site.name}</span>
+                                                            )}
                                                         </div>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-sm">
-                                                    {formatDateTime(record.actual_time_out)}
-                                                    {record.bio_out_site && record.is_cross_site_bio && (
-                                                        <div className="text-xs text-muted-foreground">
-                                                            @ {record.bio_out_site.name}
+                                                        <div className="text-muted-foreground">
+                                                            {formatDateTime(record.actual_time_out) || '-'}
+                                                            {record.bio_out_site && record.is_cross_site_bio && (
+                                                                <span className="text-xs ml-1">@ {record.bio_out_site.name}</span>
+                                                            )}
                                                         </div>
-                                                    )}
+                                                    </div>
                                                 </TableCell>
                                                 <TableCell>{getStatusBadges(record)}</TableCell>
                                                 <TableCell className="text-sm">
@@ -1210,7 +1211,7 @@ export default function AttendanceReview() {
                                                             onClick={() => openVerifyDialog(record)}
                                                         >
                                                             <Edit className="h-4 w-4 mr-1" />
-                                                            Verify
+                                                            {record.admin_verified ? 'Edit' : 'Verify'}
                                                         </Button>
                                                         {isNightShiftMissingTimeOut(record) && (
                                                             <Button
@@ -1262,28 +1263,27 @@ export default function AttendanceReview() {
 
                                     <div className="space-y-2 text-sm">
                                         <div>
-                                            <span className="font-medium">Campaign:</span>{" "}
-                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || "-"}
-                                        </div>
-                                        <div>
-                                            <span className="font-medium">Assigned Site:</span>{" "}
-                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || "-"}
+                                            <span className="font-medium">Site / Campaign:</span>{" "}
+                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
                                             {record.is_cross_site_bio && (
                                                 <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
                                                     Cross-Site
                                                 </Badge>
                                             )}
-                                        </div>
-                                        <div>
-                                            <span className="font-medium">Time In:</span>{" "}
-                                            {formatDateTime(record.actual_time_in)}
-                                            {record.bio_in_site && record.is_cross_site_bio && (
-                                                <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
+                                            {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                                <span className="text-muted-foreground">
+                                                    {" / "}{record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                </span>
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time Out:</span>{" "}
-                                            {formatDateTime(record.actual_time_out)}
+                                            <span className="font-medium">Time In / Out:</span>{" "}
+                                            {formatDateTime(record.actual_time_in) || '-'}
+                                            {record.bio_in_site && record.is_cross_site_bio && (
+                                                <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
+                                            )}
+                                            {" → "}
+                                            {formatDateTime(record.actual_time_out) || '-'}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
                                             )}
@@ -1349,7 +1349,7 @@ export default function AttendanceReview() {
                                         className="w-full"
                                     >
                                         <Edit className="h-4 w-4 mr-2" />
-                                        Verify Record
+                                        {record.admin_verified ? 'Edit Record' : 'Verify Record'}
                                     </Button>
                                     {isNightShiftMissingTimeOut(record) && (
                                         <Button
@@ -1422,6 +1422,7 @@ export default function AttendanceReview() {
                                     <SelectItem value="on_leave">On Leave</SelectItem>
                                     <SelectItem value="ncns">NCNS</SelectItem>
                                     <SelectItem value="undertime">Undertime</SelectItem>
+                                    <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
                                     <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                     <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
                                     <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>
@@ -1448,6 +1449,27 @@ export default function AttendanceReview() {
                                 </div>
                                 <p className="text-xs text-blue-700 dark:text-blue-400">
                                     This will approve overtime for any records that have overtime hours
+                                </p>
+                            </div>
+                        )}
+
+                        {/* Set Home Option - for undertime > 30 minutes */}
+                        {hasUndertimeRecords() && (
+                            <div className="space-y-2 p-4 bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                <div className="flex items-center gap-2">
+                                    <Switch
+                                        id="batch_is_set_home"
+                                        checked={batchData.is_set_home}
+                                        onCheckedChange={(checked) => setBatchData("is_set_home", checked)}
+                                    />
+                                    <Label htmlFor="batch_is_set_home" className="text-sm font-medium cursor-pointer">
+                                        Mark as "Set Home" for All Selected Records
+                                    </Label>
+                                </div>
+                                <p className="text-xs text-amber-700 dark:text-amber-400">
+                                    {batchData.is_set_home
+                                        ? "✓ Undertime violation points will be skipped for records with undertime > 30 min. Tardy points still apply."
+                                        : "Enable if employees were sent home early (not their fault). Skips undertime violation points."}
                                 </p>
                             </div>
                         )}
@@ -1699,6 +1721,7 @@ export default function AttendanceReview() {
                                     <SelectItem value="on_leave">On Leave</SelectItem>
                                     <SelectItem value="ncns">NCNS</SelectItem>
                                     <SelectItem value="undertime">Undertime</SelectItem>
+                                    <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
                                     <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                     <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
                                     <SelectItem value="present_no_bio">Present (No Bio)</SelectItem>
@@ -1804,6 +1827,140 @@ export default function AttendanceReview() {
                             </div>
                         )}
 
+                        {/* Set Home & Undertime Approval Section - for undertime > 30 minutes */}
+                        {selectedRecord?.undertime_minutes && selectedRecord.undertime_minutes > 30 && (
+                            <div className="space-y-3 p-4 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                {/* Undertime Header with Set Home toggle inline */}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="h-4 w-4 text-amber-600" />
+                                        <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                                            Undertime: {selectedRecord.undertime_minutes} min
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="is_set_home" className="text-xs text-amber-700 dark:text-amber-300 cursor-pointer">
+                                            Set Home
+                                        </Label>
+                                        <Switch
+                                            id="is_set_home"
+                                            checked={data.is_set_home}
+                                            onCheckedChange={(checked) => setData("is_set_home", checked)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {data.is_set_home ? (
+                                    <p className="text-xs text-green-700 dark:text-green-400">
+                                        ✓ Employee sent home early - no undertime points
+                                    </p>
+                                ) : selectedRecord.undertime_approval_status === 'approved' ? (
+                                    <p className="text-xs text-green-700 dark:text-green-400">
+                                        ✓ Approved: {selectedRecord.undertime_approval_reason === 'skip_points'
+                                            ? 'No points'
+                                            : selectedRecord.undertime_approval_reason === 'lunch_used'
+                                            ? 'Lunch credited'
+                                            : 'Points generated'}
+                                    </p>
+                                ) : selectedRecord.undertime_approval_status === 'rejected' ? (
+                                    <p className="text-xs text-red-600 dark:text-red-400">
+                                        ✗ Rejected - points will be generated
+                                    </p>
+                                ) : selectedRecord.undertime_approval_status === 'pending' ? (
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="h-3 w-3 text-yellow-600 animate-pulse" />
+                                        <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                                            Pending approval from Admin/HR
+                                        </p>
+                                    </div>
+                                ) : canApproveUndertime ? (
+                                    /* Admin/HR: Approval options */
+                                    <div className="space-y-2">
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={undertimeApprovalReason === 'generate_points' ? 'default' : 'outline'}
+                                                onClick={() => setUndertimeApprovalReason('generate_points')}
+                                                className="h-7 text-xs"
+                                            >
+                                                <Check className="h-3 w-3 mr-1" />
+                                                Generate Points
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={undertimeApprovalReason === 'skip_points' ? 'default' : 'outline'}
+                                                onClick={() => setUndertimeApprovalReason('skip_points')}
+                                                className="h-7 text-xs"
+                                            >
+                                                <X className="h-3 w-3 mr-1" />
+                                                Skip Points
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={undertimeApprovalReason === 'lunch_used' ? 'default' : 'outline'}
+                                                onClick={() => setUndertimeApprovalReason('lunch_used')}
+                                                className="h-7 text-xs"
+                                            >
+                                                <Clock className="h-3 w-3 mr-1" />
+                                                Lunch Used
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setIsApprovingUndertime(true);
+                                                    router.post(approveUndertime(selectedRecord.id).url, {
+                                                        status: 'approved',
+                                                        reason: undertimeApprovalReason,
+                                                        notes: data.verification_notes,
+                                                    }, {
+                                                        preserveScroll: true,
+                                                        onFinish: () => setIsApprovingUndertime(false),
+                                                    });
+                                                }}
+                                                disabled={isApprovingUndertime}
+                                                className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                            >
+                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                {isApprovingUndertime ? 'Saving...' : 'Approve'}
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                                            {undertimeApprovalReason === 'skip_points' && '✓ No points will be generated'}
+                                            {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (-1hr)'}
+                                            {undertimeApprovalReason === 'generate_points' && '• Points will be generated'}
+                                        </p>
+                                    </div>
+                                ) : canRequestUndertimeApproval ? (
+                                    /* Team Lead: Request approval button */
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => {
+                                            setIsRequestingUndertimeApproval(true);
+                                            router.post(requestUndertimeApproval(selectedRecord.id).url, {}, {
+                                                preserveScroll: true,
+                                                onFinish: () => setIsRequestingUndertimeApproval(false),
+                                            });
+                                        }}
+                                        disabled={isRequestingUndertimeApproval}
+                                        className="h-7 text-xs"
+                                    >
+                                        <Send className="h-3 w-3 mr-1" />
+                                        {isRequestingUndertimeApproval ? 'Sending...' : 'Request Approval'}
+                                    </Button>
+                                ) : (
+                                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                                        • Undertime points will be generated
+                                    </p>
+                                )}
+                            </div>
+                        )}
+
                         {/* Notes */}
                         <div className="space-y-2">
                             <Label htmlFor="notes">
@@ -1893,7 +2050,9 @@ export default function AttendanceReview() {
                                 </Button>
                             ) : (
                                 <Button type="submit" disabled={processing}>
-                                    {processing ? "Verifying..." : "Verify & Save"}
+                                    {processing
+                                        ? (selectedRecord?.admin_verified ? "Saving..." : "Verifying...")
+                                        : (selectedRecord?.admin_verified ? "Edit & Save" : "Verify & Save")}
                                 </Button>
                             )}
                         </DialogFooter>

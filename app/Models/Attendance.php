@@ -35,6 +35,7 @@ class Attendance extends Model
         'secondary_status',
         'tardy_minutes',
         'undertime_minutes',
+        'is_set_home',
         'overtime_minutes',
         'overtime_approved',
         'overtime_approved_at',
@@ -45,6 +46,14 @@ class Attendance extends Model
         'verification_notes',
         'notes',
         'warnings',
+        // Undertime approval fields
+        'undertime_approval_status',
+        'undertime_approval_reason',
+        'undertime_approval_requested_by',
+        'undertime_approval_requested_at',
+        'undertime_approved_by',
+        'undertime_approved_at',
+        'undertime_approval_notes',
     ];
 
     protected $casts = [
@@ -52,9 +61,12 @@ class Attendance extends Model
         'actual_time_in' => 'datetime',
         'actual_time_out' => 'datetime',
         'overtime_approved_at' => 'datetime',
+        'undertime_approval_requested_at' => 'datetime',
+        'undertime_approved_at' => 'datetime',
         'is_advised' => 'boolean',
         'admin_verified' => 'boolean',
         'is_cross_site_bio' => 'boolean',
+        'is_set_home' => 'boolean',
         'overtime_approved' => 'boolean',
         'tardy_minutes' => 'integer',
         'undertime_minutes' => 'integer',
@@ -108,6 +120,47 @@ class Attendance extends Model
     public function overtimeApprovedBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'overtime_approved_by');
+    }
+
+    /**
+     * Get the user who requested undertime approval.
+     */
+    public function undertimeApprovalRequestedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'undertime_approval_requested_by');
+    }
+
+    /**
+     * Get the user who approved/rejected the undertime.
+     */
+    public function undertimeApprovedBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'undertime_approved_by');
+    }
+
+    /**
+     * Scope to get records with pending undertime approval.
+     */
+    public function scopePendingUndertimeApproval($query)
+    {
+        return $query->where('undertime_approval_status', 'pending');
+    }
+
+    /**
+     * Check if undertime needs approval.
+     */
+    public function needsUndertimeApproval(): bool
+    {
+        return $this->undertime_minutes > 0 && $this->undertime_approval_status === 'pending';
+    }
+
+    /**
+     * Check if undertime was approved without generating points.
+     */
+    public function isUndertimeApprovedNoPoints(): bool
+    {
+        return $this->undertime_approval_status === 'approved'
+            && in_array($this->undertime_approval_reason, ['skip_points', 'lunch_used']);
     }
 
     /**

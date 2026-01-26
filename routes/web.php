@@ -184,6 +184,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/', [AttendanceController::class, 'store'])->name('store')->middleware('permission:attendance.create');
             Route::post('/bulk', [AttendanceController::class, 'bulkStore'])->name('bulkStore')->middleware('permission:attendance.create');
             Route::get('import', [AttendanceController::class, 'import'])->name('import')->middleware('permission:attendance.import');
+            Route::post('preview-upload', [AttendanceController::class, 'previewUpload'])->name('previewUpload')->middleware('permission:attendance.import');
             Route::post('upload', [AttendanceController::class, 'upload'])->name('upload')->middleware('permission:attendance.import');
             Route::get('review', [AttendanceController::class, 'review'])->name('review')->middleware('permission:attendance.review');
             Route::post('{attendance}/verify', [AttendanceController::class, 'verify'])->name('verify')->middleware('permission:attendance.verify');
@@ -200,6 +201,10 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
 
             // Partial Approval (Night Shift completion)
             Route::post('{attendance}/partial-approve', [AttendanceController::class, 'partialApprove'])->name('partialApprove')->middleware('permission:attendance.verify');
+
+            // Undertime Approval Workflow
+            Route::post('{attendance}/request-undertime-approval', [AttendanceController::class, 'requestUndertimeApproval'])->name('requestUndertimeApproval')->middleware('permission:attendance.request_undertime_approval');
+            Route::post('{attendance}/approve-undertime', [AttendanceController::class, 'approveUndertime'])->name('approveUndertime')->middleware('permission:attendance.approve_undertime');
         });
 
     // First-time schedule setup for Agent/Team Lead (no permission check, just auth)

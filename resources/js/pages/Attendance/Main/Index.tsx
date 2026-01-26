@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { CheckCircle, AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause, Edit, Upload } from "lucide-react";
@@ -145,59 +146,6 @@ const DEFAULT_META: Meta = {
 };
 
 // formatDateTime, formatDate, formatTime are now imported from @/lib/utils
-
-const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; className: string }> = {
-        on_time: { label: "On Time", className: "bg-green-500" },
-        tardy: { label: "Tardy", className: "bg-yellow-500" },
-        half_day_absence: { label: "Half Day", className: "bg-orange-500" },
-        advised_absence: { label: "Advised Absence", className: "bg-blue-500" },
-        on_leave: { label: "On Leave", className: "bg-blue-600" },
-        ncns: { label: "NCNS", className: "bg-red-500" },
-        undertime: { label: "Undertime", className: "bg-orange-400" },
-        undertime_more_than_hour: { label: "UT >1hr", className: "bg-orange-600" },
-        failed_bio_in: { label: "No Bio In", className: "bg-purple-500" },
-        failed_bio_out: { label: "No Bio Out", className: "bg-purple-400" },
-        needs_manual_review: { label: "Needs Review", className: "bg-amber-500" },
-        present_no_bio: { label: "Present (No Bio)", className: "bg-gray-500" },
-        non_work_day: { label: "Non-Work Day", className: "bg-slate-500" },
-    };
-
-    const config = statusConfig[status] || { label: status, className: "bg-gray-500" };
-    return <Badge className={config.className}>{config.label}</Badge>;
-};
-
-const getStatusBadges = (record: AttendanceRecord) => {
-    return (
-        <div className="flex gap-1 flex-wrap items-center">
-            {getStatusBadge(record.status)}
-            {record.secondary_status && getStatusBadge(record.secondary_status)}
-            {record.overtime_minutes && record.overtime_minutes > 0 && (
-                <Badge className={record.overtime_approved ? "bg-green-500" : "bg-blue-500"}>
-                    Overtime{record.overtime_approved && " ✓"}
-                </Badge>
-            )}
-            {record.warnings && record.warnings.length > 0 && (
-                <span title="Has warnings - needs review">
-                    <AlertCircle className="h-4 w-4 text-amber-500" />
-                </span>
-            )}
-        </div>
-    );
-};
-
-const getShiftTypeBadge = (shiftType: string) => {
-    const config: Record<string, { label: string; className: string }> = {
-        graveyard_shift: { label: "Graveyard Shift", className: "bg-indigo-500" },
-        night_shift: { label: "Night Shift", className: "bg-blue-500" },
-        morning_shift: { label: "Morning Shift", className: "bg-yellow-500" },
-        afternoon_shift: { label: "Afternoon Shift", className: "bg-orange-500" },
-        utility_24h: { label: "24H Utility", className: "bg-purple-500" },
-    };
-
-    const { label, className } = config[shiftType] || { label: shiftType, className: "bg-gray-500" };
-    return <Badge className={className}>{label}</Badge>;
-};
 
 export default function AttendanceIndex() {
     const { attendances, users = [], sites = [], campaigns = [], teamLeadCampaignId, filters, auth } = usePage<PageProps>().props;
@@ -833,13 +781,11 @@ export default function AttendanceIndex() {
                                         />
                                     </TableHead>
                                     <TableHead>Employee</TableHead>
-                                    <TableHead>Campaign</TableHead>
-                                    <TableHead>Site</TableHead>
+                                    <TableHead>Site / Campaign</TableHead>
                                     <TableHead>Shift Date</TableHead>
                                     <TableHead>Shift Type</TableHead>
                                     <TableHead>Schedule</TableHead>
-                                    <TableHead>Time In</TableHead>
-                                    <TableHead>Time Out</TableHead>
+                                    <TableHead>Time In / Out</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Tardy/UT/OT</TableHead>
                                     <TableHead>Notes</TableHead>
@@ -859,16 +805,22 @@ export default function AttendanceIndex() {
                                         <TableCell className="font-medium">
                                             {record.user.name}
                                         </TableCell>
-                                        <TableCell className="text-sm">
-                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || <span className="text-muted-foreground">-</span>}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || <span className="text-muted-foreground">-</span>}
-                                            {record.is_cross_site_bio && (
-                                                <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
-                                                    Cross-Site
-                                                </Badge>
-                                            )}
+                                        <TableCell>
+                                            <div>
+                                                <div className="font-medium truncate">
+                                                    {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
+                                                    {record.is_cross_site_bio && (
+                                                        <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
+                                                            Cross-Site
+                                                        </Badge>
+                                                    )}
+                                                </div>
+                                                {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                    </div>
+                                                )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>{formatDate(record.shift_date)}</TableCell>
                                         <TableCell className="text-sm">
@@ -888,20 +840,20 @@ export default function AttendanceIndex() {
                                             )}
                                         </TableCell>
                                         <TableCell className="text-sm">
-                                            {formatDateTime(record.actual_time_in)}
-                                            {record.bio_in_site && record.is_cross_site_bio && (
-                                                <div className="text-xs text-muted-foreground">
-                                                    @ {record.bio_in_site.name}
+                                            <div>
+                                                <div>
+                                                    {formatDateTime(record.actual_time_in) || '-'}
+                                                    {record.bio_in_site && record.is_cross_site_bio && (
+                                                        <span className="text-xs text-muted-foreground ml-1">@ {record.bio_in_site.name}</span>
+                                                    )}
                                                 </div>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {formatDateTime(record.actual_time_out)}
-                                            {record.bio_out_site && record.is_cross_site_bio && (
-                                                <div className="text-xs text-muted-foreground">
-                                                    @ {record.bio_out_site.name}
+                                                <div className="text-muted-foreground">
+                                                    {formatDateTime(record.actual_time_out) || '-'}
+                                                    {record.bio_out_site && record.is_cross_site_bio && (
+                                                        <span className="text-xs ml-1">@ {record.bio_out_site.name}</span>
+                                                    )}
                                                 </div>
-                                            )}
+                                            </div>
                                         </TableCell>
                                         <TableCell>{getStatusBadges(record)}</TableCell>
                                         <TableCell className="text-sm">
@@ -1022,16 +974,17 @@ export default function AttendanceIndex() {
 
                                     <div className="space-y-2 text-sm mt-3">
                                         <div>
-                                            <span className="font-medium">Campaign:</span>{" "}
-                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name || "-"}
-                                        </div>
-                                        <div>
-                                            <span className="font-medium">Site:</span>{" "}
-                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || "-"}
+                                            <span className="font-medium">Site / Campaign:</span>{" "}
+                                            {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
                                             {record.is_cross_site_bio && (
                                                 <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
                                                     Cross-Site
                                                 </Badge>
+                                            )}
+                                            {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                                <span className="text-muted-foreground">
+                                                    {" / "}{record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                </span>
                                             )}
                                         </div>
                                         <div>
@@ -1051,13 +1004,13 @@ export default function AttendanceIndex() {
                                             )}
                                         </div>
                                         <div>
-                                            <span className="font-medium">Time In:</span> {formatDateTime(record.actual_time_in)}
+                                            <span className="font-medium">Time In / Out:</span>{" "}
+                                            {formatDateTime(record.actual_time_in) || '-'}
                                             {record.bio_in_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
                                             )}
-                                        </div>
-                                        <div>
-                                            <span className="font-medium">Time Out:</span> {formatDateTime(record.actual_time_out)}
+                                            {" → "}
+                                            {formatDateTime(record.actual_time_out) || '-'}
                                             {record.bio_out_site && record.is_cross_site_bio && (
                                                 <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
                                             )}

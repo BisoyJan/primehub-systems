@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Head, router, useForm } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { PageHeader } from '@/components/PageHeader';
@@ -24,11 +24,27 @@ import {
     DialogTitle,
     DialogFooter,
 } from '@/components/ui/dialog';
+import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import { Clock, AlertCircle, Users, Calendar, Check, Search, CheckCircle, Pencil, X, ExternalLink } from 'lucide-react';
+import { getShiftTypeBadge, AttendanceStatusBadges } from '@/components/attendance';
+import { Clock, AlertCircle, Users, Calendar, Check, Search, CheckCircle, Pencil, X, ExternalLink, ChevronsUpDown, Send } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { index as attendanceIndex, dailyRoster, generate as generateAttendance, verify } from '@/routes/attendance';
+import { usePermission } from '@/hooks/use-permission';
+import { index as attendanceIndex, dailyRoster, generate as generateAttendance, verify, requestUndertimeApproval, approveUndertime } from '@/routes/attendance';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 
 interface Schedule {
@@ -54,6 +70,11 @@ interface ExistingAttendance {
     notes: string | null;
     verification_notes: string | null;
     overtime_approved: boolean;
+    is_set_home?: boolean;
+    undertime_minutes?: number;
+    undertime_approval_status?: 'pending' | 'approved' | 'rejected' | null;
+    undertime_approval_reason?: 'generate_points' | 'skip_points' | 'lunch_used' | null;
+    undertime_approval_notes?: string;
 }
 
 interface OnLeave {
@@ -96,35 +117,19 @@ interface Props {
     };
 }
 
-const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; className: string }> = {
-        on_time: { label: 'On Time', className: 'bg-green-500' },
-        tardy: { label: 'Tardy', className: 'bg-yellow-500' },
-        half_day_absence: { label: 'Half Day', className: 'bg-orange-500' },
-        advised_absence: { label: 'Advised Absence', className: 'bg-blue-500' },
-        on_leave: { label: 'On Leave', className: 'bg-blue-600' },
-        ncns: { label: 'NCNS', className: 'bg-red-500' },
-        undertime: { label: 'Undertime', className: 'bg-orange-400' },
-        undertime_more_than_hour: { label: 'UT >1hr', className: 'bg-orange-600' },
-        failed_bio_in: { label: 'Failed Bio In', className: 'bg-purple-500' },
-        failed_bio_out: { label: 'Failed Bio Out', className: 'bg-purple-500' },
-        present_no_bio: { label: 'Present (No Bio)', className: 'bg-gray-500' },
-        non_work_day: { label: 'Non-Work Day', className: 'bg-slate-500' },
-    };
-    const config = statusConfig[status] || { label: status, className: 'bg-gray-500' };
-    return <Badge className={config.className}>{config.label}</Badge>;
-};
-
-const getShiftTypeBadge = (shiftType: string) => {
-    const config: Record<string, { label: string; className: string }> = {
-        day_shift: { label: 'Day', className: 'bg-sky-500' },
-        night_shift: { label: 'Night', className: 'bg-indigo-500' },
-        mid_shift: { label: 'Mid', className: 'bg-violet-500' },
-        afternoon_shift: { label: 'Afternoon', className: 'bg-amber-500' },
-        graveyard_shift: { label: 'Graveyard', className: 'bg-slate-600' },
-    };
-    const { label, className } = config[shiftType] || { label: shiftType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), className: 'bg-gray-500' };
-    return <Badge className={className}>{label}</Badge>;
+/**
+ * Get status badges for DailyRoster attendance display
+ * Uses shared AttendanceStatusBadges with showManualLeaveLabel for this page
+ */
+const getStatusBadges = (attendance: ExistingAttendance) => {
+    return (
+        <AttendanceStatusBadges
+            status={attendance.status}
+            secondaryStatus={attendance.secondary_status}
+            adminVerified={attendance.admin_verified}
+            showManualLeaveLabel={true}
+        />
+    );
 };
 
 /**
@@ -317,9 +322,19 @@ const calculateSuggestedStatus = (
 export default function DailyRoster({ employees, sites, campaigns, teamLeadCampaignId, selectedDate, dayName, filters }: Props) {
     useFlashMessage();
     const isPageLoading = usePageLoading();
+    const { can } = usePermission();
+
+    // Pre-compute permission checks for undertime approval
+    const canApproveUndertime = can('attendance.approve_undertime');
+    const canRequestUndertimeApproval = can('attendance.request_undertime_approval');
 
     // Detect if user is a Team Lead (teamLeadCampaignId will be set if they are)
     const isTeamLead = !!teamLeadCampaignId;
+
+    // Undertime approval state
+    const [isRequestingUndertimeApproval, setIsRequestingUndertimeApproval] = useState(false);
+    const [isApprovingUndertime, setIsApprovingUndertime] = useState(false);
+    const [undertimeApprovalReason, setUndertimeApprovalReason] = useState<'generate_points' | 'skip_points' | 'lunch_used'>('skip_points');
 
     const { title, breadcrumbs } = usePageMeta({
         title: `Daily Roster - ${dayName}`,
@@ -336,6 +351,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
         status: string;
         secondaryStatus?: string;
         overtimeMinutes?: number;
+        undertimeMinutes?: number;
         reason: string;
         isPartial: boolean;
         violations: string[];
@@ -352,6 +368,25 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const [searchQuery, setSearchQuery] = useState(filters.search || '');
     const [dateFilter, setDateFilter] = useState(filters.date || selectedDate);
 
+    // Employee search popover state
+    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
+    const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState('');
+
+    // Filter employees based on search query
+    const filteredEmployees = useMemo(() => {
+        if (!employeeSearchQuery) return employees;
+        return employees.filter(emp =>
+            emp.name.toLowerCase().includes(employeeSearchQuery.toLowerCase()) ||
+            emp.email.toLowerCase().includes(employeeSearchQuery.toLowerCase())
+        );
+    }, [employees, employeeSearchQuery]);
+
+    // Get selected employee name for display
+    const selectedEmployeeName = selectedEmployeeId
+        ? employees.find(e => String(e.id) === selectedEmployeeId)?.name || 'Unknown'
+        : 'All Employees';
+
     const { data, setData, post, processing, errors, reset } = useForm({
         user_id: '',
         shift_date: selectedDate,
@@ -362,6 +397,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
         notes: '',
         verification_notes: '',
         overtime_approved: false,
+        is_set_home: false,
     });
 
     // Statistics
@@ -404,6 +440,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
             notes: '',
             verification_notes: '',
             overtime_approved: false,
+            is_set_home: false,
         });
 
         setIsDialogOpen(true);
@@ -439,6 +476,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
             notes: attendance.notes || '',
             verification_notes: attendance.verification_notes || '',
             overtime_approved: attendance.overtime_approved || false,
+            is_set_home: attendance.is_set_home || false,
         });
 
         setIsDialogOpen(true);
@@ -566,6 +604,8 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
         }
         setStatusFilter('all');
         setSearchQuery('');
+        setSelectedEmployeeId('');
+        setEmployeeSearchQuery('');
         setDateFilter(new Date().toISOString().split('T')[0]);
         router.get(dailyRoster().url, {}, {
             preserveState: true,
@@ -589,15 +629,72 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                 {/* Filters Row */}
                 <div className="flex flex-col gap-3">
                     <div className="flex flex-col lg:flex-row lg:flex-wrap gap-3">
-                        {/* Search */}
-                        <Input
-                            type="text"
-                            placeholder="Search by name or email..."
-                            value={searchQuery}
-                            onChange={(e) => setSearchQuery(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleApplyFilters()}
-                            className="lg:flex-1 lg:min-w-[180px]"
-                        />
+                        {/* Employee Search */}
+                        <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={isEmployeePopoverOpen}
+                                    className="w-full justify-between font-normal lg:flex-1 lg:min-w-[200px]"
+                                >
+                                    <span className="truncate">
+                                        {selectedEmployeeName}
+                                    </span>
+                                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-full p-0" align="start">
+                                <Command shouldFilter={false}>
+                                    <CommandInput
+                                        placeholder="Search employee..."
+                                        value={employeeSearchQuery}
+                                        onValueChange={setEmployeeSearchQuery}
+                                    />
+                                    <CommandList>
+                                        <CommandEmpty>No employee found.</CommandEmpty>
+                                        <CommandGroup>
+                                            <CommandItem
+                                                value="all"
+                                                onSelect={() => {
+                                                    setSelectedEmployeeId('');
+                                                    setSearchQuery('');
+                                                    setIsEmployeePopoverOpen(false);
+                                                    setEmployeeSearchQuery('');
+                                                }}
+                                                className="cursor-pointer"
+                                            >
+                                                <Check
+                                                    className={`mr-2 h-4 w-4 ${!selectedEmployeeId ? 'opacity-100' : 'opacity-0'}`}
+                                                />
+                                                All Employees
+                                            </CommandItem>
+                                            {filteredEmployees.map((emp) => (
+                                                <CommandItem
+                                                    key={emp.id}
+                                                    value={emp.name}
+                                                    onSelect={() => {
+                                                        setSelectedEmployeeId(String(emp.id));
+                                                        setSearchQuery(emp.name);
+                                                        setIsEmployeePopoverOpen(false);
+                                                        setEmployeeSearchQuery('');
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${selectedEmployeeId === String(emp.id) ? 'opacity-100' : 'opacity-0'}`}
+                                                    />
+                                                    <div className="flex flex-col">
+                                                        <span>{emp.name}</span>
+                                                        <span className="text-xs text-muted-foreground">{emp.email}</span>
+                                                    </div>
+                                                </CommandItem>
+                                            ))}
+                                        </CommandGroup>
+                                    </CommandList>
+                                </Command>
+                            </PopoverContent>
+                        </Popover>
 
                         {/* Date Selection */}
                         <DatePicker
@@ -749,22 +846,11 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                                     On {employee.on_leave.leave_type}
                                                 </Badge>
                                                 {employee.existing_attendance?.admin_verified && (
-                                                    <CheckCircle className="h-3.5 w-3.5 text-green-500" title="Attendance verified" />
+                                                    <span title="Attendance verified"><CheckCircle className="h-3.5 w-3.5 text-green-500" /></span>
                                                 )}
                                             </div>
                                         ) : employee.existing_attendance ? (
-                                            <div className="flex items-center gap-1">
-                                                {employee.existing_attendance.status === 'on_leave' ? (
-                                                    <Badge className="bg-blue-500">
-                                                        On Leave (Manual)
-                                                    </Badge>
-                                                ) : (
-                                                    getStatusBadge(employee.existing_attendance.status)
-                                                )}
-                                                {employee.existing_attendance.admin_verified && (
-                                                    <CheckCircle className="h-3.5 w-3.5 text-green-500" title="Attendance verified" />
-                                                )}
-                                            </div>
+                                            getStatusBadges(employee.existing_attendance)
                                         ) : (
                                             <Badge variant="outline" className="text-yellow-600 border-yellow-600">
                                                 Pending Entry
@@ -834,21 +920,12 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                             On {employee.on_leave.leave_type}
                                         </Badge>
                                         {employee.existing_attendance?.admin_verified && (
-                                            <CheckCircle className="h-4 w-4 text-green-500" title="Attendance verified" />
+                                            <span title="Attendance verified"><CheckCircle className="h-4 w-4 text-green-500" /></span>
                                         )}
                                     </div>
                                 ) : employee.existing_attendance ? (
-                                    <div className="flex flex-col items-end gap-1">
-                                        {employee.existing_attendance.status === 'on_leave' ? (
-                                            <Badge className="bg-blue-500">
-                                                On Leave (Manual)
-                                            </Badge>
-                                        ) : (
-                                            getStatusBadge(employee.existing_attendance.status)
-                                        )}
-                                        {employee.existing_attendance.admin_verified && (
-                                            <CheckCircle className="h-4 w-4 text-green-500" title="Attendance verified" />
-                                        )}
+                                    <div className="flex flex-wrap items-end justify-end gap-1">
+                                        {getStatusBadges(employee.existing_attendance)}
                                     </div>
                                 ) : (
                                     <Badge variant="outline" className="text-yellow-600 border-yellow-600">
@@ -1164,6 +1241,148 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                         </Label>
                                     </div>
                                 </div>
+                            </div>
+                        )}
+
+                        {/* Set Home & Undertime Approval Section - for undertime > 30 minutes */}
+                        {suggestedStatus?.undertimeMinutes && suggestedStatus.undertimeMinutes > 30 && (
+                            <div className="space-y-3 p-4 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                {/* Undertime Header with Set Home toggle inline */}
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Clock className="h-4 w-4 text-amber-600" />
+                                        <span className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                                            Undertime: {suggestedStatus.undertimeMinutes} min
+                                        </span>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <Label htmlFor="is_set_home" className="text-xs text-amber-700 dark:text-amber-300 cursor-pointer">
+                                            Set Home
+                                        </Label>
+                                        <Switch
+                                            id="is_set_home"
+                                            checked={data.is_set_home}
+                                            onCheckedChange={(checked) => setData('is_set_home', checked)}
+                                        />
+                                    </div>
+                                </div>
+
+                                {data.is_set_home ? (
+                                    <p className="text-xs text-green-700 dark:text-green-400">
+                                        ✓ Employee sent home early - no undertime points
+                                    </p>
+                                ) : isEditMode && selectedEmployee?.existing_attendance ? (
+                                    /* Editing existing record - show approval status/options */
+                                    selectedEmployee.existing_attendance.undertime_approval_status === 'approved' ? (
+                                        <p className="text-xs text-green-700 dark:text-green-400">
+                                            ✓ Approved: {selectedEmployee.existing_attendance.undertime_approval_reason === 'skip_points'
+                                                ? 'No points'
+                                                : selectedEmployee.existing_attendance.undertime_approval_reason === 'lunch_used'
+                                                ? 'Lunch credited'
+                                                : 'Points generated'}
+                                        </p>
+                                    ) : selectedEmployee.existing_attendance.undertime_approval_status === 'rejected' ? (
+                                        <p className="text-xs text-red-600 dark:text-red-400">
+                                            ✗ Rejected - points will be generated
+                                        </p>
+                                    ) : selectedEmployee.existing_attendance.undertime_approval_status === 'pending' ? (
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-3 w-3 text-yellow-600 animate-pulse" />
+                                            <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                                                Pending approval from Admin/HR
+                                            </p>
+                                        </div>
+                                    ) : canApproveUndertime ? (
+                                        /* Admin/HR: Approval options */
+                                        <div className="space-y-2">
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'generate_points' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('generate_points')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Check className="h-3 w-3 mr-1" />
+                                                    Generate Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'skip_points' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('skip_points')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <X className="h-3 w-3 mr-1" />
+                                                    Skip Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'lunch_used' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('lunch_used')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Clock className="h-3 w-3 mr-1" />
+                                                    Lunch Used
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setIsApprovingUndertime(true);
+                                                        router.post(approveUndertime(selectedEmployee.existing_attendance!.id).url, {
+                                                            status: 'approved',
+                                                            reason: undertimeApprovalReason,
+                                                            notes: data.verification_notes,
+                                                        }, {
+                                                            preserveScroll: true,
+                                                            onFinish: () => setIsApprovingUndertime(false),
+                                                        });
+                                                    }}
+                                                    disabled={isApprovingUndertime}
+                                                    className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                                >
+                                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                                    {isApprovingUndertime ? 'Saving...' : 'Approve'}
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                {undertimeApprovalReason === 'skip_points' && '✓ No points will be generated'}
+                                                {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (-1hr)'}
+                                                {undertimeApprovalReason === 'generate_points' && '• Points will be generated'}
+                                            </p>
+                                        </div>
+                                    ) : canRequestUndertimeApproval ? (
+                                        /* Team Lead: Request approval button */
+                                        <Button
+                                            type="button"
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => {
+                                                setIsRequestingUndertimeApproval(true);
+                                                router.post(requestUndertimeApproval(selectedEmployee.existing_attendance!.id).url, {}, {
+                                                    preserveScroll: true,
+                                                    onFinish: () => setIsRequestingUndertimeApproval(false),
+                                                });
+                                            }}
+                                            disabled={isRequestingUndertimeApproval}
+                                            className="h-7 text-xs"
+                                        >
+                                            <Send className="h-3 w-3 mr-1" />
+                                            {isRequestingUndertimeApproval ? 'Sending...' : 'Request Approval'}
+                                        </Button>
+                                    ) : (
+                                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                                            • Undertime points will be generated
+                                        </p>
+                                    )
+                                ) : (
+                                    /* Creating new record */
+                                    <p className="text-xs text-amber-700 dark:text-amber-300">
+                                        • Undertime points will be generated. Approval can be requested after saving.
+                                    </p>
+                                )}
                             </div>
                         )}
 

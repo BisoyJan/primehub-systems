@@ -795,4 +795,114 @@ class NotificationService
         // Also notify IT (admins)
         $this->notifyUsersByRole('IT', 'leave_request', $title, $message, $data);
     }
+
+    /**
+     * Notify about undertime approval request.
+     * Sent to Super Admin, Admin, and HR when a Team Lead requests undertime approval.
+     */
+    public function notifyUndertimeApprovalRequest(
+        \App\Models\Attendance $attendance,
+        User $requester,
+        User $employee
+    ): void {
+        $date = $attendance->shift_date->format('M d, Y');
+        $undertimeMinutes = $attendance->undertime_minutes;
+        $undertimeFormatted = $this->formatMinutesToHoursMinutes($undertimeMinutes);
+
+        $title = 'Undertime Approval Request';
+        $message = "{$requester->name} is requesting undertime approval for {$employee->name}.\n\n" .
+            "Date: {$date}\n" .
+            "Undertime: {$undertimeFormatted}\n\n" .
+            "Please review and decide whether to generate points, skip points, or apply lunch time credit.";
+
+        $data = [
+            'attendance_id' => $attendance->id,
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'requester_id' => $requester->id,
+            'requester_name' => $requester->name,
+            'date' => $date,
+            'undertime_minutes' => $undertimeMinutes,
+            'link' => route('attendances.review'),
+        ];
+
+        // Notify Super Admin, Admin, and HR
+        $this->notifyUsersByRole('Super Admin', 'undertime_approval', $title, $message, $data);
+        $this->notifyUsersByRole('Admin', 'undertime_approval', $title, $message, $data);
+        $this->notifyUsersByRole('HR', 'undertime_approval', $title, $message, $data);
+    }
+
+    /**
+     * Notify user about undertime approval decision.
+     * Sent to the Team Lead who requested and the employee.
+     */
+    public function notifyUndertimeApprovalDecision(
+        \App\Models\Attendance $attendance,
+        User $approver,
+        User $employee,
+        User $requester,
+        string $status,
+        string $reason,
+        ?string $notes = null
+    ): void {
+        $date = $attendance->shift_date->format('M d, Y');
+        $undertimeMinutes = $attendance->undertime_minutes;
+        $undertimeFormatted = $this->formatMinutesToHoursMinutes($undertimeMinutes);
+
+        $statusText = $status === 'approved' ? 'Approved' : 'Rejected';
+        $reasonText = match($reason) {
+            'generate_points' => 'Points will be generated',
+            'skip_points' => 'Points will not be generated',
+            'lunch_used' => 'Lunch time applied as work hours',
+            default => ucfirst(str_replace('_', ' ', $reason)),
+        };
+
+        $title = "Undertime {$statusText}";
+        $message = "Undertime for {$employee->name} on {$date} has been {$status}.\n\n" .
+            "Undertime: {$undertimeFormatted}\n" .
+            "Decision: {$reasonText}";
+
+        if ($notes) {
+            $message .= "\nNotes: {$notes}";
+        }
+
+        $data = [
+            'attendance_id' => $attendance->id,
+            'employee_id' => $employee->id,
+            'employee_name' => $employee->name,
+            'approver_id' => $approver->id,
+            'approver_name' => $approver->name,
+            'date' => $date,
+            'status' => $status,
+            'reason' => $reason,
+            'notes' => $notes,
+            'undertime_minutes' => $undertimeMinutes,
+            'link' => route('attendances.review'),
+        ];
+
+        // Notify the Team Lead who requested
+        if ($requester->id !== $employee->id) {
+            $this->create($requester, 'undertime_approval', $title, $message, $data);
+        }
+
+        // Notify the employee
+        $this->create($employee, 'undertime_approval', $title, $message, $data);
+    }
+
+    /**
+     * Helper to format minutes to hours and minutes string.
+     */
+    private function formatMinutesToHoursMinutes(int $minutes): string
+    {
+        $hours = intdiv($minutes, 60);
+        $mins = $minutes % 60;
+
+        if ($hours > 0 && $mins > 0) {
+            return "{$hours}h {$mins}m";
+        } elseif ($hours > 0) {
+            return "{$hours}h";
+        } else {
+            return "{$mins}m";
+        }
+    }
 }

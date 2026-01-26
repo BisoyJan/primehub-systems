@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
     Select,
     SelectContent,
@@ -32,8 +33,16 @@ import {
     TableHeader,
     TableRow
 } from "@/components/ui/table";
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Upload, FileText, AlertCircle, CheckCircle, Clock, X } from "lucide-react";
+import { Upload, FileText, AlertCircle, CheckCircle, Clock, X, Eye, AlertTriangle, Users } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
     Tooltip,
@@ -45,12 +54,53 @@ import {
     index as attendanceIndex,
     importMethod as attendanceImport,
     upload as attendanceUpload,
+    previewUpload as attendancePreviewUpload,
 } from "@/routes/attendance";
 
 interface FileUploadItem {
     id: string;
     file: File;
     biometric_site_id: number | "";
+}
+
+interface PreviewData {
+    file_name: string;
+    file_size: number;
+    total_records: number;
+    within_range: {
+        count: number;
+        unique_employees: number;
+        dates: string[];
+        employees: string[];
+    };
+    outside_range: {
+        count: number;
+        unique_employees: number;
+        dates: string[];
+        employees: string[];
+    };
+    duplicates: {
+        count: number;
+        records: Array<{
+            employee: string;
+            date: string;
+            status: string;
+            verified: boolean;
+        }>;
+        message: string;
+    };
+    date_range: {
+        from: string;
+        to: string;
+        extended_to: string;
+    };
+}
+
+interface FilePreview {
+    fileItem: FileUploadItem;
+    preview: PreviewData | null;
+    loading: boolean;
+    error: string | null;
 }
 
 interface AttendanceUpload {
@@ -107,6 +157,12 @@ export default function AttendanceImport() {
     const [notes, setNotes] = useState("");
     const [isUploading, setIsUploading] = useState(false);
 
+    // Preview state
+    const [showPreview, setShowPreview] = useState(false);
+    const [isPreviewing, setIsPreviewing] = useState(false);
+    const [filePreviews, setFilePreviews] = useState<FilePreview[]>([]);
+    const [importAllRecords, setImportAllRecords] = useState(false);
+
     const handleFilesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const selectedFiles = Array.from(e.target.files || []);
         const newFiles: FileUploadItem[] = selectedFiles.map(file => ({
@@ -127,26 +183,79 @@ export default function AttendanceImport() {
         setFiles(prev => prev.filter(f => f.id !== fileId));
     };
 
-    const handleSubmit = async (e: React.FormEvent) => {
+    // Preview files before upload
+    const handlePreview = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        console.log('handleSubmit triggered');
-        console.log('Files:', files);
-        console.log('Date range:', dateFrom, 'to', dateTo);
-
         if (files.length === 0) {
-            console.log('No files selected');
+            toast.error("Please select at least one file");
             return;
         }
 
         // Validate all files have sites assigned
         const unassignedFiles = files.filter(f => !f.biometric_site_id);
         if (unassignedFiles.length > 0) {
-            console.log('Unassigned files:', unassignedFiles);
-            alert("Please assign a site to all files before uploading.");
+            toast.error("Please assign a site to all files before previewing");
             return;
         }
 
+        setIsPreviewing(true);
+        const previews: FilePreview[] = [];
+
+        // Get preview for each file
+        for (const fileItem of files) {
+            const formData = new FormData();
+            formData.append('file', fileItem.file);
+            formData.append('date_from', dateFrom);
+            formData.append('date_to', dateTo);
+            formData.append('biometric_site_id', fileItem.biometric_site_id.toString());
+
+            try {
+                const response = await fetch(attendancePreviewUpload().url, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest',
+                    },
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    previews.push({
+                        fileItem,
+                        preview: data.preview,
+                        loading: false,
+                        error: null,
+                    });
+                } else {
+                    previews.push({
+                        fileItem,
+                        preview: null,
+                        loading: false,
+                        error: data.message || 'Failed to preview file',
+                    });
+                }
+            } catch {
+                previews.push({
+                    fileItem,
+                    preview: null,
+                    loading: false,
+                    error: 'Network error while previewing file',
+                });
+            }
+        }
+
+        setFilePreviews(previews);
+        setIsPreviewing(false);
+        setShowPreview(true);
+    };
+
+    // Confirm and upload files
+    const handleConfirmUpload = async () => {
+        setShowPreview(false);
         setIsUploading(true);
 
         let allSuccessful = true;
@@ -160,8 +269,7 @@ export default function AttendanceImport() {
             formData.append('date_to', dateTo);
             formData.append('biometric_site_id', fileItem.biometric_site_id.toString());
             formData.append('notes', notes);
-
-            console.log('Uploading file:', fileItem.file.name, 'to URL:', attendanceUpload().url);
+            formData.append('filter_by_date', importAllRecords ? '0' : '1');
 
             try {
                 const response = await fetch(attendanceUpload().url, {
@@ -174,23 +282,18 @@ export default function AttendanceImport() {
                     },
                 });
 
-                console.log('Response status:', response.status);
-
                 if (!response.ok) {
                     allSuccessful = false;
                     const errorData = await response.json().catch(() => ({}));
-                    console.error(`Error uploading ${fileItem.file.name}:`, errorData);
                     toast.error(`Failed to upload ${fileItem.file.name}`, {
                         description: errorData.message || response.statusText
                     });
                 } else {
                     const successData = await response.json();
-                    console.log('Upload successful for:', fileItem.file.name, successData);
                     successMessages.push(successData.message || `${fileItem.file.name} uploaded successfully`);
                 }
-            } catch (error) {
+            } catch {
                 allSuccessful = false;
-                console.error(`Error uploading ${fileItem.file.name}:`, error);
                 toast.error(`Network error uploading ${fileItem.file.name}`);
             }
         }
@@ -198,11 +301,12 @@ export default function AttendanceImport() {
         setIsUploading(false);
         setFiles([]);
         setNotes("");
+        setImportAllRecords(false);
+        setFilePreviews([]);
 
         // Show success messages
         if (allSuccessful && successMessages.length > 0) {
             successMessages.forEach((msg, index) => {
-                // Delay each toast slightly to show them in sequence
                 setTimeout(() => {
                     toast.success('Attendance file processed', {
                         description: msg,
@@ -214,6 +318,13 @@ export default function AttendanceImport() {
 
         // Reload page to show updated uploads
         router.reload();
+    };
+
+    // Legacy direct upload (kept for backwards compatibility, but not used in normal flow)
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        // Now redirects to preview
+        handlePreview(e);
     };
 
     const getStatusBadge = (upload: AttendanceUpload) => {
@@ -402,18 +513,23 @@ export default function AttendanceImport() {
                                 <div className="flex gap-2 pt-4">
                                     <Button
                                         type="submit"
-                                        disabled={files.length === 0 || isUploading}
+                                        disabled={files.length === 0 || isUploading || isPreviewing}
                                         className="flex-1"
                                     >
-                                        {isUploading ? (
+                                        {isPreviewing ? (
+                                            <>
+                                                <Clock className="mr-2 h-4 w-4 animate-spin" />
+                                                Analyzing {files.length} file(s)...
+                                            </>
+                                        ) : isUploading ? (
                                             <>
                                                 <Clock className="mr-2 h-4 w-4 animate-spin" />
                                                 Uploading {files.length} file(s)...
                                             </>
                                         ) : (
                                             <>
-                                                <Upload className="mr-2 h-4 w-4" />
-                                                Upload {files.length > 0 ? `${files.length} file(s)` : 'Files'}
+                                                <Eye className="mr-2 h-4 w-4" />
+                                                Preview & Upload {files.length > 0 ? `${files.length} file(s)` : ''}
                                             </>
                                         )}
                                     </Button>
@@ -593,6 +709,167 @@ export default function AttendanceImport() {
                     </Card>
                 )}
             </div>
+
+            {/* Preview Dialog */}
+            <Dialog open={showPreview} onOpenChange={setShowPreview}>
+                <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Eye className="h-5 w-5" />
+                            Import Preview
+                        </DialogTitle>
+                        <DialogDescription>
+                            Review the records that will be imported for {dateFrom} to {dateTo}
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4">
+                        {filePreviews.map((fp, index) => (
+                            <Card key={index} className={fp.error ? "border-red-300" : ""}>
+                                <CardHeader className="py-3">
+                                    <CardTitle className="text-sm flex items-center gap-2">
+                                        <FileText className="h-4 w-4" />
+                                        {fp.fileItem.file.name}
+                                        {fp.error && <Badge variant="destructive">Error</Badge>}
+                                    </CardTitle>
+                                </CardHeader>
+                                <CardContent className="py-3">
+                                    {fp.error ? (
+                                        <Alert variant="destructive">
+                                            <AlertCircle className="h-4 w-4" />
+                                            <AlertDescription>{fp.error}</AlertDescription>
+                                        </Alert>
+                                    ) : fp.preview ? (
+                                        <div className="space-y-4">
+                                            {/* Summary Stats */}
+                                            <div className="grid grid-cols-3 gap-4">
+                                                <div className="bg-muted rounded-lg p-3 text-center">
+                                                    <div className="text-2xl font-bold">{fp.preview.total_records}</div>
+                                                    <div className="text-xs text-muted-foreground">Total Records</div>
+                                                </div>
+                                                <div className="bg-green-50 dark:bg-green-950/20 rounded-lg p-3 text-center">
+                                                    <div className="text-2xl font-bold text-green-600">{fp.preview.within_range.count}</div>
+                                                    <div className="text-xs text-muted-foreground">Within Range</div>
+                                                </div>
+                                                <div className={`rounded-lg p-3 text-center ${fp.preview.outside_range.count > 0 ? 'bg-orange-50 dark:bg-orange-950/20' : 'bg-muted'}`}>
+                                                    <div className={`text-2xl font-bold ${fp.preview.outside_range.count > 0 ? 'text-orange-600' : ''}`}>
+                                                        {fp.preview.outside_range.count}
+                                                    </div>
+                                                    <div className="text-xs text-muted-foreground">Outside Range</div>
+                                                </div>
+                                            </div>
+
+                                            {/* Within Range Details */}
+                                            <div className="border rounded-lg p-3">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                                    <span className="font-medium text-sm">Records to Import</span>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                                    <div>
+                                                        <span className="text-muted-foreground">Unique Employees:</span>{" "}
+                                                        <span className="font-medium">{fp.preview.within_range.unique_employees}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-muted-foreground">Dates:</span>{" "}
+                                                        <span className="font-medium">{fp.preview.within_range.dates.join(", ") || "None"}</span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* Outside Range Warning */}
+                                            {fp.preview.outside_range.count > 0 && (
+                                                <Alert className="border-orange-300 bg-orange-50 dark:bg-orange-950/20">
+                                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                                    <AlertTitle className="text-orange-800 dark:text-orange-200">
+                                                        Records Outside Date Range
+                                                    </AlertTitle>
+                                                    <AlertDescription className="text-orange-700 dark:text-orange-300">
+                                                        <p>{fp.preview.outside_range.count} records from dates outside your selected range will be {importAllRecords ? 'included' : 'skipped'}:</p>
+                                                        <p className="mt-1 font-medium">{fp.preview.outside_range.dates.join(", ")}</p>
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+
+                                            {/* Duplicates Warning */}
+                                            {fp.preview.duplicates.count > 0 && (
+                                                <Alert>
+                                                    <Users className="h-4 w-4" />
+                                                    <AlertTitle>Existing Records Found</AlertTitle>
+                                                    <AlertDescription>
+                                                        <p>{fp.preview.duplicates.message}</p>
+                                                        {fp.preview.duplicates.records.length > 0 && (
+                                                            <ul className="mt-2 text-sm space-y-1">
+                                                                {fp.preview.duplicates.records.slice(0, 5).map((dup, i) => (
+                                                                    <li key={i} className="flex items-center gap-2">
+                                                                        <span>{dup.employee}</span>
+                                                                        <span className="text-muted-foreground">({dup.date})</span>
+                                                                        {dup.verified && <Badge variant="secondary" className="text-xs">Verified</Badge>}
+                                                                    </li>
+                                                                ))}
+                                                                {fp.preview.duplicates.records.length > 5 && (
+                                                                    <li className="text-muted-foreground">...and {fp.preview.duplicates.records.length - 5} more</li>
+                                                                )}
+                                                            </ul>
+                                                        )}
+                                                    </AlertDescription>
+                                                </Alert>
+                                            )}
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center justify-center py-4">
+                                            <Clock className="h-4 w-4 animate-spin mr-2" />
+                                            Loading preview...
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        ))}
+
+                        {/* Import All Option */}
+                        {filePreviews.some(fp => fp.preview && fp.preview.outside_range.count > 0) && (
+                            <div className="flex items-center space-x-2 p-3 bg-muted rounded-lg">
+                                <Checkbox
+                                    id="import-all"
+                                    checked={importAllRecords}
+                                    onCheckedChange={(checked) => setImportAllRecords(checked === true)}
+                                />
+                                <label
+                                    htmlFor="import-all"
+                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                                >
+                                    Import ALL records (ignore date range filter)
+                                </label>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="flex-col sm:flex-row gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setShowPreview(false)}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleConfirmUpload}
+                            disabled={filePreviews.every(fp => fp.error) || isUploading}
+                        >
+                            {isUploading ? (
+                                <>
+                                    <Clock className="mr-2 h-4 w-4 animate-spin" />
+                                    Uploading...
+                                </>
+                            ) : (
+                                <>
+                                    <Upload className="mr-2 h-4 w-4" />
+                                    Confirm & Upload
+                                </>
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }

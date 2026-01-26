@@ -68,9 +68,10 @@ class AttendanceProcessor
      *
      * @param AttendanceUpload $upload
      * @param string $filePath
+     * @param bool $filterByDate Whether to filter records by date range (default: true)
      * @return array Processing results
      */
-    public function processUpload(AttendanceUpload $upload, string $filePath): array
+    public function processUpload(AttendanceUpload $upload, string $filePath, bool $filterByDate = true): array
     {
         try {
             DB::beginTransaction();
@@ -78,22 +79,51 @@ class AttendanceProcessor
             $upload->update(['status' => 'processing']);
 
             // Parse the file
-            $records = $this->parser->parse($filePath);
+            $allRecords = $this->parser->parse($filePath);
+
+            // Filter records by date range if enabled
+            $records = $allRecords;
+            $skippedRecords = collect();
+            $filterSummary = null;
+
+            if ($filterByDate && $upload->date_from && $upload->date_to) {
+                $dateFrom = Carbon::parse($upload->date_from);
+                $dateTo = Carbon::parse($upload->date_to);
+                $filterResult = $this->parser->filterByDateRange($allRecords, $dateFrom, $dateTo);
+
+                $records = $filterResult['within_range'];
+                $skippedRecords = $filterResult['outside_range'];
+                $filterSummary = $filterResult['summary'];
+
+                \Log::info('Date range filtering applied', [
+                    'date_from' => $dateFrom->format('Y-m-d'),
+                    'date_to' => $dateTo->format('Y-m-d'),
+                    'total_records' => $allRecords->count(),
+                    'within_range' => $records->count(),
+                    'outside_range' => $skippedRecords->count(),
+                ]);
+            }
+
             $groupedRecords = $this->parser->groupByEmployee($records);
 
             \Log::info('Attendance processing started', [
-                'total_records' => $records->count(),
+                'total_records' => $allRecords->count(),
+                'filtered_records' => $records->count(),
                 'unique_employees' => $groupedRecords->count(),
             ]);
 
-            // Save all raw biometric records to database
-            $this->saveBiometricRecords($records, $upload);
+            // Save all raw biometric records to database (including skipped ones for audit)
+            $this->saveBiometricRecords($allRecords, $upload);
 
             // Validate file dates match expected dates for the shift
             $dateValidation = $this->validateFileDates($records, Carbon::parse($upload->shift_date));
 
             $stats = [
-                'total_records' => $records->count(),
+                'total_records' => $allRecords->count(),
+                'filtered_records' => $records->count(),
+                'skipped_records' => $skippedRecords->count(),
+                'filter_applied' => $filterByDate,
+                'filter_summary' => $filterSummary,
                 'processed' => 0,
                 'matched_employees' => 0,
                 'unmatched_names' => [],
@@ -153,14 +183,26 @@ class AttendanceProcessor
                 ]);
             }
 
+            // Sanitize unmatched names to ensure valid UTF-8 for JSON encoding
+            $sanitizedUnmatchedNames = array_map(function ($name) {
+                // Convert to UTF-8 if not already
+                if (!mb_check_encoding($name, 'UTF-8')) {
+                    $name = mb_convert_encoding($name, 'UTF-8', 'Windows-1252');
+                }
+                // Remove any remaining invalid UTF-8 sequences
+                $name = mb_convert_encoding($name, 'UTF-8', 'UTF-8');
+                // Final cleanup: remove any characters that can't be JSON encoded
+                return preg_replace('/[^\x20-\x7E\xA0-\xFF\x{0100}-\x{FFFF}]/u', '', $name) ?: $name;
+            }, $stats['unmatched_names']);
+
             // Update upload record
             $upload->update([
                 'status' => 'completed',
                 'total_records' => $stats['total_records'],
                 'processed_records' => $stats['processed'],
                 'matched_employees' => $stats['matched_employees'],
-                'unmatched_names' => count($stats['unmatched_names']),
-                'unmatched_names_list' => $stats['unmatched_names'],
+                'unmatched_names' => count($sanitizedUnmatchedNames),
+                'unmatched_names_list' => $sanitizedUnmatchedNames,
                 'date_warnings' => $stats['date_warnings'],
                 'dates_found' => $stats['dates_found'],
             ]);
@@ -2007,35 +2049,69 @@ class AttendanceProcessor
         // Only generate points for statuses that require them
         $pointableStatuses = ['ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'advised_absence'];
 
-        if (!in_array($attendance->status, $pointableStatuses) &&
-            !in_array($attendance->secondary_status, $pointableStatuses)) {
+        // If is_set_home is enabled, skip undertime violations
+        // This is for when employee was sent home early (not their fault)
+        $undertimeStatuses = ['undertime', 'undertime_more_than_hour'];
+
+        // Adjust statuses based on is_set_home flag
+        $effectivePrimaryStatus = $attendance->status;
+        $effectiveSecondaryStatus = $attendance->secondary_status;
+
+        if ($attendance->is_set_home) {
+            \Log::info('Set Home enabled - skipping undertime violations', [
+                'attendance_id' => $attendance->id,
+                'original_status' => $attendance->status,
+                'original_secondary' => $attendance->secondary_status,
+            ]);
+
+            // If primary status is undertime, check if there's a secondary (like tardy) to use instead
+            if (in_array($attendance->status, $undertimeStatuses)) {
+                if ($attendance->secondary_status && !in_array($attendance->secondary_status, $undertimeStatuses)) {
+                    // Use secondary status as primary (e.g., tardy)
+                    $effectivePrimaryStatus = $attendance->secondary_status;
+                    $effectiveSecondaryStatus = null;
+                } else {
+                    // No valid secondary, skip point generation entirely
+                    \Log::info('Set Home: No non-undertime status found, skipping points');
+                    return;
+                }
+            }
+
+            // If secondary status is undertime, clear it
+            if (in_array($effectiveSecondaryStatus, $undertimeStatuses)) {
+                $effectiveSecondaryStatus = null;
+            }
+        }
+
+        if (!in_array($effectivePrimaryStatus, $pointableStatuses) &&
+            !in_array($effectiveSecondaryStatus, $pointableStatuses)) {
             \Log::info('Neither status requires points', [
-                'status' => $attendance->status,
-                'secondary_status' => $attendance->secondary_status,
+                'status' => $effectivePrimaryStatus,
+                'secondary_status' => $effectiveSecondaryStatus,
             ]);
             return;
         }
 
         // Determine point type and value for PRIMARY status
-        $primaryPointType = $this->mapStatusToPointType($attendance->status);
+        $primaryPointType = $this->mapStatusToPointType($effectivePrimaryStatus);
         $primaryPointValue = AttendancePoint::POINT_VALUES[$primaryPointType] ?? 0;
 
         // Determine point type and value for SECONDARY status (if exists)
         $secondaryPointType = null;
         $secondaryPointValue = 0;
-        if ($attendance->secondary_status) {
-            $secondaryPointType = $this->mapStatusToPointType($attendance->secondary_status);
+        if ($effectiveSecondaryStatus) {
+            $secondaryPointType = $this->mapStatusToPointType($effectiveSecondaryStatus);
             $secondaryPointValue = AttendancePoint::POINT_VALUES[$secondaryPointType] ?? 0;
         }
 
         // Compare and use the higher point value (only one violation per shift)
-        $usedStatus = $attendance->status;
+        $usedStatus = $effectivePrimaryStatus;
         $pointType = $primaryPointType;
         $pointValue = $primaryPointValue;
 
         if ($secondaryPointValue > $primaryPointValue) {
             // Secondary status has higher point value, use it instead
-            $usedStatus = $attendance->secondary_status;
+            $usedStatus = $effectiveSecondaryStatus;
             $pointType = $secondaryPointType;
             $pointValue = $secondaryPointValue;
             \Log::info('Using secondary status for points (higher value)', [
