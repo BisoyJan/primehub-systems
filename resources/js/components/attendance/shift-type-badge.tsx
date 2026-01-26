@@ -19,16 +19,16 @@ export const SHIFT_TYPE_CONFIG: Record<string, { label: string; className: strin
  */
 export const getShiftTypeBadge = (shiftType: string) => {
     const config = SHIFT_TYPE_CONFIG[shiftType];
-    
+
     if (config) {
         return <Badge className={config.className}>{config.label}</Badge>;
     }
-    
+
     // Fallback: format the shift type nicely
     const formattedLabel = shiftType
         .replace(/_/g, ' ')
         .replace(/\b\w/g, (l) => l.toUpperCase());
-    
+
     return <Badge className="bg-gray-500">{formattedLabel}</Badge>;
 };
 

@@ -1278,8 +1278,8 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                             ✓ Approved: {selectedEmployee.existing_attendance.undertime_approval_reason === 'skip_points'
                                                 ? 'No points'
                                                 : selectedEmployee.existing_attendance.undertime_approval_reason === 'lunch_used'
-                                                ? 'Lunch credited'
-                                                : 'Points generated'}
+                                                    ? 'Lunch credited'
+                                                    : 'Points generated'}
                                         </p>
                                     ) : selectedEmployee.existing_attendance.undertime_approval_status === 'rejected' ? (
                                         <p className="text-xs text-red-600 dark:text-red-400">

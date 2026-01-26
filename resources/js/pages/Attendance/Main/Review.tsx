@@ -1859,8 +1859,8 @@ export default function AttendanceReview() {
                                         ✓ Approved: {selectedRecord.undertime_approval_reason === 'skip_points'
                                             ? 'No points'
                                             : selectedRecord.undertime_approval_reason === 'lunch_used'
-                                            ? 'Lunch credited'
-                                            : 'Points generated'}
+                                                ? 'Lunch credited'
+                                                : 'Points generated'}
                                     </p>
                                 ) : selectedRecord.undertime_approval_status === 'rejected' ? (
                                     <p className="text-xs text-red-600 dark:text-red-400">
