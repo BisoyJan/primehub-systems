@@ -3,7 +3,7 @@ import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
 import { useFlashMessage, usePageMeta, usePermission } from "@/hooks";
-import { formatTime } from "@/lib/utils";
+import { formatTime, formatWorkDuration } from "@/lib/utils";
 import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +54,7 @@ interface AttendanceRecord {
     scheduled_time_out?: string;
     actual_time_in?: string;
     actual_time_out?: string;
+    total_minutes_worked?: number;
     status: string;
     secondary_status?: string;
     tardy_minutes?: number;
@@ -453,7 +454,7 @@ export default function AttendanceCalendar() {
                                                                 )}
 
                                                                 {/* Overtime */}
-                                                                {attendance.overtime_minutes && attendance.overtime_minutes > 0 && (
+                                                                {attendance.overtime_minutes && attendance.overtime_minutes > 30 && (
                                                                     <div
                                                                         className={`w-4 h-4 rounded ${attendance.overtime_approved
                                                                             ? 'bg-blue-600'
@@ -599,6 +600,14 @@ export default function AttendanceCalendar() {
                                     </div>
                                 </div>
 
+                                {/* Total Hours Worked */}
+                                <div>
+                                    <label className="text-sm font-semibold">Total Hours Worked</label>
+                                    <div className="text-sm mt-1">
+                                        {formatWorkDuration(selectedAttendance.total_minutes_worked)}
+                                    </div>
+                                </div>
+
                                 {/* Violations */}
                                 {(selectedAttendance.tardy_minutes || selectedAttendance.undertime_minutes || selectedAttendance.overtime_minutes) && (
                                     <div>
@@ -620,7 +629,7 @@ export default function AttendanceCalendar() {
                                                     }
                                                 </div>
                                             )}
-                                            {selectedAttendance.overtime_minutes && (
+                                            {selectedAttendance.overtime_minutes && selectedAttendance.overtime_minutes > 30 && (
                                                 <div className={selectedAttendance.overtime_approved ? "text-green-700" : "text-blue-700"}>
                                                     Overtime: {selectedAttendance.overtime_minutes >= 60
                                                         ? `${Math.floor(selectedAttendance.overtime_minutes / 60)} hour${Math.floor(selectedAttendance.overtime_minutes / 60) > 1 ? 's' : ''}${selectedAttendance.overtime_minutes % 60 > 0 ? ` ${selectedAttendance.overtime_minutes % 60} minutes` : ''}`

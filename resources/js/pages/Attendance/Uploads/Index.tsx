@@ -32,6 +32,8 @@ interface Upload {
     id: number;
     original_filename: string;
     shift_date: string;
+    date_from: string | null;
+    date_to: string | null;
     biometric_site: Site | null;
     total_records: number;
     processed_records: number;
@@ -272,7 +274,7 @@ export default function UploadsIndex({ uploads, filters }: PageProps) {
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
                                     <TableHead>File</TableHead>
-                                    <TableHead>Shift Date</TableHead>
+                                    <TableHead>Date Range</TableHead>
                                     <TableHead>Site</TableHead>
                                     <TableHead className="text-right">Records</TableHead>
                                     <TableHead className="text-right">Matched</TableHead>
@@ -302,7 +304,19 @@ export default function UploadsIndex({ uploads, filters }: PageProps) {
                                                     )}
                                                 </div>
                                             </TableCell>
-                                            <TableCell>{formatDate(upload.shift_date)}</TableCell>
+                                            <TableCell>
+                                                {upload.date_from && upload.date_to ? (
+                                                    upload.date_from === upload.date_to ? (
+                                                        formatDate(upload.date_from)
+                                                    ) : (
+                                                        <span className="whitespace-nowrap">
+                                                            {formatDate(upload.date_from)} - {formatDate(upload.date_to)}
+                                                        </span>
+                                                    )
+                                                ) : (
+                                                    formatDate(upload.shift_date)
+                                                )}
+                                            </TableCell>
                                             <TableCell>
                                                 <Badge variant="outline">{upload.biometric_site?.name || 'N/A'}</Badge>
                                             </TableCell>
@@ -369,8 +383,18 @@ export default function UploadsIndex({ uploads, filters }: PageProps) {
 
                                 <div className="grid grid-cols-2 gap-2 text-sm">
                                     <div>
-                                        <span className="text-muted-foreground">Shift Date:</span>
-                                        <p className="font-medium">{formatDate(upload.shift_date)}</p>
+                                        <span className="text-muted-foreground">Date Range:</span>
+                                        <p className="font-medium">
+                                            {upload.date_from && upload.date_to ? (
+                                                upload.date_from === upload.date_to ? (
+                                                    formatDate(upload.date_from)
+                                                ) : (
+                                                    <span>{formatDate(upload.date_from)} - {formatDate(upload.date_to)}</span>
+                                                )
+                                            ) : (
+                                                formatDate(upload.shift_date)
+                                            )}
+                                        </p>
                                     </div>
                                     <div>
                                         <span className="text-muted-foreground">Site:</span>

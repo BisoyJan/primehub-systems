@@ -16,6 +16,8 @@ interface Upload {
     id: number;
     original_filename: string;
     shift_date: string;
+    date_from: string | null;
+    date_to: string | null;
     biometric_site: {
         id: number;
         name: string;
@@ -76,7 +78,11 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
         );
     };
 
-    const formattedShiftDate = format(new Date(upload.shift_date), 'EEEE, MMMM dd, yyyy');
+    const formattedDateRange = upload.date_from && upload.date_to
+        ? (upload.date_from === upload.date_to
+            ? format(new Date(upload.date_from), 'EEEE, MMMM dd, yyyy')
+            : `${format(new Date(upload.date_from), 'MMMM dd, yyyy')} - ${format(new Date(upload.date_to), 'MMMM dd, yyyy')}`)
+        : format(new Date(upload.shift_date), 'EEEE, MMMM dd, yyyy');
     const hasIssues = (upload.unmatched_names_list && upload.unmatched_names_list.length > 0) ||
         (upload.date_warnings && upload.date_warnings.length > 0);
 
@@ -94,7 +100,7 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
 
                 <PageHeader
                     title={upload.original_filename}
-                    description={formattedShiftDate}
+                    description={formattedDateRange}
                 />
 
                 {/* Status and Error Message */}
@@ -188,10 +194,20 @@ const UploadShow: React.FC<PageProps> = ({ upload }) => {
                                     </div>
                                 </div>
                                 <div>
-                                    <p className="text-sm font-medium text-muted-foreground">Shift Date</p>
+                                    <p className="text-sm font-medium text-muted-foreground">Date Range</p>
                                     <div className="flex items-center gap-2 mt-1">
                                         <Calendar className="h-4 w-4 text-muted-foreground" />
-                                        <span className="text-base">{format(new Date(upload.shift_date), 'MMM dd, yyyy')}</span>
+                                        <span className="text-base">
+                                            {upload.date_from && upload.date_to ? (
+                                                upload.date_from === upload.date_to ? (
+                                                    format(new Date(upload.date_from), 'MMM dd, yyyy')
+                                                ) : (
+                                                    `${format(new Date(upload.date_from), 'MMM dd, yyyy')} - ${format(new Date(upload.date_to), 'MMM dd, yyyy')}`
+                                                )
+                                            ) : (
+                                                format(new Date(upload.shift_date), 'MMM dd, yyyy')
+                                            )}
+                                        </span>
                                     </div>
                                 </div>
                             </div>

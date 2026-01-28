@@ -209,7 +209,8 @@ class AttendanceController extends Controller
             'employeeSchedule.site',
             'employeeSchedule.campaign',
             'bioInSite',
-            'bioOutSite'
+            'bioOutSite',
+            'leaveRequest' // Include leave request info
         ]);
 
         // Restrict certain roles to only view their own attendance records
@@ -287,9 +288,12 @@ class AttendanceController extends Controller
             }
         }
 
-        $attendances = $query->orderBy('shift_date', 'desc')
-            ->orderBy('created_at', 'desc')
-            ->paginate(25)
+        $attendances = $query
+            ->join('users', 'attendances.user_id', '=', 'users.id')
+            ->select('attendances.*')
+            ->orderBy('attendances.shift_date', 'desc')
+            ->orderBy('users.last_name', 'asc')
+            ->paginate(60)
             ->withQueryString();
 
         // Get all users for employee filter dropdown
@@ -644,7 +648,11 @@ class AttendanceController extends Controller
             if ($actualTimeOut->lt($scheduledTimeOut)) {
                 $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
             } else if ($actualTimeOut->gt($scheduledTimeOut)) {
-                $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                // Only count overtime if more than 30 minutes beyond scheduled time out
+                if ($timeBeyondSchedule > 30) {
+                    $overtimeMinutes = $timeBeyondSchedule;
+                }
             }
         } else if ($schedule && $actualTimeIn) {
             // Status was manually provided with only time in - still calculate tardiness
@@ -672,7 +680,11 @@ class AttendanceController extends Controller
             if ($actualTimeOut->lt($scheduledTimeOut)) {
                 $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
             } else if ($actualTimeOut->gt($scheduledTimeOut)) {
-                $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                // Only count overtime if more than 30 minutes beyond scheduled time out
+                if ($timeBeyondSchedule > 30) {
+                    $overtimeMinutes = $timeBeyondSchedule;
+                }
             }
         }
 
@@ -852,7 +864,11 @@ class AttendanceController extends Controller
                             $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
                             $hasUndertime = true;
                         } else if ($actualTimeOut->gt($scheduledTimeOut)) {
-                            $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                            $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                            // Only count overtime if more than 30 minutes beyond scheduled time out
+                            if ($timeBeyondSchedule > 30) {
+                                $overtimeMinutes = $timeBeyondSchedule;
+                            }
                         }
                     } else if ($schedule && $hasBioIn) {
                         // Has schedule and time in, check if tardy
@@ -912,7 +928,11 @@ class AttendanceController extends Controller
                     if ($actualTimeOut->lt($scheduledTimeOut)) {
                         $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
                     } else if ($actualTimeOut->gt($scheduledTimeOut)) {
-                        $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                        $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                        // Only count overtime if more than 30 minutes beyond scheduled time out
+                        if ($timeBeyondSchedule > 30) {
+                            $overtimeMinutes = $timeBeyondSchedule;
+                        }
                     }
                 } else if ($schedule && $actualTimeIn) {
                     // Status was manually provided with only time in - still calculate tardiness
@@ -940,7 +960,11 @@ class AttendanceController extends Controller
                     if ($actualTimeOut->lt($scheduledTimeOut)) {
                         $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
                     } else if ($actualTimeOut->gt($scheduledTimeOut)) {
-                        $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                        $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
+                        // Only count overtime if more than 30 minutes beyond scheduled time out
+                        if ($timeBeyondSchedule > 30) {
+                            $overtimeMinutes = $timeBeyondSchedule;
+                        }
                     }
                 }
 
@@ -1348,7 +1372,21 @@ class AttendanceController extends Controller
             });
         }
 
-        $attendances = $query->orderBy('shift_date', 'desc')->paginate(50)->withQueryString();
+        // If verify parameter is provided, filter to show only that specific record
+        // This ensures the record is visible when clicking "Verify" from the attendance list
+        $verifyAttendanceId = null;
+        if ($request->filled('verify')) {
+            $verifyAttendanceId = (int) $request->verify;
+            $query->where('attendances.id', $verifyAttendanceId);
+        }
+
+        $attendances = $query
+            ->join('users', 'attendances.user_id', '=', 'users.id')
+            ->select('attendances.*')
+            ->orderBy('attendances.shift_date', 'desc')
+            ->orderBy('users.last_name', 'asc')
+            ->paginate(60)
+            ->withQueryString();
 
         // Get all employees for the dropdown
         $employees = User::select('id', 'first_name', 'last_name')
@@ -1374,6 +1412,7 @@ class AttendanceController extends Controller
             'sites' => $sites,
             'campaigns' => $campaigns,
             'teamLeadCampaignId' => $teamLeadCampaignId,
+            'verifyAttendanceId' => $verifyAttendanceId,
             'filters' => [
                 'user_id' => $request->user_id,
                 'status' => $request->status,

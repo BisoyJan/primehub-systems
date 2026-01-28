@@ -24,12 +24,84 @@ class BiometricReprocessingController extends Controller
      */
     public function index()
     {
+        // Get employees who have biometric records (query via BiometricRecord)
+        $employeeIds = BiometricRecord::distinct()->pluck('user_id')->filter()->toArray();
+
+        // Get employees with their active schedule's campaign
+        $employees = User::select('id', 'first_name', 'last_name')
+            ->whereIn('id', $employeeIds)
+            ->with(['activeSchedule:id,user_id,campaign_id'])
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->get()
+            ->map(fn($u) => [
+                'id' => $u->id,
+                'name' => $u->first_name . ' ' . $u->last_name,
+                'campaign_id' => $u->activeSchedule?->campaign_id,
+            ]);
+
+        // Get campaigns
+        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+
         return Inertia::render('Attendance/BiometricRecords/Reprocessing', [
             'stats' => [
                 'total_records' => BiometricRecord::count(),
                 'oldest_record' => BiometricRecord::orderBy('datetime')->first()?->datetime,
                 'newest_record' => BiometricRecord::orderBy('datetime', 'desc')->first()?->datetime,
-            ]
+            ],
+            'employees' => $employees,
+            'campaigns' => $campaigns,
+        ]);
+    }
+
+    /**
+     * Get filtered employees based on date range and campaign
+     */
+    public function getFilteredEmployees(Request $request)
+    {
+        $request->validate([
+            'start_date' => 'nullable|date',
+            'end_date' => 'nullable|date|after_or_equal:start_date',
+            'campaign_id' => 'nullable|exists:campaigns,id',
+        ]);
+
+        $query = BiometricRecord::query();
+
+        // Filter by date range if provided
+        if ($request->filled('start_date') && $request->filled('end_date')) {
+            $startDate = Carbon::parse($request->start_date);
+            $endDate = Carbon::parse($request->end_date);
+            $query->whereBetween('record_date', [$startDate, $endDate]);
+        }
+
+        // Get distinct user IDs from filtered biometric records
+        $employeeIds = $query->distinct()->pluck('user_id')->filter()->toArray();
+
+        // Get employees with their active schedule's campaign
+        $employeesQuery = User::select('id', 'first_name', 'last_name')
+            ->whereIn('id', $employeeIds)
+            ->with(['activeSchedule:id,user_id,campaign_id'])
+            ->orderBy('last_name')
+            ->orderBy('first_name');
+
+        // If campaign filter is provided, filter by users in that campaign
+        if ($request->filled('campaign_id')) {
+            $campaignUserIds = \App\Models\EmployeeSchedule::where('campaign_id', $request->campaign_id)
+                ->pluck('user_id')
+                ->unique()
+                ->toArray();
+            $employeesQuery->whereIn('id', $campaignUserIds);
+        }
+
+        $employees = $employeesQuery->get()->map(fn($u) => [
+            'id' => $u->id,
+            'name' => $u->first_name . ' ' . $u->last_name,
+            'campaign_id' => $u->activeSchedule?->campaign_id,
+        ]);
+
+        return response()->json([
+            'employees' => $employees,
+            'count' => $employees->count(),
         ]);
     }
 
@@ -43,6 +115,7 @@ class BiometricReprocessingController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'exists:users,id',
+            'campaign_id' => 'nullable|exists:campaigns,id',
         ]);
 
         $startDate = Carbon::parse($request->start_date);
@@ -50,8 +123,17 @@ class BiometricReprocessingController extends Controller
 
         $query = BiometricRecord::whereBetween('record_date', [$startDate, $endDate]);
 
-        if ($request->user_ids) {
+        // Filter by specific user IDs if provided
+        if ($request->user_ids && count($request->user_ids) > 0) {
             $query->whereIn('user_id', $request->user_ids);
+        }
+        // Filter by campaign if provided (get users from that campaign's schedules)
+        elseif ($request->campaign_id) {
+            $campaignUserIds = \App\Models\EmployeeSchedule::where('campaign_id', $request->campaign_id)
+                ->pluck('user_id')
+                ->unique()
+                ->toArray();
+            $query->whereIn('user_id', $campaignUserIds);
         }
 
         $records = $query->with('user:id,first_name,last_name')->get();
@@ -87,6 +169,7 @@ class BiometricReprocessingController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'exists:users,id',
+            'campaign_id' => 'nullable|exists:campaigns,id',
             'delete_existing' => 'boolean',
         ]);
 
@@ -95,11 +178,23 @@ class BiometricReprocessingController extends Controller
         $deleteExisting = $request->boolean('delete_existing', true);
 
         // Get affected users
-        $userIds = $request->user_ids ?: BiometricRecord::whereBetween('record_date', [$startDate, $endDate])
-            ->distinct()
-            ->pluck('user_id')
-            ->filter()
-            ->toArray();
+        $userIds = null;
+
+        // Priority: specific user IDs > campaign > all users with biometric records
+        if ($request->user_ids && count($request->user_ids) > 0) {
+            $userIds = $request->user_ids;
+        } elseif ($request->campaign_id) {
+            $userIds = \App\Models\EmployeeSchedule::where('campaign_id', $request->campaign_id)
+                ->pluck('user_id')
+                ->unique()
+                ->toArray();
+        } else {
+            $userIds = BiometricRecord::whereBetween('record_date', [$startDate, $endDate])
+                ->distinct()
+                ->pluck('user_id')
+                ->filter()
+                ->toArray();
+        }
 
         $users = User::whereIn('id', $userIds)->get();
 

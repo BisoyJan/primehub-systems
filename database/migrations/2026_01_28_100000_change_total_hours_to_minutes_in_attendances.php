@@ -1,0 +1,36 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->dropColumn('total_hours_worked');
+        });
+
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->integer('total_minutes_worked')->nullable()->after('actual_time_out');
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->dropColumn('total_minutes_worked');
+        });
+
+        Schema::table('attendances', function (Blueprint $table) {
+            $table->float('total_hours_worked')->nullable()->after('actual_time_out');
+        });
+    }
+};

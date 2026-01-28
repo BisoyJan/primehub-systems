@@ -112,8 +112,10 @@ class AttendanceProcessor
                 'unique_employees' => $groupedRecords->count(),
             ]);
 
-            // Save all raw biometric records to database (including skipped ones for audit)
-            $this->saveBiometricRecords($allRecords, $upload);
+            // Save raw biometric records to database
+            // Only save records within date range when filtering is enabled
+            $recordsToSave = $filterByDate ? $records : $allRecords;
+            $this->saveBiometricRecords($recordsToSave, $upload);
 
             // Validate file dates match expected dates for the shift
             $dateValidation = $this->validateFileDates($records, Carbon::parse($upload->shift_date));
@@ -547,6 +549,14 @@ class AttendanceProcessor
         $scheduledHour = Carbon::parse($schedule->scheduled_time_in)->hour;
         $scheduledOutHour = Carbon::parse($schedule->scheduled_time_out)->hour;
 
+        // Check if this is a graveyard shift (00:00-04:59 start time)
+        // Graveyard shifts that start at midnight are treated as "previous day" shifts
+        // because the employee's work day is considered to be the day BEFORE they clock in
+        // Example: Mon-Fri schedule with 00:00-09:00 shift means:
+        // - Friday's shift: Clock in Sat 00:00, clock out Sat 09:00 (shift_date = Friday)
+        // - Thursday's shift: Clock in Fri 00:00, clock out Fri 09:00 (shift_date = Thursday)
+        $isGraveyardShift = $scheduledHour >= 0 && $scheduledHour < 5;
+
         // Sort records by datetime to process chronologically
         $sortedRecords = $records->sortBy(function ($record) {
             return $record['datetime']->timestamp;
@@ -558,8 +568,25 @@ class AttendanceProcessor
 
             if (!$isNextDayShift) {
                 // SAME DAY SHIFT: All records go to their actual date
-                // Examples: 08:00-17:00 (morning), 00:00-09:00 (graveyard), 14:00-20:00 (afternoon)
+                // Examples: 08:00-17:00 (morning), 14:00-20:00 (afternoon)
                 $shiftDate = $datetime->format('Y-m-d');
+
+                // Special handling for graveyard shifts (00:00-04:59 start time):
+                // Graveyard shifts are considered to belong to the PREVIOUS day
+                // because the work day is the day before the clock-in date.
+                // Example: For Mon-Fri schedule with 00:00-09:00 shift:
+                // - Clocking in Friday 00:30 = Thursday's shift (shift_date = Thursday)
+                // - Clocking in Saturday 00:30 = Friday's shift (shift_date = Friday)
+                if ($isGraveyardShift) {
+                    $previousDay = $datetime->copy()->subDay();
+                    $previousDayName = $previousDay->format('l');
+
+                    // Only assign to previous day if the previous day is a work day
+                    // This ensures we don't create shifts for days the employee doesn't work
+                    if ($schedule->worksOnDay($previousDayName)) {
+                        $shiftDate = $previousDay->format('Y-m-d');
+                    }
+                }
             } else {
                 // NEXT DAY SHIFT: Determine which shift date based on time
                 // Examples: 22:00-07:00 (night), 15:00-00:00 (afternoon extending to midnight)
@@ -936,6 +963,15 @@ class AttendanceProcessor
                            "Employee has {$records->count()} scan(s) on this date. " .
                            "This may represent overtime, special work, or data issue. Requires verification.";
 
+        // Calculate total minutes worked (deduct 60 min lunch if worked > 5 hours)
+        if ($attendance->actual_time_in && $attendance->actual_time_out) {
+            $rawMinutes = $attendance->actual_time_in->diffInMinutes($attendance->actual_time_out);
+            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $attendance->total_minutes_worked = $rawMinutes - $lunchDeduction;
+        } else {
+            $attendance->total_minutes_worked = null;
+        }
+
         $attendance->save();
 
         \Log::info('Created non-work day attendance record', [
@@ -989,6 +1025,15 @@ class AttendanceProcessor
         $attendance->notes = "No schedule found for this employee. Created from biometric data. " .
                            "Employee has {$records->count()} scan(s) on this date. Requires verification.";
 
+        // Calculate total minutes worked (deduct 60 min lunch if worked > 5 hours)
+        if ($attendance->actual_time_in && $attendance->actual_time_out) {
+            $rawMinutes = $attendance->actual_time_in->diffInMinutes($attendance->actual_time_out);
+            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $attendance->total_minutes_worked = $rawMinutes - $lunchDeduction;
+        } else {
+            $attendance->total_minutes_worked = null;
+        }
+
         $attendance->save();
 
         \Log::info('Created attendance record without schedule', [
@@ -1031,12 +1076,20 @@ class AttendanceProcessor
         $schedInHour = $schedTimeIn->hour;
         $schedOutHour = $schedTimeOut->hour;
         $isNextDayTimeOut = false;
+        $isGraveyardShift = false;
 
         if ($schedInHour >= 0 && $schedInHour < 5 && $schedOutHour > $schedInHour) {
-            // Early morning shift (00:00-04:59 start time) that ends later in morning on SAME day
+            // Graveyard shift (00:00-04:59 start time) that ends later in morning
             // Example: 00:00-09:00, 01:00-10:00
-            // Both IN and OUT happen on the same calendar date
-            $isNextDayTimeOut = false;
+            // For graveyard shifts, the shift_date is the PREVIOUS day (work day),
+            // but the actual biometric records are on the NEXT calendar day.
+            // So we need to adjust expected dates to the next day.
+            $isGraveyardShift = true;
+            $isNextDayTimeOut = false; // Both in/out on same calendar day (next day from shift_date)
+
+            // Adjust expected dates to next day (where the actual scans are)
+            $expectedTimeInDate = $shiftDate->copy()->addDay();
+            $scheduledTimeIn = Carbon::parse($expectedTimeInDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
         } else {
             // Standard check: time out <= time in means next day
             // Example: 22:00-07:00 (time out 07:00 < time in 22:00, so next day)
@@ -1045,13 +1098,19 @@ class AttendanceProcessor
 
         // Time out is next day if scheduled time out <= scheduled time in
         $expectedTimeOutDate = $shiftDate->copy();
-        if ($isNextDayTimeOut) {
+        if ($isGraveyardShift) {
+            // For graveyard shifts, both time in and out are on the next calendar day
+            $expectedTimeOutDate = $shiftDate->copy()->addDay();
+        } elseif ($isNextDayTimeOut) {
             $expectedTimeOutDate->addDay();
         }
 
         // Build scheduled time out datetime
         $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
-        if ($isNextDayTimeOut) {
+        if ($isGraveyardShift) {
+            // For graveyard shifts, scheduled time out is on the next calendar day
+            $scheduledTimeOut = Carbon::parse($expectedTimeOutDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+        } elseif ($isNextDayTimeOut) {
             $scheduledTimeOut->addDay();
         }
 
@@ -1059,7 +1118,12 @@ class AttendanceProcessor
         $scheduledHour = Carbon::parse($schedule->scheduled_time_in)->hour;
 
         // Find time in record based on shift pattern
-        if (!$isNextDayTimeOut) {
+        if ($isGraveyardShift) {
+            // GRAVEYARD SHIFT (00:00-04:59 start time): Find earliest valid record on expected date
+            // The biometric records are on the next calendar day from shift_date
+            // Example: Friday shift has records on Saturday around 00:00-01:00 (time in) and 09:00-10:00 (time out)
+            $timeInRecord = $this->parser->findTimeInRecord($records, $expectedTimeInDate, $schedule->scheduled_time_in);
+        } elseif (!$isNextDayTimeOut) {
             // SAME DAY SHIFT: Find earliest valid record on shift date
             // Pass scheduled time to filter out unreasonably early scans (>2 hours before)
             // Examples: 07:00-17:00, 01:00-10:00
@@ -1088,10 +1152,19 @@ class AttendanceProcessor
         // Get the expected time out hour to help determine if this is a morning or evening time out
         $scheduledOutHour = Carbon::parse($schedule->scheduled_time_out)->hour;
 
-        // For graveyard next-day shifts (00:00-04:59), time out is in morning range (0 to scheduled out hour)
-        // All records are already grouped to the shift date, so we need time range to distinguish
-        if ($isNextDayTimeOut && $scheduledHour >= 0 && $scheduledHour < 5) {
-            // Graveyard shift: Time out is 00:00 to scheduled out hour on shift date
+        // For graveyard shifts, use standard time out finding on the expected date (next calendar day)
+        if ($isGraveyardShift) {
+            // Graveyard shift: Time out is on the next calendar day from shift_date
+            // Use standard matching to find the closest record to scheduled time out
+            $timeOutRecord = $this->parser->findTimeOutRecord(
+                $records,
+                $expectedTimeOutDate,
+                $scheduledOutHour,
+                $schedule->scheduled_time_out
+            );
+        } elseif ($isNextDayTimeOut && $scheduledHour >= 0 && $scheduledHour < 5) {
+            // Next-day graveyard shift (shouldn't happen with current logic, but kept for safety)
+            // Time out is 00:00 to scheduled out hour on expected date
             $timeOutRecord = $this->parser->findTimeOutRecordByTimeRange($records, $expectedTimeOutDate, 0, $scheduledOutHour);
         } else {
             // Pass the expected hour and scheduled time out for smart matching
@@ -1253,7 +1326,7 @@ class AttendanceProcessor
         // Process time in
         if ($timeInRecord) {
             $actualTimeIn = $timeInRecord['datetime'];
-            $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn, false);
+            $tardyMinutes = (int) $scheduledTimeIn->diffInMinutes($actualTimeIn, false);
 
             // diffInMinutes with false gives positive if actualTimeIn is after scheduledTimeIn
             // We only want to set tardy_minutes if they are actually late (positive value)
@@ -1285,11 +1358,13 @@ class AttendanceProcessor
             $attendance->is_cross_site_bio = $isCrossSite;
 
             // Check for undertime (any early departure)
+            // Only count undertime if at least 1 minute early (to avoid 0 values from seconds)
             // 1-60 minutes early = undertime (0.25 pts)
             // 61+ minutes early = undertime_more_than_hour (0.50 pts)
-            if ($timeDiffMinutes < 0) {
-                $attendance->undertime_minutes = abs($timeDiffMinutes);
-                $undertimeStatus = abs($timeDiffMinutes) > 60 ? 'undertime_more_than_hour' : 'undertime';
+            $undertimeMinutes = (int) abs($timeDiffMinutes);
+            if ($timeDiffMinutes < 0 && $undertimeMinutes >= 1) {
+                $attendance->undertime_minutes = $undertimeMinutes;
+                $undertimeStatus = $undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
                 if ($attendance->status === 'on_time') {
                     $attendance->status = $undertimeStatus;
                 }
@@ -1298,16 +1373,16 @@ class AttendanceProcessor
                     $attendance->secondary_status = $undertimeStatus;
                 }
             } else {
-                // Not enough undertime, clear it
+                // Not enough undertime (less than 1 minute), clear it
                 $attendance->undertime_minutes = null;
             }
 
             // Check for overtime (worked beyond scheduled time out)
-            // Only count overtime if they worked more than 1 hour beyond scheduled time
-            if ($timeDiffMinutes > 60) { // More than 1 hour late = overtime
+            // Only count overtime if worked more than 30 minutes beyond scheduled time out
+            if ($timeDiffMinutes > 30) { // Positive means left late (overtime), threshold 30 minutes
                 $attendance->overtime_minutes = $timeDiffMinutes;
             } else {
-                // Not enough overtime, clear it
+                // Not enough overtime (30 min threshold), clear it
                 $attendance->overtime_minutes = null;
             }
         } else {
@@ -1400,6 +1475,31 @@ class AttendanceProcessor
             }
         }
 
+        // Calculate total minutes worked (deduct 60 min lunch if worked > 5 hours)
+        // Use scheduled time in if employee clocked in early (early arrivals don't count as work time)
+        // Use actual time out to capture overtime and undertime
+        if ($attendance->actual_time_in && $attendance->actual_time_out) {
+            // Build the scheduled time in datetime for comparison
+            $schedTimeInForCalc = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+
+            // Adjust for graveyard shifts (scheduled time in is on next day)
+            if ($isGraveyardShift) {
+                $schedTimeInForCalc = Carbon::parse($expectedTimeInDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+            }
+
+            // Use the later of actual time in vs scheduled time in
+            // This prevents early arrivals from counting as extra work time
+            $effectiveTimeIn = $attendance->actual_time_in->greaterThan($schedTimeInForCalc)
+                ? $attendance->actual_time_in
+                : $schedTimeInForCalc;
+
+            $rawMinutes = $effectiveTimeIn->diffInMinutes($attendance->actual_time_out);
+            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $attendance->total_minutes_worked = $rawMinutes - $lunchDeduction;
+        } else {
+            $attendance->total_minutes_worked = null;
+        }
+
         // Save all changes
         $attendance->save();
 
@@ -1463,7 +1563,7 @@ class AttendanceProcessor
         if ($timeInRecord) {
             // Calculate tardiness
             $actualTimeIn = $timeInRecord['datetime'];
-            $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn, false);
+            $tardyMinutes = (int) $scheduledTimeIn->diffInMinutes($actualTimeIn, false);
 
             // Determine status based on rules and grace period
             $gracePeriodMinutes = $schedule->grace_period_minutes ?? 15;
@@ -1582,8 +1682,8 @@ class AttendanceProcessor
             }
 
             // Check for overtime (worked beyond scheduled time out)
-            // Only count overtime if they left after scheduled time out
-            if ($timeDiffMinutes > 0) { // Positive means left late (overtime)
+            // Only count overtime if worked more than 30 minutes beyond scheduled time out
+            if ($timeDiffMinutes > 30) { // Positive means left late (overtime), threshold 30 minutes
                 $updates['overtime_minutes'] = $timeDiffMinutes;
             }
 
@@ -2320,6 +2420,13 @@ class AttendanceProcessor
         $warnings = [];
         $needsReview = false;
 
+        // Check for graveyard shift pattern (00:00-04:59 start time)
+        $schedTimeIn = Carbon::parse($schedule->scheduled_time_in);
+        $schedTimeOut = Carbon::parse($schedule->scheduled_time_out);
+        $schedInHour = $schedTimeIn->hour;
+        $schedOutHour = $schedTimeOut->hour;
+        $isGraveyardShift = $schedInHour >= 0 && $schedInHour < 5 && $schedOutHour > $schedInHour;
+
         // Only consider records on or near the shift date
         $relevantRecords = $records->filter(function ($record) use ($shiftDate) {
             $scanDate = Carbon::parse($record['datetime']->format('Y-m-d'));
@@ -2331,14 +2438,19 @@ class AttendanceProcessor
         $scanCount = $relevantRecords->count();
 
         // Build full scheduled datetime for accurate comparison
-        $scheduledTimeInFull = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
-        $scheduledTimeOutFull = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+        // For graveyard shifts, the scheduled times are on the NEXT calendar day from shift_date
+        if ($isGraveyardShift) {
+            $nextDay = $shiftDate->copy()->addDay();
+            $scheduledTimeInFull = Carbon::parse($nextDay->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+            $scheduledTimeOutFull = Carbon::parse($nextDay->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+        } else {
+            $scheduledTimeInFull = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+            $scheduledTimeOutFull = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
 
-        // Adjust time out if it's a next-day shift
-        $schedTimeIn = Carbon::parse($schedule->scheduled_time_in);
-        $schedTimeOut = Carbon::parse($schedule->scheduled_time_out);
-        if ($schedTimeOut->lessThanOrEqualTo($schedTimeIn)) {
-            $scheduledTimeOutFull->addDay();
+            // Adjust time out if it's a next-day shift
+            if ($schedTimeOut->lessThanOrEqualTo($schedTimeIn)) {
+                $scheduledTimeOutFull->addDay();
+            }
         }
 
         // Warning 1: Very few scans (only 1-2) far from scheduled times

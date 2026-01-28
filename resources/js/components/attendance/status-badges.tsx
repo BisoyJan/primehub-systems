@@ -45,7 +45,8 @@ interface AttendanceStatusProps {
 
 /**
  * Get all status badges for an attendance record
- * Includes primary status, secondary status, overtime, verified icon, and warning icon
+ * Displays primary status on top, secondary status below
+ * Includes overtime, verified icon, and warning icon
  */
 export const AttendanceStatusBadges = ({
     status,
@@ -57,17 +58,13 @@ export const AttendanceStatusBadges = ({
     showManualLeaveLabel = false,
 }: AttendanceStatusProps) => {
     return (
-        <div className="flex flex-col gap-0.5 items-start">
+        <div className="flex flex-col gap-1 items-start">
+            {/* Primary Status Row */}
             <div className="flex items-center gap-1">
                 {showManualLeaveLabel && status === 'on_leave' ? (
                     <Badge className="bg-blue-500">On Leave (Manual)</Badge>
                 ) : (
                     getStatusBadge(status)
-                )}
-                {overtimeMinutes && overtimeMinutes > 0 && (
-                    <Badge className={overtimeApproved ? 'bg-green-500' : 'bg-blue-500'}>
-                        Overtime{overtimeApproved && ' ✓'}
-                    </Badge>
                 )}
                 {adminVerified && (
                     <span title="Verified">
@@ -80,7 +77,20 @@ export const AttendanceStatusBadges = ({
                     </span>
                 )}
             </div>
-            {secondaryStatus && getStatusBadge(secondaryStatus)}
+            {/* Secondary Status Row */}
+            {secondaryStatus && (
+                <div className="flex items-center gap-1">
+                    {getStatusBadge(secondaryStatus)}
+                </div>
+            )}
+            {/* Overtime Row - only show if overtime is more than 30 minutes (threshold) */}
+            {overtimeMinutes && overtimeMinutes > 30 && (
+                <div className="flex items-center gap-1">
+                    <Badge className={overtimeApproved ? 'bg-green-500' : 'bg-blue-500'}>
+                        Overtime{overtimeApproved && ' ✓'}
+                    </Badge>
+                </div>
+            )}
         </div>
     );
 };

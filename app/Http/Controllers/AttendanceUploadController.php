@@ -35,6 +35,8 @@ class AttendanceUploadController extends Controller
                 'id' => $upload->id,
                 'original_filename' => $upload->original_filename,
                 'shift_date' => $upload->shift_date ? Carbon::parse($upload->shift_date)->format('Y-m-d') : null,
+                'date_from' => $upload->date_from ? Carbon::parse($upload->date_from)->format('Y-m-d') : null,
+                'date_to' => $upload->date_to ? Carbon::parse($upload->date_to)->format('Y-m-d') : null,
                 'biometric_site' => $upload->biometricSite ? [
                     'id' => $upload->biometricSite->id,
                     'name' => $upload->biometricSite->name,

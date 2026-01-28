@@ -239,6 +239,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->middleware('permission:biometric.reprocess')
         ->group(function () {
             Route::get('/', [BiometricReprocessingController::class, 'index'])->name('index');
+            Route::get('employees', [BiometricReprocessingController::class, 'getFilteredEmployees'])->name('employees');
             Route::post('preview', [BiometricReprocessingController::class, 'preview'])->name('preview');
             Route::post('reprocess', [BiometricReprocessingController::class, 'reprocess'])->name('reprocess');
             Route::post('fix-statuses', [BiometricReprocessingController::class, 'fixStatuses'])->name('fix-statuses');

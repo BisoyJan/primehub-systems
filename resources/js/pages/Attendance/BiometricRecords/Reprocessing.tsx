@@ -40,6 +40,17 @@ interface Stats {
     newest_record: string | null;
 }
 
+interface Employee {
+    id: number;
+    name: string;
+    campaign_id: number | null;
+}
+
+interface Campaign {
+    id: number;
+    name: string;
+}
+
 interface PreviewData {
     total_records: number;
     affected_users: number;
@@ -81,7 +92,14 @@ interface FixStatusResult {
     }>;
 }
 
-export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixResults?: FixStatusResult }) {
+interface PageProps {
+    stats: Stats;
+    employees: Employee[];
+    campaigns: Campaign[];
+    fixResults?: FixStatusResult;
+}
+
+export default function Reprocessing({ stats, employees: initialEmployees, campaigns, fixResults }: PageProps) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Reprocess Attendance',
         breadcrumbs: [
@@ -95,6 +113,10 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
+    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
+    const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+    const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>(initialEmployees);
+    const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [showPreview, setShowPreview] = useState(false);
     const [previewData, setPreviewData] = useState<PreviewData | null>(null);
@@ -104,6 +126,67 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
     const [rescanPoints, setRescanPoints] = useState(true);
     const [showReprocessConfirm, setShowReprocessConfirm] = useState(false);
     const [showFixStatusConfirm, setShowFixStatusConfirm] = useState(false);
+
+    // Fetch filtered employees when date range or campaign changes
+    const fetchFilteredEmployees = async (start: string, end: string, campaignId: string) => {
+        if (!start || !end) {
+            // Reset to initial employees if no date range
+            setFilteredEmployees(campaignId
+                ? initialEmployees.filter(emp => emp.campaign_id === parseInt(campaignId))
+                : initialEmployees
+            );
+            return;
+        }
+
+        setIsLoadingEmployees(true);
+        try {
+            const params = new URLSearchParams();
+            params.append('start_date', start);
+            params.append('end_date', end);
+            if (campaignId) params.append('campaign_id', campaignId);
+
+            const response = await fetch(`/biometric-reprocessing/employees?${params.toString()}`);
+            const data = await response.json();
+            setFilteredEmployees(data.employees);
+        } catch (error) {
+            console.error('Failed to fetch filtered employees:', error);
+            toast.error('Failed to load filtered employees');
+        } finally {
+            setIsLoadingEmployees(false);
+        }
+    };
+
+    // Handle date changes
+    const handleStartDateChange = (value: string) => {
+        setStartDate(value);
+        setSelectedEmployeeId(''); // Clear selection when dates change
+        if (value && endDate) {
+            fetchFilteredEmployees(value, endDate, selectedCampaignId);
+        }
+    };
+
+    const handleEndDateChange = (value: string) => {
+        setEndDate(value);
+        setSelectedEmployeeId(''); // Clear selection when dates change
+        if (startDate && value) {
+            fetchFilteredEmployees(startDate, value, selectedCampaignId);
+        }
+    };
+
+    // Handle campaign change
+    const handleCampaignChange = (value: string) => {
+        setSelectedCampaignId(value);
+        setSelectedEmployeeId(''); // Clear employee selection
+        if (startDate && endDate) {
+            fetchFilteredEmployees(startDate, endDate, value);
+        } else {
+            // Filter from initial employees if no date range
+            setFilteredEmployees(value
+                ? initialEmployees.filter(emp => emp.campaign_id === parseInt(value))
+                : initialEmployees
+            );
+        }
+    };
 
     const handlePreview = () => {
         if (!startDate || !endDate) {
@@ -117,6 +200,8 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
             {
                 start_date: startDate,
                 end_date: endDate,
+                user_ids: selectedEmployeeId ? [parseInt(selectedEmployeeId)] : [],
+                campaign_id: selectedCampaignId ? parseInt(selectedCampaignId) : null,
             },
             {
                 preserveState: false,
@@ -154,6 +239,8 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                 end_date: endDate,
                 delete_existing: deleteExisting,
                 rescan_points: rescanPoints,
+                user_ids: selectedEmployeeId ? [parseInt(selectedEmployeeId)] : [],
+                campaign_id: selectedCampaignId ? parseInt(selectedCampaignId) : null,
             },
             {
                 preserveState: true,
@@ -271,7 +358,7 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                     <Label htmlFor="start-date">Start Date</Label>
                                     <DatePicker
                                         value={startDate}
-                                        onChange={(value) => setStartDate(value)}
+                                        onChange={handleStartDateChange}
                                         placeholder="Select start date"
                                     />
                                 </div>
@@ -279,9 +366,54 @@ export default function Reprocessing({ stats, fixResults }: { stats: Stats; fixR
                                     <Label htmlFor="end-date">End Date</Label>
                                     <DatePicker
                                         value={endDate}
-                                        onChange={(value) => setEndDate(value)}
+                                        onChange={handleEndDateChange}
                                         placeholder="Select end date"
                                     />
+                                </div>
+                            </div>
+
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <div className="space-y-2">
+                                    <Label htmlFor="campaign">Campaign (Optional)</Label>
+                                    <select
+                                        id="campaign"
+                                        title="Select Campaign"
+                                        value={selectedCampaignId}
+                                        onChange={(e) => handleCampaignChange(e.target.value)}
+                                        disabled={isLoadingEmployees}
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <option value="">All Campaigns</option>
+                                        {campaigns.map((camp) => (
+                                            <option key={camp.id} value={camp.id}>
+                                                {camp.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div className="space-y-2">
+                                    <Label htmlFor="employee">Employee (Optional)</Label>
+                                    <select
+                                        id="employee"
+                                        title="Select Employee"
+                                        value={selectedEmployeeId}
+                                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
+                                        disabled={isLoadingEmployees}
+                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                    >
+                                        <option value="">
+                                            {isLoadingEmployees
+                                                ? 'Loading...'
+                                                : selectedCampaignId
+                                                    ? 'All Employees in Campaign'
+                                                    : 'All Employees'}
+                                        </option>
+                                        {filteredEmployees.map((emp) => (
+                                            <option key={emp.id} value={emp.id}>
+                                                {emp.name}
+                                            </option>
+                                        ))}
+                                    </select>
                                 </div>
                             </div>
 

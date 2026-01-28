@@ -6,7 +6,7 @@ import { usePermission } from "@/hooks/use-permission";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { type SharedData } from "@/types";
-import { formatDateTime, formatDate, formatTime } from "@/lib/utils";
+import { formatDateTime, formatDate, formatTime, formatWorkDuration, formatTimeAdjustment } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { DatePicker } from "@/components/ui/date-picker";
@@ -33,7 +33,7 @@ import {
 } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { getStatusBadges } from "@/components/attendance";
+import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
@@ -84,6 +84,8 @@ interface LeaveRequest {
     end_date: string;
     status: string;
     days_requested: number;
+    admin_review_notes?: string;
+    hr_review_notes?: string;
 }
 
 interface AttendanceRecord {
@@ -95,6 +97,7 @@ interface AttendanceRecord {
     shift_date: string;
     actual_time_in?: string;
     actual_time_out?: string;
+    total_minutes_worked?: number;
     status: string;
     secondary_status?: string;
     tardy_minutes?: number;
@@ -137,6 +140,7 @@ interface PageProps extends SharedData {
     sites?: Site[];
     campaigns?: Campaign[];
     teamLeadCampaignId?: number;
+    verifyAttendanceId?: number;
     filters?: {
         search?: string;
         user_id?: string;
@@ -153,7 +157,7 @@ interface PageProps extends SharedData {
 const DEFAULT_META: Meta = {
     current_page: 1,
     last_page: 1,
-    per_page: 50,
+    per_page: 70,
     total: 0,
 };
 
@@ -269,8 +273,8 @@ const calculateSuggestedStatus = (
             // Left early but less than 60 minutes = undertime
             hasUndertime = true;
             undertimeMinutes = Math.abs(diffFromScheduledOut);
-        } else if (diffFromScheduledOut > 60) {
-            // Worked more than 60 minutes overtime
+        } else if (diffFromScheduledOut > 30) {
+            // Worked more than 30 minutes overtime (threshold for overtime detection)
             overtimeMinutes = diffFromScheduledOut;
         }
     }
@@ -323,7 +327,7 @@ const calculateSuggestedStatus = (
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, filters, auth } = usePage<PageProps>().props;
+    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, verifyAttendanceId, filters, auth } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
@@ -652,17 +656,13 @@ export default function AttendanceReview() {
         }
     }, [isDialogOpen, highlightedRecordId]);
 
-    // Auto-open dialog if verify parameter is present in URL
+    // Auto-open dialog if verifyAttendanceId is provided from backend
     useEffect(() => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const verifyId = urlParams.get('verify');
-
-        if (verifyId) {
-            const recordId = parseInt(verifyId);
-            const recordToVerify = attendanceData.data.find(r => r.id === recordId);
+        if (verifyAttendanceId && attendanceData.data.length > 0) {
+            const recordToVerify = attendanceData.data.find(r => r.id === verifyAttendanceId);
 
             // Set highlighted record (will remain until dialog is closed)
-            setHighlightedRecordId(recordId);
+            setHighlightedRecordId(verifyAttendanceId);
 
             if (recordToVerify) {
                 // Wait for loading to complete, then scroll and open dialog
@@ -693,7 +693,7 @@ export default function AttendanceReview() {
             }
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [attendanceData.data, isPageLoading]);
+    }, [verifyAttendanceId, attendanceData.data, isPageLoading]);
 
     const handleVerify = (e: React.FormEvent) => {
         e.preventDefault();
@@ -748,7 +748,7 @@ export default function AttendanceReview() {
     const hasOvertimeRecords = () => {
         return attendanceData.data
             .filter(r => selectedRecords.has(r.id))
-            .some(record => record.overtime_minutes && record.overtime_minutes > 0);
+            .some(record => record.overtime_minutes && record.overtime_minutes > 30);
     };
 
     const hasUndertimeRecords = () => {
@@ -919,6 +919,7 @@ export default function AttendanceReview() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Statuses</SelectItem>
+                                            <SelectItem value="on_time">On Time</SelectItem>
                                             <SelectItem value="ncns">NCNS</SelectItem>
                                             <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
                                             <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
@@ -1072,8 +1073,9 @@ export default function AttendanceReview() {
                                             </TableHead>
                                             <TableHead>Employee</TableHead>
                                             <TableHead>Site / Campaign</TableHead>
-                                            <TableHead>Shift Date</TableHead>
+                                            <TableHead>Shift Date / Type</TableHead>
                                             <TableHead>Time In / Out</TableHead>
+                                            <TableHead>Total Hours</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Tardy/UT/OT</TableHead>
                                             <TableHead>Notes</TableHead>
@@ -1107,7 +1109,7 @@ export default function AttendanceReview() {
                                                             {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
                                                             {record.is_cross_site_bio && (
                                                                 <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600">
-                                                                    Cross-Site
+                                                                    Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
                                                                 </Badge>
                                                             )}
                                                         </div>
@@ -1118,44 +1120,52 @@ export default function AttendanceReview() {
                                                         )}
                                                     </div>
                                                 </TableCell>
-                                                <TableCell>{formatDate(record.shift_date)}</TableCell>
-                                                <TableCell className="text-sm">
+                                                <TableCell>
                                                     <div>
-                                                        <div>
-                                                            {formatDateTime(record.actual_time_in) || '-'}
-                                                            {record.bio_in_site && record.is_cross_site_bio && (
-                                                                <span className="text-xs text-muted-foreground ml-1">@ {record.bio_in_site.name}</span>
-                                                            )}
-                                                        </div>
-                                                        <div className="text-muted-foreground">
-                                                            {formatDateTime(record.actual_time_out) || '-'}
-                                                            {record.bio_out_site && record.is_cross_site_bio && (
-                                                                <span className="text-xs ml-1">@ {record.bio_out_site.name}</span>
+                                                        <div>{formatDate(record.shift_date)}</div>
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {record.employee_schedule?.shift_type ? (
+                                                                getShiftTypeBadge(record.employee_schedule.shift_type)
+                                                            ) : (
+                                                                "-"
                                                             )}
                                                         </div>
                                                     </div>
                                                 </TableCell>
+                                                <TableCell className="text-sm">
+                                                    <div>
+                                                        <div>
+                                                            {formatDateTime(record.actual_time_in) || '-'}
+                                                        </div>
+                                                        <div className="text-muted-foreground">
+                                                            {formatDateTime(record.actual_time_out) || '-'}
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-sm">
+                                                    <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
+                                                </TableCell>
                                                 <TableCell>{getStatusBadges(record)}</TableCell>
                                                 <TableCell className="text-sm">
                                                     <div className="space-y-1">
-                                                        {record.tardy_minutes && record.tardy_minutes > 0 && (
-                                                            <div className="text-orange-600">
-                                                                +{record.tardy_minutes >= 60 ? `${Math.floor(record.tardy_minutes / 60)}h` : `${record.tardy_minutes}m`} T
+                                                        {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
+                                                            <div className="text-xs text-orange-600">
+                                                                +{formatTimeAdjustment(record.tardy_minutes)} T
                                                             </div>
                                                         )}
-                                                        {record.undertime_minutes && record.undertime_minutes > 0 && (
-                                                            <div className="text-orange-600">
-                                                                {record.undertime_minutes >= 60 ? `${Math.floor(record.undertime_minutes / 60)}h` : `${record.undertime_minutes}m`} UT
+                                                        {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
+                                                            <div className="text-xs text-orange-600">
+                                                                {formatTimeAdjustment(record.undertime_minutes)} UT
                                                             </div>
                                                         )}
                                                         {(!record.tardy_minutes || record.tardy_minutes === 0) &&
                                                             (!record.undertime_minutes || record.undertime_minutes === 0) &&
-                                                            (!record.overtime_minutes || record.overtime_minutes === 0) && (
+                                                            (!record.overtime_minutes || record.overtime_minutes <= 30) && (
                                                                 <div>-</div>
                                                             )}
-                                                        {record.overtime_minutes && record.overtime_minutes > 0 && (
+                                                        {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
                                                             <div className={`text-xs ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                                +{record.overtime_minutes >= 60 ? `${Math.floor(record.overtime_minutes / 60)}h` : `${record.overtime_minutes}m`} OT
+                                                                +{formatTimeAdjustment(record.overtime_minutes)} OT
                                                                 {record.overtime_approved && ' ✓'}
                                                             </div>
                                                         )}
@@ -1254,8 +1264,11 @@ export default function AttendanceReview() {
                                         />
                                         <div className="flex-1 mx-3">
                                             <div className="text-lg font-semibold">{record.user.name}</div>
-                                            <div className="text-sm text-muted-foreground">
+                                            <div className="text-sm text-muted-foreground flex items-center gap-2">
                                                 {formatDate(record.shift_date)}
+                                                {record.employee_schedule?.shift_type && (
+                                                    <span>{getShiftTypeBadge(record.employee_schedule.shift_type)}</span>
+                                                )}
                                             </div>
                                         </div>
                                         {getStatusBadges(record)}
@@ -1267,7 +1280,7 @@ export default function AttendanceReview() {
                                             {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
                                             {record.is_cross_site_bio && (
                                                 <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
-                                                    Cross-Site
+                                                    Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
                                                 </Badge>
                                             )}
                                             {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
@@ -1279,14 +1292,12 @@ export default function AttendanceReview() {
                                         <div>
                                             <span className="font-medium">Time In / Out:</span>{" "}
                                             {formatDateTime(record.actual_time_in) || '-'}
-                                            {record.bio_in_site && record.is_cross_site_bio && (
-                                                <span className="text-muted-foreground"> @ {record.bio_in_site.name}</span>
-                                            )}
                                             {" → "}
                                             {formatDateTime(record.actual_time_out) || '-'}
-                                            {record.bio_out_site && record.is_cross_site_bio && (
-                                                <span className="text-muted-foreground"> @ {record.bio_out_site.name}</span>
-                                            )}
+                                        </div>
+                                        <div>
+                                            <span className="font-medium">Total Hours:</span>{" "}
+                                            <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
                                         </div>
                                         <div>
                                             <span className="font-medium">Issues:</span>
@@ -1311,23 +1322,23 @@ export default function AttendanceReview() {
                                                 )}
                                             </div>
                                         </div>
-                                        {((record.tardy_minutes && record.tardy_minutes > 0) || (record.undertime_minutes && record.undertime_minutes > 0) || (record.overtime_minutes && record.overtime_minutes > 0)) && (
+                                        {((record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0) || (record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0) || (record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30)) && (
                                             <div>
                                                 <span className="font-medium">Time Adjustments:</span>
                                                 <div className="mt-1 space-y-1">
-                                                    {record.tardy_minutes && record.tardy_minutes > 0 && (
+                                                    {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
                                                         <span className="text-orange-600 block">
-                                                            • Tardy: +{record.tardy_minutes >= 60 ? `${Math.floor(record.tardy_minutes / 60)}h` : `${record.tardy_minutes}m`} T
+                                                            • Tardy: +{formatTimeAdjustment(record.tardy_minutes)} T
                                                         </span>
                                                     )}
-                                                    {record.undertime_minutes && record.undertime_minutes > 0 && (
+                                                    {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
                                                         <span className="text-orange-600 block">
-                                                            • Undertime: {record.undertime_minutes >= 60 ? `${Math.floor(record.undertime_minutes / 60)}h` : `${record.undertime_minutes}m`} UT
+                                                            • Undertime: {formatTimeAdjustment(record.undertime_minutes)} UT
                                                         </span>
                                                     )}
-                                                    {record.overtime_minutes && record.overtime_minutes > 0 && (
+                                                    {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
                                                         <span className={`block ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                            • Overtime: +{record.overtime_minutes >= 60 ? `${Math.floor(record.overtime_minutes / 60)}h` : `${record.overtime_minutes}m`} OT
+                                                            • Overtime: +{formatTimeAdjustment(record.overtime_minutes)} OT
                                                             {record.overtime_approved && ' (Approved)'}
                                                         </span>
                                                     )}
@@ -1792,7 +1803,7 @@ export default function AttendanceReview() {
                         </div>
 
                         {/* Overtime Approval */}
-                        {selectedRecord?.overtime_minutes && selectedRecord.overtime_minutes > 0 && (
+                        {selectedRecord?.overtime_minutes && selectedRecord.overtime_minutes > 30 && (
                             <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 rounded-lg">
                                 <div className="flex items-center justify-between">
                                     <div>
@@ -2177,7 +2188,10 @@ export default function AttendanceReview() {
                                 <h4 className="text-sm font-semibold mb-2">Admin Verification Notes</h4>
                                 <div className="p-3 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-md">
                                     <p className="text-sm whitespace-pre-wrap">
-                                        {selectedNoteRecord.verification_notes || <span className="text-muted-foreground italic">Not verified yet</span>}
+                                        {selectedNoteRecord.verification_notes ||
+                                            selectedNoteRecord.leave_request?.admin_review_notes ||
+                                            selectedNoteRecord.leave_request?.hr_review_notes ||
+                                            <span className="text-muted-foreground italic">Not verified yet</span>}
                                     </p>
                                 </div>
                             </div>
@@ -2273,14 +2287,14 @@ export default function AttendanceReview() {
                         <div className="space-y-2">
                             <Label>Status Override (Optional)</Label>
                             <Select
-                                value={partialData.status || ""}
-                                onValueChange={value => setPartialData("status", value)}
+                                value={partialData.status || "auto"}
+                                onValueChange={value => setPartialData("status", value === "auto" ? "" : value)}
                             >
                                 <SelectTrigger>
                                     <SelectValue placeholder="Keep current status" />
                                 </SelectTrigger>
                                 <SelectContent>
-                                    <SelectItem value="">Keep current status</SelectItem>
+                                    <SelectItem value="auto">Keep current status</SelectItem>
                                     <SelectItem value="on_time">On Time</SelectItem>
                                     <SelectItem value="tardy">Tardy</SelectItem>
                                     <SelectItem value="half_day_absence">Half Day Absence</SelectItem>

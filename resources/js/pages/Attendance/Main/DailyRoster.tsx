@@ -66,6 +66,7 @@ interface ExistingAttendance {
     secondary_status: string | null;
     actual_time_in: string | null;
     actual_time_out: string | null;
+    total_minutes_worked?: number;
     admin_verified: boolean;
     notes: string | null;
     verification_notes: string | null;
