@@ -130,3 +130,35 @@ export function formatDateShort(dateString: string | null | undefined): string {
         year: 'numeric',
     });
 }
+
+/**
+ * Format total minutes worked to display as "Xh Ym" format
+ * @param minutes Total minutes worked (integer)
+ * @returns Formatted string like "8h 30m" or "-" if null/0
+ */
+export function formatWorkDuration(minutes: number | null | undefined): string {
+    if (minutes == null || minutes === 0) return '-';
+
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    if (hours === 0) return `${mins}m`;
+    if (mins === 0) return `${hours}h`;
+    return `${hours}h ${mins}m`;
+}
+
+/**
+ * Format time adjustment minutes (tardy, undertime, overtime) to display as "Xh Ym" format
+ * @param minutes Time adjustment in minutes (integer)
+ * @returns Formatted string like "1h 23m" or "45m"
+ */
+export function formatTimeAdjustment(minutes: number | null | undefined): string {
+    if (minutes == null || minutes === 0) return '0m';
+
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+
+    if (hours === 0) return `${mins}m`;
+    if (mins === 0) return `${hours}h`;
+    return `${hours}h ${mins}m`;
+}
