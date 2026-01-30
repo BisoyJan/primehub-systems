@@ -519,9 +519,9 @@ class LeaveRequestController extends Controller
                 }
             }
 
-            // Handle medical certificate/document file upload for Sick Leave and Bereavement Leave
+            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, and UPTO
             $medicalCertPath = null;
-            if (in_array($request->leave_type, ['SL', 'BL']) && $request->hasFile('medical_cert_file')) {
+            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO']) && $request->hasFile('medical_cert_file')) {
                 $file = $request->file('medical_cert_file');
                 $filename = 'medcert_' . $targetUser->id . '_' . time() . '.' . $file->getClientOriginalExtension();
                 $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
@@ -980,9 +980,9 @@ class LeaveRequestController extends Controller
 
         DB::beginTransaction();
         try {
-            // Handle medical certificate/document file upload for Sick Leave and Bereavement Leave
+            // Handle medical certificate/document file upload for Sick Leave, Bereavement Leave, and UPTO
             $medicalCertPath = $leaveRequest->medical_cert_path; // Keep existing if not replaced
-            if (in_array($request->leave_type, ['SL', 'BL']) && $request->hasFile('medical_cert_file')) {
+            if (in_array($request->leave_type, ['SL', 'BL', 'UPTO']) && $request->hasFile('medical_cert_file')) {
                 // Delete old file if exists
                 if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
                     Storage::disk('local')->delete($leaveRequest->medical_cert_path);

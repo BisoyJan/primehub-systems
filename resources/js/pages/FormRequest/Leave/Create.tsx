@@ -776,8 +776,8 @@ export default function Create({
                     </p>
                 </div>
 
-                {/* Leave Credits Summary */}
-                {creditsSummary.is_eligible && (
+                {/* Leave Credits Summary - Only show for leave types that use credits */}
+                {requiresCredits && creditsSummary.is_eligible && (
                     <Card className="mb-6">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -846,7 +846,7 @@ export default function Create({
                     </Card>
                 )}
 
-                {!creditsSummary.is_eligible && (
+                {requiresCredits && !creditsSummary.is_eligible && (
                     <>
                         {/* Show projected balance when user will be eligible by start date */}
                         {willBeEligibleByStartDate() && data.start_date ? (
@@ -1429,15 +1429,19 @@ export default function Create({
                                 )}
                             </div>
 
-                            {/* Medical/Supporting Document (for SL and BL) */}
-                            {(data.leave_type === 'SL' || data.leave_type === 'BL') && (
+                            {/* Medical/Supporting Document (for SL, BL, and UPTO) */}
+                            {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO') && (
                                 <div className="space-y-4">
                                     <div>
                                         <Label className="text-base font-medium">
-                                            Medical Certificate (Optional)
+                                            {data.leave_type === 'SL' ? 'Medical Certificate' : data.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'} (Optional)
                                         </Label>
                                         <p className="text-sm text-muted-foreground mt-1">
-                                            Upload your medical certificate to have leave credits deducted. Without a certificate, the leave will be recorded as unpaid.
+                                            {data.leave_type === 'SL'
+                                                ? 'Upload your medical certificate to have leave credits deducted. Without a certificate, the leave will be recorded as unpaid.'
+                                                : data.leave_type === 'BL'
+                                                    ? 'Upload a death certificate to support your bereavement leave request.'
+                                                    : 'Upload any supporting document for your unpaid time off request.'}
                                         </p>
                                     </div>
 
@@ -1458,7 +1462,9 @@ export default function Create({
                                                     <Upload className="h-6 w-6 text-muted-foreground" />
                                                 </div>
                                                 <div>
-                                                    <p className="font-medium">Click to upload medical certificate</p>
+                                                    <p className="font-medium">
+                                                        Click to upload {data.leave_type === 'SL' ? 'medical certificate' : data.leave_type === 'BL' ? 'death certificate' : 'supporting document'}
+                                                    </p>
                                                     <p className="text-xs text-muted-foreground mt-1">
                                                         JPEG, PNG, GIF, or WebP (max 4MB)
                                                     </p>
@@ -1471,7 +1477,7 @@ export default function Create({
                                                 <div className="flex items-center gap-2">
                                                     <FileImage className="h-5 w-5 text-green-600" />
                                                     <span className="text-sm font-medium text-green-600">
-                                                        Medical certificate attached
+                                                        {data.leave_type === 'SL' ? 'Medical certificate' : data.leave_type === 'BL' ? 'Death certificate' : 'Supporting document'} attached
                                                     </span>
                                                 </div>
                                                 <Button
