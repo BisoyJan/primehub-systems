@@ -34,9 +34,9 @@ class BiometricReprocessingController extends Controller
             ->orderBy('last_name')
             ->orderBy('first_name')
             ->get()
-            ->map(fn($u) => [
+            ->map(fn ($u) => [
                 'id' => $u->id,
-                'name' => $u->first_name . ' ' . $u->last_name,
+                'name' => $u->first_name.' '.$u->last_name,
                 'campaign_id' => $u->activeSchedule?->campaign_id,
             ]);
 
@@ -62,7 +62,7 @@ class BiometricReprocessingController extends Controller
         $request->validate([
             'start_date' => 'nullable|date',
             'end_date' => 'nullable|date|after_or_equal:start_date',
-            'campaign_id' => 'nullable|exists:campaigns,id',
+            'campaign_ids' => 'nullable|string', // Comma-separated IDs
         ]);
 
         $query = BiometricRecord::query();
@@ -84,18 +84,21 @@ class BiometricReprocessingController extends Controller
             ->orderBy('last_name')
             ->orderBy('first_name');
 
-        // If campaign filter is provided, filter by users in that campaign
-        if ($request->filled('campaign_id')) {
-            $campaignUserIds = \App\Models\EmployeeSchedule::where('campaign_id', $request->campaign_id)
-                ->pluck('user_id')
-                ->unique()
-                ->toArray();
-            $employeesQuery->whereIn('id', $campaignUserIds);
+        // If campaign filter is provided, filter by users in those campaigns
+        if ($request->filled('campaign_ids')) {
+            $campaignIds = array_filter(explode(',', $request->campaign_ids));
+            if (count($campaignIds) > 0) {
+                $campaignUserIds = \App\Models\EmployeeSchedule::whereIn('campaign_id', $campaignIds)
+                    ->pluck('user_id')
+                    ->unique()
+                    ->toArray();
+                $employeesQuery->whereIn('id', $campaignUserIds);
+            }
         }
 
-        $employees = $employeesQuery->get()->map(fn($u) => [
+        $employees = $employeesQuery->get()->map(fn ($u) => [
             'id' => $u->id,
-            'name' => $u->first_name . ' ' . $u->last_name,
+            'name' => $u->first_name.' '.$u->last_name,
             'campaign_id' => $u->activeSchedule?->campaign_id,
         ]);
 
@@ -115,7 +118,8 @@ class BiometricReprocessingController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'exists:users,id',
-            'campaign_id' => 'nullable|exists:campaigns,id',
+            'campaign_ids' => 'nullable|array',
+            'campaign_ids.*' => 'exists:campaigns,id',
         ]);
 
         $startDate = Carbon::parse($request->start_date);
@@ -127,9 +131,9 @@ class BiometricReprocessingController extends Controller
         if ($request->user_ids && count($request->user_ids) > 0) {
             $query->whereIn('user_id', $request->user_ids);
         }
-        // Filter by campaign if provided (get users from that campaign's schedules)
-        elseif ($request->campaign_id) {
-            $campaignUserIds = \App\Models\EmployeeSchedule::where('campaign_id', $request->campaign_id)
+        // Filter by campaigns if provided (get users from those campaigns' schedules)
+        elseif ($request->campaign_ids && count($request->campaign_ids) > 0) {
+            $campaignUserIds = \App\Models\EmployeeSchedule::whereIn('campaign_id', $request->campaign_ids)
                 ->pluck('user_id')
                 ->unique()
                 ->toArray();
@@ -150,9 +154,9 @@ class BiometricReprocessingController extends Controller
                     'start' => $affectedDates->first(),
                     'end' => $affectedDates->last(),
                 ],
-                'users' => $affectedUsers->map(fn($u) => [
+                'users' => $affectedUsers->map(fn ($u) => [
                     'id' => $u->id,
-                    'name' => $u->first_name . ' ' . $u->last_name,
+                    'name' => $u->first_name.' '.$u->last_name,
                     'record_count' => $records->where('user_id', $u->id)->count(),
                 ])->toArray(),
             ],
@@ -169,7 +173,8 @@ class BiometricReprocessingController extends Controller
             'end_date' => 'required|date|after_or_equal:start_date',
             'user_ids' => 'nullable|array',
             'user_ids.*' => 'exists:users,id',
-            'campaign_id' => 'nullable|exists:campaigns,id',
+            'campaign_ids' => 'nullable|array',
+            'campaign_ids.*' => 'exists:campaigns,id',
             'delete_existing' => 'boolean',
         ]);
 
@@ -180,11 +185,11 @@ class BiometricReprocessingController extends Controller
         // Get affected users
         $userIds = null;
 
-        // Priority: specific user IDs > campaign > all users with biometric records
+        // Priority: specific user IDs > campaigns > all users with biometric records
         if ($request->user_ids && count($request->user_ids) > 0) {
             $userIds = $request->user_ids;
-        } elseif ($request->campaign_id) {
-            $userIds = \App\Models\EmployeeSchedule::where('campaign_id', $request->campaign_id)
+        } elseif ($request->campaign_ids && count($request->campaign_ids) > 0) {
+            $userIds = \App\Models\EmployeeSchedule::whereIn('campaign_id', $request->campaign_ids)
                 ->pluck('user_id')
                 ->unique()
                 ->toArray();
@@ -212,7 +217,7 @@ class BiometricReprocessingController extends Controller
                     ->whereBetween('record_date', [$startDate, $endDate])
                     ->orderBy('datetime')
                     ->get()
-                    ->map(fn($r) => [
+                    ->map(fn ($r) => [
                         'datetime' => $r->datetime,
                         'name' => $user->last_name, // Use standardized name format
                     ]);
@@ -243,7 +248,7 @@ class BiometricReprocessingController extends Controller
 
                 $results['processed']++;
                 $results['details'][] = [
-                    'user' => $user->first_name . ' ' . $user->last_name,
+                    'user' => $user->first_name.' '.$user->last_name,
                     'shifts_processed' => $result['records_processed'],
                     'records_count' => $records->count(),
                 ];
@@ -251,7 +256,7 @@ class BiometricReprocessingController extends Controller
             } catch (\Exception $e) {
                 $results['failed']++;
                 $results['errors'][] = [
-                    'user' => $user->first_name . ' ' . $user->last_name,
+                    'user' => $user->first_name.' '.$user->last_name,
                     'error' => $e->getMessage(),
                 ];
 
@@ -298,7 +303,7 @@ class BiometricReprocessingController extends Controller
         $results['total_checked'] = $attendances->count();
 
         foreach ($attendances as $att) {
-            if (!$att->employeeSchedule) {
+            if (! $att->employeeSchedule) {
                 continue;
             }
 
@@ -308,16 +313,16 @@ class BiometricReprocessingController extends Controller
             $hasTimeOut = $att->actual_time_out !== null;
 
             // Recalculate status based on what we have
-            if (!$hasTimeIn && !$hasTimeOut) {
+            if (! $hasTimeIn && ! $hasTimeOut) {
                 $att->status = 'ncns';
                 $att->secondary_status = null;
-            } elseif (!$hasTimeIn && $hasTimeOut) {
+            } elseif (! $hasTimeIn && $hasTimeOut) {
                 $att->status = 'failed_bio_in';
                 $att->secondary_status = null;
-            } elseif ($hasTimeIn && !$hasTimeOut) {
+            } elseif ($hasTimeIn && ! $hasTimeOut) {
                 // Calculate tardiness
                 $shiftDate = is_string($att->shift_date) ? $att->shift_date : $att->shift_date->format('Y-m-d');
-                $scheduledIn = Carbon::parse($shiftDate . ' ' . $att->employeeSchedule->scheduled_time_in);
+                $scheduledIn = Carbon::parse($shiftDate.' '.$att->employeeSchedule->scheduled_time_in);
                 $actualIn = Carbon::parse($att->actual_time_in);
                 $tardyMins = (int) $scheduledIn->diffInMinutes($actualIn, false);
 
@@ -337,7 +342,7 @@ class BiometricReprocessingController extends Controller
             } elseif ($hasTimeIn && $hasTimeOut) {
                 // Both exist, recalculate full status
                 $shiftDate = is_string($att->shift_date) ? $att->shift_date : Carbon::parse($att->shift_date)->format('Y-m-d');
-                $scheduledIn = Carbon::parse($shiftDate . ' ' . $att->employeeSchedule->scheduled_time_in);
+                $scheduledIn = Carbon::parse($shiftDate.' '.$att->employeeSchedule->scheduled_time_in);
                 $actualIn = Carbon::parse($att->actual_time_in);
                 $tardyMins = (int) $scheduledIn->diffInMinutes($actualIn, false);
 
@@ -359,11 +364,11 @@ class BiometricReprocessingController extends Controller
                 $att->save();
                 $results['updated']++;
 
-                $oldStatusText = $oldStatus . ($oldSecondaryStatus ? " + {$oldSecondaryStatus}" : '');
-                $newStatusText = $att->status . ($att->secondary_status ? " + {$att->secondary_status}" : '');
+                $oldStatusText = $oldStatus.($oldSecondaryStatus ? " + {$oldSecondaryStatus}" : '');
+                $newStatusText = $att->status.($att->secondary_status ? " + {$att->secondary_status}" : '');
 
                 $results['details'][] = [
-                    'user' => $att->user->first_name . ' ' . $att->user->last_name,
+                    'user' => $att->user->first_name.' '.$att->user->last_name,
                     'date' => $att->shift_date->format('M d, Y'),
                     'old_status' => $oldStatusText,
                     'new_status' => $att->status,

@@ -2,17 +2,16 @@
 
 namespace App\Services;
 
-use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Log;
 use Carbon\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Log;
 
 class AttendanceFileParser
 {
     /**
      * Parse the attendance TXT file.
      *
-     * @param string $filePath Full path to the TXT file
+     * @param  string  $filePath  Full path to the TXT file
      * @return Collection Collection of parsed records
      */
     public function parse(string $filePath): Collection
@@ -28,9 +27,6 @@ class AttendanceFileParser
     /**
      * Convert content to UTF-8 encoding.
      * Biometric devices often export in Windows-1252 or Latin-1 encoding.
-     *
-     * @param string $content
-     * @return string
      */
     protected function convertToUtf8(string $content): string
     {
@@ -59,13 +55,13 @@ class AttendanceFileParser
     /**
      * Parse the content of the TXT file.
      *
-     * @param string $content File content
+     * @param  string  $content  File content
      * @return Collection Collection of parsed records
      */
     public function parseContent(string $content): Collection
     {
         // Ensure UTF-8 encoding for content passed directly
-        if (!mb_check_encoding($content, 'UTF-8')) {
+        if (! mb_check_encoding($content, 'UTF-8')) {
             $content = $this->convertToUtf8($content);
         }
 
@@ -82,7 +78,7 @@ class AttendanceFileParser
         return collect($lines)
             ->skip(1) // Skip header line
             ->filter(function ($line) {
-                return !empty(trim($line));
+                return ! empty(trim($line));
             })
             ->map(function ($line) {
                 return $this->parseLine($line);
@@ -97,9 +93,6 @@ class AttendanceFileParser
      *
      * Format: No	DevNo	UserId	Name	Mode	DateTime
      * Example: 1	1	10	Nodado A	FP	2025-11-05  05:50:25
-     *
-     * @param string $line
-     * @return array|null
      */
     protected function parseLine(string $line): ?array
     {
@@ -166,11 +159,12 @@ class AttendanceFileParser
 
             $datetime = Carbon::createFromFormat('Y-m-d H:i:s', $dateTimeStr);
 
-            if (!$datetime) {
+            if (! $datetime) {
                 \Log::warning('Failed to create Carbon instance', [
                     'line' => $line,
                     'datetime_str' => $dateTimeStr,
                 ]);
+
                 return null;
             }
         } catch (\Exception $e) {
@@ -179,8 +173,9 @@ class AttendanceFileParser
                 'line' => $line,
                 'datetime_str' => $dateTimeStr,
                 'columns_count' => count($columns),
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ]);
+
             return null;
         }
 
@@ -199,9 +194,6 @@ class AttendanceFileParser
      * Normalize name for matching.
      * Removes extra spaces, periods, converts hyphens to spaces, and lowercase.
      * Handles edge cases like: "cabarliza m.", "Ogao-ogao", "Antonio g"
-     *
-     * @param string $name
-     * @return string
      */
     public function normalizeName(string $name): string
     {
@@ -225,9 +217,6 @@ class AttendanceFileParser
 
     /**
      * Group records by employee name.
-     *
-     * @param Collection $records
-     * @return Collection
      */
     public function groupByEmployee(Collection $records): Collection
     {
@@ -242,10 +231,9 @@ class AttendanceFileParser
      * Looks for the earliest reasonable record on the expected date.
      * Ignores scans that are too early (>2 hours before scheduled time).
      *
-     * @param Collection $records Employee's bio records for a period
-     * @param Carbon $expectedDate Expected date for time in
-     * @param string|null $scheduledTimeIn Scheduled time in (HH:MM:SS) to filter unreasonable early scans
-     * @return array|null
+     * @param  Collection  $records  Employee's bio records for a period
+     * @param  Carbon  $expectedDate  Expected date for time in
+     * @param  string|null  $scheduledTimeIn  Scheduled time in (HH:MM:SS) to filter unreasonable early scans
      */
     public function findTimeInRecord(Collection $records, Carbon $expectedDate, ?string $scheduledTimeIn = null): ?array
     {
@@ -267,7 +255,7 @@ class AttendanceFileParser
         // If scheduled time is provided, filter out unreasonably early scans
         // (more than 2 hours before scheduled time)
         if ($scheduledTimeIn !== null) {
-            $scheduledDateTime = Carbon::parse($targetDate . ' ' . $scheduledTimeIn);
+            $scheduledDateTime = Carbon::parse($targetDate.' '.$scheduledTimeIn);
             $twoHoursBefore = $scheduledDateTime->copy()->subHours(2);
 
             $filteredRecords = $filteredRecords->filter(function ($record) use ($twoHoursBefore) {
@@ -287,11 +275,10 @@ class AttendanceFileParser
      * Find time in record by time range on a specific date.
      * For night shifts: looks for records between start and end hour (e.g., 18:00-23:59).
      *
-     * @param Collection $records Employee's bio records for a period
-     * @param Carbon $expectedDate Expected date for time in
-     * @param int $startHour Starting hour (e.g., 18 for 6 PM)
-     * @param int $endHour Ending hour (e.g., 23 for 11 PM)
-     * @return array|null
+     * @param  Collection  $records  Employee's bio records for a period
+     * @param  Carbon  $expectedDate  Expected date for time in
+     * @param  int  $startHour  Starting hour (e.g., 18 for 6 PM)
+     * @param  int  $endHour  Ending hour (e.g., 23 for 11 PM)
      */
     public function findTimeInRecordByTimeRange(
         Collection $records,
@@ -308,6 +295,7 @@ class AttendanceFileParser
                     return false;
                 }
                 $hour = $record['datetime']->hour;
+
                 return $hour >= $startHour && $hour <= $endHour;
             })
             ->sortBy(function ($record) {
@@ -324,11 +312,10 @@ class AttendanceFileParser
      * For afternoon/evening time outs, finds the record closest to scheduled time out
      * within a reasonable range (ignores extra scans that are too late).
      *
-     * @param Collection $records Employee's bio records for a period
-     * @param Carbon $expectedDate Expected date for time out
-     * @param int|null $expectedHour Expected time out hour (0-23) to determine if morning or evening
-     * @param string|null $scheduledTimeOut Scheduled time out (HH:MM:SS) for better matching
-     * @return array|null
+     * @param  Collection  $records  Employee's bio records for a period
+     * @param  Carbon  $expectedDate  Expected date for time out
+     * @param  int|null  $expectedHour  Expected time out hour (0-23) to determine if morning or evening
+     * @param  string|null  $scheduledTimeOut  Scheduled time out (HH:MM:SS) for better matching
      */
     public function findTimeOutRecord(
         Collection $records,
@@ -362,24 +349,21 @@ class AttendanceFileParser
         // For all other cases (including morning time outs 0-11 with schedule),
         // find the best match using scheduled time
         if ($scheduledTimeOut !== null) {
-            $scheduledDateTime = Carbon::parse($targetDate . ' ' . $scheduledTimeOut);
+            $scheduledDateTime = Carbon::parse($targetDate.' '.$scheduledTimeOut);
 
             // For graveyard/morning shifts where time out is in early/mid morning (0-11),
             // filter out very early scans that are likely TIME IN, not TIME OUT
             // Allow scans starting from 1 hour after midnight (01:00) to be considered
             if ($expectedHour !== null && $expectedHour >= 0 && $expectedHour < 12) {
-                $earliestPossibleTimeOut = Carbon::parse($targetDate . ' 01:00:00');
+                $earliestPossibleTimeOut = Carbon::parse($targetDate.' 01:00:00');
                 $filteredRecords = $filteredRecords->filter(function ($record) use ($earliestPossibleTimeOut) {
                     return $record['datetime']->greaterThanOrEqualTo($earliestPossibleTimeOut);
                 });
             }
 
-            // Find the record closest to scheduled time out, but not too late
-            // Allow up to 8 hours after scheduled time (for extended overtime or unusual situations)
-            // Anything later is likely next shift or scanner error
-            $bestMatch = null;
-            $smallestDiff = PHP_INT_MAX;
-
+            // Find the FIRST valid time out record within acceptable range
+            // When employee scans multiple times at checkout, use the FIRST scan as departure time
+            // Allow up to 8 hours before/after scheduled time (for extended overtime or unusual situations)
             foreach ($filteredRecords as $record) {
                 $recordTime = $record['datetime'];
                 $diffInMinutes = $scheduledDateTime->diffInMinutes($recordTime, false);
@@ -403,17 +387,9 @@ class AttendanceFileParser
                     }
                 }
 
-                // Find the record with smallest absolute difference from scheduled time
-                $absDiff = abs($diffInMinutes);
-                if ($absDiff < $smallestDiff) {
-                    $smallestDiff = $absDiff;
-                    $bestMatch = $record;
-                }
-            }
-
-            // If we found a valid match within the time window, return it
-            if ($bestMatch !== null) {
-                return $bestMatch;
+                // Return the FIRST valid record in the acceptable window
+                // This ensures we use the earliest scan when employee scans multiple times
+                return $record;
             }
 
             // No valid time out found within reasonable range
@@ -427,14 +403,13 @@ class AttendanceFileParser
 
     /**
      * Find time out record within a specific time range on a date.
-     * Looks for the latest record in the specified time range on the expected date.
-     * Useful for shifts where both time in and time out are on the same date (e.g., graveyard shifts).
+     * Looks for the FIRST (earliest) record in the specified time range on the expected date.
+     * When employee scans multiple times at checkout, use the first scan as departure time.
      *
-     * @param Collection $records Employee's bio records for a period
-     * @param Carbon $expectedDate Expected date for time out
-     * @param int $startHour Start hour (inclusive)
-     * @param int $endHour End hour (inclusive)
-     * @return array|null
+     * @param  Collection  $records  Employee's bio records for a period
+     * @param  Carbon  $expectedDate  Expected date for time out
+     * @param  int  $startHour  Start hour (inclusive)
+     * @param  int  $endHour  End hour (inclusive)
      */
     public function findTimeOutRecordByTimeRange(
         Collection $records,
@@ -444,28 +419,27 @@ class AttendanceFileParser
     ): ?array {
         $targetDate = $expectedDate->format('Y-m-d');
 
-        // Find the last (latest) record in the specified time range on the expected date
+        // Find the FIRST (earliest) record in the specified time range on the expected date
+        // When employee scans multiple times, use the first scan as actual departure time
         $record = $records
             ->filter(function ($record) use ($targetDate, $startHour, $endHour) {
                 if ($record['datetime']->format('Y-m-d') !== $targetDate) {
                     return false;
                 }
                 $hour = $record['datetime']->hour;
+
                 return $hour >= $startHour && $hour <= $endHour;
             })
             ->sortBy(function ($record) {
                 return $record['datetime']->timestamp;
             })
-            ->last();
+            ->first();
 
         return $record;
     }
 
     /**
      * Get statistics from parsed records.
-     *
-     * @param Collection $records
-     * @return array
      */
     public function getStatistics(Collection $records): array
     {
@@ -486,9 +460,9 @@ class AttendanceFileParser
      * Returns records within the range and records outside the range separately.
      * Includes +1 day buffer for night shift time-outs.
      *
-     * @param Collection $records Collection of parsed records
-     * @param Carbon $dateFrom Start date of the range
-     * @param Carbon $dateTo End date of the range
+     * @param  Collection  $records  Collection of parsed records
+     * @param  Carbon  $dateFrom  Start date of the range
+     * @param  Carbon  $dateTo  End date of the range
      * @return array ['within_range' => Collection, 'outside_range' => Collection, 'summary' => array]
      */
     public function filterByDateRange(Collection $records, Carbon $dateFrom, Carbon $dateTo): array
@@ -509,7 +483,7 @@ class AttendanceFileParser
                 $withinRange->push($record);
 
                 // Track dates within range
-                if (!isset($dateBreakdown[$recordDate])) {
+                if (! isset($dateBreakdown[$recordDate])) {
                     $dateBreakdown[$recordDate] = ['count' => 0, 'in_range' => true];
                 }
                 $dateBreakdown[$recordDate]['count']++;
@@ -517,7 +491,7 @@ class AttendanceFileParser
                 $outsideRange->push($record);
 
                 // Track dates outside range
-                if (!isset($dateBreakdown[$recordDate])) {
+                if (! isset($dateBreakdown[$recordDate])) {
                     $dateBreakdown[$recordDate] = ['count' => 0, 'in_range' => false];
                 }
                 $dateBreakdown[$recordDate]['count']++;

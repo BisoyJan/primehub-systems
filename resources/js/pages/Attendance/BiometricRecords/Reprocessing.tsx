@@ -26,6 +26,7 @@ import {
     AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { Can } from '@/components/authorization';
+import { MultiSelectFilter } from '@/components/multi-select-filter';
 import { index as attendanceIndex } from '@/routes/attendance';
 import {
     index as biometricReprocessingIndex,
@@ -113,8 +114,8 @@ export default function Reprocessing({ stats, employees: initialEmployees, campa
 
     const [startDate, setStartDate] = useState('');
     const [endDate, setEndDate] = useState('');
-    const [selectedEmployeeId, setSelectedEmployeeId] = useState<string>('');
-    const [selectedCampaignId, setSelectedCampaignId] = useState<string>('');
+    const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>([]);
     const [filteredEmployees, setFilteredEmployees] = useState<Employee[]>(initialEmployees);
     const [isLoadingEmployees, setIsLoadingEmployees] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -128,11 +129,11 @@ export default function Reprocessing({ stats, employees: initialEmployees, campa
     const [showFixStatusConfirm, setShowFixStatusConfirm] = useState(false);
 
     // Fetch filtered employees when date range or campaign changes
-    const fetchFilteredEmployees = async (start: string, end: string, campaignId: string) => {
+    const fetchFilteredEmployees = async (start: string, end: string, campaignIds: string[]) => {
         if (!start || !end) {
             // Reset to initial employees if no date range
-            setFilteredEmployees(campaignId
-                ? initialEmployees.filter(emp => emp.campaign_id === parseInt(campaignId))
+            setFilteredEmployees(campaignIds.length > 0
+                ? initialEmployees.filter(emp => emp.campaign_id !== null && campaignIds.includes(emp.campaign_id.toString()))
                 : initialEmployees
             );
             return;
@@ -143,7 +144,7 @@ export default function Reprocessing({ stats, employees: initialEmployees, campa
             const params = new URLSearchParams();
             params.append('start_date', start);
             params.append('end_date', end);
-            if (campaignId) params.append('campaign_id', campaignId);
+            if (campaignIds.length > 0) params.append('campaign_ids', campaignIds.join(','));
 
             const response = await fetch(`/biometric-reprocessing/employees?${params.toString()}`);
             const data = await response.json();
@@ -159,30 +160,30 @@ export default function Reprocessing({ stats, employees: initialEmployees, campa
     // Handle date changes
     const handleStartDateChange = (value: string) => {
         setStartDate(value);
-        setSelectedEmployeeId(''); // Clear selection when dates change
+        setSelectedEmployeeIds([]); // Clear selection when dates change
         if (value && endDate) {
-            fetchFilteredEmployees(value, endDate, selectedCampaignId);
+            fetchFilteredEmployees(value, endDate, selectedCampaignIds);
         }
     };
 
     const handleEndDateChange = (value: string) => {
         setEndDate(value);
-        setSelectedEmployeeId(''); // Clear selection when dates change
+        setSelectedEmployeeIds([]); // Clear selection when dates change
         if (startDate && value) {
-            fetchFilteredEmployees(startDate, value, selectedCampaignId);
+            fetchFilteredEmployees(startDate, value, selectedCampaignIds);
         }
     };
 
     // Handle campaign change
-    const handleCampaignChange = (value: string) => {
-        setSelectedCampaignId(value);
-        setSelectedEmployeeId(''); // Clear employee selection
+    const handleCampaignChange = (values: string[]) => {
+        setSelectedCampaignIds(values);
+        setSelectedEmployeeIds([]); // Clear employee selection
         if (startDate && endDate) {
-            fetchFilteredEmployees(startDate, endDate, value);
+            fetchFilteredEmployees(startDate, endDate, values);
         } else {
             // Filter from initial employees if no date range
-            setFilteredEmployees(value
-                ? initialEmployees.filter(emp => emp.campaign_id === parseInt(value))
+            setFilteredEmployees(values.length > 0
+                ? initialEmployees.filter(emp => emp.campaign_id !== null && values.includes(emp.campaign_id.toString()))
                 : initialEmployees
             );
         }
@@ -200,8 +201,8 @@ export default function Reprocessing({ stats, employees: initialEmployees, campa
             {
                 start_date: startDate,
                 end_date: endDate,
-                user_ids: selectedEmployeeId ? [parseInt(selectedEmployeeId)] : [],
-                campaign_id: selectedCampaignId ? parseInt(selectedCampaignId) : null,
+                user_ids: selectedEmployeeIds.map(id => parseInt(id)),
+                campaign_ids: selectedCampaignIds.map(id => parseInt(id)),
             },
             {
                 preserveState: false,
@@ -239,8 +240,8 @@ export default function Reprocessing({ stats, employees: initialEmployees, campa
                 end_date: endDate,
                 delete_existing: deleteExisting,
                 rescan_points: rescanPoints,
-                user_ids: selectedEmployeeId ? [parseInt(selectedEmployeeId)] : [],
-                campaign_id: selectedCampaignId ? parseInt(selectedCampaignId) : null,
+                user_ids: selectedEmployeeIds.map(id => parseInt(id)),
+                campaign_ids: selectedCampaignIds.map(id => parseInt(id)),
             },
             {
                 preserveState: true,
@@ -374,46 +375,38 @@ export default function Reprocessing({ stats, employees: initialEmployees, campa
 
                             <div className="grid gap-4 md:grid-cols-2">
                                 <div className="space-y-2">
-                                    <Label htmlFor="campaign">Campaign (Optional)</Label>
-                                    <select
-                                        id="campaign"
-                                        title="Select Campaign"
-                                        value={selectedCampaignId}
-                                        onChange={(e) => handleCampaignChange(e.target.value)}
+                                    <Label>Campaign (Optional)</Label>
+                                    <MultiSelectFilter
+                                        options={campaigns.map((camp) => ({
+                                            label: camp.name,
+                                            value: camp.id.toString(),
+                                        }))}
+                                        value={selectedCampaignIds}
+                                        onChange={handleCampaignChange}
+                                        placeholder={isLoadingEmployees ? 'Loading...' : 'Select campaigns...'}
+                                        emptyMessage="No campaigns found."
                                         disabled={isLoadingEmployees}
-                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        <option value="">All Campaigns</option>
-                                        {campaigns.map((camp) => (
-                                            <option key={camp.id} value={camp.id}>
-                                                {camp.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                    />
                                 </div>
                                 <div className="space-y-2">
-                                    <Label htmlFor="employee">Employee (Optional)</Label>
-                                    <select
-                                        id="employee"
-                                        title="Select Employee"
-                                        value={selectedEmployeeId}
-                                        onChange={(e) => setSelectedEmployeeId(e.target.value)}
-                                        disabled={isLoadingEmployees}
-                                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                                    >
-                                        <option value="">
-                                            {isLoadingEmployees
+                                    <Label>Employee (Optional)</Label>
+                                    <MultiSelectFilter
+                                        options={filteredEmployees.map((emp) => ({
+                                            label: emp.name,
+                                            value: emp.id.toString(),
+                                        }))}
+                                        value={selectedEmployeeIds}
+                                        onChange={setSelectedEmployeeIds}
+                                        placeholder={
+                                            isLoadingEmployees
                                                 ? 'Loading...'
-                                                : selectedCampaignId
-                                                    ? 'All Employees in Campaign'
-                                                    : 'All Employees'}
-                                        </option>
-                                        {filteredEmployees.map((emp) => (
-                                            <option key={emp.id} value={emp.id}>
-                                                {emp.name}
-                                            </option>
-                                        ))}
-                                    </select>
+                                                : selectedCampaignIds.length > 0
+                                                    ? 'Select employees in campaign...'
+                                                    : 'Select employees...'
+                                        }
+                                        emptyMessage="No employees found."
+                                        disabled={isLoadingEmployees}
+                                    />
                                 </div>
                             </div>
 

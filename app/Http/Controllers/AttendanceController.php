@@ -2,28 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use App\Http\Controllers\AttendancePointController;
 use App\Models\Attendance;
-use App\Models\AttendanceUpload;
 use App\Models\AttendancePoint;
+use App\Models\AttendanceUpload;
 use App\Models\LeaveRequest;
-use App\Models\User;
 use App\Models\Site;
+use App\Models\User;
 use App\Services\AttendanceProcessor;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
-use Carbon\Carbon;
 
 class AttendanceController extends Controller
 {
     protected AttendanceProcessor $processor;
+
     protected NotificationService $notificationService;
+
     protected LeaveCreditService $leaveCreditService;
+
     protected AttendancePointController $attendancePointController;
 
     public function __construct(
@@ -50,7 +52,7 @@ class AttendanceController extends Controller
             $method->setAccessible(true);
             $method->invoke($this->attendancePointController, $userId);
         } catch (\Exception $e) {
-            Log::error('AttendanceController recalculateGbroForUser Error: ' . $e->getMessage());
+            Log::error('AttendanceController recalculateGbroForUser Error: '.$e->getMessage());
         }
     }
 
@@ -58,11 +60,11 @@ class AttendanceController extends Controller
      * Check if attendance points need to be regenerated based on changes.
      * Returns true if points need regeneration, false if no changes affect points.
      *
-     * @param Attendance $attendance The attendance record (with updated values)
-     * @param string|null $oldStatus The previous status before update
-     * @param string|null $oldSecondaryStatus The previous secondary status
-     * @param bool $oldIsSetHome The previous is_set_home value
-     * @param bool $oldIsAdvised The previous is_advised value
+     * @param  Attendance  $attendance  The attendance record (with updated values)
+     * @param  string|null  $oldStatus  The previous status before update
+     * @param  string|null  $oldSecondaryStatus  The previous secondary status
+     * @param  bool  $oldIsSetHome  The previous is_set_home value
+     * @param  bool  $oldIsAdvised  The previous is_advised value
      * @return bool Whether points need regeneration
      */
     protected function needsPointRegeneration(
@@ -85,7 +87,7 @@ class AttendanceController extends Controller
         $newGeneratesPoints = in_array($newStatus, $pointableStatuses) || in_array($newSecondaryStatus, $pointableStatuses);
 
         // If neither generates points, no regeneration needed
-        if (!$oldGeneratesPoints && !$newGeneratesPoints) {
+        if (! $oldGeneratesPoints && ! $newGeneratesPoints) {
             return false;
         }
 
@@ -120,12 +122,12 @@ class AttendanceController extends Controller
      * Regenerate attendance points for a record if needed.
      * Uses smart comparison to avoid unnecessary regeneration.
      *
-     * @param Attendance $attendance The attendance record
-     * @param string|null $oldStatus Previous status (null for new records)
-     * @param string|null $oldSecondaryStatus Previous secondary status
-     * @param bool $oldIsSetHome Previous is_set_home value
-     * @param bool $oldIsAdvised Previous is_advised value
-     * @param bool $forceRegenerate Force regeneration regardless of changes
+     * @param  Attendance  $attendance  The attendance record
+     * @param  string|null  $oldStatus  Previous status (null for new records)
+     * @param  string|null  $oldSecondaryStatus  Previous secondary status
+     * @param  bool  $oldIsSetHome  Previous is_set_home value
+     * @param  bool  $oldIsAdvised  Previous is_advised value
+     * @param  bool  $forceRegenerate  Force regeneration regardless of changes
      * @return bool Whether points were regenerated
      */
     protected function regeneratePointsIfNeeded(
@@ -150,21 +152,22 @@ class AttendanceController extends Controller
             $oldIsAdvised
         );
 
-        if (!$needsRegeneration) {
+        if (! $needsRegeneration) {
             Log::info('AttendanceController: Skipping point regeneration - no relevant changes', [
                 'attendance_id' => $attendance->id,
                 'status' => $attendance->status,
             ]);
+
             return false;
         }
 
         // Delete existing points for this attendance record OR for the same user and date
         AttendancePoint::where(function ($query) use ($attendance) {
             $query->where('attendance_id', $attendance->id)
-                  ->orWhere(function ($q) use ($attendance) {
-                      $q->where('user_id', $attendance->user_id)
+                ->orWhere(function ($q) use ($attendance) {
+                    $q->where('user_id', $attendance->user_id)
                         ->where('shift_date', $attendance->shift_date);
-                  });
+                });
         })->delete();
 
         // Generate new points if the status requires them
@@ -210,7 +213,7 @@ class AttendanceController extends Controller
             'employeeSchedule.campaign',
             'bioInSite',
             'bioOutSite',
-            'leaveRequest' // Include leave request info
+            'leaveRequest', // Include leave request info
         ]);
 
         // Restrict certain roles to only view their own attendance records
@@ -220,7 +223,7 @@ class AttendanceController extends Controller
         } elseif ($user->role === 'Team Lead' && $teamLeadCampaignId) {
             // Team Leads see only their campaign's attendance (unless they manually filter)
             $campaignFilter = $request->input('campaign_id');
-            if (!$campaignFilter || $campaignFilter === 'all') {
+            if (! $campaignFilter || $campaignFilter === 'all') {
                 // Default to Team Lead's campaign if no filter specified
                 $query->whereHas('employeeSchedule', function ($q) use ($teamLeadCampaignId) {
                     $q->where('campaign_id', $teamLeadCampaignId);
@@ -232,14 +235,19 @@ class AttendanceController extends Controller
                 $search = $request->search;
                 $query->whereHas('user', function ($q) use ($search) {
                     $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
                 });
             }
 
-            // Allow user_id filter
-            if ($request->has('user_id') && $request->user_id !== 'all') {
-                $query->where('user_id', $request->user_id);
+            // Allow user_id filter (supports multiple IDs comma-separated)
+            if ($request->has('user_id') && $request->user_id !== 'all' && $request->user_id) {
+                $userIds = is_array($request->user_id)
+                    ? $request->user_id
+                    : array_filter(explode(',', $request->user_id));
+                if (count($userIds) > 0) {
+                    $query->whereIn('user_id', $userIds);
+                }
             }
         } else {
             // Search by employee name (only for non-restricted roles)
@@ -247,20 +255,31 @@ class AttendanceController extends Controller
                 $search = $request->search;
                 $query->whereHas('user', function ($q) use ($search) {
                     $q->where('first_name', 'like', "%{$search}%")
-                      ->orWhere('last_name', 'like', "%{$search}%")
-                      ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
+                        ->orWhere('last_name', 'like', "%{$search}%")
+                        ->orWhere(\DB::raw("CONCAT(first_name, ' ', last_name)"), 'like', "%{$search}%");
                 });
             }
 
-            // Allow user_id filter for non-restricted roles
-            if ($request->has('user_id') && $request->user_id !== 'all') {
-                $query->where('user_id', $request->user_id);
+            // Allow user_id filter for non-restricted roles (supports multiple IDs comma-separated)
+            if ($request->has('user_id') && $request->user_id !== 'all' && $request->user_id) {
+                $userIds = is_array($request->user_id)
+                    ? $request->user_id
+                    : array_filter(explode(',', $request->user_id));
+                if (count($userIds) > 0) {
+                    $query->whereIn('user_id', $userIds);
+                }
             }
         }
 
         // Filters (available to all roles)
-        if ($request->has('status') && $request->status !== 'all') {
-            $query->where('status', $request->status);
+        // Status filter (supports multiple statuses comma-separated)
+        if ($request->has('status') && $request->status !== 'all' && $request->status) {
+            $statuses = is_array($request->status)
+                ? $request->status
+                : array_filter(explode(',', $request->status));
+            if (count($statuses) > 0) {
+                $query->whereIn('status', $statuses);
+            }
         }
 
         if ($request->has('start_date') && $request->has('end_date')) {
@@ -271,6 +290,15 @@ class AttendanceController extends Controller
             $query->needsVerification();
         }
 
+        // Filter by verification status
+        if ($request->has('verified_status') && $request->verified_status !== 'all' && $request->verified_status) {
+            if ($request->verified_status === 'verified') {
+                $query->where('admin_verified', true);
+            } elseif ($request->verified_status === 'pending') {
+                $query->where('admin_verified', false);
+            }
+        }
+
         // Filter by site (via employee schedule)
         if ($request->has('site_id') && $request->site_id !== 'all' && $request->site_id) {
             $query->whereHas('employeeSchedule', function ($q) use ($request) {
@@ -278,13 +306,21 @@ class AttendanceController extends Controller
             });
         }
 
-        // Filter by campaign (via employee schedule) - for non-Team Leads or when Team Lead explicitly filters
+        // Filter by campaign (via employee schedule) - supports multiple IDs comma-separated
         if ($request->has('campaign_id') && $request->campaign_id !== 'all' && $request->campaign_id) {
-            // For Team Leads, allow filtering within their campaign or to 'all' if they have permission
-            if ($user->role !== 'Team Lead' || $request->campaign_id == $teamLeadCampaignId) {
-                $query->whereHas('employeeSchedule', function ($q) use ($request) {
-                    $q->where('campaign_id', $request->campaign_id);
-                });
+            $campaignIds = is_array($request->campaign_id)
+                ? $request->campaign_id
+                : array_filter(explode(',', $request->campaign_id));
+
+            if (count($campaignIds) > 0) {
+                // For Team Leads, only allow filtering within their campaign
+                if ($user->role === 'Team Lead' && ! in_array($teamLeadCampaignId, $campaignIds)) {
+                    // Team Lead trying to filter outside their campaign - ignore
+                } else {
+                    $query->whereHas('employeeSchedule', function ($q) use ($campaignIds) {
+                        $q->whereIn('campaign_id', $campaignIds);
+                    });
+                }
             }
         }
 
@@ -305,7 +341,7 @@ class AttendanceController extends Controller
                 'id' => $user->id,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
-                'name' => $user->first_name . ' ' . $user->last_name,
+                'name' => $user->first_name.' '.$user->last_name,
             ]);
 
         // Get all sites for site filter dropdown
@@ -320,7 +356,7 @@ class AttendanceController extends Controller
             'sites' => $sites,
             'campaigns' => $campaigns,
             'teamLeadCampaignId' => $teamLeadCampaignId,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'site_id', 'campaign_id', 'needs_verification']),
+            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'site_id', 'campaign_id', 'needs_verification', 'verified_status']),
         ]);
     }
 
@@ -348,7 +384,7 @@ class AttendanceController extends Controller
 
         // Auto-filter campaign for Team Leads when no campaign is specified
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (!$campaignIdToFilter && $teamLeadCampaignId) {
+        if (! $campaignIdToFilter && $teamLeadCampaignId) {
             $campaignIdToFilter = $teamLeadCampaignId;
         }
 
@@ -356,13 +392,13 @@ class AttendanceController extends Controller
         $restrictedRoles = ['Agent', 'IT', 'Utility'];
         if (in_array($authUser->role, $restrictedRoles)) {
             $userId = auth()->id();
-        } else if (!$userId && $request->has('user_id')) {
+        } elseif (! $userId && $request->has('user_id')) {
             $userId = $request->user_id;
         }
 
         // Get all users for selection (if user has permission)
         $users = [];
-        if (!in_array($authUser->role, $restrictedRoles)) {
+        if (! in_array($authUser->role, $restrictedRoles)) {
             $usersQuery = User::select('id', 'first_name', 'last_name')
                 ->orderBy('first_name')
                 ->orderBy('last_name');
@@ -378,7 +414,7 @@ class AttendanceController extends Controller
                 ->map(function ($user) {
                     return [
                         'id' => $user->id,
-                        'name' => $user->first_name . ' ' . $user->last_name,
+                        'name' => $user->first_name.' '.$user->last_name,
                     ];
                 });
         }
@@ -390,7 +426,7 @@ class AttendanceController extends Controller
             if ($user) {
                 $selectedUser = [
                     'id' => $user->id,
-                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'name' => $user->first_name.' '.$user->last_name,
                 ];
             }
         }
@@ -406,10 +442,10 @@ class AttendanceController extends Controller
                 'user',
                 'employeeSchedule.site',
                 'bioInSite',
-                'bioOutSite'
+                'bioOutSite',
             ])
-            ->where('user_id', $userId)
-            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
+                ->where('user_id', $userId)
+                ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
 
             // Apply verification filter
             if ($verificationFilter === 'verified') {
@@ -466,9 +502,10 @@ class AttendanceController extends Controller
             ->get()
             ->map(function ($user) {
                 $schedule = $user->employeeSchedules->first();
+
                 return [
                     'id' => $user->id,
-                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'name' => $user->first_name.' '.$user->last_name,
                     'email' => $user->email,
                     'schedule' => $schedule ? [
                         'shift_type' => $schedule->shift_type,
@@ -499,13 +536,13 @@ class AttendanceController extends Controller
         // Combine date and time fields on the backend if they exist
         if ($request->has('actual_time_in_date') && $request->has('actual_time_in_time') && $request->actual_time_in_date && $request->actual_time_in_time) {
             $request->merge([
-                'actual_time_in' => $request->actual_time_in_date . 'T' . $request->actual_time_in_time
+                'actual_time_in' => $request->actual_time_in_date.'T'.$request->actual_time_in_time,
             ]);
         }
 
         if ($request->has('actual_time_out_date') && $request->has('actual_time_out_time') && $request->actual_time_out_date && $request->actual_time_out_time) {
             $request->merge([
-                'actual_time_out' => $request->actual_time_out_date . 'T' . $request->actual_time_out_time
+                'actual_time_out' => $request->actual_time_out_date.'T'.$request->actual_time_out_time,
             ]);
         }
 
@@ -554,9 +591,9 @@ class AttendanceController extends Controller
         $secondaryStatus = $validated['secondary_status'] ?? null;
 
         // Auto-set status to on_leave if there's an approved leave request
-        if ($approvedLeave && !$status) {
+        if ($approvedLeave && ! $status) {
             $status = 'on_leave';
-        } else if (!$status) {
+        } elseif (! $status) {
             // Auto-determine status based on actual times and schedule
             $hasBioIn = (bool) $actualTimeIn;
             $hasBioOut = (bool) $actualTimeOut;
@@ -565,8 +602,8 @@ class AttendanceController extends Controller
 
             if ($schedule && $hasBioIn && $hasBioOut) {
                 $shiftDate = Carbon::parse($validated['shift_date']);
-                $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
-                $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+                $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
+                $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
                 // Handle night shift (time out is next day)
                 if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
@@ -587,13 +624,13 @@ class AttendanceController extends Controller
                 if ($actualTimeOut->lt($scheduledTimeOut)) {
                     $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
                     $hasUndertime = true;
-                } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+                } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                     $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
                 }
-            } else if ($schedule && $hasBioIn) {
+            } elseif ($schedule && $hasBioIn) {
                 // Has schedule and time in, check if tardy
                 $shiftDate = Carbon::parse($validated['shift_date']);
-                $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+                $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
                 $gracePeriod = $schedule->grace_period_minutes ?? 0;
                 // Always calculate minutes, grace period only affects status
                 if ($actualTimeIn->gt($scheduledTimeIn)) {
@@ -606,11 +643,11 @@ class AttendanceController extends Controller
             }
 
             // Determine status based on violations (can be combined)
-            if (!$hasBioIn && !$hasBioOut) {
+            if (! $hasBioIn && ! $hasBioOut) {
                 $status = 'present_no_bio';
-            } else if (!$hasBioIn && $hasBioOut) {
+            } elseif (! $hasBioIn && $hasBioOut) {
                 $status = 'failed_bio_in';
-            } else if ($hasBioIn && !$hasBioOut) {
+            } elseif ($hasBioIn && ! $hasBioOut) {
                 // Check if also tardy - if tardy, that becomes primary status
                 if ($isTardy) {
                     $status = 'tardy';
@@ -618,21 +655,21 @@ class AttendanceController extends Controller
                 } else {
                     $status = 'failed_bio_out';
                 }
-            } else if ($isTardy && $hasUndertime) {
+            } elseif ($isTardy && $hasUndertime) {
                 $status = 'tardy'; // Both violations, tardy takes precedence
                 $secondaryStatus = 'undertime';
-            } else if ($isTardy) {
+            } elseif ($isTardy) {
                 $status = 'tardy';
-            } else if ($hasUndertime) {
+            } elseif ($hasUndertime) {
                 $status = 'undertime';
             } else {
                 $status = 'on_time';
             }
-        } else if ($schedule && $actualTimeIn && $actualTimeOut) {
+        } elseif ($schedule && $actualTimeIn && $actualTimeOut) {
             // Status was manually provided, but still calculate tardiness/undertime/overtime
             $shiftDate = Carbon::parse($validated['shift_date']);
-            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
-            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
+            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
             // Handle night shift (time out is next day)
             if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
@@ -647,30 +684,30 @@ class AttendanceController extends Controller
             // Calculate undertime (early leave) and overtime (late leave)
             if ($actualTimeOut->lt($scheduledTimeOut)) {
                 $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-            } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+            } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                 $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
                 // Only count overtime if more than 30 minutes beyond scheduled time out
                 if ($timeBeyondSchedule > 30) {
                     $overtimeMinutes = $timeBeyondSchedule;
                 }
             }
-        } else if ($schedule && $actualTimeIn) {
+        } elseif ($schedule && $actualTimeIn) {
             // Status was manually provided with only time in - still calculate tardiness
             $shiftDate = Carbon::parse($validated['shift_date']);
-            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
 
             // Calculate tardy minutes (actual late arrival - no grace period check since status is already determined)
             if ($actualTimeIn->gt($scheduledTimeIn)) {
                 $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
             }
-        } else if ($schedule && $actualTimeOut) {
+        } elseif ($schedule && $actualTimeOut) {
             // Status was manually provided with only time out - still calculate undertime/overtime
             $shiftDate = Carbon::parse($validated['shift_date']);
-            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
             // Handle night shift (time out is next day)
             if ($schedule->shift_type === 'night_shift' && $schedule->scheduled_time_in) {
-                $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+                $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
                 if ($scheduledTimeOut->lt($scheduledTimeIn)) {
                     $scheduledTimeOut->addDay();
                 }
@@ -679,7 +716,7 @@ class AttendanceController extends Controller
             // Calculate undertime (early leave) and overtime (late leave)
             if ($actualTimeOut->lt($scheduledTimeOut)) {
                 $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-            } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+            } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                 $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
                 // Only count overtime if more than 30 minutes beyond scheduled time out
                 if ($timeBeyondSchedule > 30) {
@@ -694,7 +731,7 @@ class AttendanceController extends Controller
         $undertimeApprovalBy = null;
         $undertimeApprovalAt = null;
 
-        if (!empty($validated['undertime_approval_status']) && $validated['undertime_approval_status'] === 'approved') {
+        if (! empty($validated['undertime_approval_status']) && $validated['undertime_approval_status'] === 'approved') {
             // Only allow pre-approval if user has permission
             if ($this->permissionService->userHasPermission(auth()->user(), 'attendance.approve_undertime')) {
                 $undertimeApprovalStatus = 'approved';
@@ -719,11 +756,11 @@ class AttendanceController extends Controller
             'overtime_minutes' => $overtimeMinutes,
             'is_advised' => $status === 'advised_absence', // Set is_advised flag for advised absence
             'is_set_home' => $request->boolean('is_set_home'),
-            'admin_verified' => !$hasLeaveConflict, // Requires approval if leave conflict
+            'admin_verified' => ! $hasLeaveConflict, // Requires approval if leave conflict
             'leave_request_id' => $approvedLeave?->id,
             'verification_notes' => $hasLeaveConflict
-                ? 'Manual entry during approved leave - requires HR review. Created by ' . auth()->user()->name
-                : 'Manually created by ' . auth()->user()->name,
+                ? 'Manual entry during approved leave - requires HR review. Created by '.auth()->user()->name
+                : 'Manually created by '.auth()->user()->name,
             'notes' => $validated['notes'],
             'remarks' => $hasLeaveConflict
                 ? 'Leave conflict: Employee on approved leave but has attendance entry. Pending HR review.'
@@ -753,7 +790,7 @@ class AttendanceController extends Controller
                 $approvedLeave,
                 Carbon::parse($validated['shift_date']),
                 $actualTimeIn && $actualTimeOut ? 2 : 1, // scan count approximation
-                $actualTimeIn ? $actualTimeIn->format('H:i') . ($actualTimeOut ? ', ' . $actualTimeOut->format('H:i') : '') : 'N/A',
+                $actualTimeIn ? $actualTimeIn->format('H:i').($actualTimeOut ? ', '.$actualTimeOut->format('H:i') : '') : 'N/A',
                 $workDuration,
                 $approvedLeave->start_date != $approvedLeave->end_date
             );
@@ -774,13 +811,13 @@ class AttendanceController extends Controller
         // Combine date and time fields on the backend if they exist
         if ($request->has('actual_time_in_date') && $request->has('actual_time_in_time') && $request->actual_time_in_date && $request->actual_time_in_time) {
             $request->merge([
-                'actual_time_in' => $request->actual_time_in_date . 'T' . $request->actual_time_in_time
+                'actual_time_in' => $request->actual_time_in_date.'T'.$request->actual_time_in_time,
             ]);
         }
 
         if ($request->has('actual_time_out_date') && $request->has('actual_time_out_time') && $request->actual_time_out_date && $request->actual_time_out_time) {
             $request->merge([
-                'actual_time_out' => $request->actual_time_out_date . 'T' . $request->actual_time_out_time
+                'actual_time_out' => $request->actual_time_out_date.'T'.$request->actual_time_out_time,
             ]);
         }
 
@@ -830,9 +867,9 @@ class AttendanceController extends Controller
                 $secondaryStatus = $validated['secondary_status'] ?? null;
 
                 // Auto-set status to on_leave if there's an approved leave request
-                if ($approvedLeave && !$status) {
+                if ($approvedLeave && ! $status) {
                     $status = 'on_leave';
-                } else if (!$status) {
+                } elseif (! $status) {
                     // Auto-determine status based on actual times and schedule
                     $hasBioIn = (bool) $actualTimeIn;
                     $hasBioOut = (bool) $actualTimeOut;
@@ -841,8 +878,8 @@ class AttendanceController extends Controller
 
                     if ($schedule && $hasBioIn && $hasBioOut) {
                         $shiftDate = Carbon::parse($validated['shift_date']);
-                        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
-                        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+                        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
+                        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
                         // Handle night shift (time out is next day)
                         if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
@@ -863,17 +900,17 @@ class AttendanceController extends Controller
                         if ($actualTimeOut->lt($scheduledTimeOut)) {
                             $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
                             $hasUndertime = true;
-                        } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+                        } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                             $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
                             // Only count overtime if more than 30 minutes beyond scheduled time out
                             if ($timeBeyondSchedule > 30) {
                                 $overtimeMinutes = $timeBeyondSchedule;
                             }
                         }
-                    } else if ($schedule && $hasBioIn) {
+                    } elseif ($schedule && $hasBioIn) {
                         // Has schedule and time in, check if tardy
                         $shiftDate = Carbon::parse($validated['shift_date']);
-                        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+                        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
                         $gracePeriod = $schedule->grace_period_minutes ?? 0;
                         // Always calculate minutes, grace period only affects status
                         if ($actualTimeIn->gt($scheduledTimeIn)) {
@@ -886,11 +923,11 @@ class AttendanceController extends Controller
                     }
 
                     // Determine status based on violations (can be combined)
-                    if (!$hasBioIn && !$hasBioOut) {
+                    if (! $hasBioIn && ! $hasBioOut) {
                         $status = 'present_no_bio';
-                    } else if (!$hasBioIn && $hasBioOut) {
+                    } elseif (! $hasBioIn && $hasBioOut) {
                         $status = 'failed_bio_in';
-                    } else if ($hasBioIn && !$hasBioOut) {
+                    } elseif ($hasBioIn && ! $hasBioOut) {
                         // Check if also tardy - if tardy, that becomes primary status
                         if ($isTardy) {
                             $status = 'tardy';
@@ -898,21 +935,21 @@ class AttendanceController extends Controller
                         } else {
                             $status = 'failed_bio_out';
                         }
-                    } else if ($isTardy && $hasUndertime) {
+                    } elseif ($isTardy && $hasUndertime) {
                         $status = 'tardy'; // Both violations, tardy takes precedence
                         $secondaryStatus = 'undertime';
-                    } else if ($isTardy) {
+                    } elseif ($isTardy) {
                         $status = 'tardy';
-                    } else if ($hasUndertime) {
+                    } elseif ($hasUndertime) {
                         $status = 'undertime';
                     } else {
                         $status = 'on_time';
                     }
-                } else if ($schedule && $actualTimeIn && $actualTimeOut) {
+                } elseif ($schedule && $actualTimeIn && $actualTimeOut) {
                     // Status was manually provided, but still calculate tardiness/undertime/overtime
                     $shiftDate = Carbon::parse($validated['shift_date']);
-                    $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
-                    $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+                    $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
+                    $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
                     // Handle night shift (time out is next day)
                     if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
@@ -927,30 +964,30 @@ class AttendanceController extends Controller
                     // Calculate undertime (early leave) and overtime (late leave)
                     if ($actualTimeOut->lt($scheduledTimeOut)) {
                         $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-                    } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+                    } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                         $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
                         // Only count overtime if more than 30 minutes beyond scheduled time out
                         if ($timeBeyondSchedule > 30) {
                             $overtimeMinutes = $timeBeyondSchedule;
                         }
                     }
-                } else if ($schedule && $actualTimeIn) {
+                } elseif ($schedule && $actualTimeIn) {
                     // Status was manually provided with only time in - still calculate tardiness
                     $shiftDate = Carbon::parse($validated['shift_date']);
-                    $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+                    $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
 
                     // Calculate tardy minutes (actual late arrival - no grace period check since status is already determined)
                     if ($actualTimeIn->gt($scheduledTimeIn)) {
                         $tardyMinutes = $scheduledTimeIn->diffInMinutes($actualTimeIn);
                     }
-                } else if ($schedule && $actualTimeOut) {
+                } elseif ($schedule && $actualTimeOut) {
                     // Status was manually provided with only time out - still calculate undertime/overtime
                     $shiftDate = Carbon::parse($validated['shift_date']);
-                    $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+                    $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
                     // Handle night shift (time out is next day)
                     if ($schedule->shift_type === 'night_shift' && $schedule->scheduled_time_in) {
-                        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
+                        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
                         if ($scheduledTimeOut->lt($scheduledTimeIn)) {
                             $scheduledTimeOut->addDay();
                         }
@@ -959,7 +996,7 @@ class AttendanceController extends Controller
                     // Calculate undertime (early leave) and overtime (late leave)
                     if ($actualTimeOut->lt($scheduledTimeOut)) {
                         $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-                    } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+                    } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
                         $timeBeyondSchedule = $scheduledTimeOut->diffInMinutes($actualTimeOut);
                         // Only count overtime if more than 30 minutes beyond scheduled time out
                         if ($timeBeyondSchedule > 30) {
@@ -984,7 +1021,7 @@ class AttendanceController extends Controller
                     'is_advised' => $status === 'advised_absence', // Set is_advised flag for advised absence
                     'is_set_home' => $request->boolean('is_set_home'),
                     'admin_verified' => true, // Manual entries are pre-verified
-                    'verification_notes' => 'Manually created by ' . auth()->user()->name,
+                    'verification_notes' => 'Manually created by '.auth()->user()->name,
                     'notes' => $validated['notes'],
                 ]);
 
@@ -1001,8 +1038,9 @@ class AttendanceController extends Controller
         if ($createdCount > 0) {
             $message = "{$createdCount} attendance record(s) created successfully.";
             if (count($errors) > 0) {
-                $message .= " However, " . count($errors) . " record(s) failed.";
+                $message .= ' However, '.count($errors).' record(s) failed.';
             }
+
             return redirect()->route('attendance.index')->with('message', $message)->with('type', 'success');
         }
 
@@ -1074,7 +1112,7 @@ class AttendanceController extends Controller
             // Get dates found in the file
             $datesInRange = $filtered['within_range']
                 ->pluck('datetime')
-                ->map(fn($dt) => $dt->format('Y-m-d'))
+                ->map(fn ($dt) => $dt->format('Y-m-d'))
                 ->unique()
                 ->sort()
                 ->values()
@@ -1082,7 +1120,7 @@ class AttendanceController extends Controller
 
             $datesOutsideRange = $filtered['outside_range']
                 ->pluck('datetime')
-                ->map(fn($dt) => $dt->format('Y-m-d'))
+                ->map(fn ($dt) => $dt->format('Y-m-d'))
                 ->unique()
                 ->sort()
                 ->values()
@@ -1122,7 +1160,7 @@ class AttendanceController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Failed to parse file: ' . $e->getMessage(),
+                'message' => 'Failed to parse file: '.$e->getMessage(),
             ], 422);
         }
     }
@@ -1134,12 +1172,12 @@ class AttendanceController extends Controller
     {
         // Get unique employee-date combinations from the file
         $employeeDates = $records->map(function ($record) {
-            return $record['normalized_name'] . '_' . $record['datetime']->format('Y-m-d');
+            return $record['normalized_name'].'_'.$record['datetime']->format('Y-m-d');
         })->unique()->values();
 
         // Get unique dates
         $dates = $records->pluck('datetime')
-            ->map(fn($dt) => $dt->format('Y-m-d'))
+            ->map(fn ($dt) => $dt->format('Y-m-d'))
             ->unique()
             ->toArray();
 
@@ -1158,12 +1196,12 @@ class AttendanceController extends Controller
         $potentialDuplicates = [];
         foreach ($existingAttendances as $attendance) {
             if ($attendance->user) {
-                $userName = strtolower($attendance->user->first_name . ' ' . $attendance->user->last_name);
-                $key = $userName . '_' . $attendance->shift_date;
+                $userName = strtolower($attendance->user->first_name.' '.$attendance->user->last_name);
+                $key = $userName.'_'.$attendance->shift_date;
 
                 // Simplified check - mark as potential duplicate if attendance exists for that date
                 $potentialDuplicates[] = [
-                    'employee' => $attendance->user->first_name . ' ' . $attendance->user->last_name,
+                    'employee' => $attendance->user->first_name.' '.$attendance->user->last_name,
                     'date' => $attendance->shift_date,
                     'status' => $attendance->status,
                     'verified' => $attendance->admin_verified,
@@ -1199,7 +1237,7 @@ class AttendanceController extends Controller
 
         // Store the file
         $file = $request->file('file');
-        $filename = time() . '_' . $file->getClientOriginalName();
+        $filename = time().'_'.$file->getClientOriginalName();
         $path = $file->storeAs('attendance_uploads', $filename);
 
         // Create upload record
@@ -1237,18 +1275,18 @@ class AttendanceController extends Controller
             }
 
             // Add date validation warnings if any
-            if (!empty($stats['date_warnings'])) {
-                $warningMessage = 'Date Validation Warnings: ' . implode(' ', $stats['date_warnings']);
+            if (! empty($stats['date_warnings'])) {
+                $warningMessage = 'Date Validation Warnings: '.implode(' ', $stats['date_warnings']);
                 session()->flash('warning', $warningMessage);
             }
 
             // Add unmatched names to flash message for debugging
-            if (!empty($stats['unmatched_names'])) {
+            if (! empty($stats['unmatched_names'])) {
                 $unmatchedList = implode(', ', array_slice($stats['unmatched_names'], 0, 10));
                 if (count($stats['unmatched_names']) > 10) {
-                    $unmatchedList .= '... and ' . (count($stats['unmatched_names']) - 10) . ' more';
+                    $unmatchedList .= '... and '.(count($stats['unmatched_names']) - 10).' more';
                 }
-                $message .= '. Unmatched: ' . $unmatchedList;
+                $message .= '. Unmatched: '.$unmatchedList;
             }
 
             // Return JSON if requested via fetch/API
@@ -1274,19 +1312,19 @@ class AttendanceController extends Controller
             \Log::error('Attendance upload failed', [
                 'upload_id' => $upload->id,
                 'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+                'trace' => $e->getTraceAsString(),
             ]);
 
             // Return JSON error if requested via fetch/API
             if ($request->wantsJson()) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'Failed to process attendance file: ' . $e->getMessage(),
+                    'message' => 'Failed to process attendance file: '.$e->getMessage(),
                 ], 422);
             }
 
             return redirect()->back()
-                ->with('message', 'Failed to process attendance file: ' . $e->getMessage())
+                ->with('message', 'Failed to process attendance file: '.$e->getMessage())
                 ->with('type', 'error');
         }
     }
@@ -1314,13 +1352,13 @@ class AttendanceController extends Controller
             'employeeSchedule.campaign',
             'bioInSite',
             'bioOutSite',
-            'leaveRequest' // Include leave request info
+            'leaveRequest', // Include leave request info
         ]);
 
         // Auto-filter for Team Leads by their campaign
         if ($user->role === 'Team Lead' && $teamLeadCampaignId) {
             $campaignFilter = $request->input('campaign_id');
-            if (!$campaignFilter || $campaignFilter === 'all') {
+            if (! $campaignFilter || $campaignFilter === 'all') {
                 // Default to Team Lead's campaign if no filter specified
                 $query->whereHas('employeeSchedule', function ($q) use ($teamLeadCampaignId) {
                     $q->where('campaign_id', $teamLeadCampaignId);
@@ -1340,14 +1378,24 @@ class AttendanceController extends Controller
             // Empty string means 'all' - no filter applied, show everything
         }
 
-        // Filter by specific employee
+        // Filter by specific employee (supports multiple IDs comma-separated)
         if ($request->filled('user_id')) {
-            $query->where('user_id', $request->user_id);
+            $userIds = is_array($request->user_id)
+                ? $request->user_id
+                : array_filter(explode(',', $request->user_id));
+            if (count($userIds) > 0) {
+                $query->whereIn('user_id', $userIds);
+            }
         }
 
-        // Filter by status
+        // Filter by status (supports multiple statuses comma-separated)
         if ($request->filled('status')) {
-            $query->where('status', $request->status);
+            $statuses = is_array($request->status)
+                ? $request->status
+                : array_filter(explode(',', $request->status));
+            if (count($statuses) > 0) {
+                $query->whereIn('status', $statuses);
+            }
         }
 
         // Filter by date range
@@ -1365,11 +1413,16 @@ class AttendanceController extends Controller
             });
         }
 
-        // Filter by campaign (via employee schedule)
+        // Filter by campaign (via employee schedule) - supports multiple IDs comma-separated
         if ($request->filled('campaign_id')) {
-            $query->whereHas('employeeSchedule', function ($q) use ($request) {
-                $q->where('campaign_id', $request->campaign_id);
-            });
+            $campaignIds = is_array($request->campaign_id)
+                ? $request->campaign_id
+                : array_filter(explode(',', $request->campaign_id));
+            if (count($campaignIds) > 0) {
+                $query->whereHas('employeeSchedule', function ($q) use ($campaignIds) {
+                    $q->whereIn('campaign_id', $campaignIds);
+                });
+            }
         }
 
         // If verify parameter is provided, filter to show only that specific record
@@ -1397,7 +1450,7 @@ class AttendanceController extends Controller
                 'id' => $user->id,
                 'first_name' => $user->first_name,
                 'last_name' => $user->last_name,
-                'name' => $user->first_name . ' ' . $user->last_name,
+                'name' => $user->first_name.' '.$user->last_name,
             ]);
 
         // Get all sites for site filter dropdown
@@ -1515,7 +1568,7 @@ class AttendanceController extends Controller
             // Recalculate tardy/undertime/overtime if times provided
             if ($request->actual_time_in && $attendance->scheduled_time_in) {
                 $shiftDate = Carbon::parse($attendance->shift_date);
-                $scheduled = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attendance->scheduled_time_in);
+                $scheduled = Carbon::parse($shiftDate->format('Y-m-d').' '.$attendance->scheduled_time_in);
                 $actual = Carbon::parse($request->actual_time_in);
                 $tardyMinutes = $scheduled->diffInMinutes($actual, false);
 
@@ -1528,52 +1581,52 @@ class AttendanceController extends Controller
 
             // Recalculate undertime and overtime if time out provided
             if ($request->actual_time_out && $attendance->scheduled_time_out) {
-            $actualTimeOut = Carbon::parse($request->actual_time_out);
+                $actualTimeOut = Carbon::parse($request->actual_time_out);
 
-            // Build scheduled time out based on shift date and scheduled time
-            $shiftDate = Carbon::parse($attendance->shift_date);
-            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attendance->scheduled_time_out);
+                // Build scheduled time out based on shift date and scheduled time
+                $shiftDate = Carbon::parse($attendance->shift_date);
+                $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$attendance->scheduled_time_out);
 
-            // Handle night shift - if scheduled time out is earlier than scheduled time in,
-            // it means the shift ends the next day
-            if ($attendance->scheduled_time_in && $attendance->scheduled_time_out) {
-                $scheduledIn = Carbon::parse($attendance->scheduled_time_in);
-                $scheduledOut = Carbon::parse($attendance->scheduled_time_out);
+                // Handle night shift - if scheduled time out is earlier than scheduled time in,
+                // it means the shift ends the next day
+                if ($attendance->scheduled_time_in && $attendance->scheduled_time_out) {
+                    $scheduledIn = Carbon::parse($attendance->scheduled_time_in);
+                    $scheduledOut = Carbon::parse($attendance->scheduled_time_out);
 
-                // If time out is before time in (e.g., 07:00 < 22:00), shift crosses midnight
-                if ($scheduledOut->format('H:i:s') < $scheduledIn->format('H:i:s')) {
-                    $scheduledTimeOut->addDay();
+                    // If time out is before time in (e.g., 07:00 < 22:00), shift crosses midnight
+                    if ($scheduledOut->format('H:i:s') < $scheduledIn->format('H:i:s')) {
+                        $scheduledTimeOut->addDay();
+                    }
+                }
+
+                // Calculate difference: positive means overtime (left late), negative means undertime (left early)
+                // Using scheduledTimeOut->diffInMinutes($actualTimeOut):
+                // - Positive if actualTimeOut > scheduledTimeOut (overtime)
+                // - Negative if actualTimeOut < scheduledTimeOut (undertime)
+                $timeDiff = $scheduledTimeOut->diffInMinutes($actualTimeOut, false);
+
+                // If negative (left early), it's undertime
+                if ($timeDiff < 0) {
+                    $attendance->update([
+                        'undertime_minutes' => abs($timeDiff),
+                        'overtime_minutes' => null,
+                    ]);
+                }
+                // If positive and more than 60 minutes (left late), it's overtime
+                elseif ($timeDiff > 60) {
+                    $attendance->update([
+                        'undertime_minutes' => null,
+                        'overtime_minutes' => $timeDiff,
+                    ]);
+                }
+                // If within threshold (0 to 60), clear both
+                else {
+                    $attendance->update([
+                        'undertime_minutes' => null,
+                        'overtime_minutes' => null,
+                    ]);
                 }
             }
-
-            // Calculate difference: positive means overtime (left late), negative means undertime (left early)
-            // Using scheduledTimeOut->diffInMinutes($actualTimeOut):
-            // - Positive if actualTimeOut > scheduledTimeOut (overtime)
-            // - Negative if actualTimeOut < scheduledTimeOut (undertime)
-            $timeDiff = $scheduledTimeOut->diffInMinutes($actualTimeOut, false);
-
-            // If negative (left early), it's undertime
-            if ($timeDiff < 0) {
-                $attendance->update([
-                    'undertime_minutes' => abs($timeDiff),
-                    'overtime_minutes' => null,
-                ]);
-            }
-            // If positive and more than 60 minutes (left late), it's overtime
-            elseif ($timeDiff > 60) {
-                $attendance->update([
-                    'undertime_minutes' => null,
-                    'overtime_minutes' => $timeDiff,
-                ]);
-            }
-            // If within threshold (0 to 60), clear both
-            else {
-                $attendance->update([
-                    'undertime_minutes' => null,
-                    'overtime_minutes' => null,
-                ]);
-            }
-        }
         } // End of non_work_day check
 
         // Smart point regeneration - only regenerate if changes affect points
@@ -1602,7 +1655,7 @@ class AttendanceController extends Controller
 
         $successMessage = 'Attendance record verified and updated successfully.';
         if ($leaveAdjusted && $leaveAdjustmentMessage) {
-            $successMessage .= ' ' . $leaveAdjustmentMessage;
+            $successMessage .= ' '.$leaveAdjustmentMessage;
         }
 
         return redirect()->back()
@@ -1630,7 +1683,7 @@ class AttendanceController extends Controller
 
         foreach ($recordIds as $id) {
             $attendance = Attendance::with('employeeSchedule')->find($id);
-            if (!$attendance) {
+            if (! $attendance) {
                 continue;
             }
 
@@ -1695,7 +1748,7 @@ class AttendanceController extends Controller
         }
 
         return redirect()->back()
-            ->with('message', "Successfully verified {$verifiedCount} attendance record" . ($verifiedCount === 1 ? '' : 's') . ".")
+            ->with('message', "Successfully verified {$verifiedCount} attendance record".($verifiedCount === 1 ? '' : 's').'.')
             ->with('type', 'success');
     }
 
@@ -1739,7 +1792,7 @@ class AttendanceController extends Controller
         }
 
         // Check for unapproved overtime
-        if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && !$attendance->overtime_approved) {
+        if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && ! $attendance->overtime_approved) {
             return redirect()->back()
                 ->with('message', 'Records with unapproved overtime need manual review.')
                 ->with('type', 'error');
@@ -1776,17 +1829,20 @@ class AttendanceController extends Controller
             if ($attendance->status !== 'on_time') {
                 $skipped++;
                 $skippedReasons[] = "{$attendance->user->name} - Not on-time status";
+
                 continue;
             }
 
             if ($attendance->admin_verified) {
                 $skipped++;
+
                 continue;
             }
 
-            if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && !$attendance->overtime_approved) {
+            if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && ! $attendance->overtime_approved) {
                 $skipped++;
                 $skippedReasons[] = "{$attendance->user->name} - Has unapproved overtime";
+
                 continue;
             }
 
@@ -1802,8 +1858,8 @@ class AttendanceController extends Controller
         $message = "Successfully approved {$approved} record(s).";
         if ($skipped > 0) {
             $message .= " Skipped {$skipped} ineligible record(s).";
-            if (!empty($skippedReasons)) {
-                $message .= " Reasons: " . implode('; ', $skippedReasons);
+            if (! empty($skippedReasons)) {
+                $message .= ' Reasons: '.implode('; ', $skippedReasons);
             }
         }
 
@@ -1846,7 +1902,7 @@ class AttendanceController extends Controller
         $count = Attendance::whereIn('id', $request->ids)->delete();
 
         return redirect()->back()
-            ->with('message', "Successfully deleted {$count} attendance record" . ($count === 1 ? '' : 's') . '.')
+            ->with('message', "Successfully deleted {$count} attendance record".($count === 1 ? '' : 's').'.')
             ->with('type', 'success');
     }
 
@@ -1859,8 +1915,8 @@ class AttendanceController extends Controller
      * 3. Multi-day leave, work on last day: Adjust end date backward
      * 4. Multi-day leave, work in middle: Split or adjust (currently just adjust end date to day before)
      *
-     * @param Attendance $attendance The attendance record being verified
-     * @param Request $request The verification request
+     * @param  Attendance  $attendance  The attendance record being verified
+     * @param  Request  $request  The verification request
      * @return array ['adjusted' => bool, 'message' => string]
      */
     private function adjustLeaveForWorkDay(Attendance $attendance, Request $request): array
@@ -1900,21 +1956,21 @@ class AttendanceController extends Controller
                     $relatedAtt->update([
                         'leave_request_id' => null,
                         'status' => 'needs_manual_review',
-                        'notes' => ($relatedAtt->notes ? $relatedAtt->notes . "\n" : '') . 'Leave was cancelled - requires review.',
+                        'notes' => ($relatedAtt->notes ? $relatedAtt->notes."\n" : '').'Leave was cancelled - requires review.',
                     ]);
                 }
 
                 // Build cancellation reason message
                 $creditMessage = $canRestoreCredits
                     ? 'Original leave credit restored.'
-                    : 'Credits not restored (year mismatch: credits from ' . $creditsYear . ', current year ' . $currentYear . ').';
+                    : 'Credits not restored (year mismatch: credits from '.$creditsYear.', current year '.$currentYear.').';
 
                 // Update leave request status to cancelled
                 $leaveRequest->update([
                     'status' => 'cancelled',
                     'auto_cancelled' => true,
                     'auto_cancelled_at' => now(),
-                    'auto_cancelled_reason' => 'Employee reported to work on ' . $workDate->format('M d, Y') . '. ' . $creditMessage,
+                    'auto_cancelled_reason' => 'Employee reported to work on '.$workDate->format('M d, Y').'. '.$creditMessage,
                 ]);
 
                 // Notify the employee
@@ -1937,7 +1993,7 @@ class AttendanceController extends Controller
 
                 $resultMessage = $canRestoreCredits
                     ? "Leave request cancelled. {$creditsDeducted} day(s) of {$leaveRequest->leave_type} credit restored."
-                    : "Leave request cancelled. Credits not restored (year mismatch).";
+                    : 'Leave request cancelled. Credits not restored (year mismatch).';
 
                 return [
                     'adjusted' => true,
@@ -1991,7 +2047,7 @@ class AttendanceController extends Controller
                     $relatedAtt->update([
                         'leave_request_id' => null,
                         'status' => 'needs_manual_review',
-                        'notes' => ($relatedAtt->notes ? $relatedAtt->notes . "\n" : '') . 'Leave was cancelled - requires review.',
+                        'notes' => ($relatedAtt->notes ? $relatedAtt->notes."\n" : '').'Leave was cancelled - requires review.',
                     ]);
                 }
 
@@ -2003,7 +2059,7 @@ class AttendanceController extends Controller
                     'status' => 'cancelled',
                     'auto_cancelled' => true,
                     'auto_cancelled_at' => now(),
-                    'auto_cancelled_reason' => 'Employee worked on leave dates. ' . $creditMessage,
+                    'auto_cancelled_reason' => 'Employee worked on leave dates. '.$creditMessage,
                 ]);
 
                 $this->notificationService->notifyLeaveRequest(
@@ -2017,7 +2073,7 @@ class AttendanceController extends Controller
 
                 $resultMessage = $canRestoreCredits
                     ? "Leave request cancelled. {$creditsDeducted} day(s) of {$leaveRequest->leave_type} credit restored."
-                    : "Leave request cancelled. Credits not restored (year mismatch).";
+                    : 'Leave request cancelled. Credits not restored (year mismatch).';
 
                 return [
                     'adjusted' => true,
@@ -2040,9 +2096,9 @@ class AttendanceController extends Controller
                 'original_end_date' => $leaveRequest->original_end_date ?? $leaveEnd->format('Y-m-d'),
                 'date_modified_by' => auth()->id(),
                 'date_modified_at' => now(),
-                'date_modification_reason' => 'Auto-adjusted: Employee reported to work on ' . $workDate->format('M d, Y') .
-                    '. Leave dates changed from ' . $leaveStart->format('M d') . '-' . $leaveEnd->format('M d, Y') .
-                    ' to ' . $newStart->format('M d') . '-' . $newEnd->format('M d, Y') . '.',
+                'date_modification_reason' => 'Auto-adjusted: Employee reported to work on '.$workDate->format('M d, Y').
+                    '. Leave dates changed from '.$leaveStart->format('M d').'-'.$leaveEnd->format('M d, Y').
+                    ' to '.$newStart->format('M d').'-'.$newEnd->format('M d, Y').'.',
             ]);
 
             // Update other attendance records that are now outside the adjusted leave dates
@@ -2057,7 +2113,7 @@ class AttendanceController extends Controller
                 $affectedAtt->update([
                     'leave_request_id' => null,
                     'status' => 'needs_manual_review',
-                    'notes' => ($affectedAtt->notes ? $affectedAtt->notes . "\n" : '') .
+                    'notes' => ($affectedAtt->notes ? $affectedAtt->notes."\n" : '').
                         'Leave was adjusted - this date is no longer covered by leave.',
                 ]);
             }
@@ -2074,7 +2130,7 @@ class AttendanceController extends Controller
                     $affectedAtt->update([
                         'leave_request_id' => null,
                         'status' => 'needs_manual_review',
-                        'notes' => ($affectedAtt->notes ? $affectedAtt->notes . "\n" : '') .
+                        'notes' => ($affectedAtt->notes ? $affectedAtt->notes."\n" : '').
                             'Leave was adjusted - this date is no longer covered by leave.',
                     ]);
                 }
@@ -2085,23 +2141,23 @@ class AttendanceController extends Controller
                 $this->leaveCreditService->restorePartialCredits(
                     $leaveRequest,
                     $creditsToRestore,
-                    'Partial leave credit restored - Employee worked on ' . $workDate->format('M d, Y')
+                    'Partial leave credit restored - Employee worked on '.$workDate->format('M d, Y')
                 );
             }
 
             // Build notification message based on whether credits were restored
             $creditNotificationMsg = $canRestoreCredits
-                ? '. ' . $creditsToRestore . ' day(s) of leave credit has been restored.'
-                : '. Credits not restored (year mismatch - credits from ' . $creditsYear . ', current year ' . $currentYear . ').';
+                ? '. '.$creditsToRestore.' day(s) of leave credit has been restored.'
+                : '. Credits not restored (year mismatch - credits from '.$creditsYear.', current year '.$currentYear.').';
 
             // Notify the employee about leave adjustment
             $this->notificationService->notifySystemMessage(
                 $leaveRequest->user_id,
                 'Leave Dates Adjusted',
-                'Your ' . $leaveRequest->leave_type . ' leave has been adjusted from ' .
-                    $leaveStart->format('M d') . '-' . $leaveEnd->format('M d, Y') . ' to ' .
-                    $newStart->format('M d') . '-' . $newEnd->format('M d, Y') .
-                    ' because you reported to work on ' . $workDate->format('M d, Y') . $creditNotificationMsg,
+                'Your '.$leaveRequest->leave_type.' leave has been adjusted from '.
+                    $leaveStart->format('M d').'-'.$leaveEnd->format('M d, Y').' to '.
+                    $newStart->format('M d').'-'.$newEnd->format('M d, Y').
+                    ' because you reported to work on '.$workDate->format('M d, Y').$creditNotificationMsg,
                 ['leave_request_id' => $leaveRequest->id]
             );
 
@@ -2112,8 +2168,8 @@ class AttendanceController extends Controller
                 'user_id' => $leaveRequest->user_id,
                 'work_date' => $workDate->format('Y-m-d'),
                 'adjustment_type' => $adjustmentType,
-                'original_dates' => $leaveStart->format('Y-m-d') . ' to ' . $leaveEnd->format('Y-m-d'),
-                'new_dates' => $newStart->format('Y-m-d') . ' to ' . $newEnd->format('Y-m-d'),
+                'original_dates' => $leaveStart->format('Y-m-d').' to '.$leaveEnd->format('Y-m-d'),
+                'new_dates' => $newStart->format('Y-m-d').' to '.$newEnd->format('Y-m-d'),
                 'credits_restored' => $canRestoreCredits ? $creditsToRestore : 0,
                 'can_restore_credits' => $canRestoreCredits,
             ]);
@@ -2129,7 +2185,7 @@ class AttendanceController extends Controller
 
         } catch (\Exception $e) {
             DB::rollBack();
-            Log::error('Failed to adjust leave for work day: ' . $e->getMessage(), [
+            Log::error('Failed to adjust leave for work day: '.$e->getMessage(), [
                 'leave_request_id' => $leaveRequest->id,
                 'attendance_id' => $attendance->id,
                 'work_date' => $workDate->format('Y-m-d'),
@@ -2137,7 +2193,7 @@ class AttendanceController extends Controller
 
             return [
                 'adjusted' => false,
-                'message' => 'Failed to adjust leave: ' . $e->getMessage(),
+                'message' => 'Failed to adjust leave: '.$e->getMessage(),
             ];
         }
     }
@@ -2197,6 +2253,7 @@ class AttendanceController extends Controller
             ->filter(function ($user) use ($dayName) {
                 // Filter to only employees who work on the selected day
                 $schedule = $user->employeeSchedules->first();
+
                 return $schedule && $schedule->worksOnDay($dayName);
             })
             ->map(function ($user) use ($selectedDate) {
@@ -2216,7 +2273,7 @@ class AttendanceController extends Controller
 
                 return [
                     'id' => $user->id,
-                    'name' => $user->first_name . ' ' . $user->last_name,
+                    'name' => $user->first_name.' '.$user->last_name,
                     'email' => $user->email,
                     'schedule' => $schedule ? [
                         'id' => $schedule->id,
@@ -2262,7 +2319,7 @@ class AttendanceController extends Controller
 
         // Filter by campaign if provided OR auto-filter for Team Leads
         $campaignIdToFilter = $request->filled('campaign_id') ? $request->campaign_id : null;
-        if (!$campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
+        if (! $campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
             // Default to Team Lead's campaign if no filter specified
             $campaignIdToFilter = $teamLeadCampaignId;
         }
@@ -2276,12 +2333,13 @@ class AttendanceController extends Controller
         if ($request->filled('status')) {
             $employees = $employees->filter(function ($emp) use ($request) {
                 if ($request->status === 'pending') {
-                    return !$emp['existing_attendance'] && !$emp['on_leave'];
+                    return ! $emp['existing_attendance'] && ! $emp['on_leave'];
                 } elseif ($request->status === 'recorded') {
                     return $emp['existing_attendance'] !== null;
                 } elseif ($request->status === 'on_leave') {
                     return $emp['on_leave'] !== null;
                 }
+
                 return true;
             })->values();
         }
@@ -2345,7 +2403,7 @@ class AttendanceController extends Controller
             })
             ->first();
 
-        if (!$schedule) {
+        if (! $schedule) {
             return redirect()->back()
                 ->with('message', 'No active schedule found for this employee.')
                 ->with('type', 'error');
@@ -2357,8 +2415,8 @@ class AttendanceController extends Controller
         $shiftDate = Carbon::parse($validated['shift_date']);
 
         // Build scheduled times
-        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_in);
-        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
+        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
 
         // Handle night shift (time out is next day)
         if ($schedule->shift_type === 'night_shift' && $scheduledTimeOut->lt($scheduledTimeIn)) {
@@ -2379,7 +2437,7 @@ class AttendanceController extends Controller
             // More than grace period = half day absence
             if ($tardyMinutes > $gracePeriod) {
                 $calculatedStatus = 'half_day_absence';
-            } else if ($tardyMinutes >= 1) {
+            } elseif ($tardyMinutes >= 1) {
                 $calculatedStatus = 'tardy';
             }
         }
@@ -2393,14 +2451,14 @@ class AttendanceController extends Controller
                 } else {
                     $calculatedSecondaryStatus = 'undertime_more_than_hour';
                 }
-            } else if ($undertimeMinutes > 0) {
+            } elseif ($undertimeMinutes > 0) {
                 if ($calculatedStatus === 'on_time') {
                     $calculatedStatus = 'undertime';
                 } else {
                     $calculatedSecondaryStatus = 'undertime';
                 }
             }
-        } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+        } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
             $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
         }
 
@@ -2464,13 +2522,13 @@ class AttendanceController extends Controller
         $attendance->load('employeeSchedule');
 
         // Validate this is appropriate for partial approval
-        if (!$attendance->employeeSchedule || !$attendance->employeeSchedule->isNightShift()) {
+        if (! $attendance->employeeSchedule || ! $attendance->employeeSchedule->isNightShift()) {
             return redirect()->back()
                 ->with('message', 'Partial approval is only available for night shift records.')
                 ->with('type', 'error');
         }
 
-        if (!$attendance->actual_time_in) {
+        if (! $attendance->actual_time_in) {
             return redirect()->back()
                 ->with('message', 'Cannot complete night shift - no time in recorded.')
                 ->with('type', 'error');
@@ -2499,7 +2557,7 @@ class AttendanceController extends Controller
         $schedule = $attendance->employeeSchedule;
 
         // Build scheduled time out (next day for night shift)
-        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $schedule->scheduled_time_out);
+        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
         if ($schedule->isNightShift()) {
             $scheduledTimeOut->addDay();
         }
@@ -2510,7 +2568,7 @@ class AttendanceController extends Controller
 
         if ($actualTimeOut->lt($scheduledTimeOut)) {
             $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-        } else if ($actualTimeOut->gt($scheduledTimeOut)) {
+        } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
             $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
         }
 
@@ -2519,14 +2577,14 @@ class AttendanceController extends Controller
         $secondaryStatus = $attendance->secondary_status;
 
         // If no status override provided, check for undertime
-        if (!$validated['status']) {
+        if (! $validated['status']) {
             if ($undertimeMinutes && $undertimeMinutes > 60) {
                 if (in_array($attendance->status, ['on_time'])) {
                     $status = 'undertime_more_than_hour';
                 } else {
                     $secondaryStatus = 'undertime_more_than_hour';
                 }
-            } else if ($undertimeMinutes && $undertimeMinutes > 0) {
+            } elseif ($undertimeMinutes && $undertimeMinutes > 0) {
                 if (in_array($attendance->status, ['on_time'])) {
                     $status = 'undertime';
                 } else {
@@ -2583,7 +2641,7 @@ class AttendanceController extends Controller
         $this->authorize('update', $attendance);
 
         // Validate that attendance has undertime
-        if (!$attendance->undertime_minutes || $attendance->undertime_minutes <= 0) {
+        if (! $attendance->undertime_minutes || $attendance->undertime_minutes <= 0) {
             return redirect()->back()
                 ->with('message', 'This attendance record does not have undertime.')
                 ->with('type', 'error');
@@ -2603,7 +2661,7 @@ class AttendanceController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($attendance, $request) {
+            DB::transaction(function () use ($attendance) {
                 $attendance->update([
                     'undertime_approval_status' => 'pending',
                     'undertime_approval_requested_by' => auth()->id(),
@@ -2623,7 +2681,7 @@ class AttendanceController extends Controller
                 ->with('message', 'Undertime approval request sent to administrators.')
                 ->with('type', 'success');
         } catch (\Exception $e) {
-            Log::error('Undertime approval request error: ' . $e->getMessage());
+            Log::error('Undertime approval request error: '.$e->getMessage());
 
             return redirect()->back()
                 ->with('message', 'Failed to send undertime approval request.')
@@ -2740,11 +2798,12 @@ class AttendanceController extends Controller
             });
 
             $statusText = $validated['status'] === 'approved' ? 'approved' : 'rejected';
+
             return redirect()->back()
                 ->with('message', "Undertime has been {$statusText}.")
                 ->with('type', 'success');
         } catch (\Exception $e) {
-            Log::error('Undertime approval error: ' . $e->getMessage());
+            Log::error('Undertime approval error: '.$e->getMessage());
 
             return redirect()->back()
                 ->with('message', 'Failed to process undertime approval.')

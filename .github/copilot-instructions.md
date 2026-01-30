@@ -1,168 +1,75 @@
 # Copilot Instructions for AI Coding Agents
 
 ## Project Overview
-This is a full-stack Laravel + React (TypeScript) application. Backend logic resides in `app/` (Laravel PHP), while frontend code is in `resources/js/` (React, Vite, TypeScript). Data models, migrations, and factories are in `app/Models/` and `database/`.
+Full-stack **Laravel 12 + React 19 (TypeScript)** application for IT asset management, attendance tracking, and form requests. Uses **Inertia.js** to bridge backend/frontend (no separate API routes).
 
-Key features include: PC/Station inventory management, hardware spec tracking (RAM, Disk, Processor, Monitor), QR code generation, attendance tracking, stock management, PC maintenance, and PC transfers.
+**Key Modules:** PC/Station inventory, hardware specs (RAM, Disk, Processor, Monitor), QR codes, biometric attendance, leave/IT concerns, stock management.
 
-## Architecture & Data Flow
-- **Backend:**
-  - Controllers: `app/Http/Controllers/` handle web requests.
-  - Models: `app/Models/` define Eloquent ORM models for entities (e.g., `User`, `PcSpec`, `RamSpec`, `DiskSpec`, `MonitorSpec`, `ProcessorSpec`, `Station`, `Stock`, `Campaign`, `Site`, `PcMaintenance`, `PcTransfer`).
-  - Jobs: `app/Jobs/` for background tasks (e.g., QR code zip generation for PC specs and stations).
-  - Services: `app/Services/` for business logic (e.g., `DashboardService`).
-  - Traits: `app/Traits/` for reusable logic (e.g., `HasSpecSearch`).
-  - Utils: `app/Utils/` for helper utilities (e.g., `StationNumberUtil`).
-  - Requests: `app/Http/Requests/` for form/request validation.
-  - Middleware: `app/Http/Middleware/` for request lifecycle hooks.
-  - Service Providers: `app/Providers/` for app/service bootstrapping.
-  - Migrations/Factories/Seeders: `database/` for schema and test data.
-- **Frontend:**
-  - React pages/components: `resources/js/pages/`, `resources/js/components/`.
-  - UI Components: Uses Shadcn/UI (Radix UI primitives) with Tailwind CSS.
-  - Vite is used for bundling (`vite.config.ts`).
+## Architecture
+```
+app/
+├── Http/Controllers/    # Inertia responses, form handling
+├── Http/Requests/       # Form validation classes
+├── Http/Traits/         # RedirectsWithFlashMessages, HandlesStockOperations
+├── Models/              # Eloquent models with LogsActivity trait
+├── Jobs/                # Queue jobs (QR zips, Excel exports)
+├── Services/            # Business logic (DashboardService, NotificationService)
+├── Policies/            # Authorization policies
+resources/js/
+├── pages/               # React pages matching Inertia routes
+├── components/          # Shadcn/UI components + custom (PageHeader, DeleteConfirmDialog)
+├── hooks/               # usePageMeta, useFlashMessage, usePermission, usePageLoading
+├── routes/              # Wayfinder-generated type-safe routes
+```
 
 ## Developer Workflows
-- **Build:**
-  - Frontend: `npm run build` (Vite) or `npm run build:ssr` for SSR builds
-  - Backend: No explicit build, but run `php artisan` commands for migrations, cache clearing, etc.
-- **Test:**
-  - Backend: `php artisan test` or `vendor/bin/phpunit` (configuration in `phpunit.xml`)
-  - Frontend: `npm run lint` for ESLint, `npm run format:check` for Prettier
-- **Debug:**
-  - Laravel: Use `php artisan serve` for local dev, logs in `storage/logs/`
-  - React: Use Vite dev server (`npm run dev`)
-- **Local Development:**
-  - Run `php artisan serve` for backend (default: http://127.0.0.1:8000)
-  - Run `npm run dev` for frontend with hot reload (Vite dev server on port 5173)
-  - Requires local MySQL and Redis servers
-- **Code Quality:**
-  - TypeScript: `npm run types` for type checking
-  - Formatting: `npm run format` (Prettier with Tailwind plugin)
+```bash
+# Backend
+php artisan serve                    # Dev server :8000
+php artisan test                     # Run tests
+php artisan tinker                   # Interactive shell - ALWAYS verify new code here
+php artisan queue:work               # Process background jobs
+
+# Frontend
+npm run dev                          # Vite dev server :5173
+npm run build                        # Production build
+npm run types                        # TypeScript check
+npm run lint && npm run format       # Code quality
+```
 
 ## Console Tinker Testing
+**IMPORTANT:** Always verify backend PHP code in `php artisan tinker` before committing.
 
-**IMPORTANT:** After implementing any backend PHP code (Models, Controllers, Services, Jobs, etc.), always verify functionality using `php artisan tinker`. This ensures code works correctly before committing.
-
-### When to Use Tinker
-- After creating/modifying Models or relationships
-- After adding new Service methods
-- After implementing Job logic
-- After modifying Eloquent queries or scopes
-- After adding new helper functions or utilities
-
-### Common Tinker Test Patterns
-
-#### Testing Models & Relationships
 ```php
-# Test model creation
-$model = App\Models\RamSpec::factory()->create();
-
-# Test relationships
+# Models & Relationships
 $pcSpec = App\Models\PcSpec::with(['ramSpecs', 'diskSpecs'])->first();
-$pcSpec->ramSpecs;  // Check many-to-many
-$pcSpec->station;   // Check belongsTo
 
-# Test scopes
-App\Models\User::where('role', 'IT')->get();
-App\Models\PcSpec::search('keyword')->get();
-```
-
-#### Testing Services
-```php
-# Instantiate service
+# Services
 $service = app(App\Services\DashboardService::class);
-
-# Call methods
 $stats = $service->getStats();
-dd($stats);
+
+# Jobs (sync for testing)
+dispatch_sync(new App\Jobs\GenerateAllPcSpecQRCodesZip($jobId, 'png', 300, false));
+Cache::get("qrcode_zip_job:{$jobId}");
 ```
-
-#### Testing Eloquent Queries
-```php
-# Test complex queries
-App\Models\Attendance::whereDate('created_at', today())
-    ->with('user')
-    ->get();
-
-# Test aggregations
-App\Models\Stock::sum('quantity');
-App\Models\PcSpec::count();
-```
-
-#### Testing Factories
-```php
-# Test factory states
-App\Models\User::factory()->create(['role' => 'HR', 'is_approved' => true]);
-App\Models\LeaveRequest::factory()->pending()->create();
-```
-
-#### Testing Jobs (Sync)
-```php
-# Dispatch job synchronously for testing
-$jobId = \Illuminate\Support\Str::uuid()->toString();
-dispatch_sync(new App\Jobs\GenerateAllPcSpecQRCodesZip($jobId));
-
-# Check cache for progress
-Cache::get("pc_spec_qr_zip:{$jobId}");
-```
-
-#### Testing Notifications
-```php
-# Test notification service
-$notificationService = app(App\Services\NotificationService::class);
-$notificationService->notifyUsersByRole('IT', 'test', 'Test Title', 'Test message');
-```
-
-### Tinker Best Practices
-1. **Always test after model changes** - Verify relationships load correctly
-2. **Test edge cases** - Empty collections, null values, boundary conditions
-3. **Verify database state** - Check records were created/updated correctly
-4. **Test authorization** - Verify policies work with different user roles
-5. **Clean up test data** - Use `DB::rollBack()` or delete test records after testing
 
 ## Project-Specific Conventions
-- **Naming:**
-  - Models use `*Spec.php` for hardware specs (e.g., `RamSpec`, `DiskSpec`).
-  - Migrations use date-prefixed filenames for ordering.
-- **Frontend Routing:**
-  - React pages are organized by feature in `resources/js/pages/` (e.g., `Computer/`, `Station/`, `Attendance/`, `Account/`).
-  - **Laravel Wayfinder** is used for type-safe routing between Laravel and React. Route definitions in PHP are automatically available in TypeScript.
-- **Backend Routing:**
-  - Routes are split by concern: `routes/web.php` (main routes), `routes/auth.php` (authentication), `routes/settings.php` (settings), `routes/console.php` (console commands).
-  - No separate `api.php` - all routes use web middleware with Inertia responses.
-- **Integration:**
-  - **Inertia.js** bridges Laravel backend and React frontend. Backend controllers return Inertia responses (see `app/Http/Controllers/`), which map to React pages in `resources/js/pages/`. Props are passed from PHP to React via Inertia, enabling seamless SPA navigation and server-side data hydration.
-  - **Frontend/Backend Communication:** Controllers return Inertia responses for page navigation or JSON for API-like endpoints. React components use Inertia's form helpers or the Wayfinder-generated routes for data operations. For example, see how `resources/js/pages/Computer/RamSpecs/Index.tsx` interacts with backend endpoints for RAM specs.
-  - **Fortify** is used for authentication (`config/fortify.php`). Custom authentication logic and user management are handled via Fortify's configuration and service provider.
+- **Models:** `*Spec.php` for hardware specs (e.g., `RamSpec`, `DiskSpec`)
+- **Routes:** `routes/web.php` (main), `routes/auth.php`, `routes/settings.php` - no separate `api.php`
+- **Pages:** `resources/js/pages/{Feature}/` mirrors controller structure
+- **Wayfinder:** Type-safe routes auto-generated in `resources/js/routes/`
+- **Inertia:** Controllers return `inertia('Page/Path', $props)` → React pages receive via `usePage<Props>().props`
+- **Auth:** Laravel Fortify with 2FA support (see `config/fortify.php`)
 
-## External Dependencies
-- **Laravel packages:** See `composer.json` for installed packages (e.g., Fortify, Inertia, Wayfinder, endroid/qr-code for QR generation).
-- **Node packages:** See `package.json` for React, Vite, Radix UI (Shadcn/UI), etc.
+## Key Reference Files
+- Controller example: [RamSpecsController.php](app/Http/Controllers/RamSpecsController.php)
+- Model with relationships: [PcSpec.php](app/Models/PcSpec.php)
+- React page pattern: [RamSpecs/Index.tsx](resources/js/pages/Computer/RamSpecs/Index.tsx)
+- Permissions config: [config/permissions.php](config/permissions.php)
 
-## Examples of Patterns
-- **Eloquent Relationships:**
-  - Many-to-many: See `app/Models/PcSpec.php` and related migration files for pivot tables. Eloquent relationships are used for hardware specs and stations.
-- **Validation:**
-  - Form requests in `app/Http/Requests/` encapsulate validation logic. Example: `RamSpecRequest.php` for validating RAM spec forms.
-- **Frontend State:**
-  - React components use hooks and props for state management. Example: `resources/js/pages/Computer/RamSpecs/Index.tsx` uses React hooks to manage RAM spec data and UI state.
-- **Inertia Page Props:**
-  - Backend controllers return Inertia responses with props, which are consumed by React pages. See `app/Http/Controllers/RamSpecController.php` and corresponding React page for data flow.
-- **Custom Middleware:**
-  - Middleware in `app/Http/Middleware/` can be used for request filtering, access control, or custom logic. Register in `app/Http/Kernel.php`.
+## Error Handling & Logging
 
-## Key Files & Directories
-- `app/Models/`, `app/Http/Controllers/`, `resources/js/pages/`, `database/migrations/`, `config/`
-- `vite.config.ts`, `composer.json`, `package.json`, `phpunit.xml`
-
-## Error Handling Patterns
-
-### Backend (Controllers)
-- Wrap database operations in `DB::transaction()` for atomicity
-- Use `Log::error('ControllerName Action Error: ' . $e->getMessage())` for exceptions
-- Return via `$this->redirectWithFlash()` trait method for consistent flash messages
-
+### Controller Pattern
 ```php
 try {
     DB::transaction(function () use ($request) {
@@ -175,144 +82,40 @@ try {
 }
 ```
 
-### Backend (Jobs)
-- Use `Cache::put()` to track progress and error states with standard structure:
+### Job Progress Tracking
 ```php
-Cache::put($cacheKey, [
-    'percent' => 50,
-    'status' => 'Processing...',
-    'finished' => false,
-    'error' => false,        // Optional: true on failure
-    'downloadUrl' => null,   // Optional: set on completion
-], 3600);
+Cache::put($cacheKey, ['percent' => 50, 'status' => 'Processing...', 'finished' => false], 3600);
 ```
-
-### Frontend
-- Flash messages from backend are automatically handled by `useFlashMessage()` hook
-- Toast notifications display via Sonner library
-
-## Logging & Activity Log Conventions
 
 ### Activity Logging (Spatie)
-Models use `Spatie\Activitylog\Traits\LogsActivity`:
-```php
-use Spatie\Activitylog\Traits\LogsActivity;
-use Spatie\Activitylog\LogOptions;
-
-class Model extends BaseModel
-{
-    use LogsActivity;
-    
-    public function getActivitylogOptions(): LogOptions
-    {
-        return LogOptions::defaults()
-            ->logAll()
-            ->logOnlyDirty()
-            ->dontSubmitEmptyLogs();
-    }
-}
-```
-
-### Error Logging Format
-- Format: `Log::error('ControllerName Action Error: ' . $e->getMessage())`
-- Authentication events logged via `LogAuthentication` listener with IP and user agent
-
-### Configuration
-- Activity log retention: 365 days (see `config/activitylog.php`)
+All models use `LogsActivity` trait with `logAll()->logOnlyDirty()->dontSubmitEmptyLogs()`
 
 ## Testing Patterns
+- **Feature tests:** `tests/Feature/` with `RefreshDatabase` trait
+- **Unit tests:** `tests/Unit/` for services, policies, models
+- **Attribute syntax:** Use `#[Test]` instead of `test_` prefix
+- **Inertia assertions:** `$response->assertInertia(fn ($page) => $page->component('Path')->has('data'))`
+- **Auth testing:** `User::factory()->create(['role' => 'IT', 'is_approved' => true])`
 
-### Test Organization
-- `tests/Feature/` - Integration tests with database
-- `tests/Unit/` - Unit tests for services, policies, models
-- All tests use `RefreshDatabase` trait
+## Authorization
+**Roles:** `super_admin`, `admin`, `team_lead`, `agent`, `hr`, `it`, `utility`
+**Permissions:** `module.action` format in `config/permissions.php`
 
-### Test Conventions
 ```php
-use PHPUnit\Framework\Attributes\Test;
-
-class FeatureTest extends TestCase
-{
-    use RefreshDatabase;
-
-    protected User $admin;
-
-    protected function setUp(): void
-    {
-        parent::setUp();
-        $this->admin = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
-    }
-
-    #[Test]
-    public function it_does_something(): void
-    {
-        $response = $this->actingAs($this->admin)
-            ->get(route('route.name'));
-        
-        $response->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->component('Component/Path')
-                ->has('data', 5)
-            );
-    }
-}
-```
-
-### Key Patterns
-- Use `#[Test]` attribute instead of `test_` prefix
-- Use `assertInertia()` with callback for page component and props validation
-- Create policy tests in `tests/Unit/Policies/` for each role
-- Create users with `['role' => 'RoleName', 'is_approved' => true]` for auth testing
-
-## Authorization Patterns
-
-### Permissions Configuration
-- Defined in `config/permissions.php` using `module.action` format
-- Roles: `super_admin`, `admin`, `team_lead`, `agent`, `hr`, `it`, `utility`
-- `super_admin` has `['*']` wildcard for all permissions
-
-### Policy Pattern
-```php
-class ModelPolicy
-{
-    public function __construct(protected PermissionService $permissionService) {}
-
-    public function viewAny(User $user): bool
-    {
-        return $this->permissionService->userHasPermission($user, 'model.view');
-    }
-}
-```
-
-### Controller Authorization
-```php
+// Controller
 $this->authorize('viewAny', Model::class);
-$this->authorize('update', $model);
-```
 
-### Route Middleware
-```php
-Route::resource('models', ModelController::class)
-    ->middleware('permission:model.view,model.create,model.edit');
+// Route middleware
+Route::resource('models', Controller::class)->middleware('permission:model.view,model.create');
 ```
-
-### Frontend Components
 ```tsx
-import { Can, CanAny, HasRole } from '@/components/authorization';
+// Frontend
+import { Can } from '@/components/authorization';
 import { usePermission } from '@/hooks/use-permission';
 
-// Component-based
-<Can permission="model.create">
-    <Button>Create</Button>
-</Can>
-
-// Hook-based
-const { can } = usePermission();
-if (can('model.edit')) { /* ... */ }
+<Can permission="model.create"><Button>Create</Button></Can>
+const { can } = usePermission(); // can('model.edit')
 ```
-
-### Documentation
-- Full reference: `docs/authorization/QUICK_REFERENCE.md`
 
 ## Queue/Job Patterns
 
@@ -485,39 +288,15 @@ $progress = Cache::get("job:{$jobId}", $default);
 - Cache driver: Configurable via `CACHE_STORE` env (default: file/database)
 
 ## Mail/Notification Patterns
-
-### Mailable Structure
-```php
-class StatusUpdated extends Mailable implements ShouldQueue
-{
-    use Queueable, SerializesModels;
-
-    public function __construct(public Model $model, public User $user) {}
-
-    public function envelope(): Envelope
-    {
-        return new Envelope(subject: 'Subject: ' . $this->model->status);
-    }
-
-    public function content(): Content
-    {
-        return new Content(view: 'emails.template-name');
-    }
-}
-```
-
-### In-App Notifications
 Use `NotificationService` for in-app notifications:
 ```php
 $this->notificationService->notifyLeaveRequest($userId, $name, $type, $id);
 $this->notificationService->notifyUsersByRole('HR', 'type', 'Title', 'Message', $data);
 ```
 
-### Notification Types
-- `maintenance_due`, `leave_request`, `it_concern`, `medication_request`, `system`
+**Notification Types:** `maintenance_due`, `leave_request`, `it_concern`, `medication_request`, `system`
 
-### Documentation
-- Full reference: `docs/NOTIFICATION_SYSTEM.md`
+**Documentation:** `docs/NOTIFICATION_SYSTEM.md`
 
 ## Git Workflow
 
@@ -539,17 +318,12 @@ Example: `feat: add QR code bulk download for stations`
 
 ## Mobile View Compatibility ✅
 
-**Audit Complete (January 2025):** All pages in `resources/js/pages/` have been checked and updated for mobile view compatibility.
+All pages in `resources/js/pages/` have mobile-responsive views.
 
 ### Mobile View Pattern
-All list/index pages follow a consistent responsive pattern:
-- **Desktop Table:** Wrapped in `<div className="hidden md:block">` - visible only on medium screens and above
-- **Mobile Cards:** Wrapped in `<div className="md:hidden space-y-4">` - visible only on small screens
-
-### Example Structure
 ```tsx
 {/* Desktop Table View */}
-<div className="hidden md:block shadow rounded-md overflow-hidden">
+<div className="hidden md:block">
     <Table>...</Table>
 </div>
 
@@ -563,35 +337,309 @@ All list/index pages follow a consistent responsive pattern:
 </div>
 ```
 
-### Pages with Mobile Views
-All index/list pages in the following directories have mobile card views:
-- `Account/` - Index, Create, Edit (responsive forms)
-- `Admin/ActivityLogs/` - Index
-- `Attendance/BiometricRecords/` - Index, Anomalies, Export, Reprocessing, RetentionPolicies, Show
-- `Attendance/EmployeeSchedules/` - Index
-- `Attendance/Main/` - Index, Calendar, Create, Import, Review
-- `Attendance/Points/` - Index
-- `Attendance/Uploads/` - Index
-- `Computer/RamSpecs/` - Index
-- `Computer/DiskSpecs/` - Index
-- `Computer/ProcessorSpecs/` - Index
-- `Computer/MonitorSpecs/` - Index
-- `Computer/PcSpecs/` - Index
-- `Computer/Stocks/` - Index
-- `FormRequest/ItConcerns/` - Index
-- `FormRequest/Leave/` - Index
-- `FormRequest/MedicationRequests/` - Index
-- `Notifications/` - Index
-- `Station/` - Index, Create, Edit
-- `dashboard.tsx` - Responsive grid layout
-
 ### Best Practices
-1. Use Tailwind responsive breakpoints: `sm:`, `md:`, `lg:`, `xl:`
-2. For forms: Use `grid-cols-1 md:grid-cols-2` or similar patterns
-3. For dialogs: Use `max-w-[90vw] sm:max-w-md` to ensure proper sizing
-4. For buttons: Use `flex-1 sm:flex-none` for full-width on mobile, auto on desktop
-5. For filters: Stack vertically on mobile with `flex-col sm:flex-row`
+- Use Tailwind breakpoints: `sm:`, `md:`, `lg:`, `xl:`
+- Forms: `grid-cols-1 md:grid-cols-2`
+- Dialogs: `max-w-[90vw] sm:max-w-md`
+- Buttons: `flex-1 sm:flex-none`
+- Filters: `flex-col sm:flex-row`
 
 ---
 
 **For updates, merge new conventions and patterns here. Ask for feedback if any section is unclear or missing.**
+
+===
+
+<laravel-boost-guidelines>
+=== foundation rules ===
+
+# Laravel Boost Guidelines
+
+The Laravel Boost guidelines are specifically curated by Laravel maintainers for this application. These guidelines should be followed closely to ensure the best experience when building Laravel applications.
+
+## Foundational Context
+
+This application is a Laravel application and its main Laravel ecosystems package & versions are below. You are an expert with them all. Ensure you abide by these specific packages & versions.
+
+- php - 8.4.11
+- inertiajs/inertia-laravel (INERTIA) - v2
+- laravel/fortify (FORTIFY) - v1
+- laravel/framework (LARAVEL) - v12
+- laravel/prompts (PROMPTS) - v0
+- laravel/wayfinder (WAYFINDER) - v0
+- laravel/mcp (MCP) - v0
+- laravel/pint (PINT) - v1
+- laravel/sail (SAIL) - v1
+- phpunit/phpunit (PHPUNIT) - v11
+- @inertiajs/react (INERTIA) - v2
+- react (REACT) - v19
+- tailwindcss (TAILWINDCSS) - v4
+- @laravel/vite-plugin-wayfinder (WAYFINDER) - v0
+- eslint (ESLINT) - v9
+- prettier (PRETTIER) - v3
+
+## Skills Activation
+
+This project has domain-specific skills available. You MUST activate the relevant skill whenever you work in that domain—don't wait until you're stuck.
+
+- `wayfinder-development` — Activates whenever referencing backend routes in frontend components. Use when importing from @/actions or @/routes, calling Laravel routes from TypeScript, or working with Wayfinder route functions.
+- `inertia-react-development` — Develops Inertia.js v2 React client-side applications. Activates when creating React pages, forms, or navigation; using &lt;Link&gt;, &lt;Form&gt;, useForm, or router; working with deferred props, prefetching, or polling; or when user mentions React with Inertia, React pages, React forms, or React navigation.
+- `tailwindcss-development` — Styles applications using Tailwind CSS v4 utilities. Activates when adding styles, restyling components, working with gradients, spacing, layout, flex, grid, responsive design, dark mode, colors, typography, or borders; or when the user mentions CSS, styling, classes, Tailwind, restyle, hero section, cards, buttons, or any visual/UI changes.
+
+## Conventions
+
+- You must follow all existing code conventions used in this application. When creating or editing a file, check sibling files for the correct structure, approach, and naming.
+- Use descriptive names for variables and methods. For example, `isRegisteredForDiscounts`, not `discount()`.
+- Check for existing components to reuse before writing a new one.
+
+## Verification Scripts
+
+- Do not create verification scripts or tinker when tests cover that functionality and prove they work. Unit and feature tests are more important.
+
+## Application Structure & Architecture
+
+- Stick to existing directory structure; don't create new base folders without approval.
+- Do not change the application's dependencies without approval.
+
+## Frontend Bundling
+
+- If the user doesn't see a frontend change reflected in the UI, it could mean they need to run `npm run build`, `npm run dev`, or `composer run dev`. Ask them.
+
+## Documentation Files
+
+- You must only create documentation files if explicitly requested by the user.
+
+## Replies
+
+- Be concise in your explanations - focus on what's important rather than explaining obvious details.
+
+=== boost rules ===
+
+# Laravel Boost
+
+- Laravel Boost is an MCP server that comes with powerful tools designed specifically for this application. Use them.
+
+## Artisan
+
+- Use the `list-artisan-commands` tool when you need to call an Artisan command to double-check the available parameters.
+
+## URLs
+
+- Whenever you share a project URL with the user, you should use the `get-absolute-url` tool to ensure you're using the correct scheme, domain/IP, and port.
+
+## Tinker / Debugging
+
+- You should use the `tinker` tool when you need to execute PHP to debug code or query Eloquent models directly.
+- Use the `database-query` tool when you only need to read from the database.
+
+## Reading Browser Logs With the `browser-logs` Tool
+
+- You can read browser logs, errors, and exceptions using the `browser-logs` tool from Boost.
+- Only recent browser logs will be useful - ignore old logs.
+
+## Searching Documentation (Critically Important)
+
+- Boost comes with a powerful `search-docs` tool you should use before trying other approaches when working with Laravel or Laravel ecosystem packages. This tool automatically passes a list of installed packages and their versions to the remote Boost API, so it returns only version-specific documentation for the user's circumstance. You should pass an array of packages to filter on if you know you need docs for particular packages.
+- Search the documentation before making code changes to ensure we are taking the correct approach.
+- Use multiple, broad, simple, topic-based queries at once. For example: `['rate limiting', 'routing rate limiting', 'routing']`. The most relevant results will be returned first.
+- Do not add package names to queries; package information is already shared. For example, use `test resource table`, not `filament 4 test resource table`.
+
+### Available Search Syntax
+
+1. Simple Word Searches with auto-stemming - query=authentication - finds 'authenticate' and 'auth'.
+2. Multiple Words (AND Logic) - query=rate limit - finds knowledge containing both "rate" AND "limit".
+3. Quoted Phrases (Exact Position) - query="infinite scroll" - words must be adjacent and in that order.
+4. Mixed Queries - query=middleware "rate limit" - "middleware" AND exact phrase "rate limit".
+5. Multiple Queries - queries=["authentication", "middleware"] - ANY of these terms.
+
+=== php rules ===
+
+# PHP
+
+- Always use curly braces for control structures, even for single-line bodies.
+
+## Constructors
+
+- Use PHP 8 constructor property promotion in `__construct()`.
+    - <code-snippet>public function __construct(public GitHub $github) { }</code-snippet>
+- Do not allow empty `__construct()` methods with zero parameters unless the constructor is private.
+
+## Type Declarations
+
+- Always use explicit return type declarations for methods and functions.
+- Use appropriate PHP type hints for method parameters.
+
+<code-snippet name="Explicit Return Types and Method Params" lang="php">
+protected function isAccessible(User $user, ?string $path = null): bool
+{
+    ...
+}
+</code-snippet>
+
+## Enums
+
+- Typically, keys in an Enum should be TitleCase. For example: `FavoritePerson`, `BestLake`, `Monthly`.
+
+## Comments
+
+- Prefer PHPDoc blocks over inline comments. Never use comments within the code itself unless the logic is exceptionally complex.
+
+## PHPDoc Blocks
+
+- Add useful array shape type definitions when appropriate.
+
+=== tests rules ===
+
+# Test Enforcement
+
+- Every change must be programmatically tested. Write a new test or update an existing test, then run the affected tests to make sure they pass.
+- Run the minimum number of tests needed to ensure code quality and speed. Use `php artisan test --compact` with a specific filename or filter.
+
+=== inertia-laravel/core rules ===
+
+# Inertia
+
+- Inertia creates fully client-side rendered SPAs without modern SPA complexity, leveraging existing server-side patterns.
+- Components live in `resources/js/Pages` (unless specified in `vite.config.js`). Use `Inertia::render()` for server-side routing instead of Blade views.
+- ALWAYS use `search-docs` tool for version-specific Inertia documentation and updated code examples.
+- IMPORTANT: Activate `inertia-react-development` when working with Inertia client-side patterns.
+
+=== inertia-laravel/v2 rules ===
+
+# Inertia v2
+
+- Use all Inertia features from v1 and v2. Check the documentation before making changes to ensure the correct approach.
+- New features: deferred props, infinite scrolling (merging props + `WhenVisible`), lazy loading on scroll, polling, prefetching.
+- When using deferred props, add an empty state with a pulsing or animated skeleton.
+
+=== laravel/core rules ===
+
+# Do Things the Laravel Way
+
+- Use `php artisan make:` commands to create new files (i.e. migrations, controllers, models, etc.). You can list available Artisan commands using the `list-artisan-commands` tool.
+- If you're creating a generic PHP class, use `php artisan make:class`.
+- Pass `--no-interaction` to all Artisan commands to ensure they work without user input. You should also pass the correct `--options` to ensure correct behavior.
+
+## Database
+
+- Always use proper Eloquent relationship methods with return type hints. Prefer relationship methods over raw queries or manual joins.
+- Use Eloquent models and relationships before suggesting raw database queries.
+- Avoid `DB::`; prefer `Model::query()`. Generate code that leverages Laravel's ORM capabilities rather than bypassing them.
+- Generate code that prevents N+1 query problems by using eager loading.
+- Use Laravel's query builder for very complex database operations.
+
+### Model Creation
+
+- When creating new models, create useful factories and seeders for them too. Ask the user if they need any other things, using `list-artisan-commands` to check the available options to `php artisan make:model`.
+
+### APIs & Eloquent Resources
+
+- For APIs, default to using Eloquent API Resources and API versioning unless existing API routes do not, then you should follow existing application convention.
+
+## Controllers & Validation
+
+- Always create Form Request classes for validation rather than inline validation in controllers. Include both validation rules and custom error messages.
+- Check sibling Form Requests to see if the application uses array or string based validation rules.
+
+## Authentication & Authorization
+
+- Use Laravel's built-in authentication and authorization features (gates, policies, Sanctum, etc.).
+
+## URL Generation
+
+- When generating links to other pages, prefer named routes and the `route()` function.
+
+## Queues
+
+- Use queued jobs for time-consuming operations with the `ShouldQueue` interface.
+
+## Configuration
+
+- Use environment variables only in configuration files - never use the `env()` function directly outside of config files. Always use `config('app.name')`, not `env('APP_NAME')`.
+
+## Testing
+
+- When creating models for tests, use the factories for the models. Check if the factory has custom states that can be used before manually setting up the model.
+- Faker: Use methods such as `$this->faker->word()` or `fake()->randomDigit()`. Follow existing conventions whether to use `$this->faker` or `fake()`.
+- When creating tests, make use of `php artisan make:test [options] {name}` to create a feature test, and pass `--unit` to create a unit test. Most tests should be feature tests.
+
+## Vite Error
+
+- If you receive an "Illuminate\Foundation\ViteException: Unable to locate file in Vite manifest" error, you can run `npm run build` or ask the user to run `npm run dev` or `composer run dev`.
+
+=== laravel/v12 rules ===
+
+# Laravel 12
+
+- CRITICAL: ALWAYS use `search-docs` tool for version-specific Laravel documentation and updated code examples.
+- Since Laravel 11, Laravel has a new streamlined file structure which this project uses.
+
+## Laravel 12 Structure
+
+- In Laravel 12, middleware are no longer registered in `app/Http/Kernel.php`.
+- Middleware are configured declaratively in `bootstrap/app.php` using `Application::configure()->withMiddleware()`.
+- `bootstrap/app.php` is the file to register middleware, exceptions, and routing files.
+- `bootstrap/providers.php` contains application specific service providers.
+- The `app\Console\Kernel.php` file no longer exists; use `bootstrap/app.php` or `routes/console.php` for console configuration.
+- Console commands in `app/Console/Commands/` are automatically available and do not require manual registration.
+
+## Database
+
+- When modifying a column, the migration must include all of the attributes that were previously defined on the column. Otherwise, they will be dropped and lost.
+- Laravel 12 allows limiting eagerly loaded records natively, without external packages: `$query->latest()->limit(10);`.
+
+### Models
+
+- Casts can and likely should be set in a `casts()` method on a model rather than the `$casts` property. Follow existing conventions from other models.
+
+=== wayfinder/core rules ===
+
+# Laravel Wayfinder
+
+Wayfinder generates TypeScript functions for Laravel routes. Import from `@/actions/` (controllers) or `@/routes/` (named routes).
+
+- IMPORTANT: Activate `wayfinder-development` skill whenever referencing backend routes in frontend components.
+- Invokable Controllers: `import StorePost from '@/actions/.../StorePostController'; StorePost()`.
+- Parameter Binding: Detects route keys (`{post:slug}`) — `show({ slug: "my-post" })`.
+- Query Merging: `show(1, { mergeQuery: { page: 2, sort: null } })` merges with current URL, `null` removes params.
+- Inertia: Use `.form()` with `<Form>` component or `form.submit(store())` with useForm.
+
+=== pint/core rules ===
+
+# Laravel Pint Code Formatter
+
+- You must run `vendor/bin/pint --dirty` before finalizing changes to ensure your code matches the project's expected style.
+- Do not run `vendor/bin/pint --test`, simply run `vendor/bin/pint` to fix any formatting issues.
+
+=== phpunit/core rules ===
+
+# PHPUnit
+
+- This application uses PHPUnit for testing. All tests must be written as PHPUnit classes. Use `php artisan make:test --phpunit {name}` to create a new test.
+- If you see a test using "Pest", convert it to PHPUnit.
+- Every time a test has been updated, run that singular test.
+- When the tests relating to your feature are passing, ask the user if they would like to also run the entire test suite to make sure everything is still passing.
+- Tests should cover all happy paths, failure paths, and edge cases.
+- You must not remove any tests or test files from the tests directory without approval. These are not temporary or helper files; these are core to the application.
+
+## Running Tests
+
+- Run the minimal number of tests, using an appropriate filter, before finalizing.
+- To run all tests: `php artisan test --compact`.
+- To run all tests in a file: `php artisan test --compact tests/Feature/ExampleTest.php`.
+- To filter on a particular test name: `php artisan test --compact --filter=testName` (recommended after making a change to a related file).
+
+=== inertia-react/core rules ===
+
+# Inertia + React
+
+- IMPORTANT: Activate `inertia-react-development` when working with Inertia React client-side patterns.
+
+=== tailwindcss/core rules ===
+
+# Tailwind CSS
+
+- Always use existing Tailwind conventions; check project patterns before adding new ones.
+- IMPORTANT: Always use `search-docs` tool for version-specific Tailwind CSS documentation and updated code examples. Never rely on training data.
+- IMPORTANT: Activate `tailwindcss-development` every time you're working with a Tailwind CSS or styling-related task.
+</laravel-boost-guidelines>

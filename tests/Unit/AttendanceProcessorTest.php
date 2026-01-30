@@ -2,30 +2,28 @@
 
 namespace Tests\Unit;
 
-use App\Models\User;
-use App\Models\EmployeeSchedule;
 use App\Models\Attendance;
-use App\Models\AttendanceUpload;
-use App\Services\AttendanceProcessor;
+use App\Models\EmployeeSchedule;
+use App\Models\User;
 use App\Services\AttendanceFileParser;
-use Tests\TestCase;
+use App\Services\AttendanceProcessor;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Storage;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class AttendanceProcessorTest extends TestCase
 {
     use RefreshDatabase;
 
-
     protected AttendanceProcessor $processor;
+
     protected AttendanceFileParser $parser;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->parser = new AttendanceFileParser();
+        $this->parser = new AttendanceFileParser;
         $this->processor = new AttendanceProcessor($this->parser);
     }
 
@@ -185,6 +183,32 @@ class AttendanceProcessorTest extends TestCase
     }
 
     #[Test]
+    public function it_matches_single_initial_to_correct_sibling_when_other_uses_two_letters()
+    {
+        // Scenario: Siblings with same last name and first initial
+        // Biometric uses "Robinios Jo" for Joannah (2-letter prefix) and "Robinios J" for Jessica (1-letter)
+        // When we see "Robinios J", we should match Jessica, not Joannah
+
+        $userJoannah = User::factory()->create([
+            'first_name' => 'Joannah Salve',
+            'last_name' => 'Robinios',
+        ]);
+
+        $userJessica = User::factory()->create([
+            'first_name' => 'Jessica',
+            'last_name' => 'Robinios',
+        ]);
+
+        // Two-letter pattern should match Joannah specifically
+        $foundJo = $this->invokeMethod($this->processor, 'findUserByName', ['robinios jo', null]);
+        $this->assertEquals($userJoannah->id, $foundJo->id, 'robinios jo should match Joannah');
+
+        // Single-initial pattern should match Jessica (because Joannah has her own distinct 2-letter pattern)
+        $foundJ = $this->invokeMethod($this->processor, 'findUserByName', ['robinios j', null]);
+        $this->assertEquals($userJessica->id, $foundJ->id, 'robinios j should match Jessica, not Joannah');
+    }
+
+    #[Test]
     public function it_uses_shift_timing_to_match_users_with_same_last_name()
     {
         // Create two users with same last name but different shifts
@@ -208,12 +232,12 @@ class AttendanceProcessorTest extends TestCase
 
         // Morning record (6 AM)
         $morningRecords = collect([
-            ['datetime' => Carbon::parse('2025-11-05 06:00:00')]
+            ['datetime' => Carbon::parse('2025-11-05 06:00:00')],
         ]);
 
         // Night record (10 PM)
         $nightRecords = collect([
-            ['datetime' => Carbon::parse('2025-11-05 22:00:00')]
+            ['datetime' => Carbon::parse('2025-11-05 22:00:00')],
         ]);
 
         $foundMorning = $this->invokeMethod($this->processor, 'findUserByName', ['nodado', $morningRecords]);
@@ -355,7 +379,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -393,7 +417,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -428,7 +452,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -465,7 +489,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $bioSite->id // Different site
+            $bioSite->id, // Different site
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -499,7 +523,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -539,7 +563,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -577,7 +601,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -617,7 +641,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $firstRecords,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -638,7 +662,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $secondRecords,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance->refresh();
@@ -674,7 +698,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -714,7 +738,7 @@ class AttendanceProcessorTest extends TestCase
             $schedule,
             $records,
             $shiftDate,
-            $site->id
+            $site->id,
         ]);
 
         $attendance = Attendance::where('user_id', $user->id)
@@ -740,5 +764,3 @@ class AttendanceProcessorTest extends TestCase
         return $method->invokeArgs($object, $parameters);
     }
 }
-
-

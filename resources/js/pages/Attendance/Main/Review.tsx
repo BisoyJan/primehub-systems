@@ -8,10 +8,11 @@ import { LoadingOverlay } from "@/components/LoadingOverlay";
 import { type SharedData } from "@/types";
 import { formatDateTime, formatDate, formatTime, formatWorkDuration, formatTimeAdjustment } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 import { DatePicker } from "@/components/ui/date-picker";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
 import {
     Select,
     SelectContent,
@@ -35,16 +36,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import {
-    Command,
-    CommandEmpty,
-    CommandGroup,
-    CommandInput,
-    CommandItem,
-    CommandList,
-} from "@/components/ui/command";
-import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Clock, Edit, Moon, Search, Send, UserCheck, X } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { AlertCircle, Check, CheckCircle, Clock, Edit, Moon, Search, Send, UserCheck, X } from "lucide-react";
 import { TimeInput } from "@/components/ui/time-input";
 import { Switch } from "@/components/ui/switch";
 import { requestUndertimeApproval, approveUndertime } from "@/routes/attendance";
@@ -337,17 +330,16 @@ export default function AttendanceReview() {
     const userRole = auth.user?.role;
     const isTeamLead = userRole === 'Team Lead';
 
-    // Employee search popover state
-    const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
-    const [employeeSearchQuery, setEmployeeSearchQuery] = useState("");
-    const [selectedUserId, setSelectedUserId] = useState(filters?.user_id || "");
-    const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
-    // Auto-select Team Lead's campaign if no filter is applied
-    const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
-        if (filters?.campaign_id) return filters.campaign_id;
-        if (isTeamLead && teamLeadCampaignId) return teamLeadCampaignId.toString();
-        return "";
+    // Multi-select filter state
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() => parseMultiSelectParam(filters?.user_id));
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() => parseMultiSelectParam(filters?.status));
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
+        const fromFilter = parseMultiSelectParam(filters?.campaign_id);
+        if (fromFilter.length > 0) return fromFilter;
+        if (isTeamLead && teamLeadCampaignId) return [teamLeadCampaignId.toString()];
+        return [];
     });
+    const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Review Flagged Records",
@@ -413,20 +405,9 @@ export default function AttendanceReview() {
     const [isStatusManuallyOverridden, setIsStatusManuallyOverridden] = useState(false);
 
     // Search state
-    const [statusFilter, setStatusFilter] = useState(filters?.status || "all");
     const [verifiedFilter, setVerifiedFilter] = useState(filters?.verified || "all");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
-
-    // Filter employees based on search query
-    const filteredEmployees = (employees ?? []).filter((user) =>
-        user.name.toLowerCase().includes(employeeSearchQuery.toLowerCase())
-    );
-
-    // Get selected employee name for display
-    const selectedEmployeeName = selectedUserId
-        ? employees?.find((u) => String(u.id) === selectedUserId)?.name || "Unknown"
-        : "All Employees";
 
     const { data, setData, post, processing, errors, reset } = useForm({
         status: "",
@@ -510,35 +491,32 @@ export default function AttendanceReview() {
     };
 
     const handleSearch = () => {
-        router.get(
-            "/attendance/review",
-            {
-                user_id: selectedUserId,
-                site_id: selectedSiteId,
-                campaign_id: selectedCampaignId,
-                status: statusFilter === "all" ? "" : statusFilter,
-                verified: verifiedFilter === "all" ? "" : verifiedFilter,
-                date_from: dateFrom,
-                date_to: dateTo,
-            },
-            {
-                preserveState: true,
-                preserveScroll: true,
-            }
-        );
+        const params: Record<string, string> = {};
+
+        if (selectedUserIds.length > 0) params.user_id = multiSelectToParam(selectedUserIds);
+        if (selectedSiteId) params.site_id = selectedSiteId;
+        if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
+        if (verifiedFilter !== "all") params.verified = verifiedFilter;
+        if (dateFrom) params.date_from = dateFrom;
+        if (dateTo) params.date_to = dateTo;
+
+        router.get("/attendance/review", params, {
+            preserveState: true,
+            preserveScroll: true,
+        });
     };
 
     const handleClearFilters = () => {
-        setSelectedUserId("");
-        setEmployeeSearchQuery("");
+        setSelectedUserIds([]);
         setSelectedSiteId("");
+        setSelectedStatuses([]);
         // For Team Leads, reset to their campaign instead of empty
         if (isTeamLead && teamLeadCampaignId) {
-            setSelectedCampaignId(teamLeadCampaignId.toString());
+            setSelectedCampaignIds([teamLeadCampaignId.toString()]);
         } else {
-            setSelectedCampaignId("");
+            setSelectedCampaignIds([]);
         }
-        setStatusFilter("all");
         setVerifiedFilter("all");
         setDateFrom("");
         setDateTo("");
@@ -844,99 +822,49 @@ export default function AttendanceReview() {
                 <Card>
                     <CardContent className="pt-6">
                         <div className="space-y-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
-                                {/* Employee Search */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {/* Employee Multi-Select */}
                                 <div className="space-y-2">
                                     <Label>Employee</Label>
-                                    <Popover open={isEmployeePopoverOpen} onOpenChange={setIsEmployeePopoverOpen}>
-                                        <PopoverTrigger asChild>
-                                            <Button
-                                                variant="outline"
-                                                role="combobox"
-                                                aria-expanded={isEmployeePopoverOpen}
-                                                className="w-full justify-between font-normal"
-                                            >
-                                                <span className="truncate">
-                                                    {selectedUserId ? selectedEmployeeName : "All Employees"}
-                                                </span>
-                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-full p-0" align="start">
-                                            <Command shouldFilter={false}>
-                                                <CommandInput
-                                                    placeholder="Search employee..."
-                                                    value={employeeSearchQuery}
-                                                    onValueChange={setEmployeeSearchQuery}
-                                                />
-                                                <CommandList>
-                                                    <CommandEmpty>No employee found.</CommandEmpty>
-                                                    <CommandGroup>
-                                                        <CommandItem
-                                                            value="all"
-                                                            onSelect={() => {
-                                                                setSelectedUserId("");
-                                                                setIsEmployeePopoverOpen(false);
-                                                                setEmployeeSearchQuery("");
-                                                            }}
-                                                            className="cursor-pointer"
-                                                        >
-                                                            <Check
-                                                                className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"}`}
-                                                            />
-                                                            All Employees
-                                                        </CommandItem>
-                                                        {filteredEmployees.map((user) => (
-                                                            <CommandItem
-                                                                key={user.id}
-                                                                value={user.name}
-                                                                onSelect={() => {
-                                                                    setSelectedUserId(String(user.id));
-                                                                    setIsEmployeePopoverOpen(false);
-                                                                    setEmployeeSearchQuery("");
-                                                                }}
-                                                                className="cursor-pointer"
-                                                            >
-                                                                <Check
-                                                                    className={`mr-2 h-4 w-4 ${selectedUserId === String(user.id) ? "opacity-100" : "opacity-0"}`}
-                                                                />
-                                                                {user.name}
-                                                            </CommandItem>
-                                                        ))}
-                                                    </CommandGroup>
-                                                </CommandList>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
+                                    <MultiSelectFilter
+                                        options={(employees ?? []).map(u => ({ label: u.name, value: u.id.toString() }))}
+                                        value={selectedUserIds}
+                                        onChange={setSelectedUserIds}
+                                        placeholder="Select employees..."
+                                        emptyMessage="No employee found."
+                                        className="w-full min-h-9"
+                                    />
                                 </div>
 
-                                {/* Status Filter */}
+                                {/* Status Multi-Select */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="status-filter">Status</Label>
-                                    <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                        <SelectTrigger id="status-filter">
-                                            <SelectValue placeholder="All statuses" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Statuses</SelectItem>
-                                            <SelectItem value="on_time">On Time</SelectItem>
-                                            <SelectItem value="ncns">NCNS</SelectItem>
-                                            <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
-                                            <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
-                                            <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
-                                            <SelectItem value="tardy">Tardy</SelectItem>
-                                            <SelectItem value="undertime">Undertime</SelectItem>
-                                            <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
-                                            <SelectItem value="on_leave">On Leave</SelectItem>
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>Status</Label>
+                                    <MultiSelectFilter
+                                        options={[
+                                            { label: "On Time", value: "on_time" },
+                                            { label: "Tardy", value: "tardy" },
+                                            { label: "Half Day Absence", value: "half_day_absence" },
+                                            { label: "NCNS", value: "ncns" },
+                                            { label: "Undertime", value: "undertime" },
+                                            { label: "Undertime (>1hr)", value: "undertime_more_than_hour" },
+                                            { label: "Failed Bio In", value: "failed_bio_in" },
+                                            { label: "Failed Bio Out", value: "failed_bio_out" },
+                                            { label: "Needs Review", value: "needs_manual_review" },
+                                            { label: "On Leave", value: "on_leave" },
+                                        ]}
+                                        value={selectedStatuses}
+                                        onChange={setSelectedStatuses}
+                                        placeholder="Select status..."
+                                        emptyMessage="No status found."
+                                        className="w-full min-h-9"
+                                    />
                                 </div>
 
-                                {/* Site Filter */}
+                                {/* Site Filter - Single Select */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="site-filter">Site</Label>
+                                    <Label>Site</Label>
                                     <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
-                                        <SelectTrigger id="site-filter">
+                                        <SelectTrigger>
                                             <SelectValue placeholder="All Sites" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -950,29 +878,27 @@ export default function AttendanceReview() {
                                     </Select>
                                 </div>
 
-                                {/* Campaign Filter */}
+                                {/* Campaign Multi-Select */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="campaign-filter">Campaign</Label>
-                                    <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
-                                        <SelectTrigger id="campaign-filter">
-                                            <SelectValue placeholder="All Campaigns" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="all">All Campaigns</SelectItem>
-                                            {campaigns.map((campaign) => (
-                                                <SelectItem key={campaign.id} value={campaign.id.toString()}>
-                                                    {campaign.name}{isTeamLead && teamLeadCampaignId === campaign.id ? ' (Your Campaign)' : ''}
-                                                </SelectItem>
-                                            ))}
-                                        </SelectContent>
-                                    </Select>
+                                    <Label>Campaign</Label>
+                                    <MultiSelectFilter
+                                        options={campaigns.map(c => ({
+                                            label: c.name + (isTeamLead && teamLeadCampaignId === c.id ? ' (Your Campaign)' : ''),
+                                            value: c.id.toString()
+                                        }))}
+                                        value={selectedCampaignIds}
+                                        onChange={setSelectedCampaignIds}
+                                        placeholder="Select campaigns..."
+                                        emptyMessage="No campaign found."
+                                        className="w-full min-h-9"
+                                    />
                                 </div>
 
-                                {/* Verified Filter */}
+                                {/* Verified Filter - Single Select */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="verified-filter">Verification Status</Label>
+                                    <Label>Verification Status</Label>
                                     <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
-                                        <SelectTrigger id="verified-filter">
+                                        <SelectTrigger>
                                             <SelectValue placeholder="All Records" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -985,7 +911,7 @@ export default function AttendanceReview() {
 
                                 {/* Date From */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="date-from">Date From</Label>
+                                    <Label>Date From</Label>
                                     <DatePicker
                                         value={dateFrom}
                                         onChange={(value) => {
@@ -1001,7 +927,7 @@ export default function AttendanceReview() {
 
                                 {/* Date To */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="date-to">Date To</Label>
+                                    <Label>Date To</Label>
                                     <DatePicker
                                         value={dateTo}
                                         onChange={(value) => setDateTo(value)}
@@ -1064,11 +990,9 @@ export default function AttendanceReview() {
                                     <TableHeader>
                                         <TableRow className="bg-muted/50">
                                             <TableHead className="w-12">
-                                                <Input
-                                                    type="checkbox"
+                                                <Checkbox
                                                     checked={selectedRecords.size === attendanceData.data.length && attendanceData.data.length > 0}
-                                                    onChange={handleSelectAll}
-                                                    className="h-4 w-4 rounded border-gray-300"
+                                                    onCheckedChange={handleSelectAll}
                                                 />
                                             </TableHead>
                                             <TableHead>Employee</TableHead>
@@ -1079,7 +1003,6 @@ export default function AttendanceReview() {
                                             <TableHead>Status</TableHead>
                                             <TableHead>Tardy/UT/OT</TableHead>
                                             <TableHead>Notes</TableHead>
-                                            <TableHead>Issue</TableHead>
                                             <TableHead>Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -1094,12 +1017,10 @@ export default function AttendanceReview() {
                                                     }`}
                                             >
                                                 <TableCell>
-                                                    <Input
-                                                        type="checkbox"
+                                                    <Checkbox
                                                         checked={selectedRecords.has(record.id)}
-                                                        onChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
+                                                        onCheckedChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
                                                         disabled={selectedStatus !== null && (record.status !== selectedStatus || record.secondary_status !== selectedSecondaryStatus)}
-                                                        className="h-4 w-4 rounded border-gray-300 disabled:opacity-30 disabled:cursor-not-allowed"
                                                     />
                                                 </TableCell>
                                                 <TableCell className="font-medium">{record.user.name}</TableCell>
@@ -1175,64 +1096,61 @@ export default function AttendanceReview() {
                                                     <NotesDisplay record={record} />
                                                 </TableCell>
                                                 <TableCell>
-                                                    <div className="space-y-1">
-                                                        {(record.status === 'failed_bio_in' || record.secondary_status === 'failed_bio_in') && (
-                                                            <span className="text-sm text-red-600 block">No Time In</span>
-                                                        )}
-                                                        {(record.status === 'failed_bio_out' || record.secondary_status === 'failed_bio_out') && (
-                                                            <span className="text-sm text-red-600 block">No Time Out</span>
-                                                        )}
-                                                        {(record.status === 'ncns' || record.secondary_status === 'ncns') && (
-                                                            <span className="text-sm text-red-600 block">No Show</span>
-                                                        )}
-                                                        {(record.status === 'tardy' || record.secondary_status === 'tardy') && (
-                                                            <span className="text-sm text-orange-600 block">Late Arrival</span>
-                                                        )}
-                                                        {(record.status === 'undertime' || record.secondary_status === 'undertime') && (
-                                                            <span className="text-sm text-orange-600 block">Early Leave</span>
-                                                        )}
-                                                        {(record.status === 'half_day_absence' || record.secondary_status === 'half_day_absence') && (
-                                                            <span className="text-sm text-orange-600 block">Half Day</span>
-                                                        )}
-                                                        {record.status === 'needs_manual_review' && (
-                                                            <span className="text-sm text-amber-600 font-medium block">
-                                                                <AlertCircle className="inline h-3 w-3 mr-1" />
-                                                                Suspicious Pattern
-                                                            </span>
-                                                        )}
-                                                        {record.warnings && record.warnings.length > 0 && (
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => openWarningsDialog(record)}
-                                                                className="mt-1 h-auto py-1 px-2 text-amber-700 hover:text-amber-900 hover:bg-amber-50"
-                                                            >
-                                                                <AlertCircle className="h-3 w-3 mr-1" />
-                                                                View {record.warnings.length} Warning{record.warnings.length > 1 ? 's' : ''}
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
                                                     <div className="flex gap-1">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => openVerifyDialog(record)}
-                                                        >
-                                                            <Edit className="h-4 w-4 mr-1" />
-                                                            {record.admin_verified ? 'Edit' : 'Verify'}
-                                                        </Button>
+                                                        {record.warnings && record.warnings.length > 0 && (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-amber-600 border-amber-300 hover:bg-amber-50"
+                                                                            onClick={() => openWarningsDialog(record)}
+                                                                        >
+                                                                            <AlertCircle className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        {record.warnings.length} Warning{record.warnings.length > 1 ? 's' : ''} - Click to view
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        )}
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        className="h-8 w-8"
+                                                                        onClick={() => openVerifyDialog(record)}
+                                                                    >
+                                                                        <Edit className="h-4 w-4" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>
+                                                                    {record.admin_verified ? 'Edit Verification' : 'Verify Attendance'}
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
                                                         {isNightShiftMissingTimeOut(record) && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                onClick={() => openPartialDialog(record)}
-                                                                className="text-purple-600 border-purple-300 hover:bg-purple-50"
-                                                                title="Complete night shift by adding time out"
-                                                            >
-                                                                <Moon className="h-4 w-4" />
-                                                            </Button>
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="icon"
+                                                                            className="h-8 w-8 text-purple-600 border-purple-300 hover:bg-purple-50"
+                                                                            onClick={() => openPartialDialog(record)}
+                                                                        >
+                                                                            <Moon className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        Complete night shift by adding time out
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
                                                         )}
                                                     </div>
                                                 </TableCell>
@@ -1255,12 +1173,11 @@ export default function AttendanceReview() {
                                         }`}
                                 >
                                     <div className="flex justify-between items-start">
-                                        <Input
-                                            type="checkbox"
+                                        <Checkbox
                                             checked={selectedRecords.has(record.id)}
-                                            onChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
+                                            onCheckedChange={() => handleSelectRecord(record.id, record.status, record.secondary_status)}
                                             disabled={selectedStatus !== null && (record.status !== selectedStatus || record.secondary_status !== selectedSecondaryStatus)}
-                                            className="h-5 w-5 rounded border-gray-300 mt-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                                            className="mt-1"
                                         />
                                         <div className="flex-1 mx-3">
                                             <div className="text-lg font-semibold">{record.user.name}</div>
@@ -1447,12 +1364,10 @@ export default function AttendanceReview() {
                         {hasOvertimeRecords() && (
                             <div className="space-y-2 p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
                                 <div className="flex items-center gap-2">
-                                    <Input
-                                        type="checkbox"
+                                    <Checkbox
                                         id="batch_overtime_approved"
                                         checked={batchData.overtime_approved}
-                                        onChange={e => setBatchData("overtime_approved", e.target.checked)}
-                                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                                        onCheckedChange={(checked) => setBatchData("overtime_approved", checked === true)}
                                     />
                                     <Label htmlFor="batch_overtime_approved" className="text-sm font-medium cursor-pointer">
                                         Approve Overtime for All Selected Records
@@ -1815,12 +1730,10 @@ export default function AttendanceReview() {
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        <Input
-                                            type="checkbox"
+                                        <Checkbox
                                             id="overtime_approved"
                                             checked={data.overtime_approved}
-                                            onChange={e => setData("overtime_approved", e.target.checked)}
-                                            className="h-4 w-4 rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500"
+                                            onCheckedChange={(checked) => setData("overtime_approved", checked === true)}
                                         />
                                         <Label htmlFor="overtime_approved" className="text-sm font-medium cursor-pointer">
                                             Approve Overtime

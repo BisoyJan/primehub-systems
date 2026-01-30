@@ -9,9 +9,8 @@ import { formatTime, formatDate, formatDateTime, formatWorkDuration, formatTimeA
 import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 import { Button } from "@/components/ui/button";
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { DatePicker } from "@/components/ui/date-picker"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DatePicker } from "@/components/ui/date-picker";
+import { MultiSelectFilter, parseMultiSelectParam, multiSelectToParam } from "@/components/multi-select-filter";
 import {
     Select,
     SelectContent,
@@ -24,9 +23,11 @@ import { Badge } from "@/components/ui/badge";
 import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, Trash2, Check, ChevronsUpDown, RefreshCw, Search, Play, Pause, Edit, Upload } from "lucide-react";
+import { AlertCircle, Trash2, RefreshCw, Search, Play, Pause, Edit, Upload, Check, X } from "lucide-react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Card, CardContent } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
 import {
     AlertDialog,
     AlertDialogAction,
@@ -147,6 +148,7 @@ interface PageProps extends SharedData {
         site_id?: string;
         campaign_id?: string;
         needs_verification?: boolean;
+        verified_status?: string;
     };
     [key: string]: unknown;
 }
@@ -183,20 +185,26 @@ export default function AttendanceIndex() {
     const { can } = usePermission();
 
     const [loading, setLoading] = useState(false);
-    const [selectedUserId, setSelectedUserId] = useState(appliedFilters.user_id || "");
-    const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
-    const [userSearchQuery, setUserSearchQuery] = useState("");
+    // Multi-select state for employees
+    const [selectedUserIds, setSelectedUserIds] = useState<string[]>(() =>
+        parseMultiSelectParam(appliedFilters.user_id)
+    );
     const [selectedSiteId, setSelectedSiteId] = useState(appliedFilters.site_id || "");
-    // Auto-select Team Lead's campaign if no filter is applied
-    const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
-        if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
-        if (isTeamLead && teamLeadCampaignId) return teamLeadCampaignId.toString();
-        return "";
+    // Multi-select state for campaigns - auto-select Team Lead's campaign if no filter is applied
+    const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
+        const fromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
+        if (fromFilter.length > 0) return fromFilter;
+        if (isTeamLead && teamLeadCampaignId) return [teamLeadCampaignId.toString()];
+        return [];
     });
-    const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
+    // Multi-select state for status
+    const [selectedStatuses, setSelectedStatuses] = useState<string[]>(() =>
+        parseMultiSelectParam(appliedFilters.status)
+    );
     const [startDate, setStartDate] = useState(appliedFilters.start_date || "");
     const [endDate, setEndDate] = useState(appliedFilters.end_date || "");
     const [needsVerification, setNeedsVerification] = useState(appliedFilters.needs_verification || false);
+    const [verifiedFilter, setVerifiedFilter] = useState(appliedFilters.verified_status || "all");
 
     // LocalStorage keys for persisting selection
     const LOCAL_STORAGE_KEY = 'attendance_selected_ids';
@@ -268,35 +276,29 @@ export default function AttendanceIndex() {
 
     // Update local state when filters prop changes (e.g., when navigating back or pagination)
     useEffect(() => {
-        setSelectedUserId(appliedFilters.user_id || "");
+        setSelectedUserIds(parseMultiSelectParam(appliedFilters.user_id));
         setSelectedSiteId(appliedFilters.site_id || "");
         // For Team Leads, default to their campaign if no filter is applied
-        if (appliedFilters.campaign_id) {
-            setSelectedCampaignId(appliedFilters.campaign_id);
+        const campaignFromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
+        if (campaignFromFilter.length > 0) {
+            setSelectedCampaignIds(campaignFromFilter);
         } else if (isTeamLead && teamLeadCampaignId) {
-            setSelectedCampaignId(teamLeadCampaignId.toString());
+            setSelectedCampaignIds([teamLeadCampaignId.toString()]);
         } else {
-            setSelectedCampaignId("");
+            setSelectedCampaignIds([]);
         }
-        setStatusFilter(appliedFilters.status || "all");
+        setSelectedStatuses(parseMultiSelectParam(appliedFilters.status));
         setStartDate(appliedFilters.start_date || "");
         setEndDate(appliedFilters.end_date || "");
         setNeedsVerification(appliedFilters.needs_verification || false);
+        setVerifiedFilter(appliedFilters.verified_status || "all");
         // Don't clear selections when filters change
-    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification, isTeamLead, teamLeadCampaignId]);
+    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification, appliedFilters.verified_status, isTeamLead, teamLeadCampaignId]);
 
     const userId = auth.user?.id;
     // Roles that should only see their own attendance records
     const restrictedRoles: UserRole[] = ['Agent', 'IT', 'Utility'];
     const isRestrictedUser = userRole && restrictedRoles.includes(userRole);
-
-    // Filter users based on search query
-    const filteredUsers = React.useMemo(() => {
-        if (!userSearchQuery) return users;
-        return users.filter(user =>
-            user.name.toLowerCase().includes(userSearchQuery.toLowerCase())
-        );
-    }, [users, userSearchQuery]);
 
     const handleSearch = () => {
         const params: Record<string, string> = {};
@@ -304,17 +306,18 @@ export default function AttendanceIndex() {
         // For Agent, IT, and Utility roles, automatically filter to their own records
         if (isRestrictedUser && userId) {
             params.user_id = userId.toString();
-        } else if (selectedUserId) {
+        } else if (selectedUserIds.length > 0) {
             // Only allow user filter for users with higher permissions
-            params.user_id = selectedUserId;
+            params.user_id = multiSelectToParam(selectedUserIds);
         }
 
         if (selectedSiteId) params.site_id = selectedSiteId;
-        if (selectedCampaignId) params.campaign_id = selectedCampaignId;
-        if (statusFilter !== "all") params.status = statusFilter;
+        if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
+        if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
         if (startDate) params.start_date = startDate;
         if (endDate) params.end_date = endDate;
         if (needsVerification) params.needs_verification = "1";
+        if (verifiedFilter && verifiedFilter !== "all") params.verified_status = verifiedFilter;
 
         setLoading(true);
         router.get(attendanceIndex().url, params, {
@@ -338,16 +341,17 @@ export default function AttendanceIndex() {
 
             if (isRestrictedUser && userId) {
                 params.user_id = userId.toString();
-            } else if (selectedUserId) {
-                params.user_id = selectedUserId;
+            } else if (selectedUserIds.length > 0) {
+                params.user_id = multiSelectToParam(selectedUserIds);
             }
 
             if (selectedSiteId) params.site_id = selectedSiteId;
-            if (selectedCampaignId) params.campaign_id = selectedCampaignId;
-            if (statusFilter !== "all") params.status = statusFilter;
+            if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
+            if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
             if (startDate) params.start_date = startDate;
             if (endDate) params.end_date = endDate;
             if (needsVerification) params.needs_verification = "1";
+            if (verifiedFilter && verifiedFilter !== "all") params.verified_status = verifiedFilter;
 
             router.get(attendanceIndex().url, params, {
                 preserveState: true,
@@ -359,26 +363,27 @@ export default function AttendanceIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, selectedUserId, selectedSiteId, selectedCampaignId, statusFilter, startDate, endDate, needsVerification, isRestrictedUser, userId]);
+    }, [autoRefreshEnabled, selectedUserIds, selectedSiteId, selectedCampaignIds, selectedStatuses, startDate, endDate, needsVerification, verifiedFilter, isRestrictedUser, userId]);
 
     const showClearFilters =
-        statusFilter !== "all" ||
+        selectedStatuses.length > 0 ||
         Boolean(startDate) ||
         Boolean(endDate) ||
         needsVerification ||
-        Boolean(selectedUserId) ||
+        selectedUserIds.length > 0 ||
         Boolean(selectedSiteId) ||
-        Boolean(selectedCampaignId);
+        selectedCampaignIds.length > 0 ||
+        (verifiedFilter && verifiedFilter !== "all");
 
     const clearFilters = () => {
-        setSelectedUserId("");
-        setUserSearchQuery("");
+        setSelectedUserIds([]);
         setSelectedSiteId("");
-        setSelectedCampaignId("");
-        setStatusFilter("all");
+        setSelectedCampaignIds([]);
+        setSelectedStatuses([]);
         setStartDate("");
         setEndDate("");
         setNeedsVerification(false);
+        setVerifiedFilter("all");
 
         // Trigger reload with cleared filters
         setLoading(true);
@@ -502,197 +507,195 @@ export default function AttendanceIndex() {
                     description="Review attendance records and manage daily logs"
                 />
 
-                <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:flex lg:flex-row lg:flex-wrap lg:items-center gap-3">
-                        {!isRestrictedUser && (
-                            <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
-                                <PopoverTrigger asChild>
-                                    <Button
-                                        variant="outline"
-                                        role="combobox"
-                                        aria-expanded={isUserPopoverOpen}
-                                        className="w-full justify-between font-normal lg:w-auto lg:flex-1"
-                                    >
-                                        <span className="truncate">
-                                            {selectedUserId
-                                                ? users.find(u => u.id.toString() === selectedUserId)?.name || "Select employee..."
-                                                : "All Employees"}
-                                        </span>
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-full p-0" align="start">
-                                    <Command shouldFilter={false}>
-                                        <CommandInput
-                                            placeholder="Search employee..."
-                                            value={userSearchQuery}
-                                            onValueChange={setUserSearchQuery}
+                {/* Search and Filters */}
+                <Card>
+                    <CardContent className="pt-6">
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                                {/* Employee Multi-Select */}
+                                {!isRestrictedUser && (
+                                    <div className="space-y-2">
+                                        <Label>Employee</Label>
+                                        <MultiSelectFilter
+                                            options={users.map(u => ({ label: u.name, value: u.id.toString() }))}
+                                            value={selectedUserIds}
+                                            onChange={setSelectedUserIds}
+                                            placeholder="Select employees..."
+                                            emptyMessage="No employee found."
+                                            className="w-full min-h-9"
                                         />
-                                        <CommandList>
-                                            <CommandEmpty>No employee found.</CommandEmpty>
-                                            <CommandGroup>
-                                                <CommandItem
-                                                    value="all"
-                                                    onSelect={() => {
-                                                        setSelectedUserId("");
-                                                        setIsUserPopoverOpen(false);
-                                                        setUserSearchQuery("");
-                                                    }}
-                                                    className="cursor-pointer"
-                                                >
-                                                    <Check
-                                                        className={`mr-2 h-4 w-4 ${!selectedUserId ? "opacity-100" : "opacity-0"}`}
-                                                    />
-                                                    All Employees
-                                                </CommandItem>
-                                                {filteredUsers.map((user) => (
-                                                    <CommandItem
-                                                        key={user.id}
-                                                        value={user.name}
-                                                        onSelect={() => {
-                                                            setSelectedUserId(user.id.toString());
-                                                            setIsUserPopoverOpen(false);
-                                                            setUserSearchQuery("");
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedUserId === user.id.toString()
-                                                                ? "opacity-100"
-                                                                : "opacity-0"
-                                                                }`}
-                                                        />
-                                                        {user.name}
-                                                    </CommandItem>
-                                                ))}
-                                            </CommandGroup>
-                                        </CommandList>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
-                        )}
+                                    </div>
+                                )}
 
-                        <Select value={statusFilter} onValueChange={setStatusFilter}>
-                            <SelectTrigger className="w-full lg:w-[180px]">
-                                <SelectValue placeholder="Filter by Status" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Statuses</SelectItem>
-                                <SelectItem value="on_time">On Time</SelectItem>
-                                <SelectItem value="tardy">Tardy</SelectItem>
-                                <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
-                                <SelectItem value="advised_absence">Advised Absence</SelectItem>
-                                <SelectItem value="ncns">NCNS</SelectItem>
-                                <SelectItem value="undertime">Undertime</SelectItem>
-                                <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
-                                <SelectItem value="failed_bio_in">Failed Bio In</SelectItem>
-                                <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
-                                <SelectItem value="needs_manual_review">Needs Review</SelectItem>
-                                <SelectItem value="on_leave">On Leave</SelectItem>
-                            </SelectContent>
-                        </Select>
+                                {/* Status Multi-Select */}
+                                <div className="space-y-2">
+                                    <Label>Status</Label>
+                                    <MultiSelectFilter
+                                        options={[
+                                            { label: "On Time", value: "on_time" },
+                                            { label: "Tardy", value: "tardy" },
+                                            { label: "Half Day Absence", value: "half_day_absence" },
+                                            { label: "Advised Absence", value: "advised_absence" },
+                                            { label: "NCNS", value: "ncns" },
+                                            { label: "Undertime", value: "undertime" },
+                                            { label: "Undertime (>1hr)", value: "undertime_more_than_hour" },
+                                            { label: "Failed Bio In", value: "failed_bio_in" },
+                                            { label: "Failed Bio Out", value: "failed_bio_out" },
+                                            { label: "Needs Review", value: "needs_manual_review" },
+                                            { label: "On Leave", value: "on_leave" },
+                                        ]}
+                                        value={selectedStatuses}
+                                        onChange={setSelectedStatuses}
+                                        placeholder="Select status..."
+                                        emptyMessage="No status found."
+                                        className="w-full min-h-9"
+                                    />
+                                </div>
 
-                        <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
-                            <SelectTrigger className="w-full lg:w-[180px]">
-                                <SelectValue placeholder="All Sites" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Sites</SelectItem>
-                                {sites.map((site) => (
-                                    <SelectItem key={site.id} value={site.id.toString()}>
-                                        {site.name}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                {/* Site Filter - Single Select */}
+                                <div className="space-y-2">
+                                    <Label>Site</Label>
+                                    <Select value={selectedSiteId || "all"} onValueChange={(value) => setSelectedSiteId(value === "all" ? "" : value)}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="All Sites" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Sites</SelectItem>
+                                            {sites.map((site) => (
+                                                <SelectItem key={site.id} value={site.id.toString()}>
+                                                    {site.name}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
+                                </div>
 
-                        {/* Campaign Filter - Team Leads default to their campaign */}
-                        <Select
-                            value={selectedCampaignId || "all"}
-                            onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}
-                        >
-                            <SelectTrigger className="w-full lg:w-auto lg:flex-1">
-                                <SelectValue placeholder="All Campaigns" />
-                            </SelectTrigger>
-                            <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
-                                {campaigns.map((campaign) => (
-                                    <SelectItem key={campaign.id} value={campaign.id.toString()}>
-                                        {campaign.name}{isTeamLead && teamLeadCampaignId === campaign.id ? ' (Your Campaign)' : ''}
-                                    </SelectItem>
-                                ))}
-                            </SelectContent>
-                        </Select>
+                                {/* Campaign Multi-Select */}
+                                <div className="space-y-2">
+                                    <Label>Campaign</Label>
+                                    <MultiSelectFilter
+                                        options={campaigns.map(c => ({
+                                            label: c.name + (isTeamLead && teamLeadCampaignId === c.id ? ' (Your Campaign)' : ''),
+                                            value: c.id.toString()
+                                        }))}
+                                        value={selectedCampaignIds}
+                                        onChange={setSelectedCampaignIds}
+                                        placeholder="Select campaigns..."
+                                        emptyMessage="No campaign found."
+                                        className="w-full min-h-9"
+                                    />
+                                </div>
 
-                        <div className="flex items-center gap-2 text-sm lg:w-auto lg:flex-1">
-                            <DatePicker
-                                value={startDate}
-                                onChange={(value) => setStartDate(value)}
-                                placeholder="Start date"
-                                className="w-full"
-                            />
+                                {/* Verification Status Filter */}
+                                <div className="space-y-2">
+                                    <Label>Verification Status</Label>
+                                    <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
+                                        <SelectTrigger>
+                                            <SelectValue placeholder="All Records" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Records</SelectItem>
+                                            <SelectItem value="pending">Pending Verification</SelectItem>
+                                            <SelectItem value="verified">Verified</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Date From */}
+                                <div className="space-y-2">
+                                    <Label>Date From</Label>
+                                    <DatePicker
+                                        value={startDate}
+                                        onChange={(value) => {
+                                            setStartDate(value);
+                                            if (!endDate || value > endDate) {
+                                                setEndDate(value);
+                                            }
+                                        }}
+                                        placeholder="Select date"
+                                    />
+                                </div>
+
+                                {/* Date To */}
+                                <div className="space-y-2">
+                                    <Label>Date To</Label>
+                                    <DatePicker
+                                        value={endDate}
+                                        onChange={(value) => setEndDate(value)}
+                                        placeholder="Select date"
+                                        minDate={startDate || undefined}
+                                        defaultMonth={startDate || undefined}
+                                    />
+                                </div>
+
+                                {/* Needs Verification Toggle */}
+                                <div className="space-y-2">
+                                    <Label>Needs Review</Label>
+                                    <Button
+                                        variant={needsVerification ? "default" : "outline"}
+                                        onClick={() => setNeedsVerification(!needsVerification)}
+                                        className="w-full justify-start"
+                                    >
+                                        <AlertCircle className="h-4 w-4 mr-2" />
+                                        {needsVerification ? "Showing Flagged" : "Show Flagged Only"}
+                                    </Button>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex flex-wrap gap-2">
+                                <Button onClick={handleSearch}>
+                                    <Search className="h-4 w-4 mr-2" />
+                                    Search
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
+                                    <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+                                </Button>
+                                <Button
+                                    variant={autoRefreshEnabled ? "default" : "ghost"}
+                                    size="icon"
+                                    onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
+                                    title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
+                                >
+                                    {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                                </Button>
+                                {showClearFilters && (
+                                    <Button variant="outline" onClick={clearFilters}>
+                                        <X className="h-4 w-4 mr-2" />
+                                        Clear Filters
+                                    </Button>
+                                )}
+                            </div>
                         </div>
+                    </CardContent>
+                </Card>
 
-                        <div className="flex items-center gap-2 text-sm lg:w-auto lg:flex-1">
-                            <DatePicker
-                                value={endDate}
-                                onChange={(value) => setEndDate(value)}
-                                placeholder="End date"
-                                className="w-full"
-                            />
+                {/* Actions Row */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex justify-between items-center text-sm">
+                        <div className="text-muted-foreground">
+                            Showing {attendanceData.meta.total === 0 ? '0' : `${attendanceData.data.length}`} of {attendanceData.meta.total} record
+                            {attendanceData.meta.total === 1 ? "" : "s"}
+                            {showClearFilters ? " (filtered)" : ""}
                         </div>
-
-                        <div className="flex items-center gap-2 lg:w-auto">
-                            <TooltipProvider>
-                                <Tooltip>
-                                    <TooltipTrigger asChild>
-                                        <Button
-                                            variant={needsVerification ? "default" : "outline"}
-                                            onClick={() => setNeedsVerification(!needsVerification)}
-                                            size="icon"
-                                        >
-                                            <AlertCircle className="h-4 w-4" />
-                                        </Button>
-                                    </TooltipTrigger>
-                                    <TooltipContent>
-                                        <p>Needs Verification</p>
-                                    </TooltipContent>
-                                </Tooltip>
-                            </TooltipProvider>
-                            <Button variant="default" onClick={handleSearch} className="whitespace-nowrap px-6">
-                                <Search className="mr-2 h-4 w-4" />
-                                Apply
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={handleManualRefresh} disabled={loading} title="Refresh">
-                                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-                            </Button>
-                            <Button
-                                variant={autoRefreshEnabled ? "default" : "ghost"}
-                                size="icon"
-                                onClick={() => setAutoRefreshEnabled(!autoRefreshEnabled)}
-                                title={autoRefreshEnabled ? "Disable auto-refresh" : "Enable auto-refresh (30s)"}
-                            >
-                                {autoRefreshEnabled ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-                            </Button>
+                        <div className="flex items-center gap-4">
+                            {selectedRecords.length > 0 && (
+                                <Badge variant="secondary" className="font-normal">
+                                    {selectedRecords.length} record{selectedRecords.length === 1 ? "" : "s"} selected
+                                </Badge>
+                            )}
+                            <div className="text-xs text-muted-foreground">
+                                Last updated: {lastRefresh.toLocaleTimeString()}
+                            </div>
                         </div>
                     </div>
-
-                    {showClearFilters && (
-                        <div className="flex justify-end">
-                            <Button variant="outline" onClick={clearFilters} className="w-full sm:w-auto">
-                                Clear Filters
-                            </Button>
-                        </div>
-                    )}
-
-                    {/* Actions Row */}
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end border-t pt-3">
+                    <div className="flex flex-wrap gap-2 justify-end">
                         {selectedRecords.length > 0 && getEligibleQuickApproveCount() > 0 && (
                             <Can permission="attendance.approve">
                                 <Button
                                     onClick={handleBulkQuickApprove}
                                     variant="outline"
-                                    className="w-full sm:w-auto"
+                                    size="sm"
                                 >
                                     <Check className="mr-2 h-4 w-4" />
                                     Quick Approve ({getEligibleQuickApproveCount()})
@@ -704,16 +707,16 @@ export default function AttendanceIndex() {
                                 <Button
                                     onClick={handleBulkDelete}
                                     variant="destructive"
-                                    className="w-full sm:w-auto"
+                                    size="sm"
                                 >
                                     <Trash2 className="mr-2 h-4 w-4" />
-                                    Delete Selected ({selectedRecords.length})
+                                    Delete ({selectedRecords.length})
                                 </Button>
                             </Can>
                         )}
                         <Button
                             onClick={() => router.get(attendanceCalendar().url)}
-                            className="w-full sm:w-auto"
+                            size="sm"
                             variant="default"
                         >
                             <CalendarIcon className="mr-2 h-4 w-4" />
@@ -722,7 +725,7 @@ export default function AttendanceIndex() {
                         <Can permission="attendance.create">
                             <Button
                                 onClick={() => router.get(attendanceCreate().url)}
-                                className="w-full sm:w-auto"
+                                size="sm"
                                 variant="outline"
                             >
                                 <Edit className="mr-2 h-4 w-4" />
@@ -732,7 +735,7 @@ export default function AttendanceIndex() {
                         <Can permission="attendance.import">
                             <Button
                                 onClick={() => router.get(attendanceImport().url)}
-                                className="w-full sm:w-auto"
+                                size="sm"
                                 variant="outline"
                             >
                                 <Upload className="mr-2 h-4 w-4" />
@@ -742,7 +745,7 @@ export default function AttendanceIndex() {
                         <Can permission="attendance.create">
                             <Button
                                 onClick={() => router.get(attendanceDailyRoster().url)}
-                                className="w-full sm:w-auto"
+                                size="sm"
                                 variant="outline"
                             >
                                 <CalendarIcon className="mr-2 h-4 w-4" />
@@ -752,31 +755,13 @@ export default function AttendanceIndex() {
                         <Can permission="attendance.review">
                             <Button
                                 onClick={() => router.get(attendanceReview().url)}
-                                className="w-full sm:w-auto"
+                                size="sm"
                                 variant="outline"
                             >
                                 <AlertCircle className="mr-2 h-4 w-4" />
                                 Review Flagged
                             </Button>
                         </Can>
-                    </div>
-                </div>
-
-                <div className="flex justify-between items-center text-sm">
-                    <div className="text-muted-foreground">
-                        Showing {attendanceData.meta.total === 0 ? '0' : `${attendanceData.data.length}`} of {attendanceData.meta.total} record
-                        {attendanceData.meta.total === 1 ? "" : "s"}
-                        {showClearFilters ? " (filtered)" : ""}
-                    </div>
-                    <div className="flex items-center gap-4">
-                        {selectedRecords.length > 0 && (
-                            <Badge variant="secondary" className="font-normal">
-                                {selectedRecords.length} record{selectedRecords.length === 1 ? "" : "s"} selected
-                            </Badge>
-                        )}
-                        <div className="text-xs text-muted-foreground">
-                            Last updated: {lastRefresh.toLocaleTimeString()}
-                        </div>
                     </div>
                 </div>
 
@@ -903,38 +888,56 @@ export default function AttendanceIndex() {
                                                 <div className="flex items-center gap-2">
                                                     <Can permission="attendance.approve">
                                                         {canQuickApprove(record) ? (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() => handleQuickApprove(record.id)}
-                                                                className="h-8"
-                                                            >
-                                                                <Check className="h-3 w-3 mr-1" />
-                                                                Approve
-                                                            </Button>
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            size="icon"
+                                                                            variant="outline"
+                                                                            onClick={() => handleQuickApprove(record.id)}
+                                                                            className="h-8 w-8"
+                                                                        >
+                                                                            <Check className="h-4 w-4 text-green-600" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>Approve</TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
                                                         ) : needsReview(record) ? (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
-                                                                className="h-8 text-amber-600 border-amber-600"
-                                                            >
-                                                                <AlertCircle className="h-3 w-3 mr-1" />
-                                                                Review
-                                                            </Button>
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            size="icon"
+                                                                            variant="outline"
+                                                                            onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                            className="h-8 w-8 border-amber-600 text-amber-600"
+                                                                        >
+                                                                            <AlertCircle className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>Review</TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
                                                         ) : null}
                                                     </Can>
                                                     <Can permission="attendance.verify">
                                                         {!record.admin_verified && (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
-                                                                className="h-8"
-                                                            >
-                                                                <Edit className="h-3 w-3 mr-1" />
-                                                                Verify
-                                                            </Button>
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Button
+                                                                            size="icon"
+                                                                            variant="outline"
+                                                                            onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                            className="h-8 w-8"
+                                                                        >
+                                                                            <Edit className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>Verify</TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
                                                         )}
                                                     </Can>
                                                 </div>
@@ -1050,33 +1053,48 @@ export default function AttendanceIndex() {
                                         )}
                                     </div>
 
-                                    <Can permission="attendance.approve">
-                                        {(canQuickApprove(record) || needsReview(record)) && (
-                                            <div className="mt-3 pt-3 border-t">
-                                                {canQuickApprove(record) ? (
+                                    {/* Mobile Action Buttons */}
+                                    {(can('attendance.approve') || can('attendance.verify')) && (
+                                        <div className="mt-3 pt-3 border-t flex flex-wrap gap-2">
+                                            <Can permission="attendance.approve">
+                                                {canQuickApprove(record) && (
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
                                                         onClick={() => handleQuickApprove(record.id)}
-                                                        className="w-full"
+                                                        className="flex-1"
                                                     >
                                                         <Check className="h-3 w-3 mr-1" />
-                                                        Quick Approve
+                                                        Approve
                                                     </Button>
-                                                ) : (
+                                                )}
+                                                {needsReview(record) && (
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
                                                         onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
-                                                        className="w-full text-amber-600 border-amber-600"
+                                                        className="flex-1 text-amber-600 border-amber-600"
                                                     >
                                                         <AlertCircle className="h-3 w-3 mr-1" />
-                                                        Needs Review
+                                                        Review
                                                     </Button>
                                                 )}
-                                            </div>
-                                        )}
-                                    </Can>
+                                            </Can>
+                                            <Can permission="attendance.verify">
+                                                {!record.admin_verified && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                        className="flex-1"
+                                                    >
+                                                        <Edit className="h-3 w-3 mr-1" />
+                                                        Verify
+                                                    </Button>
+                                                )}
+                                            </Can>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </div>

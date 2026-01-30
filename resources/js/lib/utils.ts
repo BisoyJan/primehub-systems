@@ -130,3 +130,32 @@ export function formatDateShort(dateString: string | null | undefined): string {
         year: 'numeric',
     });
 }
+
+/**
+ * Format total minutes worked into a readable duration string (e.g., "8h 30m")
+ */
+export function formatWorkDuration(minutes: number | null | undefined): string {
+    if (minutes === null || minutes === undefined) return '-';
+    if (minutes === 0) return '0m';
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    if (hours === 0) return `${remainingMinutes}m`;
+    if (remainingMinutes === 0) return `${hours}h`;
+    return `${hours}h ${remainingMinutes}m`;
+}
+
+/**
+ * Format time adjustment minutes into a readable string (e.g., "1 hour 30 minutes")
+ */
+export function formatTimeAdjustment(minutes: number | null | undefined): string {
+    if (minutes === null || minutes === undefined || minutes === 0) return '-';
+
+    const hours = Math.floor(minutes / 60);
+    const remainingMinutes = minutes % 60;
+
+    if (hours === 0) return `${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+    if (remainingMinutes === 0) return `${hours} hour${hours !== 1 ? 's' : ''}`;
+    return `${hours} hour${hours !== 1 ? 's' : ''} ${remainingMinutes} minute${remainingMinutes !== 1 ? 's' : ''}`;
+}
