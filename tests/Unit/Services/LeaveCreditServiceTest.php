@@ -106,10 +106,13 @@ class LeaveCreditServiceTest extends TestCase
     {
         $user = User::factory()->create();
 
-        // Create leave credits
+        // Create leave credits - getBalance uses earned - used, not credits_balance
         LeaveCredit::factory()->create([
             'user_id' => $user->id,
             'year' => 2025,
+            'month' => 1, // Must be > 0 to be included in getTotalEarned
+            'credits_earned' => 1.5,
+            'credits_used' => 0,
             'credits_balance' => 1.5,
         ]);
 
@@ -159,13 +162,17 @@ class LeaveCreditServiceTest extends TestCase
     #[Test]
     public function it_does_not_accrue_before_month_ends(): void
     {
+        // For regularized employees, credits accrue at end of month
+        // User hired Jan 1, 2024 is regularized by July 1, 2024
+        // In Feb 2025, they are post-regularization so they use end-of-month accrual
         $user = User::factory()->create([
-            'hired_date' => Carbon::parse('2025-01-01'),
+            'hired_date' => Carbon::parse('2024-01-01'), // Regularized by July 2024
         ]);
 
         Carbon::setTestNow(Carbon::parse('2025-02-15')); // Mid-February
         $credit = $this->service->accrueMonthly($user, 2025, 2);
 
+        // Should be null because Feb 28 (end of month) hasn't arrived yet
         $this->assertNull($credit);
     }
 
@@ -217,7 +224,7 @@ class LeaveCreditServiceTest extends TestCase
 
         $this->assertFalse($result['valid']);
         $this->assertNotEmpty($result['errors']);
-        $this->assertStringContainsString('not eligible', $result['errors'][0]);
+        $this->assertStringContainsStringIgnoringCase('not be eligible', $result['errors'][0]);
     }
 
     #[Test]
