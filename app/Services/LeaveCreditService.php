@@ -329,15 +329,15 @@ class LeaveCreditService
         $regularizedBeforeThisMonth = $regularizationDate && $regularizationDate->lt($targetMonthStart);
 
         if ($regularizedBeforeThisMonth) {
-            // Regular employee: accrue at end of month
-            $accrualDate = $targetMonthEnd;
+            // Regular employee: accrue at end of month (start of day to avoid time comparison issues)
+            $accrualDate = $targetMonthEnd->startOfDay();
         } else {
             // Probationary or regularizing this month: accrue on anniversary
             $accrualDate = $anniversaryDate;
         }
 
-        // Check if accrual date has passed
-        if (now()->lt($accrualDate)) {
+        // Check if accrual date has passed (compare dates only, not times)
+        if (now()->startOfDay()->lt($accrualDate)) {
             return null;
         }
 
@@ -393,8 +393,8 @@ class LeaveCreditService
         }
 
         $hireDate = Carbon::parse($user->hired_date);
-        $today = now();
-        $currentYear = $today->year;
+        $today = now()->startOfDay(); // Use startOfDay to avoid time comparison issues
+        $currentYear = now()->year;
         $accrued = 0;
 
         // Start from January of current year or the month AFTER hire month (whichever is later)
@@ -412,7 +412,8 @@ class LeaveCreditService
         }
 
         // Loop through each month from start date to last completed month (current year only)
-        while ($currentDate->copy()->endOfMonth()->lt($today) && $currentDate->year === $currentYear) {
+        // Compare using startOfDay to avoid endOfMonth() 23:59:59 time issues
+        while ($currentDate->copy()->endOfMonth()->startOfDay()->lte($today) && $currentDate->year === $currentYear) {
             $year = $currentDate->year;
             $month = $currentDate->month;
 
@@ -443,7 +444,7 @@ class LeaveCreditService
         }
 
         $hireDate = Carbon::parse($user->hired_date);
-        $today = now();
+        $today = now()->startOfDay(); // Use startOfDay to avoid time comparison issues
         $accrued = 0;
 
         // Start from the month AFTER hire (hire month doesn't get credit)
@@ -455,7 +456,8 @@ class LeaveCreditService
         }
 
         // Loop through each month from hire to now
-        while ($currentDate->copy()->endOfMonth()->lte($today)) {
+        // Compare using startOfDay to avoid endOfMonth() 23:59:59 time issues
+        while ($currentDate->copy()->endOfMonth()->startOfDay()->lte($today)) {
             $year = $currentDate->year;
             $month = $currentDate->month;
 
