@@ -41,18 +41,19 @@ class LeaveCreditService
     /**
      * Check if user is eligible to use leave credits (6 months after hire date).
      *
-     * @param User $user The user to check eligibility for
-     * @param Carbon|null $asOfDate Optional date to check eligibility as of (defaults to now)
-     *                              This allows checking future eligibility for leave dates
+     * @param  User  $user  The user to check eligibility for
+     * @param  Carbon|null  $asOfDate  Optional date to check eligibility as of (defaults to now)
+     *                                 This allows checking future eligibility for leave dates
      */
     public function isEligible(User $user, ?Carbon $asOfDate = null): bool
     {
         $eligibilityDate = $this->getEligibilityDate($user);
-        if (!$eligibilityDate) {
+        if (! $eligibilityDate) {
             return false;
         }
 
         $checkDate = $asOfDate ?? now();
+
         return $checkDate->greaterThanOrEqualTo($eligibilityDate);
     }
 
@@ -70,12 +71,12 @@ class LeaveCreditService
      */
     protected function getHireDate(User $user): ?Carbon
     {
-        if (!$user->hired_date) {
+        if (! $user->hired_date) {
             return null;
         }
 
         $cacheKey = "hire_date:{$user->id}";
-        if (!isset($this->cache[$cacheKey])) {
+        if (! isset($this->cache[$cacheKey])) {
             $this->cache[$cacheKey] = Carbon::parse($user->hired_date);
         }
 
@@ -152,7 +153,7 @@ class LeaveCreditService
                 if ($carryover->is_first_regularization) {
                     // First regularization transfers don't expire
                     $carryoverReceived += $carryover->carryover_credits;
-                } elseif (!$isPastMarch && !$carryover->cash_converted) {
+                } elseif (! $isPastMarch && ! $carryover->cash_converted) {
                     // Regular carryover - only include if before end of March AND not yet converted
                     $carryoverReceived += $carryover->carryover_credits;
                 }
@@ -170,9 +171,8 @@ class LeaveCreditService
      * - If today is Jan 7, January's credits (accrued Jan 31) should be included
      * - Current balance only has credits up to the last completed month
      *
-     * @param User $user
-     * @param Carbon $targetDate The date to project credits to
-     * @param int|null $year The credit year to use
+     * @param  Carbon  $targetDate  The date to project credits to
+     * @param  int|null  $year  The credit year to use
      * @return array{current: float, projected: float, months_until: int, future_accrual: float}
      */
     public function getProjectedBalance(User $user, Carbon $targetDate, ?int $year = null): array
@@ -315,7 +315,7 @@ class LeaveCreditService
         $month = $month ?? now()->month;
 
         // Don't accrue if user doesn't have a hire date
-        if (!$user->hired_date) {
+        if (! $user->hired_date) {
             return null;
         }
 
@@ -408,7 +408,7 @@ class LeaveCreditService
     public function backfillCredits(User $user): int
     {
         $hireDate = $this->getHireDate($user);
-        if (!$hireDate) {
+        if (! $hireDate) {
             return 0;
         }
 
@@ -444,13 +444,12 @@ class LeaveCreditService
      * Unlike backfillCredits which only does current year, this does all years.
      * Optimized to fetch existing credits in bulk instead of per-month queries.
      *
-     * @param User $user
      * @return int Number of credit records created
      */
     public function backfillAllCredits(User $user): int
     {
         $hireDate = $this->getHireDate($user);
-        if (!$hireDate) {
+        if (! $hireDate) {
             return 0;
         }
 
@@ -465,7 +464,7 @@ class LeaveCreditService
         $existingCredits = LeaveCredit::forUser($user->id)
             ->select('year', 'month')
             ->get()
-            ->map(fn($c) => "{$c->year}-{$c->month}")
+            ->map(fn ($c) => "{$c->year}-{$c->month}")
             ->flip()
             ->toArray();
 
@@ -476,7 +475,7 @@ class LeaveCreditService
             $key = "{$currentDate->year}-{$currentDate->month}";
 
             // Skip if already exists (checked from pre-fetched data)
-            if (!isset($existingCredits[$key])) {
+            if (! isset($existingCredits[$key])) {
                 $credit = $this->accrueMonthly($user, $currentDate->year, $currentDate->month);
                 if ($credit) {
                     $accrued++;
@@ -537,7 +536,7 @@ class LeaveCreditService
      */
     public function deductCredits(LeaveRequest $leaveRequest, ?int $year = null): bool
     {
-        if (!$leaveRequest->requiresCredits()) {
+        if (! $leaveRequest->requiresCredits()) {
             return true; // Non-credited leave types don't need deduction
         }
 
@@ -563,7 +562,7 @@ class LeaveCreditService
             ->forYear($year);
 
         // Exclude carryover (month 0) if leave is after March 31
-        if (!$canUseCarryover) {
+        if (! $canUseCarryover) {
             $creditsQuery->where('month', '>', 0);
         }
 
@@ -579,7 +578,7 @@ class LeaveCreditService
                 'leave_request_id' => $leaveRequest->id,
                 'year' => $year,
                 'days_requested' => $daysToDeduct,
-                'carryover_expired' => !$canUseCarryover,
+                'carryover_expired' => ! $canUseCarryover,
             ]);
 
             $leaveRequest->update([
@@ -661,7 +660,7 @@ class LeaveCreditService
             ->toYear($year)
             ->first();
 
-        if (!$carryover || $carryover->carryover_credits <= 0) {
+        if (! $carryover || $carryover->carryover_credits <= 0) {
             return; // No carryover to create
         }
 
@@ -690,7 +689,7 @@ class LeaveCreditService
      */
     public function restoreCredits(LeaveRequest $leaveRequest): bool
     {
-        if (!$leaveRequest->credits_deducted || !$leaveRequest->credits_year) {
+        if (! $leaveRequest->credits_deducted || ! $leaveRequest->credits_year) {
             return true; // Nothing to restore
         }
 
@@ -749,14 +748,13 @@ class LeaveCreditService
      * Uses LIFO (Last-In-First-Out) order - restores to most recent months first,
      * which is the reverse of the deduction order (FIFO).
      *
-     * @param LeaveRequest $leaveRequest The leave request being adjusted
-     * @param float $daysToRestore Number of days to restore
-     * @param string $reason Reason for the restoration
-     * @return bool
+     * @param  LeaveRequest  $leaveRequest  The leave request being adjusted
+     * @param  float  $daysToRestore  Number of days to restore
+     * @param  string  $reason  Reason for the restoration
      */
     public function restorePartialCredits(LeaveRequest $leaveRequest, float $daysToRestore, string $reason = ''): bool
     {
-        if (!$leaveRequest->credits_deducted || !$leaveRequest->credits_year || $daysToRestore <= 0) {
+        if (! $leaveRequest->credits_deducted || ! $leaveRequest->credits_year || $daysToRestore <= 0) {
             return true; // Nothing to restore
         }
 
@@ -855,7 +853,7 @@ class LeaveCreditService
             ->orderBy('shift_date', 'desc')
             ->first();
 
-        if (!$lastAbsence) {
+        if (! $lastAbsence) {
             return now(); // No absences, can apply anytime
         }
 
@@ -872,7 +870,7 @@ class LeaveCreditService
             ->orderBy('shift_date', 'desc')
             ->first();
 
-        if (!$lastAbsence) {
+        if (! $lastAbsence) {
             return null;
         }
 
@@ -883,15 +881,14 @@ class LeaveCreditService
      * Check if given date falls within 30-day absence window.
      * Returns info about the restriction if applicable.
      *
-     * @param User $user
-     * @param Carbon $checkDate The date to check
+     * @param  Carbon  $checkDate  The date to check
      * @return array{within_window: bool, last_absence_date: string|null, window_end_date: string|null}
      */
     public function checkAbsenceWindowForDate(User $user, Carbon $checkDate): array
     {
         $lastAbsenceDate = $this->getLastAbsenceDate($user);
 
-        if (!$lastAbsenceDate) {
+        if (! $lastAbsenceDate) {
             return [
                 'within_window' => false,
                 'last_absence_date' => null,
@@ -935,9 +932,7 @@ class LeaveCreditService
      * Note: Sick Leave (SL) can be submitted without credits - credits are only deducted
      * if employee is eligible, has sufficient balance, AND submits a medical certificate.
      *
-     * @param User $user
-     * @param array $data Request data including 'short_notice_override' flag
-     * @return array
+     * @param  array  $data  Request data including 'short_notice_override' flag
      */
     public function validateLeaveRequest(User $user, array $data): array
     {
@@ -966,7 +961,7 @@ class LeaveCreditService
         // Check eligibility (6 months rule) for VL and BL only (SL can proceed without eligibility)
         // Check if user will be eligible BY the leave start date (not current date)
         if (in_array($leaveType, ['VL', 'BL'])) {
-            if (!$this->isEligible($user, $startDate)) {
+            if (! $this->isEligible($user, $startDate)) {
                 $eligibilityDate = $this->getEligibilityDate($user);
                 $errors[] = "You will not be eligible to use leave credits by the leave start date. You will be eligible on {$eligibilityDate->format('F j, Y')}.";
             }
@@ -974,7 +969,7 @@ class LeaveCreditService
 
         // Check 2-week advance notice for VL and BL only (SL is unpredictable)
         // Skip this check if short notice override is enabled
-        if (in_array($leaveType, ['VL', 'BL']) && !$shortNoticeOverride) {
+        if (in_array($leaveType, ['VL', 'BL']) && ! $shortNoticeOverride) {
             $twoWeeksFromNow = now()->addWeeks(2)->startOfDay();
             if ($startDate->startOfDay()->lt($twoWeeksFromNow)) {
                 $errors[] = "Leave requests must be submitted at least 2 weeks in advance. Earliest date you can apply for is {$twoWeeksFromNow->format('F j, Y')}.";
@@ -987,10 +982,10 @@ class LeaveCreditService
             $oneMonthAhead = now()->addMonth()->endOfDay();
 
             if ($startDate->lt($threeWeeksAgo)) {
-                $errors[] = "Sick Leave start date must be within the last 3 weeks.";
+                $errors[] = 'Sick Leave start date must be within the last 3 weeks.';
             }
             if ($endDate->gt($oneMonthAhead)) {
-                $errors[] = "Sick Leave end date cannot exceed 1 month from today.";
+                $errors[] = 'Sick Leave end date cannot exceed 1 month from today.';
             }
         }
 
@@ -1020,11 +1015,12 @@ class LeaveCreditService
     public function requiresShortNoticeOverride(string $leaveType, Carbon $startDate): bool
     {
         // Only VL and BL require 2-week notice
-        if (!in_array($leaveType, ['VL', 'BL'])) {
+        if (! in_array($leaveType, ['VL', 'BL'])) {
             return false;
         }
 
         $twoWeeksFromNow = now()->addWeeks(2)->startOfDay();
+
         return $startDate->startOfDay()->lt($twoWeeksFromNow);
     }
 
@@ -1042,50 +1038,80 @@ class LeaveCreditService
 
     /**
      * Check if SL credits should be deducted and return detailed reason if not.
+     * Now supports partial credit usage - if user has some credits but not enough,
+     * use available credits and mark remaining days as UPTO.
      *
-     * @param User $user
-     * @param LeaveRequest $leaveRequest
-     * @return array{should_deduct: bool, reason: string|null}
+     * @return array{should_deduct: bool, reason: string|null, convert_to_upto: bool, partial_credit: bool, credits_to_deduct: float, upto_days: float}
      */
     public function checkSlCreditDeduction(User $user, LeaveRequest $leaveRequest): array
     {
         if ($leaveRequest->leave_type !== 'SL') {
-            return ['should_deduct' => true, 'reason' => null];
+            return ['should_deduct' => true, 'reason' => null, 'convert_to_upto' => false, 'partial_credit' => false];
         }
 
         // Must have medical certificate
-        if (!$leaveRequest->medical_cert_submitted) {
+        if (! $leaveRequest->medical_cert_submitted) {
             return [
                 'should_deduct' => false,
                 'reason' => 'No medical certificate submitted',
                 'convert_to_upto' => false,
+                'partial_credit' => false,
             ];
         }
 
         // Must be eligible (6+ months) - check eligibility based on leave start date
         $startDate = Carbon::parse($leaveRequest->start_date);
-        if (!$this->isEligible($user, $startDate)) {
+        if (! $this->isEligible($user, $startDate)) {
             $hireDate = $user->hired_date ? Carbon::parse($user->hired_date)->format('M d, Y') : 'unknown';
+
             return [
                 'should_deduct' => false,
                 'reason' => "Not eligible for SL credits (less than 6 months of employment, hired: {$hireDate})",
                 'convert_to_upto' => false,
+                'partial_credit' => false,
             ];
         }
 
-        // Must have sufficient credits
+        // Check credits balance
         $year = Carbon::parse($leaveRequest->start_date)->year;
         $balance = $this->getBalance($user, $year);
-        if ($balance < $leaveRequest->days_requested) {
-            // Has medical cert but no credits - convert to UPTO
+        $daysRequested = (float) $leaveRequest->days_requested;
+
+        if ($balance <= 0) {
+            // No credits at all - convert entire request to UPTO
             return [
                 'should_deduct' => false,
-                'reason' => "Insufficient SL credits (balance: {$balance} days, requested: {$leaveRequest->days_requested} days) - Converted to UPTO",
+                'reason' => 'No SL credits available (balance: 0 days) - Converted to UPTO',
                 'convert_to_upto' => true,
+                'partial_credit' => false,
+                'credits_to_deduct' => 0,
+                'upto_days' => $daysRequested,
             ];
         }
 
-        return ['should_deduct' => true, 'reason' => null, 'convert_to_upto' => false];
+        if ($balance < $daysRequested) {
+            // Has some credits but not enough - use partial credits
+            $uptoDays = $daysRequested - $balance;
+
+            return [
+                'should_deduct' => true,
+                'reason' => "Partial SL credits used (balance: {$balance} days, requested: {$daysRequested} days) - {$balance} day(s) as SL, {$uptoDays} day(s) as UPTO",
+                'convert_to_upto' => false,
+                'partial_credit' => true,
+                'credits_to_deduct' => $balance,
+                'upto_days' => $uptoDays,
+            ];
+        }
+
+        // Full credits available
+        return [
+            'should_deduct' => true,
+            'reason' => null,
+            'convert_to_upto' => false,
+            'partial_credit' => false,
+            'credits_to_deduct' => $daysRequested,
+            'upto_days' => 0,
+        ];
     }
 
     /**
@@ -1100,11 +1126,9 @@ class LeaveCreditService
      * Unused credits from the previous year (up to max 4) are carried over.
      * These credits can be used for leave requests or conversion until end of March.
      *
-     * @param User $user
-     * @param int $fromYear The year to carry over from
-     * @param int|null $processedBy User ID who processed this carryover
-     * @param string|null $notes Optional notes
-     * @return LeaveCreditCarryover|null
+     * @param  int  $fromYear  The year to carry over from
+     * @param  int|null  $processedBy  User ID who processed this carryover
+     * @param  string|null  $notes  Optional notes
      */
     public function processCarryover(User $user, int $fromYear, ?int $processedBy = null, ?string $notes = null): ?LeaveCreditCarryover
     {
@@ -1146,8 +1170,8 @@ class LeaveCreditService
     /**
      * Process year-end carryover for all eligible users.
      *
-     * @param int $fromYear The year to carry over from
-     * @param int|null $processedBy User ID who triggered this process
+     * @param  int  $fromYear  The year to carry over from
+     * @param  int|null  $processedBy  User ID who triggered this process
      * @return array{processed: int, skipped: int, total_carryover: float, total_forfeited: float}
      */
     public function processAllCarryovers(int $fromYear, ?int $processedBy = null): array
@@ -1182,9 +1206,7 @@ class LeaveCreditService
     /**
      * Mark carryover credits as cash converted.
      *
-     * @param LeaveCreditCarryover $carryover
-     * @param int|null $processedBy User ID who processed the conversion
-     * @return bool
+     * @param  int|null  $processedBy  User ID who processed the conversion
      */
     public function markAsCashConverted(LeaveCreditCarryover $carryover, ?int $processedBy = null): bool
     {
@@ -1199,9 +1221,7 @@ class LeaveCreditService
      * Get carryover summary for a user (carryover TO a specific year).
      * Use this when you want to see what was carried INTO a year.
      *
-     * @param User $user
-     * @param int|null $toYear The year to check carryovers for
-     * @return array
+     * @param  int|null  $toYear  The year to check carryovers for
      */
     public function getCarryoverSummary(User $user, ?int $toYear = null): array
     {
@@ -1211,7 +1231,7 @@ class LeaveCreditService
             ->toYear($toYear)
             ->first();
 
-        if (!$carryover) {
+        if (! $carryover) {
             return [
                 'has_carryover' => false,
                 'carryover_credits' => 0,
@@ -1239,9 +1259,7 @@ class LeaveCreditService
      * Get carryover summary for credits FROM a specific year.
      * Use this when viewing a year and want to see what will be/was carried over from that year.
      *
-     * @param User $user
-     * @param int $fromYear The year to check carryovers from
-     * @return array
+     * @param  int  $fromYear  The year to check carryovers from
      */
     public function getCarryoverFromYearSummary(User $user, int $fromYear): array
     {
@@ -1255,7 +1273,7 @@ class LeaveCreditService
         $now = now();
         $isExpired = ($now->year > $toYear) || ($now->year === $toYear && $now->month > 3);
 
-        if (!$carryover) {
+        if (! $carryover) {
             // Calculate potential carryover if not processed yet
             $balance = $this->getBalance($user, $fromYear);
             $potentialCarryover = min($balance, self::MAX_CARRYOVER_CREDITS);
@@ -1277,7 +1295,7 @@ class LeaveCreditService
         }
 
         // First regularization carryovers don't expire
-        $carryoverExpired = $isExpired && !$carryover->is_first_regularization && !$carryover->cash_converted;
+        $carryoverExpired = $isExpired && ! $carryover->is_first_regularization && ! $carryover->cash_converted;
 
         return [
             'has_carryover' => true,
@@ -1297,7 +1315,6 @@ class LeaveCreditService
     /**
      * Get all pending cash conversions for a specific year.
      *
-     * @param int $toYear
      * @return \Illuminate\Database\Eloquent\Collection
      */
     public function getPendingCashConversions(int $toYear)
@@ -1310,9 +1327,6 @@ class LeaveCreditService
 
     /**
      * Get carryover report for all users for a specific year transition.
-     *
-     * @param int $fromYear
-     * @return array
      */
     public function getCarryoverReport(int $fromYear): array
     {
@@ -1345,18 +1359,15 @@ class LeaveCreditService
     /**
      * Get the regularization date for a user (6 months after hire date).
      * Uses memoization to avoid repeated Carbon parsing.
-     *
-     * @param User $user
-     * @return Carbon|null
      */
     public function getRegularizationDate(User $user): ?Carbon
     {
-        if (!$user->hired_date) {
+        if (! $user->hired_date) {
             return null;
         }
 
         $cacheKey = "regularization_date:{$user->id}";
-        if (!isset($this->cache[$cacheKey])) {
+        if (! isset($this->cache[$cacheKey])) {
             $this->cache[$cacheKey] = Carbon::parse($user->hired_date)->addMonths(6);
         }
 
@@ -1366,14 +1377,11 @@ class LeaveCreditService
     /**
      * Check if user is regularized (6 months after hire date has passed).
      * Uses memoization to avoid repeated calculations.
-     *
-     * @param User $user
-     * @return bool
      */
     public function isRegularized(User $user): bool
     {
         $cacheKey = "is_regularized:{$user->id}";
-        if (!isset($this->cache[$cacheKey])) {
+        if (! isset($this->cache[$cacheKey])) {
             $regularizationDate = $this->getRegularizationDate($user);
             $this->cache[$cacheKey] = $regularizationDate
                 ? now()->greaterThanOrEqualTo($regularizationDate)
@@ -1388,16 +1396,14 @@ class LeaveCreditService
      * This is for users hired in a previous year who have now been regularized (6 months after hire).
      * The transfer happens when they become regularized, regardless of which day of the year.
      *
-     * @param User $user
-     * @param int|null $toYear The year to transfer credits to (defaults to current year)
-     * @return bool
+     * @param  int|null  $toYear  The year to transfer credits to (defaults to current year)
      */
     public function needsFirstRegularizationTransfer(User $user, ?int $toYear = null): bool
     {
         $toYear = $toYear ?? now()->year;
 
         $hireDate = $this->getHireDate($user);
-        if (!$hireDate) {
+        if (! $hireDate) {
             return false;
         }
 
@@ -1410,7 +1416,7 @@ class LeaveCreditService
         $isRegularized = $this->isRegularized($user);
 
         // Has NOT already had first regularization carryover processed
-        $hasNotHadFirstRegularization = !LeaveCreditCarryover::hasFirstRegularization($user->id);
+        $hasNotHadFirstRegularization = ! LeaveCreditCarryover::hasFirstRegularization($user->id);
 
         return $hiredInPreviousYear && $isRegularized && $hasNotHadFirstRegularization;
     }
@@ -1426,7 +1432,6 @@ class LeaveCreditService
      * - User hired Jul 15, 2025 → Regularizes Jan 15, 2026 → HAS pending transfer
      * - User hired Jan 15, 2025 → Regularized Jul 15, 2025 → NO pending transfer (already regularized in 2025)
      *
-     * @param User $user
      * @return array{year: int, credits: float, months_accrued: int, regularization_date: string|null, is_pending: bool}
      */
     public function getPendingRegularizationCredits(User $user): array
@@ -1440,7 +1445,7 @@ class LeaveCreditService
         ];
 
         $hireDate = $this->getHireDate($user);
-        if (!$hireDate) {
+        if (! $hireDate) {
             return $defaultResult;
         }
 
@@ -1495,13 +1500,11 @@ class LeaveCreditService
      * Transfers ALL accrued credits from hire year to regularization year (no cap).
      * If a carryover already exists (from year-end processing), update it to be first regularization.
      *
-     * @param User $user
-     * @param int|null $processedBy User ID of the admin processing this (null for automatic)
-     * @return LeaveCreditCarryover|null
+     * @param  int|null  $processedBy  User ID of the admin processing this (null for automatic)
      */
     public function processFirstRegularizationTransfer(User $user, ?int $processedBy = null): ?LeaveCreditCarryover
     {
-        if (!$this->needsFirstRegularizationTransfer($user)) {
+        if (! $this->needsFirstRegularizationTransfer($user)) {
             return null;
         }
 
@@ -1617,11 +1620,6 @@ class LeaveCreditService
      * NOTE: This method will return null and skip processing for probationary employees
      * who will regularize in the next year. They should wait for their first regularization
      * transfer instead of getting a year-end carryover.
-     *
-     * @param User $user
-     * @param int $fromYear
-     * @param int|null $processedBy
-     * @return LeaveCreditCarryover|null
      */
     public function processYearEndCarryover(User $user, int $fromYear, ?int $processedBy = null): ?LeaveCreditCarryover
     {
@@ -1645,8 +1643,9 @@ class LeaveCreditService
                 'user_id' => $user->id,
                 'user_name' => $user->name,
                 'from_year' => $fromYear,
-                'reason' => 'Will regularize in ' . $toYear . ', should wait for first regularization transfer',
+                'reason' => 'Will regularize in '.$toYear.', should wait for first regularization transfer',
             ]);
+
             return null;
         }
 
@@ -1706,14 +1705,12 @@ class LeaveCreditService
      * transfers ALL credits without any cap, instead of getting the year-end
      * carryover which caps at 4 credits.
      *
-     * @param User $user
-     * @param int $fromYear The year being closed
-     * @return bool
+     * @param  int  $fromYear  The year being closed
      */
     public function shouldSkipYearEndCarryover(User $user, int $fromYear): bool
     {
         $hireDate = $this->getHireDate($user);
-        if (!$hireDate) {
+        if (! $hireDate) {
             return false;
         }
 
@@ -1740,8 +1737,7 @@ class LeaveCreditService
      * Note: Users who hired and regularized in the SAME year get regular year-end carryover (max 4),
      * not first regularization transfer.
      *
-     * @param int|null $toYear The year to transfer credits to (defaults to current year)
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @param  int|null  $toYear  The year to transfer credits to (defaults to current year)
      */
     public function getUsersNeedingFirstRegularization(?int $toYear = null): \Illuminate\Database\Eloquent\Collection
     {
@@ -1769,10 +1765,6 @@ class LeaveCreditService
 
     /**
      * Get detailed regularization info for a user (for display).
-     *
-     * @param User $user
-     * @param int|null $year
-     * @return array
      */
     public function getRegularizationInfo(User $user, ?int $year = null): array
     {
@@ -1795,7 +1787,7 @@ class LeaveCreditService
             'regularization_date' => $regularizationDate?->format('Y-m-d'),
             'regularization_year' => $regularizationDate?->year,
             'is_regularized' => $isRegularized,
-            'days_until_regularization' => $regularizationDate && !$isRegularized
+            'days_until_regularization' => $regularizationDate && ! $isRegularized
                 ? now()->diffInDays($regularizationDate, false)
                 : 0,
             'needs_first_transfer' => $this->needsFirstRegularizationTransfer($user, $year),
@@ -1809,8 +1801,8 @@ class LeaveCreditService
      * Handle hire date change for a user.
      * This validates the change and returns warnings about potential impacts.
      *
-     * @param User $user The user whose hire date is being changed
-     * @param Carbon $newHireDate The new hire date
+     * @param  User  $user  The user whose hire date is being changed
+     * @param  Carbon  $newHireDate  The new hire date
      * @return array{valid: bool, warnings: array, impacts: array}
      */
     public function validateHireDateChange(User $user, Carbon $newHireDate): array
@@ -1820,7 +1812,7 @@ class LeaveCreditService
 
         $oldHireDate = $user->hired_date ? Carbon::parse($user->hired_date) : null;
 
-        if (!$oldHireDate) {
+        if (! $oldHireDate) {
             // No previous hire date, nothing to validate
             return ['valid' => true, 'warnings' => [], 'impacts' => []];
         }
@@ -1860,7 +1852,7 @@ class LeaveCreditService
                 ->first();
 
             if ($firstRegCarryover) {
-                $warnings[] = "IMPORTANT: User already has a first regularization carryover. Year change may invalidate this record.";
+                $warnings[] = 'IMPORTANT: User already has a first regularization carryover. Year change may invalidate this record.';
                 $impacts[] = [
                     'type' => 'first_regularization_affected',
                     'carryover_id' => $firstRegCarryover->id,
@@ -1887,13 +1879,13 @@ class LeaveCreditService
      * Recalculate credits after a hire date change.
      * WARNING: This should only be called after admin confirmation.
      *
-     * @param User $user The user to recalculate
-     * @param bool $deleteExisting Whether to delete existing credits and start fresh
+     * @param  User  $user  The user to recalculate
+     * @param  bool  $deleteExisting  Whether to delete existing credits and start fresh
      * @return array{success: bool, message: string, details: array}
      */
     public function recalculateCreditsForUser(User $user, bool $deleteExisting = false): array
     {
-        if (!$user->hired_date) {
+        if (! $user->hired_date) {
             return [
                 'success' => false,
                 'message' => 'User has no hire date',
@@ -1936,11 +1928,11 @@ class LeaveCreditService
     /**
      * Log leave credit activity with standardized format.
      *
-     * @param string $action The action being performed
-     * @param User $user The user affected
-     * @param mixed $subject The model being acted upon (LeaveCredit, LeaveCreditCarryover, etc.)
-     * @param array $properties Additional properties to log
-     * @param User|null $performedBy The user performing the action (null for system)
+     * @param  string  $action  The action being performed
+     * @param  User  $user  The user affected
+     * @param  mixed  $subject  The model being acted upon (LeaveCredit, LeaveCreditCarryover, etc.)
+     * @param  array  $properties  Additional properties to log
+     * @param  User|null  $performedBy  The user performing the action (null for system)
      */
     protected function logActivity(
         string $action,

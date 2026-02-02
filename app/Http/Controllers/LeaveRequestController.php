@@ -4,6 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Http\Requests\LeaveRequestRequest;
 use App\Jobs\GenerateLeaveCreditsExportExcel;
+use App\Mail\LeaveRequestStatusUpdated;
+use App\Mail\LeaveRequestSubmitted;
+use App\Mail\LeaveRequestTLStatusUpdated;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\Campaign;
@@ -15,17 +18,14 @@ use App\Models\LeaveRequestDeniedDate;
 use App\Models\User;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
-use App\Mail\LeaveRequestStatusUpdated;
-use App\Mail\LeaveRequestSubmitted;
-use App\Mail\LeaveRequestTLStatusUpdated;
 use App\Services\PermissionService;
-use Illuminate\Support\Facades\Mail;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
@@ -33,6 +33,7 @@ use Inertia\Inertia;
 class LeaveRequestController extends Controller
 {
     protected $leaveCreditService;
+
     protected $notificationService;
 
     public function __construct(LeaveCreditService $leaveCreditService, NotificationService $notificationService)
@@ -102,21 +103,21 @@ class LeaveRequestController extends Controller
         // Filter by employee name (admin/TL only)
         if (($isAdmin || $isTeamLead) && $request->filled('employee_name')) {
             $query->whereHas('user', function ($q) use ($request) {
-                $searchTerm = '%' . $request->employee_name . '%';
+                $searchTerm = '%'.$request->employee_name.'%';
                 // Search across first_name, middle_name, and last_name
                 // Format: "First M. Last" or "First Last"
                 $q->where(function ($q2) use ($searchTerm) {
                     $q2->whereRaw("CONCAT(first_name, ' ', COALESCE(CONCAT(middle_name, '. '), ''), last_name) LIKE ?", [$searchTerm])
-                       ->orWhere('first_name', 'like', $searchTerm)
-                       ->orWhere('last_name', 'like', $searchTerm)
-                       ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
+                        ->orWhere('first_name', 'like', $searchTerm)
+                        ->orWhere('last_name', 'like', $searchTerm)
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
                 });
             });
         }
 
         // Filter by campaign/department - auto-filter for Team Leads
         $campaignFilter = $request->filled('campaign_department') ? $request->campaign_department : null;
-        if (!$campaignFilter && $isTeamLead && $teamLeadCampaignName) {
+        if (! $campaignFilter && $isTeamLead && $teamLeadCampaignName) {
             $campaignFilter = $teamLeadCampaignName;
         }
         if ($campaignFilter) {
@@ -139,14 +140,14 @@ class LeaveRequestController extends Controller
             if ($isTeamLead) {
                 $employeeQuery->where(function ($q) use ($user) {
                     $q->where('id', $user->id)
-                      ->orWhereHas('leaveRequests', fn($lq) => $lq->where('requires_tl_approval', true));
+                        ->orWhereHas('leaveRequests', fn ($lq) => $lq->where('requires_tl_approval', true));
                 });
             }
 
             $allEmployees = $employeeQuery
                 ->orderByRaw("CONCAT(first_name, ' ', last_name)")
                 ->get()
-                ->map(fn($u) => [
+                ->map(fn ($u) => [
                     'id' => $u->id,
                     'name' => $u->name,
                 ])
@@ -197,12 +198,12 @@ class LeaveRequestController extends Controller
         $viewMode = $request->input('view_mode', 'single'); // 'single' or 'multi'
 
         // Auto-filter campaign for Team Leads when no campaign is specified
-        if (!$campaignId && $teamLeadCampaignId) {
+        if (! $campaignId && $teamLeadCampaignId) {
             $campaignId = $teamLeadCampaignId;
         }
 
         // Parse month to get date range
-        $calendarDate = Carbon::parse($month . '-01');
+        $calendarDate = Carbon::parse($month.'-01');
 
         // For multi-month view, show 3 months (prev, current, next)
         if ($viewMode === 'multi') {
@@ -215,8 +216,8 @@ class LeaveRequestController extends Controller
 
         // Build query for approved and pending leaves
         $query = LeaveRequest::with(['user:id,first_name,last_name,role', 'user.employeeSchedules' => function ($q) {
-                $q->where('is_active', true)->with('campaign:id,name');
-            }])
+            $q->where('is_active', true)->with('campaign:id,name');
+        }])
             ->when($status, function ($q) use ($status) {
                 $q->where('status', $status);
             }, function ($q) {
@@ -227,7 +228,7 @@ class LeaveRequestController extends Controller
                     ->orWhereBetween('end_date', [$startOfRange, $endOfRange])
                     ->orWhere(function ($inner) use ($startOfRange, $endOfRange) {
                         $inner->where('start_date', '<=', $startOfRange)
-                              ->where('end_date', '>=', $endOfRange);
+                            ->where('end_date', '>=', $endOfRange);
                     });
             });
 
@@ -239,14 +240,14 @@ class LeaveRequestController extends Controller
             if ($activeSchedule?->campaign_id) {
                 $query->whereHas('user.employeeSchedules', function ($q) use ($activeSchedule) {
                     $q->where('campaign_id', $activeSchedule->campaign_id)
-                      ->where('is_active', true);
+                        ->where('is_active', true);
                 });
             }
         } elseif ($campaignId) {
             // Admin filter by campaign
             $query->whereHas('user.employeeSchedules', function ($q) use ($campaignId) {
                 $q->where('campaign_id', $campaignId)
-                  ->where('is_active', true);
+                    ->where('is_active', true);
             });
         }
 
@@ -257,10 +258,11 @@ class LeaveRequestController extends Controller
 
         $leaves = $query->orderBy('created_at')->get()->map(function ($leave) {
             $activeSchedule = $leave->user->employeeSchedules->first();
+
             return [
                 'id' => $leave->id,
                 'user_id' => $leave->user_id,
-                'user_name' => $leave->user->last_name . ', ' . $leave->user->first_name,
+                'user_name' => $leave->user->last_name.', '.$leave->user->first_name,
                 'user_role' => $leave->user->role,
                 'campaign_name' => $activeSchedule?->campaign?->name ?? 'No Campaign',
                 'leave_type' => $leave->leave_type,
@@ -275,7 +277,7 @@ class LeaveRequestController extends Controller
 
         // Get campaigns for filter (only for non-restricted roles)
         $campaigns = null;
-        if (!$isRestrictedRole) {
+        if (! $isRestrictedRole) {
             $campaigns = Campaign::select('id', 'name')->orderBy('name')->get();
         }
 
@@ -455,7 +457,7 @@ class LeaveRequestController extends Controller
                 $query->where(function ($q) use ($startDate, $endDate) {
                     // New request starts during existing request
                     $q->where('start_date', '<=', $endDate)
-                      ->where('end_date', '>=', $startDate);
+                        ->where('end_date', '>=', $startDate);
                 });
             })
             ->first();
@@ -464,6 +466,7 @@ class LeaveRequestController extends Controller
             $existingStart = Carbon::parse($overlappingRequest->start_date)->format('M d, Y');
             $existingEnd = Carbon::parse($overlappingRequest->end_date)->format('M d, Y');
             $status = ucfirst($overlappingRequest->status);
+
             return back()->withErrors(['error' => "The selected dates overlap with an existing {$status} leave request ({$overlappingRequest->leave_type}: {$existingStart} to {$existingEnd}). Please choose different dates."])->withInput();
         }
 
@@ -491,7 +494,7 @@ class LeaveRequestController extends Controller
         // Validate business rules
         $validation = $leaveCreditService->validateLeaveRequest($targetUser, $validationData);
 
-        if (!$validation['valid']) {
+        if (! $validation['valid']) {
             return back()->withErrors(['validation' => $validation['errors']])->withInput();
         }
 
@@ -523,7 +526,7 @@ class LeaveRequestController extends Controller
             $medicalCertPath = null;
             if (in_array($request->leave_type, ['SL', 'BL', 'UPTO']) && $request->hasFile('medical_cert_file')) {
                 $file = $request->file('medical_cert_file');
-                $filename = 'medcert_' . $targetUser->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+                $filename = 'medcert_'.$targetUser->id.'_'.time().'.'.$file->getClientOriginalExtension();
                 $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
             }
 
@@ -644,7 +647,7 @@ class LeaveRequestController extends Controller
 
         // Check if Team Lead can approve this request
         $canTlApprove = false;
-        if ($isTeamLead && $leaveRequest->requiresTlApproval() && !$leaveRequest->isTlApproved() && !$leaveRequest->isTlRejected()) {
+        if ($isTeamLead && $leaveRequest->requiresTlApproval() && ! $leaveRequest->isTlApproved() && ! $leaveRequest->isTlRejected()) {
             // Any Team Lead can approve agent leave requests
             $canTlApprove = true;
         }
@@ -666,12 +669,12 @@ class LeaveRequestController extends Controller
         // Check if Admin/Super Admin can cancel approved leave (not if dates passed)
         $canAdminCancel = in_array($user->role, ['Super Admin', 'Admin'])
             && $leaveRequest->status === 'approved'
-            && !$leaveEndDatePassed;
+            && ! $leaveEndDatePassed;
 
         // Check if Admin/Super Admin can edit approved leave dates (not if dates passed)
         $canEditApproved = in_array($user->role, ['Super Admin', 'Admin'])
             && $leaveRequest->status === 'approved'
-            && !$leaveEndDatePassed;
+            && ! $leaveEndDatePassed;
 
         // Check if user can view medical certificate (Admin, HR, Super Admin only)
         $canViewMedicalCert = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
@@ -702,20 +705,20 @@ class LeaveRequestController extends Controller
                     // Currently active (not excused, not expired)
                     $q->where('is_excused', false)->where('is_expired', false);
                 })
-                ->orWhere(function ($q) use ($requestSubmittedAt) {
-                    // Was excused AFTER the request was submitted
-                    $q->where('is_excused', true)
-                      ->where('excused_at', '>', $requestSubmittedAt);
-                })
-                ->orWhere(function ($q) use ($requestSubmittedAt) {
-                    // Was expired AFTER the request was submitted
-                    $q->where('is_expired', true)
-                      ->where('expired_at', '>', $requestSubmittedAt);
-                });
+                    ->orWhere(function ($q) use ($requestSubmittedAt) {
+                        // Was excused AFTER the request was submitted
+                        $q->where('is_excused', true)
+                            ->where('excused_at', '>', $requestSubmittedAt);
+                    })
+                    ->orWhere(function ($q) use ($requestSubmittedAt) {
+                        // Was expired AFTER the request was submitted
+                        $q->where('is_expired', true)
+                            ->where('expired_at', '>', $requestSubmittedAt);
+                    });
             })
             ->orderBy('shift_date', 'desc')
             ->get()
-            ->map(function ($point) use ($requestSubmittedAt) {
+            ->map(function ($point) {
                 // Determine status at request time
                 $wasActiveAtRequest = true;
                 $currentStatus = 'active';
@@ -768,17 +771,17 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
 
         // Only Admin, HR, Super Admin can view medical certificates
-        if (!in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+        if (! in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
             abort(403, 'Unauthorized to view medical certificate.');
         }
 
-        if (!$leaveRequest->medical_cert_path) {
+        if (! $leaveRequest->medical_cert_path) {
             abort(404, 'Medical certificate not found.');
         }
 
-        $path = storage_path('app/private/' . $leaveRequest->medical_cert_path);
+        $path = storage_path('app/private/'.$leaveRequest->medical_cert_path);
 
-        if (!file_exists($path)) {
+        if (! file_exists($path)) {
             abort(404, 'Medical certificate file not found.');
         }
 
@@ -798,13 +801,13 @@ class LeaveRequestController extends Controller
         $isApprovedLeave = $leaveRequest->status === 'approved';
 
         // Only Admin/Super Admin can edit approved leaves
-        if ($isApprovedLeave && !$isAdmin) {
+        if ($isApprovedLeave && ! $isAdmin) {
             return redirect()->route('leave-requests.show', $leaveRequest)
                 ->with('error', 'Only Admin or Super Admin can edit approved leave requests.');
         }
 
         // For non-admins, only pending requests can be edited
-        if (!$isAdmin && $leaveRequest->status !== 'pending') {
+        if (! $isAdmin && $leaveRequest->status !== 'pending') {
             return redirect()->route('leave-requests.show', $leaveRequest)
                 ->with('error', 'Only pending leave requests can be edited.');
         }
@@ -915,9 +918,10 @@ class LeaveRequestController extends Controller
 
         // For approved leaves, only Admin/Super Admin can update (for date changes)
         if ($isApprovedLeave) {
-            if (!$isAdmin) {
+            if (! $isAdmin) {
                 return back()->withErrors(['error' => 'Only Admin or Super Admin can edit approved leave requests.']);
             }
+
             // Redirect to updateApproved method
             return $this->updateApproved($request, $leaveRequest);
         }
@@ -931,7 +935,7 @@ class LeaveRequestController extends Controller
             ->whereIn('status', ['pending', 'approved'])
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->where('start_date', '<=', $endDate)
-                      ->where('end_date', '>=', $startDate);
+                    ->where('end_date', '>=', $startDate);
             })
             ->first();
 
@@ -939,11 +943,12 @@ class LeaveRequestController extends Controller
             $existingStart = Carbon::parse($overlappingRequest->start_date)->format('M d, Y');
             $existingEnd = Carbon::parse($overlappingRequest->end_date)->format('M d, Y');
             $status = ucfirst($overlappingRequest->status);
+
             return back()->withErrors(['error' => "The selected dates overlap with an existing {$status} leave request ({$overlappingRequest->leave_type}: {$existingStart} to {$existingEnd}). Please choose different dates."])->withInput();
         }
 
         // For non-admins, only pending requests can be edited
-        if (!$isAdmin && $leaveRequest->status !== 'pending') {
+        if (! $isAdmin && $leaveRequest->status !== 'pending') {
             return back()->withErrors(['error' => 'Only pending leave requests can be edited.']);
         }
 
@@ -974,7 +979,7 @@ class LeaveRequestController extends Controller
         // Validate business rules
         $validation = $leaveCreditService->validateLeaveRequest($targetUser, $validationData);
 
-        if (!$validation['valid']) {
+        if (! $validation['valid']) {
             return back()->withErrors(['validation' => $validation['errors']])->withInput();
         }
 
@@ -988,7 +993,7 @@ class LeaveRequestController extends Controller
                     Storage::disk('local')->delete($leaveRequest->medical_cert_path);
                 }
                 $file = $request->file('medical_cert_file');
-                $filename = 'medcert_' . $targetUser->id . '_' . time() . '.' . $file->getClientOriginalExtension();
+                $filename = 'medcert_'.$targetUser->id.'_'.time().'.'.$file->getClientOriginalExtension();
                 $medicalCertPath = $file->storeAs('medical_certificates', $filename, 'local');
             }
 
@@ -1005,7 +1010,7 @@ class LeaveRequestController extends Controller
             ];
 
             // Track short notice override if applied
-            if ($shortNoticeOverride && !$leaveRequest->short_notice_override) {
+            if ($shortNoticeOverride && ! $leaveRequest->short_notice_override) {
                 $updateData['short_notice_override'] = true;
                 $updateData['short_notice_override_by'] = $user->id;
                 $updateData['short_notice_override_at'] = now();
@@ -1038,7 +1043,7 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
 
         // Double-check authorization
-        if (!in_array($user->role, ['Super Admin', 'Admin'])) {
+        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
             return back()->withErrors(['error' => 'Only Admin or Super Admin can update approved leave requests.']);
         }
 
@@ -1132,8 +1137,8 @@ class LeaveRequestController extends Controller
             \Log::info('Approved leave request dates updated', [
                 'leave_request_id' => $leaveRequest->id,
                 'modified_by' => $user->id,
-                'old_dates' => Carbon::parse($originalStartDate)->format('Y-m-d') . ' to ' . Carbon::parse($originalEndDate)->format('Y-m-d'),
-                'new_dates' => Carbon::parse($newStartDate)->format('Y-m-d') . ' to ' . Carbon::parse($newEndDate)->format('Y-m-d'),
+                'old_dates' => Carbon::parse($originalStartDate)->format('Y-m-d').' to '.Carbon::parse($originalEndDate)->format('Y-m-d'),
+                'new_dates' => Carbon::parse($newStartDate)->format('Y-m-d').' to '.Carbon::parse($newEndDate)->format('Y-m-d'),
                 'old_days' => $oldDaysRequested,
                 'new_days' => $newDaysRequested,
             ]);
@@ -1165,7 +1170,7 @@ class LeaveRequestController extends Controller
             return back()->withErrors(['error' => 'Only pending requests can be approved.']);
         }
 
-        if (!$leaveRequest->requiresTlApproval()) {
+        if (! $leaveRequest->requiresTlApproval()) {
             return back()->withErrors(['error' => 'This request does not require Team Lead approval.']);
         }
 
@@ -1224,6 +1229,7 @@ class LeaveRequestController extends Controller
                 'error' => $e->getMessage(),
                 'leave_request_id' => $leaveRequest->id,
             ]);
+
             return back()->withErrors(['error' => 'Failed to approve leave request. Please try again.']);
         }
     }
@@ -1241,7 +1247,7 @@ class LeaveRequestController extends Controller
             return back()->withErrors(['error' => 'Only pending requests can be denied.']);
         }
 
-        if (!$leaveRequest->requiresTlApproval()) {
+        if (! $leaveRequest->requiresTlApproval()) {
             return back()->withErrors(['error' => 'This request does not require Team Lead approval.']);
         }
 
@@ -1263,7 +1269,7 @@ class LeaveRequestController extends Controller
                 'status' => 'denied',
                 'reviewed_by' => $user->id,
                 'reviewed_at' => now(),
-                'review_notes' => 'Rejected by Team Lead: ' . $request->review_notes,
+                'review_notes' => 'Rejected by Team Lead: '.$request->review_notes,
             ]);
 
             // Notify the agent about TL rejection
@@ -1297,6 +1303,7 @@ class LeaveRequestController extends Controller
                 'error' => $e->getMessage(),
                 'leave_request_id' => $leaveRequest->id,
             ]);
+
             return back()->withErrors(['error' => 'Failed to deny leave request. Please try again.']);
         }
     }
@@ -1317,7 +1324,7 @@ class LeaveRequestController extends Controller
         }
 
         // Check if this request requires TL approval first
-        if ($leaveRequest->requiresTlApproval() && !$leaveRequest->isTlApproved()) {
+        if ($leaveRequest->requiresTlApproval() && ! $leaveRequest->isTlApproved()) {
             return back()->withErrors(['error' => 'This request must be approved by Team Lead first.']);
         }
 
@@ -1447,6 +1454,7 @@ class LeaveRequestController extends Controller
                 DB::commit();
 
                 $otherRole = $isAdmin ? 'HR' : 'Admin';
+
                 return redirect()->route('leave-requests.show', $leaveRequest)
                     ->with('success', "Your approval recorded. Waiting for {$otherRole} approval.");
             }
@@ -1457,6 +1465,7 @@ class LeaveRequestController extends Controller
                 'leave_request_id' => $leaveRequest->id,
                 'user_id' => $user->id,
             ]);
+
             return back()->withErrors(['error' => 'Failed to approve leave request. Please try again.']);
         }
     }
@@ -1487,7 +1496,7 @@ class LeaveRequestController extends Controller
         ]);
 
         $leaveCreditService = $this->leaveCreditService;
-        $hasDeniedDates = !empty($validated['denied_dates']);
+        $hasDeniedDates = ! empty($validated['denied_dates']);
 
         DB::beginTransaction();
         try {
@@ -1495,7 +1504,7 @@ class LeaveRequestController extends Controller
             if ($hasDeniedDates) {
                 $startDate = Carbon::parse($leaveRequest->start_date);
                 $endDate = Carbon::parse($leaveRequest->end_date);
-                $deniedDates = collect($validated['denied_dates'])->map(fn($d) => Carbon::parse($d));
+                $deniedDates = collect($validated['denied_dates'])->map(fn ($d) => Carbon::parse($d));
 
                 // Validate denied dates are within the leave period
                 foreach ($deniedDates as $date) {
@@ -1514,7 +1523,7 @@ class LeaveRequestController extends Controller
                     $current->addDay();
                 }
 
-                $deniedDateStrings = $deniedDates->map(fn($d) => $d->format('Y-m-d'))->toArray();
+                $deniedDateStrings = $deniedDates->map(fn ($d) => $d->format('Y-m-d'))->toArray();
                 $approvedDates = array_diff($allWorkDays, $deniedDateStrings);
 
                 if (empty($approvedDates)) {
@@ -1560,7 +1569,7 @@ class LeaveRequestController extends Controller
             ]);
 
             // If TL approval was required but not done, mark it as approved too
-            if ($leaveRequest->requiresTlApproval() && !$leaveRequest->isTlApproved()) {
+            if ($leaveRequest->requiresTlApproval() && ! $leaveRequest->isTlApproved()) {
                 $leaveRequest->update([
                     'tl_approved_by' => $user->id,
                     'tl_approved_at' => now(),
@@ -1629,6 +1638,7 @@ class LeaveRequestController extends Controller
                 'leave_request_id' => $leaveRequest->id,
                 'user_id' => $user->id,
             ]);
+
             return back()->withErrors(['error' => 'Failed to force approve leave request. Please try again.']);
         }
     }
@@ -1686,6 +1696,7 @@ class LeaveRequestController extends Controller
                 ->with('success', 'Leave request denied.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return back()->withErrors(['error' => 'Failed to deny leave request. Please try again.']);
         }
     }
@@ -1709,10 +1720,10 @@ class LeaveRequestController extends Controller
 
         // Team Lead can only partial deny if TL approval is required and not yet done
         if ($isTeamLead) {
-            if (!$leaveRequest->requiresTlApproval() || $leaveRequest->isTlApproved() || $leaveRequest->isTlRejected()) {
+            if (! $leaveRequest->requiresTlApproval() || $leaveRequest->isTlApproved() || $leaveRequest->isTlRejected()) {
                 return back()->withErrors(['error' => 'You cannot partially deny this request.']);
             }
-        } else if ($isAdminOrHR) {
+        } elseif ($isAdminOrHR) {
             $this->authorize('approve', $leaveRequest);
         } else {
             return back()->withErrors(['error' => 'You do not have permission to partially deny this request.']);
@@ -1731,7 +1742,7 @@ class LeaveRequestController extends Controller
 
         $startDate = Carbon::parse($leaveRequest->start_date);
         $endDate = Carbon::parse($leaveRequest->end_date);
-        $deniedDates = collect($validated['denied_dates'])->map(fn($d) => Carbon::parse($d));
+        $deniedDates = collect($validated['denied_dates'])->map(fn ($d) => Carbon::parse($d));
 
         // Validate denied dates are within the leave period
         foreach ($deniedDates as $date) {
@@ -1751,7 +1762,7 @@ class LeaveRequestController extends Controller
             $current->addDay();
         }
 
-        $deniedDateStrings = $deniedDates->map(fn($d) => $d->format('Y-m-d'))->toArray();
+        $deniedDateStrings = $deniedDates->map(fn ($d) => $d->format('Y-m-d'))->toArray();
         $approvedDates = array_diff($allWorkDays, $deniedDateStrings);
 
         if (empty($approvedDates)) {
@@ -1801,7 +1812,7 @@ class LeaveRequestController extends Controller
             // Build review notes
             $roleLabel = $user->role === 'Team Lead' ? 'Team Lead' : (in_array($user->role, ['Admin', 'Super Admin']) ? 'Admin' : 'HR');
             $reviewNote = "{$roleLabel} partially approved: {$approvedDaysCount} day(s) approved, {$deniedDaysCount} day(s) denied. ";
-            $reviewNote .= "Denied dates: " . implode(', ', $deniedDates->map(fn($d) => $d->format('M d, Y'))->toArray()) . ". ";
+            $reviewNote .= 'Denied dates: '.implode(', ', $deniedDates->map(fn ($d) => $d->format('M d, Y'))->toArray()).'. ';
             $reviewNote .= "Reason: {$validated['denial_reason']}";
 
             if ($validated['review_notes']) {
@@ -1815,15 +1826,15 @@ class LeaveRequestController extends Controller
             ];
 
             // Store original dates before updating (only on first partial denial)
-            if (!$leaveRequest->original_start_date) {
+            if (! $leaveRequest->original_start_date) {
                 $updateData['original_start_date'] = $leaveRequest->start_date;
             }
-            if (!$leaveRequest->original_end_date) {
+            if (! $leaveRequest->original_end_date) {
                 $updateData['original_end_date'] = $leaveRequest->end_date;
             }
 
             // Update start and end dates to reflect only approved dates
-            if (!empty($approvedDates)) {
+            if (! empty($approvedDates)) {
                 $updateData['start_date'] = min($approvedDates);
                 $updateData['end_date'] = max($approvedDates);
             }
@@ -1833,11 +1844,11 @@ class LeaveRequestController extends Controller
                 $updateData['tl_approved_by'] = $user->id;
                 $updateData['tl_approved_at'] = now();
                 $updateData['tl_review_notes'] = $reviewNote;
-            } else if (in_array($user->role, ['Admin', 'Super Admin'])) {
+            } elseif (in_array($user->role, ['Admin', 'Super Admin'])) {
                 $updateData['admin_approved_by'] = $user->id;
                 $updateData['admin_approved_at'] = now();
                 $updateData['admin_review_notes'] = $reviewNote;
-            } else if ($user->role === 'HR') {
+            } elseif ($user->role === 'HR') {
                 $updateData['hr_approved_by'] = $user->id;
                 $updateData['hr_approved_at'] = now();
                 $updateData['hr_review_notes'] = $reviewNote;
@@ -1872,7 +1883,7 @@ class LeaveRequestController extends Controller
             }
 
             // Check if fully approved (Admin + HR, and TL if required)
-            $fullyApproved = $adminApproved && $hrApproved && (!$tlRequired || $tlApproved);
+            $fullyApproved = $adminApproved && $hrApproved && (! $tlRequired || $tlApproved);
 
             if ($fullyApproved) {
                 // Both have approved - mark as approved
@@ -1932,7 +1943,7 @@ class LeaveRequestController extends Controller
 
             $statusMsg = ($leaveRequest->status === 'approved')
                 ? "Leave request partially approved. {$approvedDaysCount} day(s) will be used."
-                : "Partial approval recorded. Awaiting " . ($adminApproved ? 'HR' : 'Admin') . " approval.";
+                : 'Partial approval recorded. Awaiting '.($adminApproved ? 'HR' : 'Admin').' approval.';
 
             return redirect()->route('leave-requests.show', $leaveRequest)
                 ->with('success', $statusMsg);
@@ -1942,7 +1953,8 @@ class LeaveRequestController extends Controller
                 'error' => $e->getMessage(),
                 'leave_request_id' => $leaveRequest->id,
             ]);
-            return back()->withErrors(['error' => 'Failed to process partial denial. ' . $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Failed to process partial denial. '.$e->getMessage()]);
         }
     }
 
@@ -2035,9 +2047,9 @@ class LeaveRequestController extends Controller
             }
 
             // Update leave request
-            $adjustmentNote = "Adjusted: Employee reported to work on {$workDate->format('M d, Y')}. " .
-                "Original period: {$startDate->format('M d')} - {$endDate->format('M d, Y')} ({$originalDays} days). " .
-                "New period: {$newStartDate->format('M d')} - {$newEndDate->format('M d, Y')} ({$newDays} days). " .
+            $adjustmentNote = "Adjusted: Employee reported to work on {$workDate->format('M d, Y')}. ".
+                "Original period: {$startDate->format('M d')} - {$endDate->format('M d, Y')} ({$originalDays} days). ".
+                "New period: {$newStartDate->format('M d')} - {$newEndDate->format('M d, Y')} ({$newDays} days). ".
                 "{$daysReduced} day(s) credit restored.";
 
             if ($validated['notes']) {
@@ -2098,7 +2110,8 @@ class LeaveRequestController extends Controller
                 'error' => $e->getMessage(),
                 'leave_request_id' => $leaveRequest->id,
             ]);
-            return back()->withErrors(['error' => 'Failed to adjust leave. ' . $e->getMessage()]);
+
+            return back()->withErrors(['error' => 'Failed to adjust leave. '.$e->getMessage()]);
         }
     }
 
@@ -2172,12 +2185,12 @@ class LeaveRequestController extends Controller
         $isApprovedLeave = $leaveRequest->status === 'approved';
 
         // For approved leaves, only Admin/Super Admin can cancel
-        if ($isApprovedLeave && !$isAdmin) {
+        if ($isApprovedLeave && ! $isAdmin) {
             return back()->withErrors(['error' => 'Only Admin or Super Admin can cancel approved leave requests.']);
         }
 
         // For regular employees, check canBeCancelled
-        if (!$isAdmin && !$leaveRequest->canBeCancelled()) {
+        if (! $isAdmin && ! $leaveRequest->canBeCancelled()) {
             return back()->withErrors(['error' => 'This leave request cannot be cancelled.']);
         }
 
@@ -2213,7 +2226,7 @@ class LeaveRequestController extends Controller
             $leaveRequest->update($updateData);
 
             // Notify the employee about cancellation (if cancelled by admin)
-            if ($isAdmin && !$isOwnRequest) {
+            if ($isAdmin && ! $isOwnRequest) {
                 $this->notificationService->notifyLeaveRequestCancelledByAdmin(
                     $leaveRequest->user_id,
                     str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
@@ -2245,13 +2258,14 @@ class LeaveRequestController extends Controller
             ]);
 
             return redirect()->route('leave-requests.index')
-                ->with('success', 'Leave request cancelled successfully.' . ($leaveRequest->credits_deducted ? ' Credits have been restored.' : ''));
+                ->with('success', 'Leave request cancelled successfully.'.($leaveRequest->credits_deducted ? ' Credits have been restored.' : ''));
         } catch (\Exception $e) {
             DB::rollBack();
             \Log::error('Leave request cancellation failed', [
                 'error' => $e->getMessage(),
                 'leave_request_id' => $leaveRequest->id,
             ]);
+
             return back()->withErrors(['error' => 'Failed to cancel leave request. Please try again.']);
         }
     }
@@ -2289,6 +2303,7 @@ class LeaveRequestController extends Controller
                 'error' => $e->getMessage(),
                 'leave_request_id' => $leaveRequest->id,
             ]);
+
             return back()->withErrors(['error' => 'Failed to delete leave request. Please try again.']);
         }
     }
@@ -2330,7 +2345,6 @@ class LeaveRequestController extends Controller
      * Check for campaign conflicts (employees in the same campaign with overlapping leave dates).
      * Returns informational data only - users can still apply.
      *
-     * @param Request $request
      * @return \Illuminate\Http\JsonResponse
      */
     public function checkCampaignConflicts(Request $request)
@@ -2355,7 +2369,7 @@ class LeaveRequestController extends Controller
             ->whereIn('status', ['pending', 'approved'])
             ->where(function ($q) use ($startDate, $endDate) {
                 $q->where('start_date', '<=', $endDate)
-                  ->where('end_date', '>=', $startDate);
+                    ->where('end_date', '>=', $startDate);
             });
 
         // Exclude current user if specified
@@ -2402,14 +2416,11 @@ class LeaveRequestController extends Controller
     /**
      * Get earlier conflicts for a leave request (first-come-first-serve check for VL/UPTO).
      * Returns leave requests from the same campaign that were submitted earlier and have overlapping dates.
-     *
-     * @param LeaveRequest $leaveRequest
-     * @return array
      */
     private function getEarlierConflicts(LeaveRequest $leaveRequest): array
     {
         // Only check for VL and UPTO (first-come-first-serve policy)
-        if (!in_array($leaveRequest->leave_type, ['VL', 'UPTO'])) {
+        if (! in_array($leaveRequest->leave_type, ['VL', 'UPTO'])) {
             return [];
         }
 
@@ -2422,7 +2433,7 @@ class LeaveRequestController extends Controller
             ->where('created_at', '<', $leaveRequest->created_at) // Submitted BEFORE this request
             ->where(function ($q) use ($leaveRequest) {
                 $q->where('start_date', '<=', $leaveRequest->end_date)
-                  ->where('end_date', '>=', $leaveRequest->start_date);
+                    ->where('end_date', '>=', $leaveRequest->start_date);
             })
             ->get()
             ->map(function ($leave) use ($leaveRequest) {
@@ -2464,7 +2475,7 @@ class LeaveRequestController extends Controller
         $this->authorize('viewAny', LeaveRequest::class);
 
         $request->validate([
-            'year' => 'required|integer|min:2020|max:' . (now()->year + 1),
+            'year' => 'required|integer|min:2020|max:'.(now()->year + 1),
         ]);
 
         $year = $request->input('year');
@@ -2525,7 +2536,7 @@ class LeaveRequestController extends Controller
 
         // Sanitize filename to prevent directory traversal
         $filename = basename($filename);
-        $filePath = storage_path('app/temp/' . $filename);
+        $filePath = storage_path('app/temp/'.$filename);
 
         Log::info('Leave credits download attempt', [
             'filename' => $filename,
@@ -2533,8 +2544,9 @@ class LeaveRequestController extends Controller
             'exists' => file_exists($filePath),
         ]);
 
-        if (!file_exists($filePath)) {
+        if (! file_exists($filePath)) {
             Log::warning('Leave credits file not found', ['filePath' => $filePath]);
+
             return redirect()->route('leave-requests.credits.index')
                 ->with('flash', [
                     'message' => 'File not found or has expired. Please try exporting again.',
@@ -2548,10 +2560,6 @@ class LeaveRequestController extends Controller
 
     /**
      * Get the active employee schedule for a user on a specific date.
-     *
-     * @param int $userId
-     * @param string $date
-     * @return EmployeeSchedule|null
      */
     protected function getActiveScheduleForDate(int $userId, string $date): ?EmployeeSchedule
     {
@@ -2584,14 +2592,14 @@ class LeaveRequestController extends Controller
         if ($leaveRequest->has_partial_denial) {
             $deniedDates = $leaveRequest->deniedDates()
                 ->pluck('denied_date')
-                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
                 ->toArray();
         }
 
         // Check if we should deduct credits at all and get the reason if not
         $creditCheck = $leaveCreditService->checkSlCreditDeduction($user, $leaveRequest);
 
-        if (!$creditCheck['should_deduct']) {
+        if (! $creditCheck['should_deduct']) {
             // Check if this should be converted to UPTO (has med cert but no credits)
             if ($creditCheck['convert_to_upto'] ?? false) {
                 // Convert SL to UPTO
@@ -2603,19 +2611,42 @@ class LeaveRequestController extends Controller
                 ]);
                 // Update attendance for UPTO (unpaid leave)
                 $this->updateAttendanceForApprovedLeave($leaveRequest);
+
+                // Auto-excuse attendance points if medical cert submitted
+                $this->autoExcuseAttendancePoints($leaveRequest);
+
                 return;
             }
 
             // No credits to deduct - just update attendance notes and track reason
             $this->updateSlAttendanceWithoutDeduction($leaveRequest, $creditCheck['reason']);
+
+            // Auto-excuse attendance points if medical cert submitted
+            $this->autoExcuseAttendancePoints($leaveRequest);
+
             return;
         }
 
+        // Handle partial credit scenario - use available credits, rest as UPTO
+        if ($creditCheck['partial_credit'] ?? false) {
+            $creditsToDeduct = $creditCheck['credits_to_deduct'];
+            $uptoDays = $creditCheck['upto_days'];
+
+            // Update attendance records and deduct partial credits
+            $this->handlePartialSlApproval($leaveRequest, $leaveCreditService, $creditsToDeduct, $uptoDays, $deniedDates);
+
+            // Auto-excuse attendance points if medical cert submitted
+            $this->autoExcuseAttendancePoints($leaveRequest);
+
+            return;
+        }
+
+        // Full credits available - normal flow
         // Get attendance records for the leave period (excluding denied dates)
         $attendanceQuery = Attendance::where('user_id', $user->id)
             ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
 
-        if (!empty($deniedDates)) {
+        if (! empty($deniedDates)) {
             $attendanceQuery->whereNotIn('shift_date', $deniedDates);
         }
 
@@ -2629,9 +2660,9 @@ class LeaveRequestController extends Controller
             if ($attendance->status === 'ncns') {
                 // NCNS stays unchanged - no credit deduction for this day
                 // Just add a note that SL was applied but NCNS status preserved
-                $existingNotes = $attendance->notes ? $attendance->notes . "\n" : '';
+                $existingNotes = $attendance->notes ? $attendance->notes."\n" : '';
                 $attendance->update([
-                    'notes' => $existingNotes . "SL applied but NCNS status preserved - Leave Request #{$leaveRequest->id}",
+                    'notes' => $existingNotes."SL applied but NCNS status preserved - Leave Request #{$leaveRequest->id}",
                     'leave_request_id' => $leaveRequest->id,
                     'admin_verified' => true,
                 ]);
@@ -2649,13 +2680,13 @@ class LeaveRequestController extends Controller
 
         // Also handle days with no attendance record yet (create advised_absence records)
         // Excluding denied dates
-        $existingDates = $attendances->pluck('shift_date')->map(fn($d) => $d->format('Y-m-d'))->toArray();
+        $existingDates = $attendances->pluck('shift_date')->map(fn ($d) => $d->format('Y-m-d'))->toArray();
         $currentDate = $startDate->copy();
 
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             // Skip denied dates and existing dates
-            if (!in_array($dateStr, $existingDates) && !in_array($dateStr, $deniedDates)) {
+            if (! in_array($dateStr, $existingDates) && ! in_array($dateStr, $deniedDates)) {
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
@@ -2705,14 +2736,133 @@ class LeaveRequestController extends Controller
                 'sl_no_credit_reason' => 'All days in the leave period had NCNS status - no credits deducted',
             ]);
         }
+
+        // Auto-excuse attendance points if medical cert submitted
+        $this->autoExcuseAttendancePoints($leaveRequest);
+    }
+
+    /**
+     * Handle partial SL approval where user has some credits but not enough for all days.
+     * Uses available credits for the first days, remaining days are marked as UPTO.
+     *
+     * @param  float  $creditsToDeduct  Number of days to use SL credits for
+     * @param  float  $uptoDays  Number of days to mark as UPTO
+     * @param  array  $deniedDates  Array of denied date strings
+     */
+    protected function handlePartialSlApproval(
+        LeaveRequest $leaveRequest,
+        LeaveCreditService $leaveCreditService,
+        float $creditsToDeduct,
+        float $uptoDays,
+        array $deniedDates = []
+    ): void {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $year = $startDate->year;
+
+        // Get all non-NCNS attendance days (or create them) sorted by date
+        $allDates = [];
+        $currentDate = $startDate->copy();
+
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if (! in_array($dateStr, $deniedDates)) {
+                $allDates[] = $dateStr;
+            }
+            $currentDate->addDay();
+        }
+
+        // Get existing attendance records
+        $existingAttendances = Attendance::where('user_id', $user->id)
+            ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
+            ->whereNotIn('shift_date', $deniedDates)
+            ->get()
+            ->keyBy(fn ($a) => $a->shift_date->format('Y-m-d'));
+
+        $slDaysUsed = 0;
+        $uptoDaysUsed = 0;
+
+        foreach ($allDates as $index => $dateStr) {
+            $attendance = $existingAttendances->get($dateStr);
+            $isNcns = $attendance && $attendance->status === 'ncns';
+
+            // NCNS days don't consume credits
+            if ($isNcns) {
+                $existingNotes = $attendance->notes ? $attendance->notes."\n" : '';
+                $attendance->update([
+                    'notes' => $existingNotes."SL applied but NCNS status preserved - Leave Request #{$leaveRequest->id}",
+                    'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
+                ]);
+
+                continue;
+            }
+
+            // Determine if this day uses SL credit or UPTO
+            if ($slDaysUsed < $creditsToDeduct) {
+                // Use SL credit for this day
+                $slDaysUsed++;
+                $leaveNote = "Covered by approved Sick Leave (SL) - Leave Request #{$leaveRequest->id}";
+                $status = 'advised_absence';
+            } else {
+                // Use UPTO for this day
+                $uptoDaysUsed++;
+                $leaveNote = "UPTO (Unpaid Time Off) - Insufficient SL credits - Leave Request #{$leaveRequest->id}";
+                $status = 'on_leave';
+            }
+
+            if ($attendance) {
+                $attendance->update([
+                    'status' => $status,
+                    'notes' => $leaveNote,
+                    'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
+                ]);
+            } else {
+                // Create attendance record
+                $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
+                Attendance::create([
+                    'user_id' => $user->id,
+                    'employee_schedule_id' => $schedule?->id,
+                    'shift_date' => $dateStr,
+                    'scheduled_time_in' => $schedule?->scheduled_time_in,
+                    'scheduled_time_out' => $schedule?->scheduled_time_out,
+                    'status' => $status,
+                    'notes' => $leaveNote,
+                    'leave_request_id' => $leaveRequest->id,
+                    'admin_verified' => true,
+                ]);
+            }
+        }
+
+        // Deduct the SL credits used
+        if ($slDaysUsed > 0) {
+            $originalDays = $leaveRequest->days_requested;
+            $leaveRequest->days_requested = $slDaysUsed;
+            $leaveCreditService->deductCredits($leaveRequest, $year);
+            $leaveRequest->days_requested = $originalDays;
+        }
+
+        // Update the leave request with partial credit info
+        $leaveRequest->update([
+            'credits_deducted' => $slDaysUsed,
+            'sl_credits_applied' => $slDaysUsed > 0,
+            'sl_no_credit_reason' => "Partial SL credits used: {$slDaysUsed} day(s) as SL, {$uptoDaysUsed} day(s) as UPTO",
+        ]);
+
+        \Log::info("Partial SL approval for Leave Request #{$leaveRequest->id}", [
+            'user_id' => $user->id,
+            'sl_days' => $slDaysUsed,
+            'upto_days' => $uptoDaysUsed,
+        ]);
     }
 
     /**
      * Update attendance for Sick Leave when no credits are being deducted.
      * Still updates status and notes for tracking purposes.
      *
-     * @param LeaveRequest $leaveRequest
-     * @param string|null $reason The reason why credits were not deducted
+     * @param  string|null  $reason  The reason why credits were not deducted
      */
     protected function updateSlAttendanceWithoutDeduction(LeaveRequest $leaveRequest, ?string $reason = null): void
     {
@@ -2726,7 +2876,7 @@ class LeaveRequestController extends Controller
         if ($leaveRequest->has_partial_denial) {
             $deniedDates = $leaveRequest->deniedDates()
                 ->pluck('denied_date')
-                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
                 ->toArray();
         }
 
@@ -2734,7 +2884,7 @@ class LeaveRequestController extends Controller
         $attendanceQuery = Attendance::where('user_id', $user->id)
             ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
 
-        if (!empty($deniedDates)) {
+        if (! empty($deniedDates)) {
             $attendanceQuery->whereNotIn('shift_date', $deniedDates);
         }
 
@@ -2743,9 +2893,9 @@ class LeaveRequestController extends Controller
         foreach ($attendances as $attendance) {
             if ($attendance->status === 'ncns') {
                 // Keep NCNS status but add note
-                $existingNotes = $attendance->notes ? $attendance->notes . "\n" : '';
+                $existingNotes = $attendance->notes ? $attendance->notes."\n" : '';
                 $attendance->update([
-                    'notes' => $existingNotes . "SL applied (no credits) - NCNS status preserved - Leave Request #{$leaveRequest->id}",
+                    'notes' => $existingNotes."SL applied (no credits) - NCNS status preserved - Leave Request #{$leaveRequest->id}",
                     'leave_request_id' => $leaveRequest->id,
                     'admin_verified' => true,
                 ]);
@@ -2761,13 +2911,13 @@ class LeaveRequestController extends Controller
         }
 
         // Create attendance records for days without existing records (excluding denied dates)
-        $existingDates = $attendances->pluck('shift_date')->map(fn($d) => $d->format('Y-m-d'))->toArray();
+        $existingDates = $attendances->pluck('shift_date')->map(fn ($d) => $d->format('Y-m-d'))->toArray();
         $currentDate = $startDate->copy();
 
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             // Skip denied dates and existing dates
-            if (!in_array($dateStr, $existingDates) && !in_array($dateStr, $deniedDates)) {
+            if (! in_array($dateStr, $existingDates) && ! in_array($dateStr, $deniedDates)) {
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
@@ -2795,21 +2945,103 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Update attendance records for approved leave (VL, BL, etc.) to on_leave status.
+     * Automatically excuse attendance points for approved leave requests with medical certificate.
+     * This applies to SL and UPTO with medical certificate submitted.
+     *
+     * @param  LeaveRequest  $leaveRequest  The approved leave request
+     * @param  string|null  $excuseReason  Optional custom excuse reason
+     * @return int Number of points excused
      */
-    protected function updateAttendanceForApprovedLeave(LeaveRequest $leaveRequest): void
+    protected function autoExcuseAttendancePoints(LeaveRequest $leaveRequest, ?string $excuseReason = null): int
     {
+        // Only auto-excuse if certificate is submitted
+        // - For SL: requires medical certificate
+        // - For UPTO: any supporting certificate/document is acceptable
+        if (! $leaveRequest->medical_cert_submitted) {
+            return 0;
+        }
+
+        // Only for SL and UPTO leave types
+        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO'])) {
+            return 0;
+        }
+
         $user = $leaveRequest->user;
-        $startDate = Carbon::parse($leaveRequest->start_date);
-        $endDate = Carbon::parse($leaveRequest->end_date);
-        $leaveNote = "On approved {$leaveRequest->leave_type}" . ($leaveRequest->reason ? " - {$leaveRequest->reason}" : '');
+        $startDate = Carbon::parse($leaveRequest->start_date)->format('Y-m-d');
+        $endDate = Carbon::parse($leaveRequest->end_date)->format('Y-m-d');
 
         // Get denied dates if this is a partial denial
         $deniedDates = [];
         if ($leaveRequest->has_partial_denial) {
             $deniedDates = $leaveRequest->deniedDates()
                 ->pluck('denied_date')
-                ->map(fn($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
+        }
+
+        // Build the default excuse reason
+        $certificateType = $leaveRequest->leave_type === 'SL' ? 'medical certificate' : 'supporting certificate';
+        $defaultReason = "Auto-excused: Approved {$leaveRequest->leave_type} with {$certificateType} - Leave Request #{$leaveRequest->id}";
+        $reason = $excuseReason ?? $defaultReason;
+
+        // Find and excuse attendance points for the leave period
+        $query = AttendancePoint::where('user_id', $user->id)
+            ->where('is_excused', false)
+            ->whereBetween('shift_date', [$startDate, $endDate]);
+
+        if (! empty($deniedDates)) {
+            $query->whereNotIn('shift_date', $deniedDates);
+        }
+
+        $pointsToExcuse = $query->get();
+        $excusedCount = 0;
+
+        foreach ($pointsToExcuse as $point) {
+            $point->update([
+                'is_excused' => true,
+                'excused_by' => auth()->id(),
+                'excused_at' => now(),
+                'excuse_reason' => $reason,
+            ]);
+            $excusedCount++;
+        }
+
+        // If any points were excused, recalculate GBRO
+        if ($excusedCount > 0) {
+            try {
+                $gbroService = app(\App\Services\AttendancePoint\GbroService::class);
+                $gbroService->cascadeRecalculateGbro($user->id);
+            } catch (\Exception $e) {
+                \Log::warning("Failed to recalculate GBRO after auto-excusing points: {$e->getMessage()}");
+            }
+        }
+
+        \Log::info("Auto-excused {$excusedCount} attendance points for Leave Request #{$leaveRequest->id}", [
+            'user_id' => $user->id,
+            'leave_type' => $leaveRequest->leave_type,
+            'period' => "{$startDate} to {$endDate}",
+        ]);
+
+        return $excusedCount;
+    }
+
+    /**
+     * Update attendance records for approved leave (VL, BL, etc.) to on_leave status.
+     * For UPTO with medical certificate, also auto-excuse attendance points.
+     */
+    protected function updateAttendanceForApprovedLeave(LeaveRequest $leaveRequest): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $leaveNote = "On approved {$leaveRequest->leave_type}".($leaveRequest->reason ? " - {$leaveRequest->reason}" : '');
+
+        // Get denied dates if this is a partial denial
+        $deniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $deniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
                 ->toArray();
         }
 
@@ -2818,7 +3050,7 @@ class LeaveRequestController extends Controller
         $updateQuery = Attendance::where('user_id', $user->id)
             ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
 
-        if (!empty($deniedDates)) {
+        if (! empty($deniedDates)) {
             $updateQuery->whereNotIn('shift_date', $deniedDates);
         }
 
@@ -2833,7 +3065,7 @@ class LeaveRequestController extends Controller
         $existingDates = Attendance::where('user_id', $user->id)
             ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')])
             ->pluck('shift_date')
-            ->map(fn($d) => $d->format('Y-m-d'))
+            ->map(fn ($d) => $d->format('Y-m-d'))
             ->toArray();
 
         $currentDate = $startDate->copy();
@@ -2841,7 +3073,7 @@ class LeaveRequestController extends Controller
         while ($currentDate->lte($endDate)) {
             $dateStr = $currentDate->format('Y-m-d');
             // Skip denied dates and existing dates
-            if (!in_array($dateStr, $existingDates) && !in_array($dateStr, $deniedDates)) {
+            if (! in_array($dateStr, $existingDates) && ! in_array($dateStr, $deniedDates)) {
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
@@ -2859,6 +3091,12 @@ class LeaveRequestController extends Controller
             }
             $currentDate->addDay();
         }
+
+        // Auto-excuse attendance points for UPTO with medical certificate
+        // (SL is handled in handleSlApproval, but UPTO submitted directly also needs this)
+        if ($leaveRequest->leave_type === 'UPTO' && $leaveRequest->medical_cert_submitted) {
+            $this->autoExcuseAttendancePoints($leaveRequest);
+        }
     }
 
     /**
@@ -2870,7 +3108,7 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
 
         // Check if user has permission to view all leave credits
-        if (!app(PermissionService::class)->userHasPermission($user, 'leave_credits.view_all')) {
+        if (! app(PermissionService::class)->userHasPermission($user, 'leave_credits.view_all')) {
             // Redirect to their own credits page if they have view_own permission
             if (app(PermissionService::class)->userHasPermission($user, 'leave_credits.view_own')) {
                 return redirect()->route('leave-requests.credits.show', $user->id);
@@ -2942,7 +3180,7 @@ class LeaveRequestController extends Controller
 
         // Apply campaign filter - auto-filter for Team Leads
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (!$campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
+        if (! $campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
             $campaignIdToFilter = $teamLeadCampaignId;
         }
         if ($campaignIdToFilter) {
@@ -2988,12 +3226,12 @@ class LeaveRequestController extends Controller
             // Check if there are pending credits from previous year awaiting regularization
             $pendingRegularizationCredits = $regularizationInfo['pending_credits'];
             $showPendingRegularization = $pendingRegularizationCredits['credits'] > 0
-                && !$regularizationInfo['has_first_regularization'];
+                && ! $regularizationInfo['has_first_regularization'];
 
             // For users hired in the displayed year who are NOT yet regularized,
             // show their credits as pending transfer (from carryover record)
             $showPendingTransferFromThisYear = false;
-            if ($hireYear === $year && !$regularizationInfo['is_regularized'] && $carryoverSummary['is_processed']) {
+            if ($hireYear === $year && ! $regularizationInfo['is_regularized'] && $carryoverSummary['is_processed']) {
                 $showPendingTransferFromThisYear = true;
             }
 
@@ -3077,7 +3315,7 @@ class LeaveRequestController extends Controller
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get()
-            ->map(fn($user) => [
+            ->map(fn ($user) => [
                 'id' => $user->id,
                 'name' => $user->name,
                 'email' => $user->email,
@@ -3118,12 +3356,12 @@ class LeaveRequestController extends Controller
         $isViewingOwnCredits = $authUser->id === $user->id;
 
         // If viewing someone else's credits, must have view_all permission
-        if (!$isViewingOwnCredits && !$canViewAll) {
+        if (! $isViewingOwnCredits && ! $canViewAll) {
             abort(403, 'Unauthorized action.');
         }
 
         // If viewing own credits, must have at least view_own permission
-        if ($isViewingOwnCredits && !$canViewOwn && !$canViewAll) {
+        if ($isViewingOwnCredits && ! $canViewOwn && ! $canViewAll) {
             abort(403, 'Unauthorized action.');
         }
 
@@ -3207,7 +3445,7 @@ class LeaveRequestController extends Controller
         // - Don't show if user is viewing their hire year and not yet regularized (pending transfer)
         // - Don't show if the carryover is a first regularization transfer (not for cash)
         $showCarryoverForward = true;
-        if ($hireYear === (int) $year && !$regularizationInfo['is_regularized']) {
+        if ($hireYear === (int) $year && ! $regularizationInfo['is_regularized']) {
             // User is viewing their hire year and not yet regularized - no carryover forward
             $showCarryoverForward = false;
         }
@@ -3269,6 +3507,7 @@ class LeaveRequestController extends Controller
         // Count users with pending credits
         $usersWithPendingCredits = $usersNeedingRegularization->filter(function ($user) {
             $pendingCredits = $this->leaveCreditService->getPendingRegularizationCredits($user);
+
             return $pendingCredits && $pendingCredits['credits'] > 0;
         });
 
@@ -3350,10 +3589,11 @@ class LeaveRequestController extends Controller
                 'results' => $results,
             ]);
         } catch (\Exception $e) {
-            \Log::error('Regularization processing error: ' . $e->getMessage());
+            \Log::error('Regularization processing error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to process regularization: ' . $e->getMessage(),
+                'error' => 'Failed to process regularization: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -3365,7 +3605,7 @@ class LeaveRequestController extends Controller
     {
         $pendingCredits = $this->leaveCreditService->getPendingRegularizationCredits($user);
 
-        if (!$pendingCredits || $pendingCredits['credits'] <= 0) {
+        if (! $pendingCredits || $pendingCredits['credits'] <= 0) {
             return [
                 'status' => 'skipped',
                 'user_id' => $user->id,
@@ -3431,7 +3671,7 @@ class LeaveRequestController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Monthly accruals processed successfully.",
+                'message' => 'Monthly accruals processed successfully.',
                 'summary' => [
                     'processed' => $result['processed'],
                     'skipped' => $result['skipped'],
@@ -3439,10 +3679,11 @@ class LeaveRequestController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Monthly accruals processing error: ' . $e->getMessage());
+            \Log::error('Monthly accruals processing error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to process monthly accruals: ' . $e->getMessage(),
+                'error' => 'Failed to process monthly accruals: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -3465,7 +3706,7 @@ class LeaveRequestController extends Controller
 
             return response()->json([
                 'success' => true,
-                'message' => "Year-end carryovers from {$fromYear} to " . ($fromYear + 1) . " processed successfully.",
+                'message' => "Year-end carryovers from {$fromYear} to ".($fromYear + 1).' processed successfully.',
                 'summary' => [
                     'processed' => $result['processed'],
                     'skipped' => $result['skipped'],
@@ -3474,10 +3715,11 @@ class LeaveRequestController extends Controller
                 ],
             ]);
         } catch (\Exception $e) {
-            \Log::error('Year-end carryover processing error: ' . $e->getMessage());
+            \Log::error('Year-end carryover processing error: '.$e->getMessage());
+
             return response()->json([
                 'success' => false,
-                'error' => 'Failed to process year-end carryovers: ' . $e->getMessage(),
+                'error' => 'Failed to process year-end carryovers: '.$e->getMessage(),
             ], 500);
         }
     }
