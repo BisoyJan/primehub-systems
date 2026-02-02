@@ -8,6 +8,7 @@ use App\Models\AttendanceUpload;
 use App\Models\LeaveRequest;
 use App\Models\Site;
 use App\Models\User;
+use App\Services\AttendancePoint\GbroCalculationService;
 use App\Services\AttendanceProcessor;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
@@ -26,18 +27,18 @@ class AttendanceController extends Controller
 
     protected LeaveCreditService $leaveCreditService;
 
-    protected AttendancePointController $attendancePointController;
+    protected GbroCalculationService $gbroService;
 
     public function __construct(
         AttendanceProcessor $processor,
         NotificationService $notificationService,
         LeaveCreditService $leaveCreditService,
-        AttendancePointController $attendancePointController
+        GbroCalculationService $gbroService
     ) {
         $this->processor = $processor;
         $this->notificationService = $notificationService;
         $this->leaveCreditService = $leaveCreditService;
-        $this->attendancePointController = $attendancePointController;
+        $this->gbroService = $gbroService;
     }
 
     /**
@@ -47,10 +48,7 @@ class AttendanceController extends Controller
     protected function recalculateGbroForUser(int $userId): void
     {
         try {
-            // Use reflection to call the private cascadeRecalculateGbro method
-            $method = new \ReflectionMethod($this->attendancePointController, 'cascadeRecalculateGbro');
-            $method->setAccessible(true);
-            $method->invoke($this->attendancePointController, $userId);
+            $this->gbroService->cascadeRecalculateGbro($userId);
         } catch (\Exception $e) {
             Log::error('AttendanceController recalculateGbroForUser Error: '.$e->getMessage());
         }
@@ -748,6 +746,26 @@ class AttendanceController extends Controller
                 $undertimeApprovalReason = $validated['undertime_approval_reason'] ?? 'generate_points';
                 $undertimeApprovalBy = auth()->id();
                 $undertimeApprovalAt = now();
+
+                // If lunch_used, reduce undertime by 60 minutes
+                if ($undertimeApprovalReason === 'lunch_used' && $undertimeMinutes !== null) {
+                    $undertimeMinutes = max(0, $undertimeMinutes - 60);
+
+                    // Update status if undertime is now 0 or reduced
+                    if ($undertimeMinutes === 0) {
+                        if ($status === 'undertime' || $status === 'undertime_more_than_hour') {
+                            $status = 'on_time';
+                        } elseif ($secondaryStatus === 'undertime' || $secondaryStatus === 'undertime_more_than_hour') {
+                            $secondaryStatus = null;
+                        }
+                    } elseif ($undertimeMinutes > 0 && $undertimeMinutes <= 60) {
+                        if ($status === 'undertime_more_than_hour') {
+                            $status = 'undertime';
+                        } elseif ($secondaryStatus === 'undertime_more_than_hour') {
+                            $secondaryStatus = 'undertime';
+                        }
+                    }
+                }
             }
         }
 
@@ -780,6 +798,11 @@ class AttendanceController extends Controller
             'undertime_approved_by' => $undertimeApprovalBy,
             'undertime_approved_at' => $undertimeApprovalAt,
         ]);
+
+        // If lunch_used, recalculate total minutes worked (no lunch deduction)
+        if ($undertimeApprovalReason === 'lunch_used') {
+            $this->processor->recalculateTotalMinutesWorked($attendance);
+        }
 
         // Generate attendance points if the record is admin_verified and has a violation status
         if ($attendance->admin_verified) {
@@ -2703,6 +2726,10 @@ class AttendanceController extends Controller
     {
         $this->authorize('update', $attendance);
 
+        $validated = $request->validate([
+            'suggested_reason' => 'nullable|in:generate_points,skip_points,lunch_used',
+        ]);
+
         // Validate that attendance has undertime
         if (! $attendance->undertime_minutes || $attendance->undertime_minutes <= 0) {
             return redirect()->back()
@@ -2724,9 +2751,10 @@ class AttendanceController extends Controller
         }
 
         try {
-            DB::transaction(function () use ($attendance) {
+            DB::transaction(function () use ($attendance, $validated) {
                 $attendance->update([
                     'undertime_approval_status' => 'pending',
+                    'undertime_approval_reason' => $validated['suggested_reason'] ?? null,
                     'undertime_approval_requested_by' => auth()->id(),
                     'undertime_approval_requested_at' => now(),
                 ]);
@@ -2765,10 +2793,10 @@ class AttendanceController extends Controller
             'notes' => 'nullable|string|max:1000',
         ]);
 
-        // Validate that attendance is pending approval
-        if ($attendance->undertime_approval_status !== 'pending') {
+        // Validate that attendance is eligible for approval (pending or null - direct approval by Admin/HR)
+        if ($attendance->undertime_approval_status !== null && $attendance->undertime_approval_status !== 'pending') {
             return redirect()->back()
-                ->with('message', 'This undertime approval request is no longer pending.')
+                ->with('message', 'This undertime has already been processed.')
                 ->with('type', 'warning');
         }
 
@@ -2809,6 +2837,11 @@ class AttendanceController extends Controller
 
                 $attendance->update($updates);
                 $attendance->refresh();
+
+                // If lunch_used, recalculate total minutes worked (no lunch deduction)
+                if ($validated['status'] === 'approved' && $validated['reason'] === 'lunch_used') {
+                    $this->processor->recalculateTotalMinutesWorked($attendance);
+                }
 
                 // Handle point generation based on reason
                 if ($validated['status'] === 'approved') {

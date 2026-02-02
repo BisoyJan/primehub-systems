@@ -374,6 +374,15 @@ export default function AttendanceReview() {
     const [isApprovingUndertime, setIsApprovingUndertime] = useState(false);
     const [undertimeApprovalReason, setUndertimeApprovalReason] = useState<'generate_points' | 'skip_points' | 'lunch_used'>('skip_points');
 
+    // Pre-select suggested reason when dialog opens with pending approval
+    React.useEffect(() => {
+        if (selectedRecord && selectedRecord.undertime_approval_status === 'pending' && selectedRecord.undertime_approval_reason) {
+            setUndertimeApprovalReason(selectedRecord.undertime_approval_reason as 'generate_points' | 'skip_points' | 'lunch_used');
+        } else {
+            setUndertimeApprovalReason('skip_points');
+        }
+    }, [selectedRecord]);
+
     // Helper to display notes - show dialog with both notes and verification notes
     const NotesDisplay = ({ record }: { record: AttendanceRecord }) => {
         const hasNotes = record.notes || record.verification_notes;
@@ -1803,12 +1812,105 @@ export default function AttendanceReview() {
                                         ✗ Rejected - points will be generated
                                     </p>
                                 ) : selectedRecord.undertime_approval_status === 'pending' ? (
-                                    <div className="flex items-center gap-2">
-                                        <Clock className="h-3 w-3 text-yellow-600 animate-pulse" />
-                                        <p className="text-xs text-yellow-700 dark:text-yellow-400">
-                                            Pending approval from Admin/HR
-                                        </p>
-                                    </div>
+                                    canApproveUndertime ? (
+                                        /* Admin/HR: Approve pending request with suggested reason */
+                                        <div className="space-y-2">
+                                            {selectedRecord.undertime_approval_reason && (
+                                                <p className="text-xs text-blue-700 dark:text-blue-400 font-medium">
+                                                    ⭐ Team Lead suggested: {selectedRecord.undertime_approval_reason === 'skip_points'
+                                                        ? 'No points'
+                                                        : selectedRecord.undertime_approval_reason === 'lunch_used'
+                                                            ? 'Lunch time credited (+1hr)'
+                                                            : 'Generate points'}
+                                                </p>
+                                            )}
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'generate_points' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('generate_points')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Check className="h-3 w-3 mr-1" />
+                                                    Generate Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'skip_points' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('skip_points')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <X className="h-3 w-3 mr-1" />
+                                                    Skip Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'lunch_used' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('lunch_used')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Clock className="h-3 w-3 mr-1" />
+                                                    Lunch Used
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setIsApprovingUndertime(true);
+                                                        router.post(approveUndertime(selectedRecord.id).url, {
+                                                            status: 'approved',
+                                                            reason: undertimeApprovalReason,
+                                                            notes: data.verification_notes,
+                                                        }, {
+                                                            preserveScroll: true,
+                                                            onFinish: () => setIsApprovingUndertime(false),
+                                                        });
+                                                    }}
+                                                    disabled={isApprovingUndertime}
+                                                    className="h-7 text-xs bg-green-600 hover:bg-green-700"
+                                                >
+                                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                                    {isApprovingUndertime ? 'Saving...' : 'Approve'}
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="destructive"
+                                                    onClick={() => {
+                                                        setIsApprovingUndertime(true);
+                                                        router.post(approveUndertime(selectedRecord.id).url, {
+                                                            status: 'rejected',
+                                                            reason: 'generate_points',
+                                                            notes: data.verification_notes,
+                                                        }, {
+                                                            preserveScroll: true,
+                                                            onFinish: () => setIsApprovingUndertime(false),
+                                                        });
+                                                    }}
+                                                    disabled={isApprovingUndertime}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <X className="h-3 w-3 mr-1" />
+                                                    Reject
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                {undertimeApprovalReason === 'skip_points' && '✓ No points will be generated'}
+                                                {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (+1hr)'}
+                                                {undertimeApprovalReason === 'generate_points' && '• Points will be generated'}
+                                            </p>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-3 w-3 text-yellow-600 animate-pulse" />
+                                            <p className="text-xs text-yellow-700 dark:text-yellow-400">
+                                                Pending approval from Admin/HR
+                                            </p>
+                                        </div>
+                                    )
                                 ) : canApproveUndertime ? (
                                     /* Admin/HR: Approval options */
                                     <div className="space-y-2">
@@ -1866,29 +1968,69 @@ export default function AttendanceReview() {
                                         </div>
                                         <p className="text-xs text-amber-700 dark:text-amber-300">
                                             {undertimeApprovalReason === 'skip_points' && '✓ No points will be generated'}
-                                            {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (-1hr)'}
+                                            {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (+1hr)'}
                                             {undertimeApprovalReason === 'generate_points' && '• Points will be generated'}
                                         </p>
                                     </div>
                                 ) : canRequestUndertimeApproval ? (
-                                    /* Team Lead: Request approval button */
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        variant="outline"
-                                        onClick={() => {
-                                            setIsRequestingUndertimeApproval(true);
-                                            router.post(requestUndertimeApproval(selectedRecord.id).url, {}, {
-                                                preserveScroll: true,
-                                                onFinish: () => setIsRequestingUndertimeApproval(false),
-                                            });
-                                        }}
-                                        disabled={isRequestingUndertimeApproval}
-                                        className="h-7 text-xs"
-                                    >
-                                        <Send className="h-3 w-3 mr-1" />
-                                        {isRequestingUndertimeApproval ? 'Sending...' : 'Request Approval'}
-                                    </Button>
+                                    /* Team Lead: Request approval with suggestion */
+                                    <div className="space-y-2">
+                                        <div className="flex flex-wrap gap-2">
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={undertimeApprovalReason === 'generate_points' ? 'default' : 'outline'}
+                                                onClick={() => setUndertimeApprovalReason('generate_points')}
+                                                className="h-7 text-xs"
+                                            >
+                                                <Check className="h-3 w-3 mr-1" />
+                                                Generate Points
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={undertimeApprovalReason === 'skip_points' ? 'default' : 'outline'}
+                                                onClick={() => setUndertimeApprovalReason('skip_points')}
+                                                className="h-7 text-xs"
+                                            >
+                                                <X className="h-3 w-3 mr-1" />
+                                                Skip Points
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                variant={undertimeApprovalReason === 'lunch_used' ? 'default' : 'outline'}
+                                                onClick={() => setUndertimeApprovalReason('lunch_used')}
+                                                className="h-7 text-xs"
+                                            >
+                                                <Clock className="h-3 w-3 mr-1" />
+                                                Lunch Used
+                                            </Button>
+                                            <Button
+                                                type="button"
+                                                size="sm"
+                                                onClick={() => {
+                                                    setIsRequestingUndertimeApproval(true);
+                                                    router.post(requestUndertimeApproval(selectedRecord.id).url, {
+                                                        suggested_reason: undertimeApprovalReason,
+                                                    }, {
+                                                        preserveScroll: true,
+                                                        onFinish: () => setIsRequestingUndertimeApproval(false),
+                                                    });
+                                                }}
+                                                disabled={isRequestingUndertimeApproval}
+                                                className="h-7 text-xs"
+                                            >
+                                                <Send className="h-3 w-3 mr-1" />
+                                                {isRequestingUndertimeApproval ? 'Sending...' : 'Request Approval'}
+                                            </Button>
+                                        </div>
+                                        <p className="text-xs text-amber-700 dark:text-amber-300">
+                                            {undertimeApprovalReason === 'skip_points' && '• Suggesting: No points'}
+                                            {undertimeApprovalReason === 'lunch_used' && '• Suggesting: Lunch time credited (+1hr)'}
+                                            {undertimeApprovalReason === 'generate_points' && '• Suggesting: Generate points'}
+                                        </p>
+                                    </div>
                                 ) : (
                                     <p className="text-xs text-amber-700 dark:text-amber-300">
                                         • Undertime points will be generated

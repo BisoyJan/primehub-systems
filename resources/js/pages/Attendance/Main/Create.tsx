@@ -1270,7 +1270,7 @@ export default function Create({ users, campaigns }: Props) {
                                                 </div>
                                                 <p className="text-xs text-amber-700 dark:text-amber-300">
                                                     {data.undertime_approval_reason === 'skip_points' && '✓ No points will be generated'}
-                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ Lunch time credited (-1hr)'}
+                                                    {data.undertime_approval_reason === 'lunch_used' && '✓ Lunch time credited (+1hr)'}
                                                     {data.undertime_approval_reason === 'generate_points' && '• Points will be generated'}
                                                     {!data.undertime_approval_reason && '• Select option or leave blank for default (generate points)'}
                                                 </p>

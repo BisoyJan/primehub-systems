@@ -1350,29 +1350,69 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                             </div>
                                             <p className="text-xs text-amber-700 dark:text-amber-300">
                                                 {undertimeApprovalReason === 'skip_points' && '✓ No points will be generated'}
-                                                {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (-1hr)'}
+                                                {undertimeApprovalReason === 'lunch_used' && '✓ Lunch time credited (+1hr)'}
                                                 {undertimeApprovalReason === 'generate_points' && '• Points will be generated'}
                                             </p>
                                         </div>
                                     ) : canRequestUndertimeApproval ? (
-                                        /* Team Lead: Request approval button */
-                                        <Button
-                                            type="button"
-                                            size="sm"
-                                            variant="outline"
-                                            onClick={() => {
-                                                setIsRequestingUndertimeApproval(true);
-                                                router.post(requestUndertimeApproval(selectedEmployee.existing_attendance!.id).url, {}, {
-                                                    preserveScroll: true,
-                                                    onFinish: () => setIsRequestingUndertimeApproval(false),
-                                                });
-                                            }}
-                                            disabled={isRequestingUndertimeApproval}
-                                            className="h-7 text-xs"
-                                        >
-                                            <Send className="h-3 w-3 mr-1" />
-                                            {isRequestingUndertimeApproval ? 'Sending...' : 'Request Approval'}
-                                        </Button>
+                                        /* Team Lead: Request approval with suggestion */
+                                        <div className="space-y-2">
+                                            <div className="flex flex-wrap gap-2">
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'generate_points' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('generate_points')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Check className="h-3 w-3 mr-1" />
+                                                    Generate Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'skip_points' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('skip_points')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <X className="h-3 w-3 mr-1" />
+                                                    Skip Points
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant={undertimeApprovalReason === 'lunch_used' ? 'default' : 'outline'}
+                                                    onClick={() => setUndertimeApprovalReason('lunch_used')}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Clock className="h-3 w-3 mr-1" />
+                                                    Lunch Used
+                                                </Button>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        setIsRequestingUndertimeApproval(true);
+                                                        router.post(requestUndertimeApproval(selectedEmployee.existing_attendance!.id).url, {
+                                                            suggested_reason: undertimeApprovalReason,
+                                                        }, {
+                                                            preserveScroll: true,
+                                                            onFinish: () => setIsRequestingUndertimeApproval(false),
+                                                        });
+                                                    }}
+                                                    disabled={isRequestingUndertimeApproval}
+                                                    className="h-7 text-xs"
+                                                >
+                                                    <Send className="h-3 w-3 mr-1" />
+                                                    {isRequestingUndertimeApproval ? 'Sending...' : 'Request Approval'}
+                                                </Button>
+                                            </div>
+                                            <p className="text-xs text-amber-700 dark:text-amber-300">
+                                                {undertimeApprovalReason === 'skip_points' && '• Suggesting: No points'}
+                                                {undertimeApprovalReason === 'lunch_used' && '• Suggesting: Lunch time credited (+1hr)'}
+                                                {undertimeApprovalReason === 'generate_points' && '• Suggesting: Generate points'}
+                                            </p>
+                                        </div>
                                     ) : (
                                         <p className="text-xs text-amber-700 dark:text-amber-300">
                                             • Undertime points will be generated

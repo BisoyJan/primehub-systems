@@ -9,13 +9,6 @@ class NotificationService
 {
     /**
      * Create a notification for a user.
-     *
-     * @param User|int $user
-     * @param string $type
-     * @param string $title
-     * @param string $message
-     * @param array|null $data
-     * @return Notification
      */
     public function create(User|int $user, string $type, string $title, string $message, ?array $data = null): Notification
     {
@@ -32,13 +25,6 @@ class NotificationService
 
     /**
      * Create notifications for multiple users.
-     *
-     * @param array $userIds
-     * @param string $type
-     * @param string $title
-     * @param string $message
-     * @param array|null $data
-     * @return void
      */
     public function createForMultipleUsers(array $userIds, string $type, string $title, string $message, ?array $data = null): void
     {
@@ -81,6 +67,7 @@ class NotificationService
     public function notifyLeaveRequestStatusChange(User|int $user, string $status, string $leaveType, int $requestId): Notification
     {
         $statusText = ucfirst($status);
+
         return $this->create(
             $user,
             'leave_request',
@@ -90,7 +77,7 @@ class NotificationService
                 'status' => $status,
                 'type' => $leaveType,
                 'request_id' => $requestId,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -115,6 +102,7 @@ class NotificationService
     public function notifyItConcernStatusChange(User|int $user, string $status, string $stationName, int $concernId): Notification
     {
         $statusText = ucfirst(str_replace('_', ' ', $status));
+
         return $this->create(
             $user,
             'it_concern',
@@ -205,7 +193,7 @@ class NotificationService
                 'status' => $status,
                 'date' => $date,
                 'points' => $points,
-                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user)
+                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user),
             ]
         );
     }
@@ -216,7 +204,7 @@ class NotificationService
     public function notifyManualAttendancePoint(User|int $user, string $pointType, string $date, float $points): Notification
     {
         // Format point type for display
-        $typeText = match($pointType) {
+        $typeText = match ($pointType) {
             'whole_day_absence' => 'Whole Day Absence',
             'half_day_absence' => 'Half-Day Absence',
             'tardy' => 'Tardy',
@@ -239,7 +227,7 @@ class NotificationService
                 'date' => $date,
                 'points' => $points,
                 'is_manual' => true,
-                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user)
+                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user),
             ]
         );
     }
@@ -250,7 +238,7 @@ class NotificationService
     public function notifyAttendancePointExpired(User|int $user, string $pointType, string $shiftDate, float $points, string $expirationType): Notification
     {
         // Format point type for display
-        $typeText = match($pointType) {
+        $typeText = match ($pointType) {
             'whole_day_absence' => 'Whole Day Absence',
             'half_day_absence' => 'Half-Day Absence',
             'tardy' => 'Tardy',
@@ -260,7 +248,7 @@ class NotificationService
         };
 
         // Format expiration type
-        $expirationText = match($expirationType) {
+        $expirationText = match ($expirationType) {
             'gbro' => 'Good Behavior Roll Off (GBRO)',
             'sro' => 'Standard Roll Off (SRO)',
             default => 'expiration'
@@ -270,7 +258,7 @@ class NotificationService
         $message = "Your {$typeText} violation from {$shiftDate} ({$points} pts) has expired via {$expirationText}.";
 
         if ($expirationType === 'gbro') {
-            $message .= " Congratulations on maintaining good attendance!";
+            $message .= ' Congratulations on maintaining good attendance!';
         }
 
         return $this->create(
@@ -283,7 +271,7 @@ class NotificationService
                 'shift_date' => $shiftDate,
                 'points' => $points,
                 'expiration_type' => $expirationType,
-                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user)
+                'link' => route('attendance-points.show', $user instanceof User ? $user->id : $user),
             ]
         );
     }
@@ -304,7 +292,7 @@ class NotificationService
             'priority' => $priority,
             'description' => $description,
             'concern_id' => $concernId,
-            'link' => route('it-concerns.show', $concernId)
+            'link' => route('it-concerns.show', $concernId),
         ];
 
         $this->notifyUsersByRole('IT', 'it_concern', $title, $message, $data);
@@ -325,7 +313,7 @@ class NotificationService
             'site_name' => $siteName,
             'agent_name' => $agentName,
             'concern_id' => $concernId,
-            'link' => route('it-concerns.show', $concernId)
+            'link' => route('it-concerns.show', $concernId),
         ];
 
         $this->notifyUsersByRole('IT', 'it_concern', $title, $message, $data);
@@ -345,7 +333,7 @@ class NotificationService
             'site_name' => $siteName,
             'agent_name' => $agentName,
             'concern_id' => $concernId,
-            'link' => route('it-concerns.show', $concernId)
+            'link' => route('it-concerns.show', $concernId),
         ];
 
         $this->notifyUsersByRole('IT', 'it_concern', $title, $message, $data);
@@ -366,7 +354,7 @@ class NotificationService
             'start_date' => $startDate,
             'end_date' => $endDate,
             'request_id' => $requestId,
-            'link' => route('leave-requests.show', $requestId)
+            'link' => route('leave-requests.show', $requestId),
         ];
 
         $this->notifyUsersByRole('HR', 'leave_request', $title, $message, $data);
@@ -407,7 +395,7 @@ class NotificationService
             'type' => $leaveType,
             'hr_approver' => $hrApproverName,
             'request_id' => $requestId,
-            'link' => route('leave-requests.show', $requestId)
+            'link' => route('leave-requests.show', $requestId),
         ];
 
         $this->notifyUsersByRole('Admin', 'leave_request', $title, $message, $data);
@@ -427,7 +415,7 @@ class NotificationService
             'type' => $leaveType,
             'admin_approver' => $adminApproverName,
             'request_id' => $requestId,
-            'link' => route('leave-requests.show', $requestId)
+            'link' => route('leave-requests.show', $requestId),
         ];
 
         $this->notifyUsersByRole('HR', 'leave_request', $title, $message, $data);
@@ -447,7 +435,7 @@ class NotificationService
                 'status' => 'approved',
                 'type' => $leaveType,
                 'request_id' => $requestId,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -469,7 +457,7 @@ class NotificationService
                 'end_date' => $endDate,
                 'request_id' => $requestId,
                 'requires_tl_approval' => true,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -489,7 +477,7 @@ class NotificationService
                 'type' => $leaveType,
                 'team_lead' => $teamLeadName,
                 'request_id' => $requestId,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -509,7 +497,7 @@ class NotificationService
                 'type' => $leaveType,
                 'team_lead' => $teamLeadName,
                 'request_id' => $requestId,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -527,7 +515,7 @@ class NotificationService
             'type' => $leaveType,
             'team_lead' => $teamLeadName,
             'request_id' => $requestId,
-            'link' => route('leave-requests.show', $requestId)
+            'link' => route('leave-requests.show', $requestId),
         ];
 
         $this->notifyUsersByRole('Admin', 'leave_request', $title, $message, $data);
@@ -547,7 +535,7 @@ class NotificationService
             'requester' => $requesterName,
             'medication_type' => $medicationType,
             'request_id' => $requestId,
-            'link' => route('medication-requests.show', $requestId)
+            'link' => route('medication-requests.show', $requestId),
         ];
 
         $this->notifyUsersByRole('Team Lead', 'medication_request', $title, $message, $data);
@@ -562,6 +550,7 @@ class NotificationService
     public function notifyMedicationRequestStatusChange(User|int $user, string $status, string $medicationType, int $requestId): Notification
     {
         $statusText = ucfirst($status);
+
         return $this->create(
             $user,
             'medication_request',
@@ -571,7 +560,7 @@ class NotificationService
                 'status' => $status,
                 'medication_type' => $medicationType,
                 'request_id' => $requestId,
-                'link' => route('medication-requests.show', $requestId)
+                'link' => route('medication-requests.show', $requestId),
             ]
         );
     }
@@ -606,7 +595,7 @@ class NotificationService
             'account_name' => $accountName,
             'deleted_by' => $deletedByName,
             'account_id' => $accountId,
-            'link' => route('accounts.index', ['status' => 'pending_deletion'])
+            'link' => route('accounts.index', ['status' => 'pending_deletion']),
         ];
 
         $this->notifyUsersByRole('Super Admin', 'account_deletion', $title, $message, $data);
@@ -625,7 +614,7 @@ class NotificationService
         $data = [
             'account_name' => $accountName,
             'account_id' => $accountId,
-            'link' => route('accounts.index')
+            'link' => route('accounts.index'),
         ];
 
         $this->notifyUsersByRole('Super Admin', 'account_reactivation', $title, $message, $data);
@@ -675,7 +664,7 @@ class NotificationService
                 'modified_by' => $modifiedByName,
                 'reason' => $reason,
                 'request_id' => $requestId,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -704,7 +693,7 @@ class NotificationService
                 'cancelled_by' => $cancelledByName,
                 'reason' => $reason,
                 'request_id' => $requestId,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -731,7 +720,7 @@ class NotificationService
                 'end_date' => $endDate,
                 'reason' => $reason,
                 'request_id' => $requestId,
-                'link' => route('leave-requests.show', $requestId)
+                'link' => route('leave-requests.show', $requestId),
             ]
         );
     }
@@ -740,13 +729,13 @@ class NotificationService
      * Notify HR/Admin about leave attendance conflict for review.
      * Called when employee has biometric activity during approved leave.
      *
-     * @param User $employee The employee with the leave
-     * @param \App\Models\LeaveRequest $leaveRequest The approved leave request
-     * @param \Carbon\Carbon $activityDate The date with biometric activity
-     * @param int $scanCount Number of biometric scans
-     * @param string $scanTimes Comma-separated scan times
-     * @param float $workDuration Estimated work duration in hours
-     * @param bool $isMultiDayLeave Whether this is a multi-day leave
+     * @param  User  $employee  The employee with the leave
+     * @param  \App\Models\LeaveRequest  $leaveRequest  The approved leave request
+     * @param  \Carbon\Carbon  $activityDate  The date with biometric activity
+     * @param  int  $scanCount  Number of biometric scans
+     * @param  string  $scanTimes  Comma-separated scan times
+     * @param  float  $workDuration  Estimated work duration in hours
+     * @param  bool  $isMultiDayLeave  Whether this is a multi-day leave
      */
     public function notifyLeaveAttendanceConflict(
         User $employee,
@@ -764,15 +753,15 @@ class NotificationService
 
         $title = 'Leave Attendance Conflict - Review Required';
 
-        $message = "{$employee->name} has biometric activity during approved {$leaveType} leave.\n\n" .
-            "Leave Period: {$startDate} to {$endDate}\n" .
-            "Activity Date: {$activityDateFormatted}\n" .
-            "Scans: {$scanCount} ({$scanTimes})\n" .
-            "Est. Duration: {$workDuration} hours\n\n" .
-            "Please review and decide:\n" .
-            "• If accidental clock-in: No action needed\n" .
-            "• If partial work day: Consider adjusting leave\n" .
-            "• If full work day: Cancel leave to restore credits";
+        $message = "{$employee->name} has biometric activity during approved {$leaveType} leave.\n\n".
+            "Leave Period: {$startDate} to {$endDate}\n".
+            "Activity Date: {$activityDateFormatted}\n".
+            "Scans: {$scanCount} ({$scanTimes})\n".
+            "Est. Duration: {$workDuration} hours\n\n".
+            "Please review and decide:\n".
+            "• If accidental clock-in: No action needed\n".
+            "• If partial work day: Consider adjusting leave\n".
+            '• If full work day: Cancel leave to restore credits';
 
         $data = [
             'employee_id' => $employee->id,
@@ -810,10 +799,10 @@ class NotificationService
         $undertimeFormatted = $this->formatMinutesToHoursMinutes($undertimeMinutes);
 
         $title = 'Undertime Approval Request';
-        $message = "{$requester->name} is requesting undertime approval for {$employee->name}.\n\n" .
-            "Date: {$date}\n" .
-            "Undertime: {$undertimeFormatted}\n\n" .
-            "Please review and decide whether to generate points, skip points, or apply lunch time credit.";
+        $message = "{$requester->name} is requesting undertime approval for {$employee->name}.\n\n".
+            "Date: {$date}\n".
+            "Undertime: {$undertimeFormatted}\n\n".
+            'Please review and decide whether to generate points, skip points, or apply lunch time credit.';
 
         $data = [
             'attendance_id' => $attendance->id,
@@ -823,7 +812,7 @@ class NotificationService
             'requester_name' => $requester->name,
             'date' => $date,
             'undertime_minutes' => $undertimeMinutes,
-            'link' => route('attendances.review'),
+            'link' => route('attendance.review'),
         ];
 
         // Notify Super Admin, Admin, and HR
@@ -850,7 +839,7 @@ class NotificationService
         $undertimeFormatted = $this->formatMinutesToHoursMinutes($undertimeMinutes);
 
         $statusText = $status === 'approved' ? 'Approved' : 'Rejected';
-        $reasonText = match($reason) {
+        $reasonText = match ($reason) {
             'generate_points' => 'Points will be generated',
             'skip_points' => 'Points will not be generated',
             'lunch_used' => 'Lunch time applied as work hours',
@@ -858,8 +847,8 @@ class NotificationService
         };
 
         $title = "Undertime {$statusText}";
-        $message = "Undertime for {$employee->name} on {$date} has been {$status}.\n\n" .
-            "Undertime: {$undertimeFormatted}\n" .
+        $message = "Undertime for {$employee->name} on {$date} has been {$status}.\n\n".
+            "Undertime: {$undertimeFormatted}\n".
             "Decision: {$reasonText}";
 
         if ($notes) {
@@ -877,7 +866,7 @@ class NotificationService
             'reason' => $reason,
             'notes' => $notes,
             'undertime_minutes' => $undertimeMinutes,
-            'link' => route('attendances.review'),
+            'link' => route('attendance.review'),
         ];
 
         // Notify the Team Lead who requested

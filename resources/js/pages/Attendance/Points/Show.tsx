@@ -228,6 +228,7 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
             whole_day_absence: number;
             half_day_absence: number;
             undertime: number;
+            undertime_more_than_hour: number;
             tardy: number;
         };
     } | null>(null);
@@ -1469,10 +1470,20 @@ const AttendancePointsShow: React.FC<PageProps> = ({ user, points, totals, dateR
                                     <div className="flex items-center justify-between p-3 rounded-lg border bg-yellow-50 dark:bg-yellow-950 border-yellow-200">
                                         <div className="flex items-center gap-2">
                                             <TrendingUp className="h-4 w-4 text-yellow-600" />
-                                            <span className="text-sm font-medium">Undertime</span>
+                                            <span className="text-sm font-medium">Undertime (≤1 hour)</span>
                                         </div>
                                         <span className="text-lg font-bold text-yellow-600">
                                             {Number(statistics.by_type.undertime).toFixed(2)}
+                                        </span>
+                                    </div>
+
+                                    <div className="flex items-center justify-between p-3 rounded-lg border bg-amber-50 dark:bg-amber-950 border-amber-200">
+                                        <div className="flex items-center gap-2">
+                                            <TrendingUp className="h-4 w-4 text-amber-600" />
+                                            <span className="text-sm font-medium">Undertime (&gt;1 hour)</span>
+                                        </div>
+                                        <span className="text-lg font-bold text-amber-600">
+                                            {Number(statistics.by_type.undertime_more_than_hour || 0).toFixed(2)}
                                         </span>
                                     </div>
                                 </div>

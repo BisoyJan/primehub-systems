@@ -2607,11 +2607,14 @@ class AttendanceProcessor
             return;
         }
 
+        // Check if lunch_used - if so, no lunch deduction (employee worked through lunch)
+        $lunchUsed = $attendance->undertime_approval_reason === 'lunch_used';
+
         // Need schedule for proper calculation
         if (! $attendance->scheduled_time_in || ! $attendance->scheduled_time_out) {
             // No schedule - calculate raw time worked
             $rawMinutes = $attendance->actual_time_in->diffInMinutes($attendance->actual_time_out);
-            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $lunchDeduction = (! $lunchUsed && ($rawMinutes / 60) > 5) ? 60 : 0;
             $attendance->update(['total_minutes_worked' => $rawMinutes - $lunchDeduction]);
 
             return;
@@ -2660,7 +2663,7 @@ class AttendanceProcessor
         }
 
         $rawMinutes = $effectiveTimeIn->diffInMinutes($effectiveTimeOut);
-        $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+        $lunchDeduction = (! $lunchUsed && ($rawMinutes / 60) > 5) ? 60 : 0;
         $attendance->update(['total_minutes_worked' => $rawMinutes - $lunchDeduction]);
     }
 }
