@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, Trash2, RefreshCw, Search, Play, Pause, Edit, Upload, Check, X } from "lucide-react";
+import { AlertCircle, Trash2, RefreshCw, Search, Play, Pause, Edit, Upload, Check, X, CheckCircle } from "lucide-react";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Card, CardContent } from "@/components/ui/card";
@@ -873,9 +873,15 @@ export default function AttendanceIndex() {
                                                         <div>-</div>
                                                     )}
                                                 {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                                    <div className={`text-xs ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                        +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                        {record.overtime_approved && ' ✓'}
+                                                    <div className="text-xs flex items-center gap-1">
+                                                        <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
+                                                            +{formatTimeAdjustment(record.overtime_minutes)} OT
+                                                        </span>
+                                                        {record.overtime_approved ? (
+                                                            <CheckCircle className="h-3 w-3 text-green-600" />
+                                                        ) : record.admin_verified ? (
+                                                            <X className="h-3 w-3 text-red-600" />
+                                                        ) : null}
                                                     </div>
                                                 )}
                                             </div>
@@ -1037,12 +1043,16 @@ export default function AttendanceIndex() {
                                             </div>
                                         )}
                                         {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                            <div>
+                                            <div className="flex items-center gap-1">
                                                 <span className="font-medium">Overtime:</span>{" "}
-                                                <span className={record.overtime_approved ? 'text-green-600' : 'text-blue-600'}>
+                                                <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
                                                     +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                    {record.overtime_approved && ' (Approved)'}
                                                 </span>
+                                                {record.overtime_approved ? (
+                                                    <CheckCircle className="h-3 w-3 text-green-600" />
+                                                ) : record.admin_verified ? (
+                                                    <X className="h-3 w-3 text-red-600" />
+                                                ) : null}
                                             </div>
                                         )}
                                         {(record.notes || record.verification_notes) && (

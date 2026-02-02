@@ -1085,9 +1085,15 @@ export default function AttendanceReview() {
                                                                 <div>-</div>
                                                             )}
                                                         {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                                            <div className={`text-xs ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                                +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                                {record.overtime_approved && ' ✓'}
+                                                            <div className="text-xs flex items-center gap-1">
+                                                                <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
+                                                                    +{formatTimeAdjustment(record.overtime_minutes)} OT
+                                                                </span>
+                                                                {record.overtime_approved ? (
+                                                                    <CheckCircle className="h-3 w-3 text-green-600" />
+                                                                ) : record.admin_verified ? (
+                                                                    <X className="h-3 w-3 text-red-600" />
+                                                                ) : null}
                                                             </div>
                                                         )}
                                                     </div>
@@ -1254,9 +1260,15 @@ export default function AttendanceReview() {
                                                         </span>
                                                     )}
                                                     {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                                        <span className={`block ${record.overtime_approved ? 'text-green-600' : 'text-blue-600'}`}>
-                                                            • Overtime: +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                            {record.overtime_approved && ' (Approved)'}
+                                                        <span className="flex items-center gap-1">
+                                                            <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
+                                                                • Overtime: +{formatTimeAdjustment(record.overtime_minutes)} OT
+                                                            </span>
+                                                            {record.overtime_approved ? (
+                                                                <CheckCircle className="h-3 w-3 text-green-600" />
+                                                            ) : record.admin_verified ? (
+                                                                <X className="h-3 w-3 text-red-600" />
+                                                            ) : null}
                                                         </span>
                                                     )}
                                                 </div>

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
-import { CheckCircle, AlertCircle } from 'lucide-react';
+import { CheckCircle, AlertCircle, XCircle } from 'lucide-react';
 
 /**
  * Attendance status configuration - Single source of truth for all status badges
@@ -86,9 +86,18 @@ export const AttendanceStatusBadges = ({
             {/* Overtime Row - only show if overtime is more than 30 minutes (threshold) */}
             {overtimeMinutes && overtimeMinutes > 30 && (
                 <div className="flex items-center gap-1">
-                    <Badge className={overtimeApproved ? 'bg-green-500' : 'bg-blue-500'}>
-                        Overtime{overtimeApproved && ' ✓'}
+                    <Badge className={overtimeApproved ? 'bg-green-500' : 'bg-red-500'}>
+                        Overtime
                     </Badge>
+                    {overtimeApproved ? (
+                        <span title="Overtime Approved">
+                            <CheckCircle className="h-4 w-4 text-green-500" />
+                        </span>
+                    ) : adminVerified ? (
+                        <span title="Overtime Not Approved">
+                            <XCircle className="h-4 w-4 text-red-500" />
+                        </span>
+                    ) : null}
                 </div>
             )}
         </div>

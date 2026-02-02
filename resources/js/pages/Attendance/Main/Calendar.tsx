@@ -19,7 +19,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, Calendar as CalendarIcon, ShieldCheck } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, Calendar as CalendarIcon, ShieldCheck, X, CheckCircle } from "lucide-react";
 import {
     index as attendanceIndex,
     calendar as attendanceCalendar,
@@ -456,15 +456,17 @@ export default function AttendanceCalendar() {
                                                                 {/* Overtime */}
                                                                 {attendance.overtime_minutes && attendance.overtime_minutes > 30 && (
                                                                     <div
-                                                                        className={`w-4 h-4 rounded ${attendance.overtime_approved
-                                                                            ? 'bg-blue-600'
-                                                                            : 'bg-blue-500'
+                                                                        className={`w-4 h-4 rounded flex items-center justify-center ${attendance.overtime_approved
+                                                                            ? 'bg-green-600'
+                                                                            : 'bg-red-500'
                                                                             }`}
                                                                         title={`Overtime: ${attendance.overtime_minutes >= 60
                                                                             ? `${Math.floor(attendance.overtime_minutes / 60)}h ${attendance.overtime_minutes % 60 > 0 ? `${attendance.overtime_minutes % 60}m` : ''}`.trim()
                                                                             : `${attendance.overtime_minutes}m`
-                                                                            }${attendance.overtime_approved ? ' (Approved)' : ' (Pending)'}`}
-                                                                    />
+                                                                            }${attendance.overtime_approved ? ' (Approved)' : ' (Not Approved)'}`}
+                                                                    >
+                                                                        {!attendance.overtime_approved && <X className="h-3 w-3 text-white" />}
+                                                                    </div>
                                                                 )}
 
                                                                 {/* Verified Icon */}
@@ -630,12 +632,18 @@ export default function AttendanceCalendar() {
                                                 </div>
                                             )}
                                             {selectedAttendance.overtime_minutes && selectedAttendance.overtime_minutes > 30 && (
-                                                <div className={selectedAttendance.overtime_approved ? "text-green-700" : "text-blue-700"}>
-                                                    Overtime: {selectedAttendance.overtime_minutes >= 60
-                                                        ? `${Math.floor(selectedAttendance.overtime_minutes / 60)} hour${Math.floor(selectedAttendance.overtime_minutes / 60) > 1 ? 's' : ''}${selectedAttendance.overtime_minutes % 60 > 0 ? ` ${selectedAttendance.overtime_minutes % 60} minutes` : ''}`
-                                                        : `${selectedAttendance.overtime_minutes} minutes`
-                                                    }
-                                                    {selectedAttendance.overtime_approved && " (Approved)"}
+                                                <div className="flex items-center gap-1">
+                                                    <span className={selectedAttendance.overtime_approved ? "text-green-700" : "text-red-700"}>
+                                                        Overtime: {selectedAttendance.overtime_minutes >= 60
+                                                            ? `${Math.floor(selectedAttendance.overtime_minutes / 60)} hour${Math.floor(selectedAttendance.overtime_minutes / 60) > 1 ? 's' : ''}${selectedAttendance.overtime_minutes % 60 > 0 ? ` ${selectedAttendance.overtime_minutes % 60} minutes` : ''}`
+                                                            : `${selectedAttendance.overtime_minutes} minutes`
+                                                        }
+                                                    </span>
+                                                    {selectedAttendance.overtime_approved ? (
+                                                        <CheckCircle className="h-3 w-3 text-green-700" />
+                                                    ) : selectedAttendance.admin_verified ? (
+                                                        <X className="h-3 w-3 text-red-700" />
+                                                    ) : null}
                                                 </div>
                                             )}
                                         </div>

@@ -96,6 +96,16 @@ class AttendanceController extends Controller
             return true;
         }
 
+        // NEW: Check if points exist for this attendance record
+        // If status requires points but no points exist yet, regeneration is needed
+        // This handles first-time verification where status may not have changed
+        if ($newGeneratesPoints) {
+            $existingPoints = AttendancePoint::where('attendance_id', $attendance->id)->exists();
+            if (! $existingPoints) {
+                return true;
+            }
+        }
+
         // Both generate points - check if the values that affect point calculation changed
         if ($oldStatus !== $newStatus) {
             return true;
@@ -1557,7 +1567,7 @@ class AttendanceController extends Controller
 
         $attendance->update($updates);
 
-        // Skip time calculations for non-work days
+        // Skip all time calculations for non-work days
         if ($request->status === 'non_work_day') {
             $attendance->update([
                 'tardy_minutes' => null,
@@ -1565,10 +1575,23 @@ class AttendanceController extends Controller
                 'overtime_minutes' => null,
             ]);
         } else {
-            // Recalculate tardy/undertime/overtime if times provided
+            // Recalculate tardy if time in is provided (not applicable for failed_bio_in)
             if ($request->actual_time_in && $attendance->scheduled_time_in) {
                 $shiftDate = Carbon::parse($attendance->shift_date);
+
+                // Build scheduled time in datetime
+                $scheduledIn = Carbon::parse($attendance->scheduled_time_in);
+                $schedInHour = $scheduledIn->hour;
+
+                // Check for graveyard shift pattern (00:00-04:59 start time)
+                // For graveyard shifts, scheduled time is on the NEXT calendar day from shift_date
+                $isGraveyardShift = $schedInHour >= 0 && $schedInHour < 5;
+
                 $scheduled = Carbon::parse($shiftDate->format('Y-m-d').' '.$attendance->scheduled_time_in);
+                if ($isGraveyardShift) {
+                    $scheduled->addDay();
+                }
+
                 $actual = Carbon::parse($request->actual_time_in);
                 $tardyMinutes = $scheduled->diffInMinutes($actual, false);
 
@@ -1577,9 +1600,14 @@ class AttendanceController extends Controller
                 } else {
                     $attendance->update(['tardy_minutes' => null]);
                 }
+            } else {
+                // No time in - clear tardy (can't calculate without time in)
+                $attendance->update(['tardy_minutes' => null]);
             }
 
-            // Recalculate undertime and overtime if time out provided
+            // Recalculate undertime and overtime if time out is provided
+            // Undertime/overtime are based on actual_time_out vs scheduled_time_out
+            // This is valid even for failed_bio_in (no time_in) since it's about when they left
             if ($request->actual_time_out && $attendance->scheduled_time_out) {
                 $actualTimeOut = Carbon::parse($request->actual_time_out);
 
@@ -1587,14 +1615,21 @@ class AttendanceController extends Controller
                 $shiftDate = Carbon::parse($attendance->shift_date);
                 $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$attendance->scheduled_time_out);
 
-                // Handle night shift - if scheduled time out is earlier than scheduled time in,
-                // it means the shift ends the next day
+                // Handle shift crossing midnight or next-day scenarios
                 if ($attendance->scheduled_time_in && $attendance->scheduled_time_out) {
                     $scheduledIn = Carbon::parse($attendance->scheduled_time_in);
                     $scheduledOut = Carbon::parse($attendance->scheduled_time_out);
+                    $schedInHour = $scheduledIn->hour;
 
-                    // If time out is before time in (e.g., 07:00 < 22:00), shift crosses midnight
-                    if ($scheduledOut->format('H:i:s') < $scheduledIn->format('H:i:s')) {
+                    // Check for graveyard shift pattern (00:00-04:59 start time)
+                    // For graveyard shifts, scheduled time out is on the NEXT calendar day from shift_date
+                    $isGraveyardShift = $schedInHour >= 0 && $schedInHour < 5;
+
+                    if ($isGraveyardShift) {
+                        // Graveyard shift: both time in and time out are on next calendar day
+                        $scheduledTimeOut = Carbon::parse($shiftDate->copy()->addDay()->format('Y-m-d').' '.$attendance->scheduled_time_out);
+                    } elseif ($scheduledOut->format('H:i:s') < $scheduledIn->format('H:i:s')) {
+                        // Night shift: time out is before time in (e.g., 22:00-07:00), shift crosses midnight
                         $scheduledTimeOut->addDay();
                     }
                 }
@@ -1607,27 +1642,50 @@ class AttendanceController extends Controller
 
                 // If negative (left early), it's undertime
                 if ($timeDiff < 0) {
-                    $attendance->update([
-                        'undertime_minutes' => abs($timeDiff),
+                    $undertimeMinutes = (int) abs($timeDiff);
+                    $undertimeStatus = $undertimeMinutes > 60 ? 'undertime_more_than_hour' : 'undertime';
+
+                    $updateData = [
+                        'undertime_minutes' => $undertimeMinutes,
                         'overtime_minutes' => null,
-                    ]);
+                    ];
+
+                    // For statuses like failed_bio_in that aren't pointable,
+                    // set undertime as secondary_status so points can be generated
+                    $nonPointableStatuses = ['failed_bio_in', 'failed_bio_out', 'on_time', 'present_no_bio'];
+                    if (in_array($attendance->status, $nonPointableStatuses)) {
+                        $updateData['secondary_status'] = $undertimeStatus;
+                    }
+
+                    $attendance->update($updateData);
                 }
-                // If positive and more than 60 minutes (left late), it's overtime
-                elseif ($timeDiff > 60) {
+                // If positive and more than 30 minutes (left late), it's overtime
+                elseif ($timeDiff > 30) {
                     $attendance->update([
                         'undertime_minutes' => null,
                         'overtime_minutes' => $timeDiff,
                     ]);
                 }
-                // If within threshold (0 to 60), clear both
+                // If within threshold (0 to 30), clear both
                 else {
                     $attendance->update([
                         'undertime_minutes' => null,
                         'overtime_minutes' => null,
                     ]);
                 }
+            } else {
+                // No time out - clear undertime/overtime
+                $attendance->update([
+                    'undertime_minutes' => null,
+                    'overtime_minutes' => null,
+                ]);
             }
         } // End of non_work_day check
+
+        // Recalculate total minutes worked based on overtime approval status
+        // If overtime exists but is not approved, work hours are capped at scheduled time out
+        $attendance->refresh();
+        $this->processor->recalculateTotalMinutesWorked($attendance);
 
         // Smart point regeneration - only regenerate if changes affect points
         $attendance->refresh();
@@ -1719,6 +1777,11 @@ class AttendanceController extends Controller
             }
 
             $attendance->update($updates);
+
+            // Recalculate total minutes worked based on overtime approval status
+            // If overtime exists but is not approved, work hours are capped at scheduled time out
+            $attendance->refresh();
+            $this->processor->recalculateTotalMinutesWorked($attendance);
 
             // Smart point regeneration - only regenerate if changes affect points
             $attendance->refresh();

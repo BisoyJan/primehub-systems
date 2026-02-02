@@ -1536,6 +1536,7 @@ class AttendanceProcessor
         // Calculate total minutes worked (deduct 60 min lunch if worked > 5 hours)
         // Use scheduled time in if employee clocked in early (early arrivals don't count as work time)
         // Use actual time out to capture overtime and undertime
+        // If overtime exists but is NOT approved, cap work hours at scheduled time out
         if ($attendance->actual_time_in && $attendance->actual_time_out) {
             // Build the scheduled time in datetime for comparison
             $schedTimeInForCalc = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_in);
@@ -1551,7 +1552,18 @@ class AttendanceProcessor
                 ? $attendance->actual_time_in
                 : $schedTimeInForCalc;
 
-            $rawMinutes = $effectiveTimeIn->diffInMinutes($attendance->actual_time_out);
+            // Determine effective time out:
+            // If overtime exists but is NOT approved, cap at scheduled time out
+            // This ensures unapproved overtime doesn't count towards work hours
+            $effectiveTimeOut = $attendance->actual_time_out;
+            if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && ! $attendance->overtime_approved) {
+                // Cap at scheduled time out (don't include unapproved overtime in work hours)
+                if ($attendance->actual_time_out->greaterThan($scheduledTimeOut)) {
+                    $effectiveTimeOut = $scheduledTimeOut;
+                }
+            }
+
+            $rawMinutes = $effectiveTimeIn->diffInMinutes($effectiveTimeOut);
             $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
             $attendance->total_minutes_worked = $rawMinutes - $lunchDeduction;
         } else {
@@ -2235,13 +2247,18 @@ class AttendanceProcessor
         }
 
         // Determine point type and value for PRIMARY status
-        $primaryPointType = $this->mapStatusToPointType($effectivePrimaryStatus);
-        $primaryPointValue = AttendancePoint::POINT_VALUES[$primaryPointType] ?? 0;
+        // Only calculate primary point value if status is pointable, otherwise set to 0
+        $primaryPointType = null;
+        $primaryPointValue = 0;
+        if (in_array($effectivePrimaryStatus, $pointableStatuses)) {
+            $primaryPointType = $this->mapStatusToPointType($effectivePrimaryStatus);
+            $primaryPointValue = AttendancePoint::POINT_VALUES[$primaryPointType] ?? 0;
+        }
 
         // Determine point type and value for SECONDARY status (if exists)
         $secondaryPointType = null;
         $secondaryPointValue = 0;
-        if ($effectiveSecondaryStatus) {
+        if ($effectiveSecondaryStatus && in_array($effectiveSecondaryStatus, $pointableStatuses)) {
             $secondaryPointType = $this->mapStatusToPointType($effectiveSecondaryStatus);
             $secondaryPointValue = AttendancePoint::POINT_VALUES[$secondaryPointType] ?? 0;
         }
@@ -2572,5 +2589,78 @@ class AttendanceProcessor
             'needs_review' => $needsReview,
             'warnings' => $warnings,
         ];
+    }
+
+    /**
+     * Recalculate total minutes worked for an attendance record.
+     * This should be called when overtime approval status changes.
+     *
+     * If overtime exists but is NOT approved, work hours are capped at scheduled time out.
+     * If overtime is approved, work hours include the overtime period.
+     */
+    public function recalculateTotalMinutesWorked(Attendance $attendance): void
+    {
+        // Can only calculate if both time in and time out exist
+        if (! $attendance->actual_time_in || ! $attendance->actual_time_out) {
+            $attendance->update(['total_minutes_worked' => null]);
+
+            return;
+        }
+
+        // Need schedule for proper calculation
+        if (! $attendance->scheduled_time_in || ! $attendance->scheduled_time_out) {
+            // No schedule - calculate raw time worked
+            $rawMinutes = $attendance->actual_time_in->diffInMinutes($attendance->actual_time_out);
+            $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+            $attendance->update(['total_minutes_worked' => $rawMinutes - $lunchDeduction]);
+
+            return;
+        }
+
+        $shiftDate = Carbon::parse($attendance->shift_date);
+
+        // Build scheduled times
+        $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$attendance->scheduled_time_in);
+        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$attendance->scheduled_time_out);
+
+        // Handle night shift - if scheduled time out is earlier than scheduled time in,
+        // it means the shift ends the next day
+        $scheduledIn = Carbon::parse($attendance->scheduled_time_in);
+        $scheduledOut = Carbon::parse($attendance->scheduled_time_out);
+        $isNightShift = $scheduledOut->format('H:i:s') < $scheduledIn->format('H:i:s');
+
+        if ($isNightShift) {
+            $scheduledTimeOut->addDay();
+        }
+
+        // Handle graveyard shift (00:00-04:59 start time)
+        $schedInHour = $scheduledIn->hour;
+        $isGraveyardShift = $schedInHour >= 0 && $schedInHour < 5;
+
+        if ($isGraveyardShift) {
+            // For graveyard shifts, adjust scheduled times to next day
+            $scheduledTimeIn = $scheduledTimeIn->addDay();
+            $scheduledTimeOut = $scheduledTimeOut->addDay();
+        }
+
+        // Use the later of actual time in vs scheduled time in
+        // This prevents early arrivals from counting as extra work time
+        $effectiveTimeIn = $attendance->actual_time_in->greaterThan($scheduledTimeIn)
+            ? $attendance->actual_time_in
+            : $scheduledTimeIn;
+
+        // Determine effective time out:
+        // If overtime exists but is NOT approved, cap at scheduled time out
+        $effectiveTimeOut = $attendance->actual_time_out;
+        if ($attendance->overtime_minutes && $attendance->overtime_minutes > 0 && ! $attendance->overtime_approved) {
+            // Cap at scheduled time out (don't include unapproved overtime in work hours)
+            if ($attendance->actual_time_out->greaterThan($scheduledTimeOut)) {
+                $effectiveTimeOut = $scheduledTimeOut;
+            }
+        }
+
+        $rawMinutes = $effectiveTimeIn->diffInMinutes($effectiveTimeOut);
+        $lunchDeduction = ($rawMinutes / 60) > 5 ? 60 : 0;
+        $attendance->update(['total_minutes_worked' => $rawMinutes - $lunchDeduction]);
     }
 }
