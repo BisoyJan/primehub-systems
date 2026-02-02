@@ -19,6 +19,7 @@ use App\Models\User;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
 use App\Services\PermissionService;
+use \App\Services\AttendancePoint\GbroCalculationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -3009,7 +3010,7 @@ class LeaveRequestController extends Controller
         // If any points were excused, recalculate GBRO
         if ($excusedCount > 0) {
             try {
-                $gbroService = app(\App\Services\AttendancePoint\GbroService::class);
+                $gbroService = app(GbroCalculationService::class);
                 $gbroService->cascadeRecalculateGbro($user->id);
             } catch (\Exception $e) {
                 \Log::warning("Failed to recalculate GBRO after auto-excusing points: {$e->getMessage()}");
@@ -3702,7 +3703,7 @@ class LeaveRequestController extends Controller
         $fromYear = $validated['from_year'];
 
         try {
-            $result = $this->leaveCreditService->processCarryoverForAllUsers($fromYear, auth()->id());
+            $result = $this->leaveCreditService->processAllCarryovers($fromYear, auth()->id());
 
             return response()->json([
                 'success' => true,
