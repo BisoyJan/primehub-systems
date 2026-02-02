@@ -820,8 +820,8 @@ export default function Edit({
                     </Alert>
                 )}
 
-                {/* Leave Credits Summary */}
-                {creditsSummary.is_eligible && (
+                {/* Leave Credits Summary - Only show for leave types that use credits */}
+                {requiresCredits && creditsSummary.is_eligible && (
                     <Card className="mb-6">
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
@@ -897,7 +897,7 @@ export default function Edit({
                     </Card>
                 )}
 
-                {!creditsSummary.is_eligible && (
+                {requiresCredits && !creditsSummary.is_eligible && (
                     <>
                         {/* Show projected balance when user will be eligible by start date */}
                         {willBeEligibleByStartDate() && data.start_date ? (
@@ -1413,11 +1413,11 @@ export default function Edit({
                                 )}
                             </div>
 
-                            {/* Medical/Supporting Document (for SL and BL) */}
-                            {(data.leave_type === 'SL' || data.leave_type === 'BL') && (
+                            {/* Medical/Supporting Document (for SL, BL, and UPTO) */}
+                            {(data.leave_type === 'SL' || data.leave_type === 'BL' || data.leave_type === 'UPTO') && (
                                 <div className="space-y-3">
                                     <Label>
-                                        {data.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'} (Optional)
+                                        {data.leave_type === 'SL' ? 'Medical Certificate' : data.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'} (Optional)
                                     </Label>
 
                                     {/* Show existing certificate if available */}
@@ -1427,7 +1427,7 @@ export default function Edit({
                                                 <div className="flex items-center gap-2">
                                                     <FileImage className="h-5 w-5 text-green-600" />
                                                     <span className="text-sm font-medium">
-                                                        Existing {data.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
+                                                        Existing {data.leave_type === 'SL' ? 'Medical Certificate' : data.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
                                                     </span>
                                                 </div>
                                                 <a
@@ -1481,7 +1481,7 @@ export default function Edit({
                                             >
                                                 <Upload className="h-8 w-8 text-muted-foreground" />
                                                 <span className="text-sm font-medium">
-                                                    Click to upload {data.leave_type === 'SL' ? 'medical certificate' : 'supporting document'}
+                                                    Click to upload {data.leave_type === 'SL' ? 'medical certificate' : 'death certificate'}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
                                                     JPEG, PNG, GIF, WebP (max 4MB)
