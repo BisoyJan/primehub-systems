@@ -2,17 +2,17 @@
 
 namespace App\Services;
 
-use App\Models\Station;
-use App\Models\PcSpec;
-use App\Models\PcMaintenance;
-use App\Models\ItConcern;
-use App\Models\Site;
 use App\Models\Attendance;
-use App\Models\LeaveRequest;
 use App\Models\AttendancePoint;
+use App\Models\ItConcern;
+use App\Models\LeaveRequest;
+use App\Models\PcMaintenance;
+use App\Models\PcSpec;
+use App\Models\Site;
+use App\Models\Station;
 use App\Models\User;
-use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
@@ -26,7 +26,7 @@ class DashboardService
 
         return [
             'total' => $total,
-            'bysite' => $bySite
+            'bysite' => $bySite,
         ];
     }
 
@@ -39,7 +39,7 @@ class DashboardService
             ->whereNull('pc_spec_id')
             ->orderBy('station_number')
             ->get()
-            ->map(fn($station) => [
+            ->map(fn ($station) => [
                 'station' => $station->station_number,
                 'site' => $station->site->name,
                 'campaign' => $station->campaign->name,
@@ -48,7 +48,7 @@ class DashboardService
 
         return [
             'total' => count($stations),
-            'stations' => $stations
+            'stations' => $stations,
         ];
     }
 
@@ -64,40 +64,42 @@ class DashboardService
 
         $stations = $query->with('site')
             ->get()
-            ->map(fn($station) => [
+            ->map(fn ($station) => [
                 'site' => $station->site->name,
-                'station_number' => $station->station_number
+                'station_number' => $station->station_number,
             ])
             ->toArray();
 
         return [
             'total' => $total,
             'bysite' => $bySite,
-            'stations' => $stations
+            'stations' => $stations,
         ];
     }
 
     /**
      * Get PCs with SSD drives
+     *
      * @deprecated Drive type is no longer tracked in disk_specs
      */
     public function getPcsWithSsd(): array
     {
         return [
             'total' => 0,
-            'details' => []
+            'details' => [],
         ];
     }
 
     /**
      * Get PCs with HDD drives
+     *
      * @deprecated Drive type is no longer tracked in disk_specs
      */
     public function getPcsWithHdd(): array
     {
         return [
             'total' => 0,
-            'details' => []
+            'details' => [],
         ];
     }
 
@@ -111,7 +113,7 @@ class DashboardService
 
         return [
             'total' => $total,
-            'bysite' => $bySite
+            'bysite' => $bySite,
         ];
     }
 
@@ -123,17 +125,17 @@ class DashboardService
         $now = Carbon::now();
 
         $maintenances = PcMaintenance::with(['pcSpec.stations.site'])
-            ->where(function($query) use ($now) {
+            ->where(function ($query) use ($now) {
                 $query->where('status', 'overdue')
-                      ->orWhere(function($q) use ($now) {
-                          $q->where('status', 'pending')
+                    ->orWhere(function ($q) use ($now) {
+                        $q->where('status', 'pending')
                             ->where('next_due_date', '<', $now);
-                      });
+                    });
             })
             ->orderBy('next_due_date', 'asc')
             ->get();
 
-        $stations = $maintenances->flatMap(function($maintenance) use ($now) {
+        $stations = $maintenances->flatMap(function ($maintenance) use ($now) {
             $dueDate = Carbon::parse($maintenance->next_due_date);
             $daysOverdue = abs($now->diffInDays($dueDate, false));
 
@@ -146,21 +148,21 @@ class DashboardService
                     'station' => $maintenance->pcSpec?->pc_number ?? 'Unknown PC',
                     'site' => 'Unassigned',
                     'dueDate' => $dueDate->format('Y-m-d'),
-                    'daysOverdue' => $this->formatDaysOverdue($daysOverdue)
+                    'daysOverdue' => $this->formatDaysOverdue($daysOverdue),
                 ]];
             }
 
-            return $pcStations->map(fn($station) => [
+            return $pcStations->map(fn ($station) => [
                 'station' => $station->station_number,
                 'site' => $station->site?->name ?? 'Unknown Site',
                 'dueDate' => $dueDate->format('Y-m-d'),
-                'daysOverdue' => $this->formatDaysOverdue($daysOverdue)
+                'daysOverdue' => $this->formatDaysOverdue($daysOverdue),
             ]);
         })->toArray();
 
         return [
             'total' => count($stations),
-            'stations' => $stations
+            'stations' => $stations,
         ];
     }
 
@@ -173,14 +175,14 @@ class DashboardService
             ->whereDoesntHave('stations')
             ->get();
 
-        return $unassigned->map(fn($pc) => [
+        return $unassigned->map(fn ($pc) => [
             'id' => $pc->id,
             'pc_number' => $pc->pc_number,
             'model' => $pc->model,
-            'ram' => $pc->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
+            'ram' => $pc->ramSpecs->map(fn ($ram) => $ram->model)->implode(', '),
             'ram_gb' => $pc->ramSpecs->sum('capacity_gb'),
             'ram_count' => $pc->ramSpecs->count(),
-            'disk' => $pc->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
+            'disk' => $pc->diskSpecs->map(fn ($disk) => $disk->model)->implode(', '),
             'disk_tb' => round($pc->diskSpecs->sum('capacity_gb') / 1024, 2),
             'disk_count' => $pc->diskSpecs->count(),
             'processor' => $pc->processorSpecs->pluck('model')->implode(', '),
@@ -192,9 +194,9 @@ class DashboardService
     /**
      * Get all dashboard statistics
      *
-     * @param string|null $presenceDate Date for presence insights
-     * @param string|null $leaveCalendarMonth Month for leave calendar
-     * @param int|null $leaveCalendarCampaignId Campaign ID to filter leave calendar (for Agents to see same-campaign leaves)
+     * @param  string|null  $presenceDate  Date for presence insights
+     * @param  string|null  $leaveCalendarMonth  Month for leave calendar
+     * @param  int|null  $leaveCalendarCampaignId  Campaign ID to filter leave calendar (for Agents to see same-campaign leaves)
      */
     public function getAllStats(?string $presenceDate = null, ?string $leaveCalendarMonth = null, ?int $leaveCalendarCampaignId = null): array
     {
@@ -210,6 +212,60 @@ class DashboardService
             'itConcernStats' => $this->getItConcernStats(),
             'itConcernTrends' => $this->getItConcernTrends(),
             'presenceInsights' => $this->getPresenceInsights($presenceDate, $leaveCalendarMonth, $leaveCalendarCampaignId),
+            'leaveConflicts' => $this->getLeaveConflicts(),
+        ];
+    }
+
+    /**
+     * Get leave conflicts - attendance records where employee has biometric activity during approved leave
+     * These require HR/Admin review to either cancel/adjust leave or confirm as accidental clock-in
+     */
+    public function getLeaveConflicts(): array
+    {
+        $conflicts = Attendance::with([
+            'user:id,first_name,last_name,role',
+            'leaveRequest:id,leave_type,start_date,end_date,days_requested',
+            'employeeSchedule.campaign:id,name',
+        ])
+            ->whereNotNull('leave_request_id')
+            ->where('status', '!=', 'on_leave')
+            ->where('admin_verified', false)
+            ->where(function ($q) {
+                $q->whereNotNull('actual_time_in')
+                    ->orWhereNotNull('actual_time_out');
+            })
+            ->orderBy('shift_date', 'desc')
+            ->limit(10)
+            ->get()
+            ->map(function ($attendance) {
+                return [
+                    'id' => $attendance->id,
+                    'user_id' => $attendance->user_id,
+                    'user_name' => $attendance->user?->last_name.', '.$attendance->user?->first_name,
+                    'user_role' => $attendance->user?->role,
+                    'campaign_name' => $attendance->employeeSchedule?->campaign?->name ?? 'No Campaign',
+                    'shift_date' => $attendance->shift_date,
+                    'leave_type' => $attendance->leaveRequest?->leave_type,
+                    'leave_start' => $attendance->leaveRequest?->start_date?->format('Y-m-d'),
+                    'leave_end' => $attendance->leaveRequest?->end_date?->format('Y-m-d'),
+                    'actual_time_in' => $attendance->actual_time_in,
+                    'actual_time_out' => $attendance->actual_time_out,
+                ];
+            })
+            ->toArray();
+
+        $totalCount = Attendance::whereNotNull('leave_request_id')
+            ->where('status', '!=', 'on_leave')
+            ->where('admin_verified', false)
+            ->where(function ($q) {
+                $q->whereNotNull('actual_time_in')
+                    ->orWhereNotNull('actual_time_out');
+            })
+            ->count();
+
+        return [
+            'total' => $totalCount,
+            'records' => $conflicts,
         ];
     }
 
@@ -252,9 +308,9 @@ class DashboardService
                 'total' => $total,
             ];
         })
-        ->filter(fn ($row) => $row['total'] > 0)
-        ->values()
-        ->toArray();
+            ->filter(fn ($row) => $row['total'] > 0)
+            ->values()
+            ->toArray();
 
         return [
             'pending' => (int) ($counts['pending'] ?? 0),
@@ -279,9 +335,9 @@ class DashboardService
         return $query->groupBy('sites.name')
             ->orderBy('sites.name')
             ->get()
-            ->map(fn($item) => [
+            ->map(fn ($item) => [
                 'site' => $item->site,
-                'count' => (int) $item->count
+                'count' => (int) $item->count,
             ])
             ->toArray();
     }
@@ -344,9 +400,9 @@ class DashboardService
     /**
      * Get presence insights including leave calendar
      *
-     * @param string|null $date Date for presence stats
-     * @param string|null $leaveCalendarMonth Month for leave calendar
-     * @param int|null $campaignId If provided, filter leave calendar to only show users from this campaign
+     * @param  string|null  $date  Date for presence stats
+     * @param  string|null  $leaveCalendarMonth  Month for leave calendar
+     * @param  int|null  $campaignId  If provided, filter leave calendar to only show users from this campaign
      */
     public function getPresenceInsights(?string $date = null, ?string $leaveCalendarMonth = null, ?int $campaignId = null): array
     {
@@ -385,7 +441,7 @@ class DashboardService
                     ->orWhereBetween('end_date', [$startOfMonth, $endOfMonth])
                     ->orWhere(function ($q) use ($startOfMonth, $endOfMonth) {
                         $q->where('start_date', '<=', $startOfMonth)
-                          ->where('end_date', '>=', $endOfMonth);
+                            ->where('end_date', '>=', $endOfMonth);
                     });
             });
 
@@ -393,19 +449,20 @@ class DashboardService
         if ($campaignId) {
             $leaveCalendarQuery->whereHas('user.employeeSchedules', function ($query) use ($campaignId) {
                 $query->where('campaign_id', $campaignId)
-                      ->where('is_active', true);
+                    ->where('is_active', true);
             });
         }
 
         $leaveCalendarData = $leaveCalendarQuery
             ->orderBy('start_date')
             ->get()
-            ->map(function($leave) {
+            ->map(function ($leave) {
                 $activeSchedule = $leave->user->employeeSchedules->where('is_active', true)->first();
+
                 return [
                     'id' => $leave->id,
                     'user_id' => $leave->user_id,
-                    'user_name' => $leave->user->last_name . ', ' . $leave->user->first_name,
+                    'user_name' => $leave->user->last_name.', '.$leave->user->first_name,
                     'user_role' => $leave->user->role,
                     'campaign_name' => $activeSchedule?->campaign?->name ?? 'No Campaign',
                     'leave_type' => $leave->leave_type,
@@ -435,11 +492,11 @@ class DashboardService
                 if ($totalPoints >= 6) {
                     return [
                         'user_id' => $user->id,
-                        'user_name' => $user->last_name . ', ' . $user->first_name,
+                        'user_name' => $user->last_name.', '.$user->first_name,
                         'user_role' => $user->role,
                         'total_points' => round($totalPoints, 2),
                         'violations_count' => $userPoints->count(),
-                        'points' => $userPoints->sortByDesc('shift_date')->take(5)->map(fn($point) => [
+                        'points' => $userPoints->sortByDesc('shift_date')->take(5)->map(fn ($point) => [
                             'id' => $point->id,
                             'shift_date' => $point->shift_date,
                             'point_type' => $point->point_type,
@@ -449,6 +506,7 @@ class DashboardService
                         ])->values()->toArray(),
                     ];
                 }
+
                 return null;
             })
             ->filter()
@@ -487,6 +545,7 @@ class DashboardService
             ->get()
             ->map(function ($row) {
                 $date = Carbon::createFromFormat('Y-m', $row->month);
+
                 return [
                     'month' => $row->month,
                     'label' => $date->format('M Y'),

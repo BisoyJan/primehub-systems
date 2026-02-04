@@ -1458,6 +1458,16 @@ class AttendanceController extends Controller
             }
         }
 
+        // Filter by leave conflict (employee has biometric activity during approved leave)
+        if ($request->filled('leave_conflict') && $request->leave_conflict === 'yes') {
+            $query->whereNotNull('leave_request_id')
+                ->where('status', '!=', 'on_leave')
+                ->where(function ($q) {
+                    $q->whereNotNull('actual_time_in')
+                        ->orWhereNotNull('actual_time_out');
+                });
+        }
+
         // If verify parameter is provided, filter to show only that specific record
         // This ensures the record is visible when clicking "Verify" from the attendance list
         $verifyAttendanceId = null;
@@ -1492,6 +1502,16 @@ class AttendanceController extends Controller
         // Get all campaigns for campaign filter dropdown
         $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
 
+        // Count leave conflicts (records where employee has biometric activity during approved leave)
+        $leaveConflictCount = Attendance::whereNotNull('leave_request_id')
+            ->where('status', '!=', 'on_leave')
+            ->where('admin_verified', false)
+            ->where(function ($q) {
+                $q->whereNotNull('actual_time_in')
+                    ->orWhereNotNull('actual_time_out');
+            })
+            ->count();
+
         return Inertia::render('Attendance/Main/Review', [
             'attendances' => $attendances,
             'employees' => $employees,
@@ -1499,6 +1519,7 @@ class AttendanceController extends Controller
             'campaigns' => $campaigns,
             'teamLeadCampaignId' => $teamLeadCampaignId,
             'verifyAttendanceId' => $verifyAttendanceId,
+            'leaveConflictCount' => $leaveConflictCount,
             'filters' => [
                 'user_id' => $request->user_id,
                 'status' => $request->status,
@@ -1507,6 +1528,7 @@ class AttendanceController extends Controller
                 'date_to' => $request->date_to,
                 'site_id' => $request->site_id,
                 'campaign_id' => $request->campaign_id,
+                'leave_conflict' => $request->leave_conflict,
             ],
         ]);
     }
@@ -2017,8 +2039,20 @@ class AttendanceController extends Controller
         $creditsDeducted = $leaveRequest->credits_deducted ?? $originalLeaveDays;
 
         // Check if credits can be restored based on year
-        // Credits can only be restored if current year matches the credits_year
-        // (e.g., 2025 credits used in Jan/Feb 2026 cannot be restored in 2026)
+        // Credits can only be restored if current year matches the credits_year (the year when leave was approved)
+        //
+        // HOW IT WORKS:
+        // - credits_year is set to the leave's start_date year when credits are deducted
+        // - For a leave in Jan 2026 using 2025 rollover credits:
+        //   → credits_year = 2026 (the leave year)
+        //   → Rollover credits are stored in leave_credits table with year=2026, month=0
+        //   → Can restore because current year (2026) matches credits_year (2026)
+        //
+        // EDGE CASE - Year mismatch prevents restoration:
+        // - Leave approved in Dec 2025, employee works during leave in Jan 2026
+        //   → credits_year = 2025 (when leave was approved)
+        //   → Can't restore because current year (2026) != credits_year (2025)
+        //   → This prevents cross-year accounting issues
         $currentYear = now()->year;
         $creditsYear = $leaveRequest->credits_year;
         $canRestoreCredits = $creditsYear && $currentYear === $creditsYear;

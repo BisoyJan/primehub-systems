@@ -143,7 +143,9 @@ interface PageProps extends SharedData {
         verified?: string;
         site_id?: string;
         campaign_id?: string;
+        leave_conflict?: string;
     };
+    leaveConflictCount?: number;
     [key: string]: unknown;
 }
 
@@ -320,7 +322,7 @@ const calculateSuggestedStatus = (
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, verifyAttendanceId, filters, auth } = usePage<PageProps>().props;
+    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, verifyAttendanceId, filters, auth, leaveConflictCount } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
@@ -415,6 +417,7 @@ export default function AttendanceReview() {
 
     // Search state
     const [verifiedFilter, setVerifiedFilter] = useState(filters?.verified || "all");
+    const [leaveConflictFilter, setLeaveConflictFilter] = useState(filters?.leave_conflict || "all");
     const [dateFrom, setDateFrom] = useState(filters?.date_from || "");
     const [dateTo, setDateTo] = useState(filters?.date_to || "");
 
@@ -507,6 +510,7 @@ export default function AttendanceReview() {
         if (selectedCampaignIds.length > 0) params.campaign_id = multiSelectToParam(selectedCampaignIds);
         if (selectedStatuses.length > 0) params.status = multiSelectToParam(selectedStatuses);
         if (verifiedFilter !== "all") params.verified = verifiedFilter;
+        if (leaveConflictFilter !== "all") params.leave_conflict = leaveConflictFilter;
         if (dateFrom) params.date_from = dateFrom;
         if (dateTo) params.date_to = dateTo;
 
@@ -527,6 +531,7 @@ export default function AttendanceReview() {
             setSelectedCampaignIds([]);
         }
         setVerifiedFilter("all");
+        setLeaveConflictFilter("all");
         setDateFrom("");
         setDateTo("");
         router.get("/attendance/review", {}, { preserveState: true });
@@ -914,6 +919,32 @@ export default function AttendanceReview() {
                                             <SelectItem value="all">All Records</SelectItem>
                                             <SelectItem value="pending">Pending Verification</SelectItem>
                                             <SelectItem value="verified">Verified</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                {/* Leave Conflict Filter */}
+                                <div className="space-y-2">
+                                    <Label className="flex items-center gap-2">
+                                        Leave Conflicts
+                                        {(leaveConflictCount ?? 0) > 0 && (
+                                            <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                                                {leaveConflictCount}
+                                            </Badge>
+                                        )}
+                                    </Label>
+                                    <Select value={leaveConflictFilter} onValueChange={setLeaveConflictFilter}>
+                                        <SelectTrigger className={leaveConflictFilter === "yes" ? "border-amber-500 bg-amber-50 dark:bg-amber-950/20" : ""}>
+                                            <SelectValue placeholder="All Records" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="all">All Records</SelectItem>
+                                            <SelectItem value="yes">
+                                                <span className="flex items-center gap-2">
+                                                    <AlertCircle className="h-3 w-3 text-amber-500" />
+                                                    Leave Conflicts Only
+                                                </span>
+                                            </SelectItem>
                                         </SelectContent>
                                     </Select>
                                 </div>

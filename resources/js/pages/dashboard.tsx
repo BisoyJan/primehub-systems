@@ -198,6 +198,22 @@ interface DashboardProps {
         balance: number;
     };
     leaveCalendarMonth?: string;
+    leaveConflicts?: {
+        total: number;
+        records: Array<{
+            id: number;
+            user_id: number;
+            user_name: string;
+            user_role: string;
+            campaign_name: string;
+            shift_date: string;
+            leave_type: string;
+            leave_start: string;
+            leave_end: string;
+            actual_time_in: string | null;
+            actual_time_out: string | null;
+        }>;
+    };
 }
 
 interface StatCardProps {
@@ -324,6 +340,7 @@ export default function Dashboard({
     presenceInsights,
     leaveCredits,
     leaveCalendarMonth,
+    leaveConflicts,
 }: DashboardProps) {
     // Get user role from shared data
     const { auth } = usePage<SharedData>().props;
@@ -1591,6 +1608,69 @@ export default function Dashboard({
                                         </CardContent>
                                     </Card>
                                 </div>
+
+                                {/* Leave Conflicts Widget - Only show if there are conflicts and user is not restricted */}
+                                {!isRestrictedRole && leaveConflicts && leaveConflicts.total > 0 && (
+                                    <Card className="border-amber-500/50 bg-amber-50/50 dark:bg-amber-950/20">
+                                        <CardHeader className="pb-3">
+                                            <div className="flex items-center justify-between">
+                                                <div>
+                                                    <CardTitle className="text-lg flex items-center gap-2 text-amber-700 dark:text-amber-400">
+                                                        <AlertTriangle className="h-5 w-5" />
+                                                        Leave Conflicts
+                                                        <Badge variant="destructive" className="ml-2">
+                                                            {leaveConflicts.total}
+                                                        </Badge>
+                                                    </CardTitle>
+                                                    <CardDescription>
+                                                        Employees with biometric activity during approved leave
+                                                    </CardDescription>
+                                                </div>
+                                                <Link
+                                                    href="/attendance/review?leave_conflict=yes&verified=pending"
+                                                    className="text-sm text-primary hover:underline flex items-center gap-1"
+                                                >
+                                                    Review All <ExternalLink className="h-3 w-3" />
+                                                </Link>
+                                            </div>
+                                        </CardHeader>
+                                        <CardContent>
+                                            <div className="space-y-3">
+                                                {leaveConflicts.records.slice(0, 5).map((record) => (
+                                                    <div
+                                                        key={record.id}
+                                                        className="flex items-center justify-between p-3 bg-white dark:bg-gray-900 rounded-lg border border-amber-200 dark:border-amber-800"
+                                                    >
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="font-medium text-sm">{record.user_name}</span>
+                                                                <Badge variant="outline" className="text-xs">
+                                                                    {record.leave_type}
+                                                                </Badge>
+                                                            </div>
+                                                            <div className="text-xs text-muted-foreground mt-1">
+                                                                <span>Worked on {new Date(record.shift_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                                                                <span className="mx-1">•</span>
+                                                                <span>Leave: {new Date(record.leave_start).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - {new Date(record.leave_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                                            </div>
+                                                        </div>
+                                                        <Link
+                                                            href={`/attendance/review?verify=${record.id}`}
+                                                            className="text-xs text-primary hover:underline"
+                                                        >
+                                                            Review
+                                                        </Link>
+                                                    </div>
+                                                ))}
+                                                {leaveConflicts.total > 5 && (
+                                                    <p className="text-xs text-muted-foreground text-center pt-2">
+                                                        +{leaveConflicts.total - 5} more conflicts pending review
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </CardContent>
+                                    </Card>
+                                )}
 
                                 {/* Leave Credits Widget */}
                                 {leaveCredits && (
