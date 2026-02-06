@@ -44,7 +44,7 @@ import { Clock, AlertCircle, Users, Calendar, Check, Search, CheckCircle, Pencil
 import { Switch } from '@/components/ui/switch';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
-import { index as attendanceIndex, dailyRoster, generate as generateAttendance, verify, requestUndertimeApproval, approveUndertime } from '@/routes/attendance';
+import { hub as attendanceHub, dailyRoster, generate as generateAttendance, verify, requestUndertimeApproval, approveUndertime } from '@/routes/attendance';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 
 interface Schedule {
@@ -340,8 +340,8 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const { title, breadcrumbs } = usePageMeta({
         title: `Daily Roster - ${dayName}`,
         breadcrumbs: [
-            { title: 'Attendance', href: attendanceIndex().url },
-            { title: 'Daily Roster', href: dailyRoster().url },
+            { title: 'Attendance', href: attendanceHub().url },
+            { title: 'Daily Roster' },
         ],
     });
 

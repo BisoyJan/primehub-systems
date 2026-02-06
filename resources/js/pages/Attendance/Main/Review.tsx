@@ -347,7 +347,7 @@ export default function AttendanceReview() {
         title: "Review Flagged Records",
         breadcrumbs: [
             { title: "Attendance", href: "/attendance" },
-            { title: "Review", href: "/attendance/review" },
+            { title: "Review" },
         ],
     });
 

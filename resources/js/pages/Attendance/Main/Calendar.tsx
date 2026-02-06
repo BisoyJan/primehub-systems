@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight, Check, ChevronsUpDown, Calendar as CalendarIcon, ShieldCheck, X, CheckCircle } from "lucide-react";
 import {
-    index as attendanceIndex,
+    hub as attendanceHub,
     calendar as attendanceCalendar,
     review as attendanceReview,
     quickApprove as attendanceQuickApprove,
@@ -124,8 +124,8 @@ export default function AttendanceCalendar() {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Attendance Calendar',
         breadcrumbs: [
-            { title: 'Attendance', href: attendanceIndex().url },
-            { title: 'Calendar', href: attendanceCalendar().url },
+            { title: 'Attendance', href: attendanceHub().url },
+            { title: 'Calendar' },
         ],
     });
 

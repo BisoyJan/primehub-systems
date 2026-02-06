@@ -47,6 +47,7 @@ import {
 } from "@/components/ui/dialog";
 import {
     index as attendanceIndex,
+    hub as attendanceHub,
     calendar as attendanceCalendar,
     create as attendanceCreate,
     importMethod as attendanceImport,
@@ -176,8 +177,11 @@ export default function AttendanceIndex() {
     const isTeamLead = userRole === 'Team Lead';
 
     const { title, breadcrumbs } = usePageMeta({
-        title: "Attendance",
-        breadcrumbs: [{ title: "Attendance", href: attendanceIndex().url }],
+        title: "Attendance Records",
+        breadcrumbs: [
+            { title: "Attendance", href: attendanceHub().url },
+            { title: "Records" }
+        ],
     });
 
     useFlashMessage();
