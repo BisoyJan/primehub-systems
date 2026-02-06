@@ -4,6 +4,7 @@ use App\Http\Controllers\AccountController;
 use App\Http\Controllers\ActivityLogController;
 use App\Http\Controllers\AttendanceController;
 use App\Http\Controllers\AttendancePointController;
+use App\Http\Controllers\AttendanceToolsController;
 use App\Http\Controllers\AttendanceUploadController;
 use App\Http\Controllers\BiometricAnomalyController;
 use App\Http\Controllers\BiometricExportController;
@@ -226,6 +227,11 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::get('employee-schedules/user/{userId}/schedules', [EmployeeScheduleController::class, 'getUserSchedules'])
         ->middleware('permission:schedules.view')
         ->name('employee-schedules.getUserSchedules');
+
+    // Attendance Tools Hub
+    Route::get('attendance-tools', [AttendanceToolsController::class, 'index'])
+        ->middleware('permission:biometric.view')
+        ->name('attendance-tools.index');
 
     // Biometric Records
     Route::prefix('biometric-records')->name('biometric-records.')
