@@ -212,6 +212,19 @@ export default function Create({
         return format(date, 'yyyy-MM-dd');
     };
 
+    // Get date constraints for Solo Parent Leave (2 weeks back for start, 1 month ahead for end)
+    const getSplMinDate = (): string => {
+        const date = new Date();
+        date.setDate(date.getDate() - 14); // 2 weeks ago
+        return format(date, 'yyyy-MM-dd');
+    };
+
+    const getSplMaxEndDate = (): string => {
+        const date = new Date();
+        date.setMonth(date.getMonth() + 1); // 1 month from now
+        return format(date, 'yyyy-MM-dd');
+    };
+
     // Handle start date change with weekend validation
     const handleStartDateChange = (value: string) => {
         if (isWeekend(value)) {
@@ -1338,8 +1351,8 @@ export default function Create({
                                         onChange={(value) => handleStartDateChange(value)}
                                         placeholder="Select start date"
                                         className={weekendError.start ? 'border-red-500' : ''}
-                                        minDate={data.leave_type === 'SL' ? getSlMinDate() : undefined}
-                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
+                                        minDate={data.leave_type === 'SL' ? getSlMinDate() : data.leave_type === 'SPL' ? getSplMinDate() : undefined}
+                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : undefined}
                                     />
                                     {weekendError.start && (
                                         <p className="text-sm text-red-500">{weekendError.start}</p>
@@ -1349,6 +1362,8 @@ export default function Create({
                                     )}
                                     {data.leave_type === 'SL' ? (
                                         <p className="text-xs text-muted-foreground">Sick Leave: Select from last 3 weeks to 1 month ahead</p>
+                                    ) : data.leave_type === 'SPL' ? (
+                                        <p className="text-xs text-muted-foreground">Solo Parent Leave: Select from last 2 weeks to 1 month ahead</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
@@ -1363,8 +1378,8 @@ export default function Create({
                                         onChange={(value) => handleEndDateChange(value)}
                                         placeholder="Select end date"
                                         className={weekendError.end ? 'border-red-500' : ''}
-                                        minDate={data.start_date || (data.leave_type === 'SL' ? getSlMinDate() : undefined)}
-                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : undefined}
+                                        minDate={data.start_date || (data.leave_type === 'SL' ? getSlMinDate() : data.leave_type === 'SPL' ? getSplMinDate() : undefined)}
+                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : undefined}
                                         defaultMonth={data.start_date || undefined}
                                     />
                                     {weekendError.end && (
@@ -1375,6 +1390,8 @@ export default function Create({
                                     )}
                                     {data.leave_type === 'SL' ? (
                                         <p className="text-xs text-muted-foreground">Sick Leave: Up to 1 month from today</p>
+                                    ) : data.leave_type === 'SPL' ? (
+                                        <p className="text-xs text-muted-foreground">Solo Parent Leave: Up to 1 month from today</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
