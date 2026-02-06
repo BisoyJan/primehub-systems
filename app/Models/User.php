@@ -8,18 +8,25 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Fortify\TwoFactorAuthenticatable;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class User extends Authenticatable
 {
     /** @use HasFactory<\Database\Factories\UserFactory> */
-    use HasFactory, Notifiable, TwoFactorAuthenticatable, LogsActivity;
+    use HasFactory, LogsActivity, Notifiable, TwoFactorAuthenticatable;
 
     public function getActivitylogOptions(): LogOptions
     {
         return LogOptions::defaults()
             ->logAll()
+            ->logExcept([
+                'password',
+                'remember_token',
+                'two_factor_secret',
+                'two_factor_recovery_codes',
+                'two_factor_confirmed_at',
+            ])
             ->logOnlyDirty()
             ->dontSubmitEmptyLogs();
     }
@@ -85,9 +92,6 @@ class User extends Authenticatable
 
     /**
      * Capitalize a name string properly (first letter uppercase, rest lowercase for each word).
-     *
-     * @param string|null $value
-     * @return string|null
      */
     protected function capitalizeName(?string $value): ?string
     {
@@ -132,16 +136,15 @@ class User extends Authenticatable
 
     /**
      * Get the user's full name.
-     *
-     * @return string
      */
     public function getNameAttribute(): string
     {
         $name = $this->first_name;
-        if (!empty($this->middle_name)) {
-            $name .= ' ' . $this->middle_name . '.';
+        if (! empty($this->middle_name)) {
+            $name .= ' '.$this->middle_name.'.';
         }
-        $name .= ' ' . $this->last_name;
+        $name .= ' '.$this->last_name;
+
         return $name;
     }
 
@@ -225,9 +228,6 @@ class User extends Authenticatable
 
     /**
      * Check if user has a specific permission
-     *
-     * @param string $permission
-     * @return bool
      */
     public function hasPermission(string $permission): bool
     {
@@ -236,9 +236,6 @@ class User extends Authenticatable
 
     /**
      * Check if user has any of the specified permissions
-     *
-     * @param array $permissions
-     * @return bool
      */
     public function hasAnyPermission(array $permissions): bool
     {
@@ -247,9 +244,6 @@ class User extends Authenticatable
 
     /**
      * Check if user has all of the specified permissions
-     *
-     * @param array $permissions
-     * @return bool
      */
     public function hasAllPermissions(array $permissions): bool
     {
@@ -258,9 +252,6 @@ class User extends Authenticatable
 
     /**
      * Check if user has a specific role
-     *
-     * @param string|array $roles
-     * @return bool
      */
     public function hasRole(string|array $roles): bool
     {
@@ -269,8 +260,6 @@ class User extends Authenticatable
 
     /**
      * Get all permissions for this user
-     *
-     * @return array
      */
     public function getPermissions(): array
     {
@@ -279,8 +268,6 @@ class User extends Authenticatable
 
     /**
      * Check if the user is soft deleted (marked for deletion).
-     *
-     * @return bool
      */
     public function isSoftDeleted(): bool
     {
@@ -289,8 +276,6 @@ class User extends Authenticatable
 
     /**
      * Check if the deletion is pending confirmation.
-     *
-     * @return bool
      */
     public function isDeletionPending(): bool
     {
@@ -299,8 +284,6 @@ class User extends Authenticatable
 
     /**
      * Check if the deletion has been confirmed.
-     *
-     * @return bool
      */
     public function isDeletionConfirmed(): bool
     {

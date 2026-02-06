@@ -37,6 +37,7 @@ class ActivityLogControllerTest extends TestCase
                 ->component('Admin/ActivityLogs/Index')
                 ->has('activities')
                 ->has('filters')
+                ->has('causers')
             );
     }
 
@@ -245,6 +246,136 @@ class ActivityLogControllerTest extends TestCase
                 ->where('filters.search', 'station')
                 ->where('filters.event', 'created')
                 ->where('filters.causer', 'Target')
+            );
+    }
+
+    public function test_index_passes_causers_list(): void
+    {
+        $otherUser = User::factory()->create([
+            'first_name' => 'Alice',
+            'last_name' => 'Wonder',
+        ]);
+
+        activity()
+            ->causedBy($this->user)
+            ->log('Activity by main user');
+
+        activity()
+            ->causedBy($otherUser)
+            ->log('Activity by other user');
+
+        $response = $this->actingAs($this->user)
+            ->get(route('activity-logs.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('causers')
+            );
+    }
+
+    public function test_index_sanitizes_sensitive_fields_from_properties(): void
+    {
+        // Clear any activities created during setUp (e.g., user creation)
+        Activity::query()->delete();
+
+        activity()
+            ->causedBy($this->user)
+            ->withProperties([
+                'old' => [
+                    'email' => 'old@example.com',
+                    'password' => 'hashed_old_password',
+                    'remember_token' => 'old_token',
+                ],
+                'attributes' => [
+                    'email' => 'new@example.com',
+                    'password' => 'hashed_new_password',
+                    'remember_token' => 'new_token',
+                ],
+            ])
+            ->event('updated')
+            ->log('User updated');
+
+        $response = $this->actingAs($this->user)
+            ->get(route('activity-logs.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('activities.data.0', fn (Assert $item) => $item
+                    ->has('properties.old', fn (Assert $old) => $old
+                        ->has('email')
+                        ->missing('password')
+                        ->missing('remember_token')
+                    )
+                    ->has('properties.attributes', fn (Assert $attrs) => $attrs
+                        ->has('email')
+                        ->missing('password')
+                        ->missing('remember_token')
+                    )
+                    ->etc()
+                )
+            );
+    }
+
+    public function test_export_downloads_csv(): void
+    {
+        activity()
+            ->causedBy($this->user)
+            ->event('created')
+            ->log('Test export activity');
+
+        $response = $this->actingAs($this->user)
+            ->get(route('activity-logs.export'));
+
+        $response->assertStatus(200)
+            ->assertHeader('content-type', 'text/csv; charset=UTF-8')
+            ->assertDownload();
+    }
+
+    public function test_export_respects_filters(): void
+    {
+        activity()
+            ->causedBy($this->user)
+            ->event('created')
+            ->log('Created something');
+
+        activity()
+            ->causedBy($this->user)
+            ->event('deleted')
+            ->log('Deleted something');
+
+        $response = $this->actingAs($this->user)
+            ->get(route('activity-logs.export', ['event' => 'created']));
+
+        $response->assertStatus(200);
+
+        $csv = $response->streamedContent();
+        $this->assertStringContainsString('Created something', $csv);
+        $this->assertStringNotContainsString('Deleted something', $csv);
+    }
+
+    public function test_search_does_not_break_event_filter(): void
+    {
+        activity()
+            ->causedBy($this->user)
+            ->event('created')
+            ->log('Created a resource');
+
+        activity()
+            ->causedBy($this->user)
+            ->event('updated')
+            ->log('Updated a resource');
+
+        // Search + event filter combined should scope correctly
+        $response = $this->actingAs($this->user)
+            ->get(route('activity-logs.index', [
+                'search' => 'resource',
+                'event' => 'created',
+            ]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('filters.search', 'resource')
+                ->where('filters.event', 'created')
             );
     }
 }

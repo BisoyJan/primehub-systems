@@ -155,6 +155,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::get('activity-logs', [ActivityLogController::class, 'index'])
         ->middleware('permission:activity_logs.view')
         ->name('activity-logs.index');
+    Route::get('activity-logs/export', [ActivityLogController::class, 'export'])
+        ->middleware('permission:activity_logs.view')
+        ->name('activity-logs.export');
 
     // PC Transfer
     Route::prefix('pc-transfers')->name('pc-transfers.')
