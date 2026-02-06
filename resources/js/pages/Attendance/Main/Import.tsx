@@ -51,8 +51,8 @@ import {
     TooltipTrigger,
 } from "@/components/ui/tooltip";
 import {
+    hub as attendanceHub,
     index as attendanceIndex,
-    importMethod as attendanceImport,
     upload as attendanceUpload,
     previewUpload as attendancePreviewUpload,
 } from "@/routes/attendance";
@@ -143,8 +143,8 @@ export default function AttendanceImport() {
     const { title, breadcrumbs } = usePageMeta({
         title: "Import Attendance",
         breadcrumbs: [
-            { title: "Attendance", href: attendanceIndex().url },
-            { title: "Import", href: attendanceImport().url },
+            { title: "Attendance", href: attendanceHub().url },
+            { title: "Import" },
         ],
     });
 

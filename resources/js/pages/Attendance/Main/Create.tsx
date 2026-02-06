@@ -23,7 +23,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { AlertCircle, Check, CheckCircle, ChevronsUpDown, Clock, Repeat, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageMeta, usePermission } from '@/hooks';
-import { index as attendanceIndex, create as attendanceCreate, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
+import { hub as attendanceHub, index as attendanceIndex, store as attendanceStore, bulkStore as attendanceBulkStore } from '@/routes/attendance';
 import { Switch } from '@/components/ui/switch';
 
 interface User {
@@ -61,8 +61,8 @@ export default function Create({ users, campaigns }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Manual Attendance',
         breadcrumbs: [
-            { title: 'Attendance', href: attendanceIndex().url },
-            { title: 'Manual Entry', href: attendanceCreate().url },
+            { title: 'Attendance', href: attendanceHub().url },
+            { title: 'Manual Entry' },
         ],
     });
 

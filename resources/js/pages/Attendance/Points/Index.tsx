@@ -1507,9 +1507,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <TableCell className="text-right">
                                                 <div className="flex items-center justify-end gap-1">
                                                     <Button
-                                                        variant="ghost"
+                                                        variant="outline"
                                                         size="icon"
-                                                        className="h-8 w-8 text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                                                        className="h-8 w-8 text-blue-600 hover:text-blue-700 border-blue-300"
                                                         onClick={() => viewUserDetails(point.user.id, point.shift_date)}
                                                         title="View User Details"
                                                     >
@@ -1519,7 +1519,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                         <>
                                                             <Can permission="attendance_points.edit">
                                                                 <Button
-                                                                    variant="ghost"
+                                                                    variant="outline"
                                                                     size="icon"
                                                                     className="h-8 w-8"
                                                                     onClick={() => openEditDialog(point)}
@@ -1530,9 +1530,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                             </Can>
                                                             <Can permission="attendance_points.delete">
                                                                 <Button
-                                                                    variant="ghost"
+                                                                    variant="outline"
                                                                     size="icon"
-                                                                    className="h-8 w-8 text-red-600 hover:text-red-800 dark:text-red-400"
+                                                                    className="h-8 w-8 text-red-600 hover:text-red-700 border-red-300"
                                                                     onClick={() => openDeleteDialog(point)}
                                                                     title="Delete"
                                                                 >
@@ -1544,9 +1544,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                     {!point.is_expired && !point.is_excused && (
                                                         <Can permission="attendance_points.excuse">
                                                             <Button
-                                                                variant="ghost"
+                                                                variant="outline"
                                                                 size="icon"
-                                                                className="h-8 w-8 text-green-600 hover:text-green-800 dark:text-green-400"
+                                                                className="h-8 w-8 text-green-600 hover:text-green-700 border-green-300"
                                                                 onClick={() => openExcuseDialog(point)}
                                                                 title="Excuse"
                                                             >
@@ -1557,9 +1557,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                     {!point.is_expired && point.is_excused && (
                                                         <Can permission="attendance_points.excuse">
                                                             <Button
-                                                                variant="ghost"
+                                                                variant="outline"
                                                                 size="icon"
-                                                                className="h-8 w-8 text-red-600 hover:text-red-800 dark:text-red-400"
+                                                                className="h-8 w-8 text-red-600 hover:text-red-700 border-red-300"
                                                                 onClick={() => handleUnexcuse(point.id)}
                                                                 title="Remove Excuse"
                                                             >
@@ -1726,7 +1726,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                         className="flex-1"
                                         onClick={() => viewUserDetails(point.user.id, point.shift_date)}
                                     >
-                                        <Eye className="h-4 w-4 mr-1" />
+                                        <Eye className="h-4 w-4 mr-2" />
                                         View
                                     </Button>
                                     {point.is_manual && (
@@ -1741,7 +1741,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                         openEditDialog(point);
                                                     }}
                                                 >
-                                                    <Pencil className="h-4 w-4 mr-1" />
+                                                    <Pencil className="h-4 w-4 mr-2" />
                                                     Edit
                                                 </Button>
                                             </Can>
@@ -1749,13 +1749,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                                 <Button
                                                     variant="outline"
                                                     size="sm"
-                                                    className="flex-1 text-red-600 hover:text-red-800 dark:text-red-400 border-red-200"
+                                                    className="flex-1 text-red-600 hover:text-red-700 border-red-300"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         openDeleteDialog(point);
                                                     }}
                                                 >
-                                                    <Trash2 className="h-4 w-4 mr-1" />
+                                                    <Trash2 className="h-4 w-4 mr-2" />
                                                     Delete
                                                 </Button>
                                             </Can>
@@ -1766,13 +1766,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="flex-1"
+                                                className="flex-1 text-green-600 hover:text-green-700 border-green-300"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     openExcuseDialog(point);
                                                 }}
                                             >
-                                                <CheckCircle className="h-4 w-4 mr-1" />
+                                                <CheckCircle className="h-4 w-4 mr-2" />
                                                 Excuse
                                             </Button>
                                         </Can>
@@ -1782,13 +1782,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                             <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="flex-1"
+                                                className="flex-1 text-red-600 hover:text-red-700 border-red-300"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleUnexcuse(point.id);
                                                 }}
                                             >
-                                                <XCircle className="h-4 w-4 mr-1" />
+                                                <XCircle className="h-4 w-4 mr-2" />
                                                 Remove
                                             </Button>
                                         </Can>

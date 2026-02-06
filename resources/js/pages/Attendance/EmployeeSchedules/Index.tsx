@@ -693,20 +693,23 @@ export default function EmployeeSchedulesIndex() {
                                                 <div className="flex gap-2">
                                                     <Can permission="schedules.edit">
                                                         <Button
-                                                            variant="ghost"
-                                                            size="sm"
+                                                            variant="outline"
+                                                            size="icon"
                                                             onClick={() => router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url)}
+                                                            title="Edit Schedule"
                                                         >
                                                             <Edit className="h-4 w-4" />
                                                         </Button>
                                                     </Can>
                                                     <Can permission="schedules.delete">
                                                         <Button
-                                                            variant="ghost"
-                                                            size="sm"
+                                                            variant="outline"
+                                                            size="icon"
                                                             onClick={() => handleDelete(schedule.id)}
+                                                            title="Delete Schedule"
+                                                            className="text-red-600 hover:text-red-700 border-red-300"
                                                         >
-                                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                                            <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                     </Can>
                                                 </div>
@@ -818,8 +821,10 @@ export default function EmployeeSchedulesIndex() {
                                             variant="outline"
                                             size="sm"
                                             onClick={() => handleDelete(schedule.id)}
+                                            className="text-red-600 hover:text-red-700 border-red-300"
                                         >
-                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete
                                         </Button>
                                     </Can>
                                 </div>
@@ -1236,26 +1241,29 @@ export default function EmployeeSchedulesIndex() {
                                             <div className="flex gap-2 justify-end">
                                                 <Can permission="schedules.edit">
                                                     <Button
-                                                        size="sm"
-                                                        variant="ghost"
+                                                        size="icon"
+                                                        variant="outline"
                                                         onClick={() => {
                                                             setScheduleDetailsDialogOpen(false);
                                                             router.get(employeeSchedulesEdit({ employee_schedule: schedule.id }).url);
                                                         }}
+                                                        title="Edit Schedule"
                                                     >
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
                                                 </Can>
                                                 <Can permission="schedules.delete">
                                                     <Button
-                                                        size="sm"
-                                                        variant="ghost"
+                                                        size="icon"
+                                                        variant="outline"
                                                         onClick={() => {
                                                             setScheduleDetailsDialogOpen(false);
                                                             handleDelete(schedule.id);
                                                         }}
+                                                        title="Delete Schedule"
+                                                        className="text-red-600 hover:text-red-700 border-red-300"
                                                     >
-                                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                                        <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 </Can>
                                             </div>

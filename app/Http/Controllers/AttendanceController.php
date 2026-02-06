@@ -42,6 +42,25 @@ class AttendanceController extends Controller
     }
 
     /**
+     * Display the attendance hub page for non-restricted roles.
+     * Restricted roles (Agent, IT, Utility) are redirected to the main index.
+     */
+    public function hub()
+    {
+        $this->authorize('viewAny', \App\Models\Attendance::class);
+
+        $user = auth()->user();
+        $restrictedRoles = ['Agent', 'IT', 'Utility'];
+
+        // Restricted roles go directly to the main attendance index
+        if (in_array($user->role, $restrictedRoles)) {
+            return redirect()->route('attendance.index');
+        }
+
+        return Inertia::render('Attendance/Main/Hub');
+    }
+
+    /**
      * Recalculate GBRO expiration dates for a user after points have been modified.
      * This ensures GBRO dates are always accurate when points are added/removed.
      */

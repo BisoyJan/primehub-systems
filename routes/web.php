@@ -1,40 +1,40 @@
 <?php
 
+use App\Http\Controllers\AccountController;
+use App\Http\Controllers\ActivityLogController;
+use App\Http\Controllers\AttendanceController;
+use App\Http\Controllers\AttendancePointController;
+use App\Http\Controllers\AttendanceToolsController;
+use App\Http\Controllers\AttendanceUploadController;
+use App\Http\Controllers\BiometricAnomalyController;
+use App\Http\Controllers\BiometricExportController;
+use App\Http\Controllers\BiometricRecordController;
+use App\Http\Controllers\BiometricReprocessingController;
+use App\Http\Controllers\BiometricRetentionPolicyController;
+use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DiskSpecsController;
+use App\Http\Controllers\EmployeeScheduleController;
+use App\Http\Controllers\FormRequestRetentionPolicyController;
+use App\Http\Controllers\ItConcernController;
+use App\Http\Controllers\LeaveRequestController;
+use App\Http\Controllers\MedicationRequestController;
+use App\Http\Controllers\MonitorSpecsController;
+use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PcMaintenanceController;
+use App\Http\Controllers\PcSpecController;
+use App\Http\Controllers\PcTransferController;
+use App\Http\Controllers\ProcessorSpecsController;
+use App\Http\Controllers\RamSpecsController;
 use App\Http\Controllers\Station\CampaignController;
 use App\Http\Controllers\Station\SiteController;
 use App\Http\Controllers\Station\StationController;
-use App\Http\Controllers\ProcessorSpecsController;
-use App\Http\Controllers\DiskSpecsController;
-use App\Http\Controllers\RamSpecsController;
-use App\Http\Controllers\MonitorSpecsController;
-use App\Http\Controllers\PcSpecController;
 use App\Http\Controllers\StockController;
-use App\Http\Controllers\AccountController;
-use App\Http\Controllers\PcTransferController;
-use App\Http\Controllers\PcMaintenanceController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\AttendanceController;
-use App\Http\Controllers\EmployeeScheduleController;
-use App\Http\Controllers\BiometricRecordController;
-use App\Http\Controllers\BiometricReprocessingController;
-use App\Http\Controllers\BiometricAnomalyController;
-use App\Http\Controllers\BiometricExportController;
-use App\Http\Controllers\AttendanceUploadController;
-use App\Http\Controllers\AttendancePointController;
-use App\Http\Controllers\BiometricRetentionPolicyController;
-use App\Http\Controllers\FormRequestRetentionPolicyController;
-use App\Http\Controllers\LeaveRequestController;
-use App\Http\Controllers\ItConcernController;
-use App\Http\Controllers\MedicationRequestController;
-use App\Http\Controllers\NotificationController;
-use App\Http\Controllers\ActivityLogController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 Route::get('/', function () {
     return redirect()->route('login');
 })->name('home');
-
 
 Route::middleware(['auth', 'verified'])->group(function () {
     // Pending approval page - accessible to authenticated but unapproved users
@@ -43,6 +43,7 @@ Route::middleware(['auth', 'verified'])->group(function () {
         if (auth()->user()->is_approved) {
             return redirect()->route('dashboard');
         }
+
         return Inertia::render('auth/pending-approval');
     })->name('pending-approval');
 });
@@ -178,7 +179,8 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::prefix('attendance')->name('attendance.')
         ->middleware('permission:attendance.view')
         ->group(function () {
-            Route::get('/', [AttendanceController::class, 'index'])->name('index');
+            Route::get('/', [AttendanceController::class, 'hub'])->name('hub');
+            Route::get('/records', [AttendanceController::class, 'index'])->name('index');
             Route::get('/calendar/{user?}', [AttendanceController::class, 'calendar'])->name('calendar');
             Route::get('/create', [AttendanceController::class, 'create'])->name('create')->middleware('permission:attendance.create');
             Route::post('/', [AttendanceController::class, 'store'])->name('store')->middleware('permission:attendance.create');
@@ -225,6 +227,11 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::get('employee-schedules/user/{userId}/schedules', [EmployeeScheduleController::class, 'getUserSchedules'])
         ->middleware('permission:schedules.view')
         ->name('employee-schedules.getUserSchedules');
+
+    // Attendance Tools Hub
+    Route::get('attendance-tools', [AttendanceToolsController::class, 'index'])
+        ->middleware('permission:biometric.view')
+        ->name('attendance-tools.index');
 
     // Biometric Records
     Route::prefix('biometric-records')->name('biometric-records.')
@@ -365,7 +372,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/{leaveRequest}/approve-tl', [LeaveRequestController::class, 'approveTL'])->name('approve-tl');
             Route::post('/{leaveRequest}/deny-tl', [LeaveRequestController::class, 'denyTL'])->name('deny-tl');
             Route::delete('/{leaveRequest}', [LeaveRequestController::class, 'destroy'])->name('destroy');
-    });
+        });
 
     // Form Requests - IT Concerns
     Route::prefix('form-requests/it-concerns')->name('it-concerns.')
@@ -431,7 +438,5 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     });
 });
 
-require __DIR__ . '/settings.php';
-require __DIR__ . '/auth.php';
-
-
+require __DIR__.'/settings.php';
+require __DIR__.'/auth.php';

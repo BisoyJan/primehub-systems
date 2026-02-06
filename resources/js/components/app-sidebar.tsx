@@ -21,8 +21,9 @@ import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
 import { index as medicationRequestsIndex } from '@/routes/medication-requests'
+import { index as attendanceToolsIndex } from '@/routes/attendance-tools'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, CreditCard, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, RefreshCw, AlertTriangle, Download, Shield, FileText, Award, Plane, LucideIcon, AlertCircle, Pill, Activity } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, CreditCard, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -149,40 +150,16 @@ const getNavigationConfig = (userId: number, userRole: string) => {
                     permission: 'biometric.view',
                 },
                 {
-                    title: 'Recent Uploads',
-                    href: '/attendance-uploads',
-                    icon: FileText,
-                    permission: 'biometric.view',
-                },
-                {
                     title: 'Attendance Points',
                     href: attendancePointsHref,
                     icon: Award,
                     permission: 'attendance.view',
                 },
                 {
-                    title: 'Reprocess Attendance',
-                    href: '/biometric-reprocessing',
-                    icon: RefreshCw,
-                    permission: 'biometric.reprocess',
-                },
-                {
-                    title: 'Anomaly Detection',
-                    href: '/biometric-anomalies',
-                    icon: AlertTriangle,
-                    permission: 'biometric.anomalies',
-                },
-                {
-                    title: 'Export Records',
-                    href: '/biometric-export',
-                    icon: Download,
-                    permission: 'biometric.export',
-                },
-                {
-                    title: 'Retention Policies',
-                    href: '/biometric-retention-policies',
-                    icon: Shield,
-                    permission: 'biometric.retention',
+                    title: 'Attendance Tools',
+                    href: attendanceToolsIndex.url(),
+                    icon: Settings,
+                    permission: 'biometric.view',
                 },
             ],
         },
