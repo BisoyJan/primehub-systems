@@ -763,44 +763,49 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Link href={leaveShowRoute(request.id).url}>
-                                                        <Button size="sm" variant="ghost">
+                                                        <Button size="icon" variant="outline" title="View Details">
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     </Link>
                                                     {/* Medical/Supporting Document Button - For SL, BL, and UPTO with uploaded cert */}
                                                     {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && isAdmin && (
                                                         <Button
-                                                            size="sm"
-                                                            variant="ghost"
+                                                            size="icon"
+                                                            variant="outline"
                                                             onClick={() => handleViewMedicalCert(request.id, request.user.name)}
                                                             title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : request.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}`}
+                                                            className="text-green-600 hover:text-green-700 border-green-300"
                                                         >
-                                                            <FileImage className="h-4 w-4 text-green-600" />
+                                                            <FileImage className="h-4 w-4" />
                                                         </Button>
                                                     )}
                                                     {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
                                                         <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
-                                                            <Button size="sm" variant="ghost">
+                                                            <Button size="icon" variant="outline" title="Edit Request">
                                                                 <Pencil className="h-4 w-4" />
                                                             </Button>
                                                         </Link>
                                                     )}
                                                     {request.status === 'pending' && auth.user.id === request.user.id && (
                                                         <Button
-                                                            size="sm"
-                                                            variant="ghost"
+                                                            size="icon"
+                                                            variant="outline"
                                                             onClick={() => handleCancelRequest(request.id)}
+                                                            title="Cancel Request"
+                                                            className="text-orange-600 hover:text-orange-700 border-orange-300"
                                                         >
-                                                            <Ban className="h-4 w-4 text-red-500" />
+                                                            <Ban className="h-4 w-4" />
                                                         </Button>
                                                     )}
                                                     {can('leave.delete') && (
                                                         <Button
-                                                            size="sm"
-                                                            variant="ghost"
+                                                            size="icon"
+                                                            variant="outline"
                                                             onClick={() => handleDeleteRequest(request.id)}
+                                                            title="Delete Request"
+                                                            className="text-red-600 hover:text-red-700 border-red-300"
                                                         >
-                                                            <Trash2 className="h-4 w-4 text-red-500" />
+                                                            <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                     )}
                                                 </div>
@@ -902,9 +907,9 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                             size="sm"
                                             variant="outline"
                                             onClick={() => handleCancelRequest(request.id)}
-                                            className="flex-1"
+                                            className="flex-1 text-orange-600 hover:text-orange-700 border-orange-300"
                                         >
-                                            <Ban className="mr-2 h-4 w-4 text-red-500" />
+                                            <Ban className="mr-2 h-4 w-4" />
                                             Cancel
                                         </Button>
                                     )}
@@ -913,9 +918,9 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                             size="sm"
                                             variant="outline"
                                             onClick={() => handleDeleteRequest(request.id)}
-                                            className="flex-1"
+                                            className="flex-1 text-red-600 hover:text-red-700 border-red-300"
                                         >
-                                            <Trash2 className="mr-2 h-4 w-4 text-red-500" />
+                                            <Trash2 className="mr-2 h-4 w-4" />
                                             Delete
                                         </Button>
                                     )}

@@ -25,7 +25,7 @@ import {
     bulkUnapprove as accountsBulkUnapprove,
 } from "@/routes/accounts";
 import { toast } from "sonner";
-import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck, Mail, AlertTriangle } from "lucide-react";
+import { Plus, RefreshCw, Search, RotateCcw, CheckCircle, XCircle, CheckSquare, XSquare, X, UserX, Play, Pause, Check, ChevronsUpDown, UserCheck, Mail, AlertTriangle, Pencil, Trash2, UserCheck2, UserMinus } from "lucide-react";
 
 // New reusable hooks and components
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
@@ -475,6 +475,14 @@ export default function AccountIndex() {
                 className: 'bg-green-100 text-green-800 border-green-200'
             };
         }
+        // User has hired_date but is not approved = Resigned employee
+        if (user.hired_date && !user.is_approved) {
+            return {
+                label: 'Resigned',
+                className: 'bg-purple-100 text-purple-800 border-purple-200'
+            };
+        }
+        // User has no hired_date and is not approved = Pending applicant
         return {
             label: 'Pending',
             className: 'bg-yellow-100 text-yellow-800 border-yellow-200'
@@ -820,13 +828,13 @@ export default function AccountIndex() {
                                                             <HasRole role={['Super Admin', 'Admin', 'IT']}>
                                                                 <Button
                                                                     variant="outline"
-                                                                    size="sm"
+                                                                    size="icon"
                                                                     onClick={() => handleConfirmDelete(user.id)}
                                                                     disabled={loading || user.id === currentUserId}
                                                                     className="text-red-600 hover:text-red-700 border-red-300"
+                                                                    title="Confirm Delete"
                                                                 >
-                                                                    <CheckCircle className="mr-1 h-4 w-4" />
-                                                                    Confirm Delete
+                                                                    <CheckCircle className="h-4 w-4" />
                                                                 </Button>
                                                             </HasRole>
 
@@ -834,13 +842,13 @@ export default function AccountIndex() {
                                                             <Can permission="accounts.edit">
                                                                 <Button
                                                                     variant="outline"
-                                                                    size="sm"
+                                                                    size="icon"
                                                                     onClick={() => handleRestore(user.id)}
                                                                     disabled={loading}
                                                                     className="text-green-600 hover:text-green-700 border-green-300"
+                                                                    title="Restore Account"
                                                                 >
-                                                                    <RotateCcw className="mr-1 h-4 w-4" />
-                                                                    Restore
+                                                                    <RotateCcw className="h-4 w-4" />
                                                                 </Button>
                                                             </Can>
                                                         </>
@@ -850,13 +858,13 @@ export default function AccountIndex() {
                                                             <HasRole role={['Super Admin', 'Admin', 'HR', 'IT']}>
                                                                 <Button
                                                                     variant="outline"
-                                                                    size="sm"
+                                                                    size="icon"
                                                                     onClick={() => handleRestore(user.id)}
                                                                     disabled={loading}
                                                                     className="text-green-600 hover:text-green-700 border-green-300"
+                                                                    title="Restore Account"
                                                                 >
-                                                                    <RotateCcw className="mr-1 h-4 w-4" />
-                                                                    Restore
+                                                                    <RotateCcw className="h-4 w-4" />
                                                                 </Button>
                                                             </HasRole>
 
@@ -870,11 +878,11 @@ export default function AccountIndex() {
                                                                     trigger={
                                                                         <Button
                                                                             variant="destructive"
-                                                                            size="sm"
+                                                                            size="icon"
                                                                             disabled={loading || user.id === currentUserId}
+                                                                            title="Permanently Delete"
                                                                         >
-                                                                            <XCircle className="mr-1 h-4 w-4" />
-                                                                            Permanently Delete
+                                                                            <XCircle className="h-4 w-4" />
                                                                         </Button>
                                                                     }
                                                                 />
@@ -884,8 +892,8 @@ export default function AccountIndex() {
                                                         <>
                                                             <Can permission="accounts.edit">
                                                                 <Link href={accountsEdit(user.id).url}>
-                                                                    <Button variant="outline" size="sm" disabled={loading}>
-                                                                        Edit
+                                                                    <Button variant="outline" size="icon" disabled={loading} title="Edit Account">
+                                                                        <Pencil className="h-4 w-4" />
                                                                     </Button>
                                                                 </Link>
                                                             </Can>
@@ -894,22 +902,24 @@ export default function AccountIndex() {
                                                                 {user.is_approved ? (
                                                                     <Button
                                                                         variant="outline"
-                                                                        size="sm"
+                                                                        size="icon"
                                                                         onClick={() => handleUnapprove(user)}
                                                                         disabled={loading || user.id === currentUserId}
                                                                         className="text-yellow-600 hover:text-yellow-700 border-yellow-300"
+                                                                        title="Revoke Access"
                                                                     >
-                                                                        Revoke
+                                                                        <UserMinus className="h-4 w-4" />
                                                                     </Button>
                                                                 ) : (
                                                                     <Button
                                                                         variant="outline"
-                                                                        size="sm"
+                                                                        size="icon"
                                                                         onClick={() => handleApprove(user.id)}
                                                                         disabled={loading}
                                                                         className="text-green-600 hover:text-green-700 border-green-300"
+                                                                        title="Approve Account"
                                                                     >
-                                                                        Approve
+                                                                        <UserCheck2 className="h-4 w-4" />
                                                                     </Button>
                                                                 )}
                                                             </Can>
@@ -920,6 +930,17 @@ export default function AccountIndex() {
                                                                     title="Delete User Account"
                                                                     description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? The account will be marked for deletion and require admin confirmation.`}
                                                                     disabled={loading || user.id === currentUserId}
+                                                                    trigger={
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="icon"
+                                                                            disabled={loading || user.id === currentUserId}
+                                                                            className="text-red-600 hover:text-red-700 border-red-300"
+                                                                            title="Delete Account"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    }
                                                                 />
                                                             </Can>
                                                         </>
@@ -1018,7 +1039,7 @@ export default function AccountIndex() {
                                                     disabled={loading || user.id === currentUserId}
                                                     className="w-full text-red-600 hover:text-red-700 border-red-300"
                                                 >
-                                                    <CheckCircle className="mr-1 h-4 w-4" />
+                                                    <CheckCircle className="mr-2 h-4 w-4" />
                                                     Confirm Delete
                                                 </Button>
                                             </HasRole>
@@ -1030,7 +1051,7 @@ export default function AccountIndex() {
                                                     disabled={loading}
                                                     className="w-full text-green-600 hover:text-green-700 border-green-300"
                                                 >
-                                                    <RotateCcw className="mr-1 h-4 w-4" />
+                                                    <RotateCcw className="mr-2 h-4 w-4" />
                                                     Restore Account
                                                 </Button>
                                             </Can>
@@ -1065,7 +1086,7 @@ export default function AccountIndex() {
                                                             className="w-full"
                                                             disabled={loading || user.id === currentUserId}
                                                         >
-                                                            <XCircle className="mr-1 h-4 w-4" />
+                                                            <XCircle className="mr-2 h-4 w-4" />
                                                             Permanently Delete
                                                         </Button>
                                                     }
@@ -1078,6 +1099,7 @@ export default function AccountIndex() {
                                                 <Can permission="accounts.edit">
                                                     <Link href={accountsEdit(user.id).url} className="flex-1">
                                                         <Button variant="outline" size="sm" className="w-full" disabled={loading}>
+                                                            <Pencil className="mr-2 h-4 w-4" />
                                                             Edit
                                                         </Button>
                                                     </Link>
@@ -1104,6 +1126,7 @@ export default function AccountIndex() {
                                                         disabled={loading || user.id === currentUserId}
                                                         className="w-full text-yellow-600 hover:text-yellow-700 border-yellow-300"
                                                     >
+                                                        <UserMinus className="mr-2 h-4 w-4" />
                                                         Revoke Approval
                                                     </Button>
                                                 ) : (
@@ -1114,6 +1137,7 @@ export default function AccountIndex() {
                                                         disabled={loading}
                                                         className="w-full text-green-600 hover:text-green-700 border-green-300"
                                                     >
+                                                        <UserCheck2 className="mr-2 h-4 w-4" />
                                                         Approve Account
                                                     </Button>
                                                 )}

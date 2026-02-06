@@ -688,7 +688,6 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                             <TableCell>
                                                 <div>
                                                     <p className="font-medium">{employee.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{employee.email}</p>
                                                 </div>
                                             </TableCell>
                                             <TableCell>
@@ -869,7 +868,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                             </TableCell>
                                             <TableCell className="text-center">
                                                 <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
-                                                    <Button variant="ghost" size="sm">
+                                                    <Button variant="outline" size="icon" title="View History">
                                                         <Eye className="h-4 w-4" />
                                                     </Button>
                                                 </Link>
@@ -901,7 +900,6 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     <div className="flex justify-between items-start">
                                         <div>
                                             <p className="font-medium">{employee.name}</p>
-                                            <p className="text-xs text-muted-foreground">{employee.email}</p>
                                         </div>
                                         <Badge variant={getRoleBadgeVariant(employee.role)}>
                                             {employee.role}

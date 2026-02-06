@@ -368,17 +368,19 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                             <TableCell className="text-right">
                                                 <div className="flex justify-end gap-2">
                                                     <Link href={medicationShowRoute(request.id).url}>
-                                                        <Button variant="ghost" size="sm">
+                                                        <Button variant="outline" size="icon" title="View Details">
                                                             <Eye className="h-4 w-4" />
                                                         </Button>
                                                     </Link>
                                                     <Can permission="medication_requests.delete">
                                                         <Button
-                                                            variant="ghost"
-                                                            size="sm"
+                                                            variant="outline"
+                                                            size="icon"
                                                             onClick={() => handleDelete(request.id)}
+                                                            title="Delete Request"
+                                                            className="text-red-600 hover:text-red-700 border-red-300"
                                                         >
-                                                            <Trash2 className="h-4 w-4 text-red-600" />
+                                                            <Trash2 className="h-4 w-4" />
                                                         </Button>
                                                     </Can>
                                                 </div>
@@ -448,9 +450,9 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                             variant="outline"
                                             size="sm"
                                             onClick={() => handleDelete(request.id)}
-                                            className="flex-1"
+                                            className="flex-1 text-red-600 hover:text-red-700 border-red-300"
                                         >
-                                            <Trash2 className="mr-2 h-4 w-4 text-red-600" />
+                                            <Trash2 className="mr-2 h-4 w-4" />
                                             Delete
                                         </Button>
                                     </Can>

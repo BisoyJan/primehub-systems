@@ -554,12 +554,13 @@ export default function ItConcernsIndex() {
                                                 <Can permission="it_concerns.resolve">
                                                     {concern.status !== 'resolved' && (
                                                         <Button
-                                                            variant="ghost"
-                                                            size="sm"
+                                                            variant="outline"
+                                                            size="icon"
                                                             onClick={() => handleResolve(concern)}
-                                                            title="Quick Resolve"
+                                                            title="Resolve Concern"
+                                                            className="text-green-600 hover:text-green-700 border-green-300"
                                                         >
-                                                            <CheckCircle className="h-4 w-4 text-green-500" />
+                                                            <CheckCircle className="h-4 w-4" />
                                                         </Button>
                                                     )}
                                                 </Can>
@@ -567,10 +568,10 @@ export default function ItConcernsIndex() {
                                                 {/* Edit Button - Global permission OR Owner (pending/in_progress) */}
                                                 {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
                                                     <Button
-                                                        variant="ghost"
-                                                        size="sm"
+                                                        variant="outline"
+                                                        size="icon"
                                                         onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
-                                                        title="Edit"
+                                                        title="Edit Concern"
                                                     >
                                                         <Edit className="h-4 w-4" />
                                                     </Button>
@@ -579,24 +580,26 @@ export default function ItConcernsIndex() {
                                                 {/* Cancel Button - Owner (pending/in_progress) */}
                                                 {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
                                                     <Button
-                                                        variant="ghost"
-                                                        size="sm"
+                                                        variant="outline"
+                                                        size="icon"
                                                         onClick={() => handleCancel(concern)}
                                                         title="Cancel Request"
+                                                        className="text-orange-600 hover:text-orange-700 border-orange-300"
                                                     >
-                                                        <XCircle className="h-4 w-4 text-orange-500" />
+                                                        <XCircle className="h-4 w-4" />
                                                     </Button>
                                                 )}
 
                                                 {/* Delete Button - Global permission OR Owner (pending) */}
                                                 {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
                                                     <Button
-                                                        variant="ghost"
-                                                        size="sm"
+                                                        variant="outline"
+                                                        size="icon"
                                                         onClick={() => handleDelete(concern.id)}
-                                                        title="Delete"
+                                                        title="Delete Concern"
+                                                        className="text-red-600 hover:text-red-700 border-red-300"
                                                     >
-                                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                                        <Trash2 className="h-4 w-4" />
                                                     </Button>
                                                 )}
                                             </div>
@@ -693,8 +696,10 @@ export default function ItConcernsIndex() {
                                         variant="outline"
                                         size="sm"
                                         onClick={() => handleDelete(concern.id)}
+                                        className="text-red-600 hover:text-red-700 border-red-300"
                                     >
-                                        <Trash2 className="h-4 w-4 text-red-500" />
+                                        <Trash2 className="mr-2 h-4 w-4" />
+                                        Delete
                                     </Button>
                                 )}
                             </div>
