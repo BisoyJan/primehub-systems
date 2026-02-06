@@ -31,6 +31,12 @@ class LeaveRequestRequest extends FormRequest
             $maxEndDate = now()->addMonth()->format('Y-m-d');
             $startDateRule = ['required', 'date', 'after_or_equal:' . $minStartDate, 'before_or_equal:' . $maxEndDate];
             $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:' . $maxEndDate];
+        } elseif ($leaveType === 'SPL') {
+            // Solo Parent Leave: start date can be up to 2 weeks ago, end date up to 1 month ahead
+            $minStartDate = now()->subWeeks(2)->format('Y-m-d');
+            $maxEndDate = now()->addMonth()->format('Y-m-d');
+            $startDateRule = ['required', 'date', 'after_or_equal:' . $minStartDate, 'before_or_equal:' . $maxEndDate];
+            $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:' . $maxEndDate];
         } else {
             // Other leave types: start date must be today or future
             $startDateRule = ['required', 'date', 'after_or_equal:today'];
