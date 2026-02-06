@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Attendance extends Model
 {
@@ -43,6 +43,7 @@ class Attendance extends Model
         'overtime_approved_by',
         'is_advised',
         'admin_verified',
+        'is_partially_verified',
         'is_cross_site_bio',
         'verification_notes',
         'notes',
@@ -67,6 +68,7 @@ class Attendance extends Model
         'undertime_approved_at' => 'datetime',
         'is_advised' => 'boolean',
         'admin_verified' => 'boolean',
+        'is_partially_verified' => 'boolean',
         'is_cross_site_bio' => 'boolean',
         'is_set_home' => 'boolean',
         'overtime_approved' => 'boolean',
@@ -196,14 +198,23 @@ class Attendance extends Model
     {
         return $query->where(function ($q) {
             $q->whereIn('status', ['failed_bio_in', 'failed_bio_out', 'ncns', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour', 'needs_manual_review', 'non_work_day'])
-              ->orWhere('is_cross_site_bio', true)
-              ->orWhereNotNull('warnings')
-              ->orWhere(function ($subQ) {
-                  // Include records with unapproved overtime
-                  $subQ->where('overtime_minutes', '>', 0)
-                       ->where('overtime_approved', false);
-              });
+                ->orWhere('is_cross_site_bio', true)
+                ->orWhereNotNull('warnings')
+                ->orWhere(function ($subQ) {
+                    // Include records with unapproved overtime
+                    $subQ->where('overtime_minutes', '>', 0)
+                        ->where('overtime_approved', false);
+                });
         })->where('admin_verified', false);
+    }
+
+    /**
+     * Scope to get partially verified records (verified without time out).
+     */
+    public function scopePartiallyVerified($query)
+    {
+        return $query->where('admin_verified', true)
+            ->where('is_partially_verified', true);
     }
 
     /**
@@ -213,7 +224,7 @@ class Attendance extends Model
     {
         return $query->where(function ($q) {
             $q->where('status', 'needs_manual_review')
-              ->orWhereNotNull('warnings');
+                ->orWhereNotNull('warnings');
         })->where('admin_verified', false);
     }
 
@@ -223,8 +234,8 @@ class Attendance extends Model
     public function scopeSuspiciousPatterns($query)
     {
         return $query->whereNotNull('warnings')
-                     ->where('admin_verified', false)
-                     ->orderBy('shift_date', 'desc');
+            ->where('admin_verified', false)
+            ->orderBy('shift_date', 'desc');
     }
 
     /**
@@ -240,8 +251,8 @@ class Attendance extends Model
             'undertime_more_than_hour',
             'failed_bio_in',
             'failed_bio_out',
-            'needs_manual_review'
-        ]) || !empty($this->warnings);
+            'needs_manual_review',
+        ]) || ! empty($this->warnings);
     }
 
     /**

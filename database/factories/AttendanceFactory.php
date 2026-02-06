@@ -3,11 +3,11 @@
 namespace Database\Factories;
 
 use App\Models\Attendance;
-use App\Models\User;
 use App\Models\EmployeeSchedule;
 use App\Models\Site;
-use Illuminate\Database\Eloquent\Factories\Factory;
+use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
  * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Attendance>
@@ -55,7 +55,7 @@ class AttendanceFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $shiftDate = Carbon::parse($attributes['shift_date']);
-            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attributes['scheduled_time_in']);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$attributes['scheduled_time_in']);
             $actualTimeIn = $scheduledTimeIn->copy()->subMinutes(fake()->numberBetween(1, 10));
 
             return [
@@ -74,7 +74,7 @@ class AttendanceFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $shiftDate = Carbon::parse($attributes['shift_date']);
-            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attributes['scheduled_time_in']);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$attributes['scheduled_time_in']);
             $tardyMinutes = fake()->numberBetween(1, 15);
             $actualTimeIn = $scheduledTimeIn->copy()->addMinutes($tardyMinutes);
 
@@ -94,7 +94,7 @@ class AttendanceFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $shiftDate = Carbon::parse($attributes['shift_date']);
-            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attributes['scheduled_time_in']);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$attributes['scheduled_time_in']);
             $tardyMinutes = fake()->numberBetween(16, 120);
             $actualTimeIn = $scheduledTimeIn->copy()->addMinutes($tardyMinutes);
 
@@ -139,7 +139,7 @@ class AttendanceFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $shiftDate = Carbon::parse($attributes['shift_date']);
-            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attributes['scheduled_time_out']);
+            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$attributes['scheduled_time_out']);
             $undertimeMinutes = fake()->numberBetween(1, 60); // 1-60 minutes early = undertime
             $actualTimeOut = $scheduledTimeOut->copy()->subMinutes($undertimeMinutes);
 
@@ -159,7 +159,7 @@ class AttendanceFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $shiftDate = Carbon::parse($attributes['shift_date']);
-            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attributes['scheduled_time_out']);
+            $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$attributes['scheduled_time_out']);
 
             return [
                 'actual_time_in' => null,
@@ -177,7 +177,7 @@ class AttendanceFactory extends Factory
     {
         return $this->state(function (array $attributes) {
             $shiftDate = Carbon::parse($attributes['shift_date']);
-            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d') . ' ' . $attributes['scheduled_time_in']);
+            $scheduledTimeIn = Carbon::parse($shiftDate->format('Y-m-d').' '.$attributes['scheduled_time_in']);
 
             return [
                 'actual_time_in' => $scheduledTimeIn,
@@ -206,6 +206,18 @@ class AttendanceFactory extends Factory
         return $this->state([
             'admin_verified' => true,
             'verification_notes' => fake()->sentence(),
+        ]);
+    }
+
+    /**
+     * Indicate that the attendance is partially verified (time out pending).
+     */
+    public function partiallyVerified(): static
+    {
+        return $this->state([
+            'admin_verified' => true,
+            'is_partially_verified' => true,
+            'verification_notes' => 'Partially approved - time out pending.',
         ]);
     }
 }

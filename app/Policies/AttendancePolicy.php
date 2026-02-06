@@ -54,6 +54,14 @@ class AttendancePolicy
     }
 
     /**
+     * Determine whether the user can update the model.
+     */
+    public function update(User $user, Attendance $attendance): bool
+    {
+        return $this->permissionService->userHasPermission($user, 'attendance.verify');
+    }
+
+    /**
      * Determine whether the user can review attendance.
      */
     public function review(User $user): bool

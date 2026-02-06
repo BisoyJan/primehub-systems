@@ -204,8 +204,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::get('daily-roster', [AttendanceController::class, 'dailyRoster'])->name('dailyRoster')->middleware('permission:attendance.create');
             Route::post('generate', [AttendanceController::class, 'generateAttendance'])->name('generate')->middleware('permission:attendance.create');
 
-            // Partial Approval (Night Shift completion)
+            // Partial Approval (Time Out pending)
             Route::post('{attendance}/partial-approve', [AttendanceController::class, 'partialApprove'])->name('partialApprove')->middleware('permission:attendance.verify');
+            Route::post('batch-partial-approve', [AttendanceController::class, 'batchPartialApprove'])->name('batchPartialApprove')->middleware('permission:attendance.verify');
 
             // Undertime Approval Workflow
             Route::post('{attendance}/request-undertime-approval', [AttendanceController::class, 'requestUndertimeApproval'])->name('requestUndertimeApproval')->middleware('permission:attendance.request_undertime_approval');

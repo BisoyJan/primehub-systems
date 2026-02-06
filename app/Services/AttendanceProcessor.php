@@ -667,13 +667,30 @@ class AttendanceProcessor
                 // - Clocking in Friday 00:30 = Thursday's shift (shift_date = Thursday)
                 // - Clocking in Saturday 00:30 = Friday's shift (shift_date = Friday)
                 if ($isGraveyardShift) {
-                    $previousDay = $datetime->copy()->subDay();
-                    $previousDayName = $previousDay->format('l');
+                    // For graveyard shifts, distinguish between:
+                    // 1. Late evening records (hour >= 20): These are early TIME IN arrivals
+                    //    for the CURRENT day's graveyard shift → keep on current date
+                    // 2. Morning/daytime records: These are TIME OUT from the PREVIOUS day's shift
+                    //    → assign to previous work day
+                    //
+                    // Example for 00:30-09:30 shift on Monday:
+                    // - Mon 23:15 → early TIME IN for Monday's shift → shift_date = Monday
+                    // - Tue 09:02 → TIME OUT for Monday's shift → shift_date = Monday
+                    // - Tue 23:01 → early TIME IN for Tuesday's shift → shift_date = Tuesday
+                    $isLateEveningRecord = $hour >= 20;
 
-                    // Only assign to previous day if the previous day is a work day
-                    // This ensures we don't create shifts for days the employee doesn't work
-                    if ($schedule->worksOnDay($previousDayName)) {
-                        $shiftDate = $previousDay->format('Y-m-d');
+                    if ($isLateEveningRecord) {
+                        // Early arrival for today's graveyard shift - keep on current date
+                        $shiftDate = $datetime->format('Y-m-d');
+                    } else {
+                        $previousDay = $datetime->copy()->subDay();
+                        $previousDayName = $previousDay->format('l');
+
+                        // Only assign to previous day if the previous day is a work day
+                        // This ensures we don't create shifts for days the employee doesn't work
+                        if ($schedule->worksOnDay($previousDayName)) {
+                            $shiftDate = $previousDay->format('Y-m-d');
+                        }
                     }
                 }
             } else {
@@ -1176,10 +1193,28 @@ class AttendanceProcessor
 
         // Find time in record based on shift pattern
         if ($isGraveyardShift) {
-            // GRAVEYARD SHIFT (00:00-04:59 start time): Find earliest valid record on expected date
-            // The biometric records are on the next calendar day from shift_date
-            // Example: Friday shift has records on Saturday around 00:00-01:00 (time in) and 09:00-10:00 (time out)
-            $timeInRecord = $this->parser->findTimeInRecord($records, $expectedTimeInDate, $schedule->scheduled_time_in);
+            // GRAVEYARD SHIFT (00:00-04:59 start time)
+            // TIME IN could be:
+            // A) Late evening on shift date (early arrival before midnight)
+            //    Example: 23:15 on Mon for a Mon 00:30-09:30 shift
+            // B) Early morning on next calendar day (on-time or late arrival)
+            //    Example: 00:35 on Tue for a Mon 00:30-09:30 shift
+
+            // (A) Check for early arrivals on the shift date evening
+            $timeInRecord = $this->parser->findTimeInRecordByTimeRange($records, $shiftDate, 20, 23);
+
+            // (B) If no early arrival, look on the next calendar day
+            // Use a restricted hour range (midnight to shift midpoint) to avoid picking up TIME OUT records
+            if (! $timeInRecord) {
+                $schedInMinutes = Carbon::parse($schedule->scheduled_time_in)->hour * 60 + Carbon::parse($schedule->scheduled_time_in)->minute;
+                $schedOutMinutes = Carbon::parse($schedule->scheduled_time_out)->hour * 60 + Carbon::parse($schedule->scheduled_time_out)->minute;
+                $midpointHour = (int) (($schedInMinutes + $schedOutMinutes) / 2 / 60);
+                $maxSearchHour = max($midpointHour, $schedInHour + 3);
+
+                $timeInRecord = $this->parser->findTimeInRecordByTimeRange(
+                    $records, $expectedTimeInDate, 0, $maxSearchHour
+                );
+            }
         } elseif (! $isNextDayTimeOut) {
             // SAME DAY SHIFT: Find earliest valid record on shift date
             // Pass scheduled time to filter out unreasonably early scans (>2 hours before)
@@ -1684,7 +1719,8 @@ class AttendanceProcessor
         }
 
         // Skip updating if this is a verified record (manual entry, approved overtime, etc.)
-        if ($attendance->admin_verified) {
+        // But allow time-out updates for partially verified records
+        if ($attendance->admin_verified && ! $attendance->is_partially_verified) {
             return [
                 'matched' => true,
                 'records_processed' => 0, // Skipped

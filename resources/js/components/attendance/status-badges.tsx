@@ -77,8 +77,8 @@ export const AttendanceStatusBadges = ({
                     </span>
                 )}
             </div>
-            {/* Secondary Status Row */}
-            {secondaryStatus && (
+            {/* Secondary Status Row - skip if same as primary */}
+            {secondaryStatus && secondaryStatus !== status && (
                 <div className="flex items-center gap-1">
                     {getStatusBadge(secondaryStatus)}
                 </div>

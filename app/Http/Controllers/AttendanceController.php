@@ -1422,10 +1422,15 @@ class AttendanceController extends Controller
         // Default behavior: show all records (matching frontend default "All Records")
         if ($request->has('verified') && $request->verified !== '') {
             if ($request->verified === 'verified') {
-                $query->where('admin_verified', true);
+                $query->where('admin_verified', true)
+                    ->where('is_partially_verified', false);
             } elseif ($request->verified === 'pending') {
                 // Show ALL unverified records, not just those with specific statuses
                 $query->where('admin_verified', false);
+            } elseif ($request->verified === 'partially_verified') {
+                // Show records that are partially approved (time out pending)
+                $query->where('admin_verified', true)
+                    ->where('is_partially_verified', true);
             }
             // Empty string means 'all' - no filter applied, show everything
         }
@@ -1521,8 +1526,65 @@ class AttendanceController extends Controller
         // Get all campaigns for campaign filter dropdown
         $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
 
+        // Build a base query with shared filters (date, employee, site, campaign, team lead)
+        // Used for status summary counts so they reflect the same filter context
+        $baseFilteredQuery = Attendance::query();
+
+        // Apply Team Lead auto-filter to summary counts
+        if ($user->role === 'Team Lead' && $teamLeadCampaignId) {
+            $campaignFilter = $request->input('campaign_id');
+            if (! $campaignFilter || $campaignFilter === 'all') {
+                $baseFilteredQuery->whereHas('employeeSchedule', function ($q) use ($teamLeadCampaignId) {
+                    $q->where('campaign_id', $teamLeadCampaignId);
+                });
+            }
+        }
+
+        if ($request->filled('user_id')) {
+            $userIds = is_array($request->user_id)
+                ? $request->user_id
+                : array_filter(explode(',', $request->user_id));
+            if (count($userIds) > 0) {
+                $baseFilteredQuery->whereIn('user_id', $userIds);
+            }
+        }
+
+        if ($request->filled('date_from')) {
+            $baseFilteredQuery->where('shift_date', '>=', $request->date_from);
+        }
+        if ($request->filled('date_to')) {
+            $baseFilteredQuery->where('shift_date', '<=', $request->date_to);
+        }
+
+        if ($request->filled('site_id')) {
+            $baseFilteredQuery->whereHas('employeeSchedule', function ($q) use ($request) {
+                $q->where('site_id', $request->site_id);
+            });
+        }
+
+        if ($request->filled('campaign_id')) {
+            $campaignIds = is_array($request->campaign_id)
+                ? $request->campaign_id
+                : array_filter(explode(',', $request->campaign_id));
+            if (count($campaignIds) > 0) {
+                $baseFilteredQuery->whereHas('employeeSchedule', function ($q) use ($campaignIds) {
+                    $q->whereIn('campaign_id', $campaignIds);
+                });
+            }
+        }
+
+        if ($request->filled('leave_conflict') && $request->leave_conflict === 'yes') {
+            $baseFilteredQuery->whereNotNull('leave_request_id')
+                ->where('status', '!=', 'on_leave')
+                ->where(function ($q) {
+                    $q->whereNotNull('actual_time_in')
+                        ->orWhereNotNull('actual_time_out');
+                });
+        }
+
         // Count leave conflicts (records where employee has biometric activity during approved leave)
-        $leaveConflictCount = Attendance::whereNotNull('leave_request_id')
+        $leaveConflictCount = (clone $baseFilteredQuery)
+            ->whereNotNull('leave_request_id')
             ->where('status', '!=', 'on_leave')
             ->where('admin_verified', false)
             ->where(function ($q) {
@@ -1530,6 +1592,26 @@ class AttendanceController extends Controller
                     ->orWhereNotNull('actual_time_out');
             })
             ->count();
+
+        // Count partially verified records (approved but time out pending)
+        $partiallyVerifiedCount = (clone $baseFilteredQuery)
+            ->where('admin_verified', true)
+            ->where('is_partially_verified', true)
+            ->count();
+
+        // Status summary counts for the review page cards (respects active filters)
+        $statusCounts = (clone $baseFilteredQuery)
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status')
+            ->toArray();
+
+        // Verification-based counts (respects active filters)
+        $verificationCounts = [
+            'pending' => (clone $baseFilteredQuery)->where('admin_verified', false)->count(),
+            'verified' => (clone $baseFilteredQuery)->where('admin_verified', true)->where('is_partially_verified', false)->count(),
+            'partially_verified' => $partiallyVerifiedCount,
+        ];
 
         return Inertia::render('Attendance/Main/Review', [
             'attendances' => $attendances,
@@ -1539,6 +1621,9 @@ class AttendanceController extends Controller
             'teamLeadCampaignId' => $teamLeadCampaignId,
             'verifyAttendanceId' => $verifyAttendanceId,
             'leaveConflictCount' => $leaveConflictCount,
+            'partiallyVerifiedCount' => $partiallyVerifiedCount,
+            'statusCounts' => $statusCounts,
+            'verificationCounts' => $verificationCounts,
             'filters' => [
                 'user_id' => $request->user_id,
                 'status' => $request->status,
@@ -1606,6 +1691,11 @@ class AttendanceController extends Controller
             'notes' => $request->notes,
             'is_set_home' => $request->boolean('is_set_home'),
         ];
+
+        // If this was a partially verified record and now has time out, mark as fully verified
+        if ($attendance->is_partially_verified) {
+            $updates['is_partially_verified'] = $request->actual_time_out ? false : true;
+        }
 
         // Clear leave_request_id if employee actually worked (not on_leave status)
         if ($request->status !== 'on_leave' && $attendance->leave_request_id) {
@@ -2650,8 +2740,9 @@ class AttendanceController extends Controller
     }
 
     /**
-     * Partial approve a night shift attendance by completing the time out.
-     * For night shifts where time out occurs on the next calendar day.
+     * Partially approve a night shift attendance when time out is not yet available.
+     * Sets admin_verified=true and is_partially_verified=true, generates points based on time-in status.
+     * When time out becomes available later, the verify() method will complete the record.
      */
     public function partialApprove(Request $request, Attendance $attendance)
     {
@@ -2660,22 +2751,15 @@ class AttendanceController extends Controller
         // Load relationships
         $attendance->load('employeeSchedule');
 
-        // Validate this is appropriate for partial approval
-        if (! $attendance->employeeSchedule || ! $attendance->employeeSchedule->isNightShift()) {
-            return redirect()->back()
-                ->with('message', 'Partial approval is only available for night shift records.')
-                ->with('type', 'error');
-        }
-
         if (! $attendance->actual_time_in) {
             return redirect()->back()
-                ->with('message', 'Cannot complete night shift - no time in recorded.')
+                ->with('message', 'Cannot partially approve - no time in recorded.')
                 ->with('type', 'error');
         }
 
         if ($attendance->actual_time_out) {
             return redirect()->back()
-                ->with('message', 'This attendance record already has a time out.')
+                ->with('message', 'This attendance record already has a time out. Use full verification instead.')
                 ->with('type', 'error');
         }
 
@@ -2686,64 +2770,55 @@ class AttendanceController extends Controller
         $oldIsAdvised = $attendance->is_advised ?? false;
 
         $validated = $request->validate([
-            'actual_time_out' => 'required|date_format:Y-m-d\\TH:i',
+            'status' => 'nullable|in:on_time,tardy,half_day_absence,undertime,undertime_more_than_hour,failed_bio_out',
             'verification_notes' => 'nullable|string|max:1000',
-            'status' => 'nullable|in:on_time,tardy,half_day_absence,undertime,undertime_more_than_hour',
         ]);
 
-        $actualTimeOut = Carbon::parse($validated['actual_time_out']);
-        $shiftDate = Carbon::parse($attendance->shift_date);
-        $schedule = $attendance->employeeSchedule;
+        // Determine status - keep current status if not overridden
+        $explicitStatus = $validated['status'] ?? null;
+        $status = $explicitStatus ?? $attendance->status;
 
-        // Build scheduled time out (next day for night shift)
-        $scheduledTimeOut = Carbon::parse($shiftDate->format('Y-m-d').' '.$schedule->scheduled_time_out);
-        if ($schedule->isNightShift()) {
-            $scheduledTimeOut->addDay();
-        }
-
-        // Calculate undertime/overtime
-        $undertimeMinutes = null;
-        $overtimeMinutes = null;
-
-        if ($actualTimeOut->lt($scheduledTimeOut)) {
-            $undertimeMinutes = $actualTimeOut->diffInMinutes($scheduledTimeOut);
-        } elseif ($actualTimeOut->gt($scheduledTimeOut)) {
-            $overtimeMinutes = $scheduledTimeOut->diffInMinutes($actualTimeOut);
-        }
-
-        // Determine status if not provided
-        $status = $validated['status'] ?? $attendance->status;
-        $secondaryStatus = $attendance->secondary_status;
-
-        // If no status override provided, check for undertime
-        if (! $validated['status']) {
-            if ($undertimeMinutes && $undertimeMinutes > 60) {
-                if (in_array($attendance->status, ['on_time'])) {
-                    $status = 'undertime_more_than_hour';
-                } else {
-                    $secondaryStatus = 'undertime_more_than_hour';
-                }
-            } elseif ($undertimeMinutes && $undertimeMinutes > 0) {
-                if (in_array($attendance->status, ['on_time'])) {
-                    $status = 'undertime';
-                } else {
-                    $secondaryStatus = 'undertime';
-                }
+        // If no explicit status and current status needs recalculation, determine from tardy info
+        $recalculableStatuses = ['failed_bio_out', 'needs_manual_review'];
+        if (! $explicitStatus && ! in_array($attendance->status, $recalculableStatuses)) {
+            // If record has tardy info from time-in, preserve that status
+            if ($attendance->tardy_minutes && $attendance->tardy_minutes > 0) {
+                $schedule = $attendance->employeeSchedule;
+                $gracePeriod = $schedule->grace_period_minutes ?? 15;
+                $status = $attendance->tardy_minutes > $gracePeriod ? 'half_day_absence' : 'tardy';
             }
+        } elseif (! $explicitStatus && $attendance->status === 'needs_manual_review') {
+            // For needs_manual_review, always recalculate from tardy info if available
+            if ($attendance->tardy_minutes && $attendance->tardy_minutes > 0) {
+                $schedule = $attendance->employeeSchedule;
+                $gracePeriod = $schedule->grace_period_minutes ?? 15;
+                $status = $attendance->tardy_minutes > $gracePeriod ? 'half_day_absence' : 'tardy';
+            } else {
+                // Default to failed_bio_out since time-out is missing
+                $status = 'failed_bio_out';
+            }
+        }
+
+        // Build verification note with partial approval context
+        $notes = $validated['verification_notes'] ?? 'Partially approved - time out pending.';
+
+        // Clear secondary_status if it duplicates the new primary status,
+        // or if it's no longer relevant (time-out hasn't arrived yet)
+        $secondaryStatus = $attendance->secondary_status;
+        if ($secondaryStatus === $status || in_array($secondaryStatus, ['failed_bio_out'])) {
+            $secondaryStatus = null;
         }
 
         // Update the attendance record
         $attendance->update([
-            'actual_time_out' => $actualTimeOut,
-            'undertime_minutes' => $undertimeMinutes,
-            'overtime_minutes' => $overtimeMinutes,
             'status' => $status,
             'secondary_status' => $secondaryStatus,
             'admin_verified' => true,
-            'verification_notes' => $validated['verification_notes'],
+            'is_partially_verified' => true,
+            'verification_notes' => $notes,
         ]);
 
-        // Smart point regeneration - only regenerate if changes affect points
+        // Smart point regeneration - generate points based on current status
         $attendance->refresh();
         $this->regeneratePointsIfNeeded(
             $attendance,
@@ -2757,18 +2832,109 @@ class AttendanceController extends Controller
         $pointRecord = AttendancePoint::where('attendance_id', $attendance->id)->first();
         $points = $pointRecord ? $pointRecord->points : null;
 
-        // Notify user
-        if ($status !== 'on_time') {
+        // Notify user if status is not on_time or failed_bio_out
+        if (! in_array($status, ['on_time', 'failed_bio_out'])) {
             $this->notificationService->notifyAttendanceStatus(
                 $attendance->user_id,
                 $status,
-                $shiftDate->format('M d, Y'),
+                Carbon::parse($attendance->shift_date)->format('M d, Y'),
                 $points
             );
         }
 
         return redirect()->back()
-            ->with('message', 'Night shift attendance completed and verified successfully.')
+            ->with('message', 'Attendance partially approved. Time out will be verified when available.')
+            ->with('type', 'success');
+    }
+
+    /**
+     * Batch partially approve multiple attendance records that are missing time out.
+     */
+    public function batchPartialApprove(Request $request)
+    {
+        $validated = $request->validate([
+            'record_ids' => 'required|array|min:1',
+            'record_ids.*' => 'required|exists:attendances,id',
+            'verification_notes' => 'nullable|string|max:1000',
+        ]);
+
+        $recordIds = $validated['record_ids'];
+        $approvedCount = 0;
+        $skippedCount = 0;
+
+        foreach ($recordIds as $id) {
+            $attendance = Attendance::with('employeeSchedule')->find($id);
+            if (! $attendance) {
+                $skippedCount++;
+
+                continue;
+            }
+
+            // Skip records that don't qualify (no time-in, already has time-out, already verified)
+            if (! $attendance->actual_time_in || $attendance->actual_time_out || $attendance->admin_verified) {
+                $skippedCount++;
+
+                continue;
+            }
+
+            // Capture old values for smart point regeneration comparison
+            $oldStatus = $attendance->status;
+            $oldSecondaryStatus = $attendance->secondary_status;
+            $oldIsSetHome = $attendance->is_set_home ?? false;
+            $oldIsAdvised = $attendance->is_advised ?? false;
+
+            // Determine status - preserve tardy if applicable
+            $status = $attendance->status;
+            if (! in_array($status, ['failed_bio_out'])) {
+                if ($attendance->tardy_minutes && $attendance->tardy_minutes > 0) {
+                    $schedule = $attendance->employeeSchedule;
+                    $gracePeriod = $schedule->grace_period_minutes ?? 15;
+                    $status = $attendance->tardy_minutes > $gracePeriod ? 'half_day_absence' : 'tardy';
+                }
+            }
+
+            $notes = $validated['verification_notes'] ?? 'Batch partially approved - time out pending.';
+
+            $attendance->update([
+                'status' => $status,
+                'admin_verified' => true,
+                'is_partially_verified' => true,
+                'verification_notes' => $notes,
+            ]);
+
+            // Smart point regeneration
+            $attendance->refresh();
+            $this->regeneratePointsIfNeeded(
+                $attendance,
+                $oldStatus,
+                $oldSecondaryStatus,
+                $oldIsSetHome,
+                $oldIsAdvised
+            );
+
+            // Notify user if status generates points
+            if (! in_array($status, ['on_time', 'failed_bio_out'])) {
+                $pointRecord = AttendancePoint::where('attendance_id', $attendance->id)->first();
+                $points = $pointRecord ? $pointRecord->points : null;
+
+                $this->notificationService->notifyAttendanceStatus(
+                    $attendance->user_id,
+                    $status,
+                    Carbon::parse($attendance->shift_date)->format('M d, Y'),
+                    $points
+                );
+            }
+
+            $approvedCount++;
+        }
+
+        $message = "Successfully partially approved {$approvedCount} attendance record".($approvedCount === 1 ? '' : 's').'.';
+        if ($skippedCount > 0) {
+            $message .= " {$skippedCount} record".($skippedCount === 1 ? ' was' : 's were').' skipped (not eligible).';
+        }
+
+        return redirect()->back()
+            ->with('message', $message)
             ->with('type', 'success');
     }
 

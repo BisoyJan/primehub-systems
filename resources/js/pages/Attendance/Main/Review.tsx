@@ -32,12 +32,17 @@ import {
     Card,
     CardContent,
 } from "@/components/ui/card";
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { getStatusBadges, getShiftTypeBadge } from "@/components/attendance";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { AlertCircle, Check, CheckCircle, Clock, Edit, Moon, Search, Send, UserCheck, X } from "lucide-react";
+import { AlertCircle, Check, CheckCircle, ChevronDown, Clock, Edit, Moon, Search, Send, UserCheck, X } from "lucide-react";
 import { TimeInput } from "@/components/ui/time-input";
 import { Switch } from "@/components/ui/switch";
 import { requestUndertimeApproval, approveUndertime } from "@/routes/attendance";
@@ -104,6 +109,7 @@ interface AttendanceRecord {
     bio_in_site?: Site;
     bio_out_site?: Site;
     admin_verified: boolean;
+    is_partially_verified?: boolean;
     verification_notes?: string;
     notes?: string;
     warnings?: string[];
@@ -146,6 +152,13 @@ interface PageProps extends SharedData {
         leave_conflict?: string;
     };
     leaveConflictCount?: number;
+    partiallyVerifiedCount?: number;
+    statusCounts?: Record<string, number>;
+    verificationCounts?: {
+        pending: number;
+        verified: number;
+        partially_verified: number;
+    };
     [key: string]: unknown;
 }
 
@@ -322,7 +335,7 @@ const calculateSuggestedStatus = (
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, verifyAttendanceId, filters, auth, leaveConflictCount } = usePage<PageProps>().props;
+    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, verifyAttendanceId, filters, auth, leaveConflictCount, partiallyVerifiedCount, statusCounts = {}, verificationCounts } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
@@ -446,43 +459,26 @@ export default function AttendanceReview() {
     const [partialRecord, setPartialRecord] = useState<AttendanceRecord | null>(null);
 
     const { data: partialData, setData: setPartialData, post: postPartial, processing: partialProcessing, errors: partialErrors, reset: resetPartial } = useForm({
-        actual_time_out: "",
         verification_notes: "",
         status: "",
     });
 
-    // Helper to check if a record is eligible for partial approval (night shift with missing time out)
-    const isNightShiftMissingTimeOut = (record: AttendanceRecord): boolean => {
-        const schedule = record.employee_schedule || record.user?.active_schedule;
-        if (!schedule) return false;
-
-        const isNightShift = schedule.shift_type === 'night_shift' ||
-            (schedule.scheduled_time_in && schedule.scheduled_time_out &&
-                schedule.scheduled_time_out < schedule.scheduled_time_in);
-
+    // Helper to check if a record is eligible for partial approval (missing time out)
+    const isMissingTimeOut = (record: AttendanceRecord): boolean => {
         const hasTimeIn = record.actual_time_in !== undefined && record.actual_time_in !== null;
         const hasNoTimeOut = record.actual_time_out === undefined || record.actual_time_out === null;
+        const isNotVerified = !record.admin_verified;
 
-        return Boolean(isNightShift) && hasTimeIn && hasNoTimeOut;
+        return hasTimeIn && hasNoTimeOut && isNotVerified;
     };
 
     // Open partial approval dialog
     const openPartialDialog = (record: AttendanceRecord) => {
         setPartialRecord(record);
-        const schedule = record.employee_schedule || record.user?.active_schedule;
-
-        // Calculate the expected time out date (next day for night shift)
-        const shiftDate = new Date(record.shift_date);
-        const nextDay = new Date(shiftDate);
-        nextDay.setDate(nextDay.getDate() + 1);
-
-        const timeOutDate = nextDay.toISOString().split('T')[0];
-        const timeOutTime = schedule?.scheduled_time_out?.slice(0, 5) || "07:00";
 
         setPartialData({
-            actual_time_out: `${timeOutDate}T${timeOutTime}`,
             verification_notes: "",
-            status: record.status || "",
+            status: "",
         });
         setIsPartialDialogOpen(true);
     };
@@ -498,6 +494,43 @@ export default function AttendanceReview() {
                 setIsPartialDialogOpen(false);
                 resetPartial();
                 setPartialRecord(null);
+            },
+        });
+    };
+
+    // Batch partial approval state
+    const [isBatchPartialDialogOpen, setIsBatchPartialDialogOpen] = useState(false);
+    const { data: batchPartialData, setData: setBatchPartialData, post: postBatchPartial, processing: batchPartialProcessing, reset: resetBatchPartial } = useForm({
+        record_ids: [] as number[],
+        verification_notes: "",
+    });
+
+    // Count of eligible records for batch partial approval (has time-in, no time-out, not verified)
+    const eligiblePartialCount = attendanceData.data.filter(r =>
+        isMissingTimeOut(r) && !r.is_partially_verified
+    ).length;
+
+    const openBatchPartialDialog = () => {
+        const eligibleIds = attendanceData.data
+            .filter(r => isMissingTimeOut(r) && !r.is_partially_verified)
+            .map(r => r.id);
+
+        setBatchPartialData({
+            record_ids: eligibleIds,
+            verification_notes: "",
+        });
+        setIsBatchPartialDialogOpen(true);
+    };
+
+    const handleBatchPartialApprove = (e: React.FormEvent) => {
+        e.preventDefault();
+        if (batchPartialData.record_ids.length === 0) return;
+
+        postBatchPartial('/attendance/batch-partial-approve', {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsBatchPartialDialogOpen(false);
+                resetBatchPartial();
             },
         });
     };
@@ -832,6 +865,79 @@ export default function AttendanceReview() {
                     description="Review and verify attendance records that need attention"
                 />
 
+                {/* Status Summary Cards - Collapsible */}
+                <Collapsible defaultOpen={false}>
+                    <Card>
+                        <CollapsibleTrigger asChild>
+                            <button className="flex w-full items-center justify-between px-6 py-4 text-left hover:bg-muted/50 transition-colors cursor-pointer">
+                                <div className="flex items-center gap-2">
+                                    <h3 className="text-sm font-semibold">Status Summary</h3>
+                                    <Badge variant="secondary" className="text-xs">
+                                        {Object.values(statusCounts).reduce((a, b) => a + b, 0)} total
+                                    </Badge>
+                                </div>
+                                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform duration-200 [[data-state=open]_&]:rotate-180" />
+                            </button>
+                        </CollapsibleTrigger>
+                        <CollapsibleContent>
+                            <CardContent className="pt-0 pb-4">
+                                {/* Attendance Status Counts */}
+                                <div className="mb-3">
+                                    <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">By Status</p>
+                                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-2">
+                                        {[
+                                            { key: 'on_time', label: 'On Time', color: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400' },
+                                            { key: 'tardy', label: 'Tardy', color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400' },
+                                            { key: 'half_day_absence', label: 'Half Day', color: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400' },
+                                            { key: 'ncns', label: 'NCNS', color: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400' },
+                                            { key: 'undertime', label: 'Undertime', color: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-400' },
+                                            { key: 'undertime_more_than_hour', label: 'Undertime >1hr', color: 'bg-violet-100 text-violet-800 dark:bg-violet-900/30 dark:text-violet-400' },
+                                            { key: 'failed_bio_in', label: 'Failed Bio In', color: 'bg-slate-100 text-slate-800 dark:bg-slate-900/30 dark:text-slate-400' },
+                                            { key: 'failed_bio_out', label: 'Failed Bio Out', color: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400' },
+                                            { key: 'needs_manual_review', label: 'Needs Review', color: 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400' },
+                                            { key: 'on_leave', label: 'On Leave', color: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400' },
+                                            { key: 'present_no_bio', label: 'Present (No Bio)', color: 'bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-400' },
+                                            { key: 'non_work_day', label: 'Non-Work Day', color: 'bg-zinc-100 text-zinc-800 dark:bg-zinc-900/30 dark:text-zinc-400' },
+                                        ].filter(s => (statusCounts[s.key] ?? 0) > 0).map(({ key, label, color }) => (
+                                            <div key={key} className={`rounded-lg px-3 py-2 ${color}`}>
+                                                <p className="text-xs font-medium opacity-80">{label}</p>
+                                                <p className="text-lg font-bold">{statusCounts[key] ?? 0}</p>
+                                            </div>
+                                        ))}
+                                        {Object.values(statusCounts).every(v => v === 0) && (
+                                            <p className="text-sm text-muted-foreground col-span-full">No records found.</p>
+                                        )}
+                                    </div>
+                                </div>
+
+                                {/* Verification Status Counts */}
+                                {verificationCounts && (
+                                    <div>
+                                        <p className="text-xs text-muted-foreground mb-2 font-medium uppercase tracking-wide">By Verification</p>
+                                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                            <div className="rounded-lg px-3 py-2 bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400">
+                                                <p className="text-xs font-medium opacity-80">Pending</p>
+                                                <p className="text-lg font-bold">{verificationCounts.pending}</p>
+                                            </div>
+                                            <div className="rounded-lg px-3 py-2 bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                                <p className="text-xs font-medium opacity-80">Verified</p>
+                                                <p className="text-lg font-bold">{verificationCounts.verified}</p>
+                                            </div>
+                                            <div className="rounded-lg px-3 py-2 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                                <div className="flex items-center gap-1">
+                                                    <Moon className="h-3 w-3" />
+                                                    <p className="text-xs font-medium opacity-80">Partially Verified</p>
+                                                </div>
+                                                <p className="text-lg font-bold">{verificationCounts.partially_verified}</p>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </CollapsibleContent>
+                    </Card>
+                </Collapsible>
+
                 {/* Search and Filters */}
                 <Card>
                     <CardContent className="pt-6">
@@ -918,6 +1024,15 @@ export default function AttendanceReview() {
                                         <SelectContent>
                                             <SelectItem value="all">All Records</SelectItem>
                                             <SelectItem value="pending">Pending Verification</SelectItem>
+                                            <SelectItem value="partially_verified">
+                                                <span className="flex items-center gap-2">
+                                                    <Moon className="h-3 w-3 text-amber-500" />
+                                                    Partially Verified
+                                                    {(partiallyVerifiedCount ?? 0) > 0 && (
+                                                        <span className="text-xs text-amber-600 font-semibold">({partiallyVerifiedCount})</span>
+                                                    )}
+                                                </span>
+                                            </SelectItem>
                                             <SelectItem value="verified">Verified</SelectItem>
                                         </SelectContent>
                                     </Select>
@@ -1003,7 +1118,17 @@ export default function AttendanceReview() {
                             </span>
                         )}
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
+                        {eligiblePartialCount > 0 && (
+                            <Button
+                                variant="outline"
+                                className="text-amber-600 border-amber-300 hover:bg-amber-50"
+                                onClick={openBatchPartialDialog}
+                            >
+                                <Moon className="h-4 w-4 mr-2" />
+                                Partial Approve {eligiblePartialCount} Record{eligiblePartialCount === 1 ? "" : "s"}
+                            </Button>
+                        )}
                         {selectedRecords.size > 0 && (
                             <Button onClick={openBatchVerifyDialog}>
                                 <CheckCircle className="h-4 w-4 mr-2" />
@@ -1106,7 +1231,17 @@ export default function AttendanceReview() {
                                                 <TableCell className="text-sm">
                                                     <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
                                                 </TableCell>
-                                                <TableCell>{getStatusBadges(record)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex flex-wrap items-center gap-1">
+                                                        {getStatusBadges(record)}
+                                                        {record.is_partially_verified && (
+                                                            <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950/20 text-xs">
+                                                                <Moon className="h-3 w-3 mr-1" />
+                                                                Partial
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
                                                 <TableCell className="text-sm">
                                                     <div className="space-y-1">
                                                         {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
@@ -1168,32 +1303,34 @@ export default function AttendanceReview() {
                                                                     <Button
                                                                         variant="outline"
                                                                         size="icon"
-                                                                        className="h-8 w-8"
+                                                                        className={`h-8 w-8 ${record.is_partially_verified ? 'text-amber-600 border-amber-400 bg-amber-50' : ''}`}
                                                                         onClick={() => openVerifyDialog(record)}
                                                                     >
                                                                         <Edit className="h-4 w-4" />
                                                                     </Button>
                                                                 </TooltipTrigger>
                                                                 <TooltipContent>
-                                                                    {record.admin_verified ? 'Edit Verification' : 'Verify Attendance'}
+                                                                    {record.is_partially_verified
+                                                                        ? 'Complete Verification (time out now available)'
+                                                                        : record.admin_verified ? 'Edit Verification' : 'Verify Attendance'}
                                                                 </TooltipContent>
                                                             </Tooltip>
                                                         </TooltipProvider>
-                                                        {isNightShiftMissingTimeOut(record) && (
+                                                        {isMissingTimeOut(record) && !record.is_partially_verified && (
                                                             <TooltipProvider>
                                                                 <Tooltip>
                                                                     <TooltipTrigger asChild>
                                                                         <Button
                                                                             variant="outline"
                                                                             size="icon"
-                                                                            className="h-8 w-8 text-purple-600 border-purple-300 hover:bg-purple-50"
+                                                                            className="h-8 w-8 text-amber-600 border-amber-300 hover:bg-amber-50"
                                                                             onClick={() => openPartialDialog(record)}
                                                                         >
                                                                             <Moon className="h-4 w-4" />
                                                                         </Button>
                                                                     </TooltipTrigger>
                                                                     <TooltipContent>
-                                                                        Complete night shift by adding time out
+                                                                        Partially approve (time out pending)
                                                                     </TooltipContent>
                                                                 </Tooltip>
                                                             </TooltipProvider>
@@ -1322,24 +1459,33 @@ export default function AttendanceReview() {
                                         )}
                                     </div>
 
+                                    {record.is_partially_verified && (
+                                        <Badge variant="outline" className="text-amber-600 border-amber-400 bg-amber-50 dark:bg-amber-950/20 text-xs">
+                                            <Moon className="h-3 w-3 mr-1" />
+                                            Partially Verified - Time Out Pending
+                                        </Badge>
+                                    )}
+
                                     <Button
                                         variant="outline"
                                         size="sm"
                                         onClick={() => openVerifyDialog(record)}
-                                        className="w-full"
+                                        className={`w-full ${record.is_partially_verified ? 'text-amber-600 border-amber-400' : ''}`}
                                     >
                                         <Edit className="h-4 w-4 mr-2" />
-                                        {record.admin_verified ? 'Edit Record' : 'Verify Record'}
+                                        {record.is_partially_verified
+                                            ? 'Complete Verification'
+                                            : record.admin_verified ? 'Edit Record' : 'Verify Record'}
                                     </Button>
-                                    {isNightShiftMissingTimeOut(record) && (
+                                    {isMissingTimeOut(record) && !record.is_partially_verified && (
                                         <Button
                                             variant="outline"
                                             size="sm"
                                             onClick={() => openPartialDialog(record)}
-                                            className="w-full mt-2 text-purple-600 border-purple-300 hover:bg-purple-50"
+                                            className="w-full mt-2 text-amber-600 border-amber-300 hover:bg-amber-50"
                                         >
                                             <Moon className="h-4 w-4 mr-2" />
-                                            Complete Night Shift
+                                            Partially Approve
                                         </Button>
                                     )}
                                 </div>
@@ -2298,17 +2444,18 @@ export default function AttendanceReview() {
                 </DialogContent>
             </Dialog>
 
-            {/* Partial Approval Dialog (Night Shift Completion) */}
+            {/* Partial Approval Dialog (Night Shift - Time Out Pending) */}
             <Dialog open={isPartialDialogOpen} onOpenChange={setIsPartialDialogOpen}>
                 <DialogContent className="max-w-[95vw] sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                            <Moon className="h-5 w-5 text-purple-600" />
-                            Complete Night Shift
+                            <Moon className="h-5 w-5 text-amber-600" />
+                            Partial Approval - Time Out Pending
                         </DialogTitle>
                         <DialogDescription>
-                            Add the time out for {partialRecord?.user.name}'s night shift on{" "}
-                            {partialRecord && formatDate(partialRecord.shift_date)}
+                            Approve {partialRecord?.user.name}'s time-in for{" "}
+                            {partialRecord && formatDate(partialRecord.shift_date)}.
+                            Time out will be verified later when available.
                         </DialogDescription>
                     </DialogHeader>
 
@@ -2318,7 +2465,7 @@ export default function AttendanceReview() {
                             const schedule = partialRecord.employee_schedule || partialRecord.user?.active_schedule;
                             return (
                                 <div className="bg-muted p-4 rounded-md space-y-2 text-sm">
-                                    <h4 className="font-semibold">Night Shift Information</h4>
+                                    <h4 className="font-semibold">Shift Information</h4>
                                     <div className="grid grid-cols-2 gap-2">
                                         <div>
                                             <span className="text-muted-foreground">Shift Date:</span>{" "}
@@ -2326,7 +2473,7 @@ export default function AttendanceReview() {
                                         </div>
                                         <div>
                                             <span className="text-muted-foreground">Shift Type:</span>{" "}
-                                            {schedule?.shift_type?.replace('_', ' ') || "Night Shift"}
+                                            {schedule?.shift_type?.replace('_', ' ') || "N/A"}
                                         </div>
                                         <div>
                                             <span className="text-muted-foreground">Scheduled In:</span>{" "}
@@ -2334,7 +2481,9 @@ export default function AttendanceReview() {
                                         </div>
                                         <div>
                                             <span className="text-muted-foreground">Scheduled Out:</span>{" "}
-                                            {formatTime(schedule?.scheduled_time_out) || "-"} (next day)
+                                            {formatTime(schedule?.scheduled_time_out) || "-"}
+                                            {schedule?.scheduled_time_out && schedule?.scheduled_time_in &&
+                                                schedule.scheduled_time_out < schedule.scheduled_time_in && " (next day)"}
                                         </div>
                                         <div className="col-span-2">
                                             <span className="text-muted-foreground">Actual Time In:</span>{" "}
@@ -2349,37 +2498,6 @@ export default function AttendanceReview() {
                                 </div>
                             );
                         })()}
-
-                        {/* Time Out Input */}
-                        <div className="space-y-2">
-                            <Label>Actual Time Out <span className="text-red-500">*</span></Label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-muted-foreground">Date</Label>
-                                    <DatePicker
-                                        value={partialData.actual_time_out ? partialData.actual_time_out.slice(0, 10) : ""}
-                                        onChange={(date) => {
-                                            const time = partialData.actual_time_out ? partialData.actual_time_out.slice(11, 16) : "07:00";
-                                            setPartialData("actual_time_out", date ? `${date}T${time}` : "");
-                                        }}
-                                        placeholder="Date"
-                                    />
-                                </div>
-                                <div className="space-y-1">
-                                    <Label className="text-xs text-muted-foreground">Time</Label>
-                                    <TimeInput
-                                        value={partialData.actual_time_out ? partialData.actual_time_out.slice(11, 16) : ""}
-                                        onChange={(time: string) => {
-                                            const date = partialData.actual_time_out ? partialData.actual_time_out.slice(0, 10) : "";
-                                            setPartialData("actual_time_out", date && time ? `${date}T${time}` : "");
-                                        }}
-                                    />
-                                </div>
-                            </div>
-                            {partialErrors.actual_time_out && (
-                                <p className="text-sm text-red-500">{partialErrors.actual_time_out}</p>
-                            )}
-                        </div>
 
                         {/* Status Override (Optional) */}
                         <div className="space-y-2">
@@ -2396,42 +2514,41 @@ export default function AttendanceReview() {
                                     <SelectItem value="on_time">On Time</SelectItem>
                                     <SelectItem value="tardy">Tardy</SelectItem>
                                     <SelectItem value="half_day_absence">Half Day Absence</SelectItem>
-                                    <SelectItem value="undertime">Undertime</SelectItem>
-                                    <SelectItem value="undertime_more_than_hour">Undertime (&gt;1hr)</SelectItem>
+                                    <SelectItem value="failed_bio_out">Failed Bio Out</SelectItem>
                                 </SelectContent>
                             </Select>
                             <p className="text-xs text-muted-foreground">
-                                Leave empty to auto-calculate based on undertime
+                                Status based on time-in only. Will be recalculated when time out is verified.
                             </p>
                         </div>
 
                         {/* Verification Notes */}
                         <div className="space-y-2">
-                            <Label>Verification Notes <span className="text-red-500">*</span></Label>
+                            <Label>Verification Notes</Label>
                             <div className="flex flex-wrap gap-2 mb-2">
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setPartialData("verification_notes", "Night shift time out completed.")}
+                                    onClick={() => setPartialData("verification_notes", "Partially approved - time out pending.")}
                                     className="h-7 text-xs"
                                 >
-                                    Night shift completed
+                                    Time out pending
                                 </Button>
                                 <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
-                                    onClick={() => setPartialData("verification_notes", "Time out from next day biometric upload.")}
+                                    onClick={() => setPartialData("verification_notes", "Time-in verified. Awaiting biometric for time out.")}
                                     className="h-7 text-xs"
                                 >
-                                    From biometric upload
+                                    Awaiting biometric
                                 </Button>
                             </div>
                             <Textarea
                                 value={partialData.verification_notes}
                                 onChange={e => setPartialData("verification_notes", e.target.value)}
-                                placeholder="Explain why this night shift is being completed..."
+                                placeholder="Optional notes about the partial approval..."
                                 rows={3}
                             />
                             {partialErrors.verification_notes && (
@@ -2439,10 +2556,11 @@ export default function AttendanceReview() {
                             )}
                         </div>
 
-                        <div className="bg-purple-50 dark:bg-purple-950/20 border border-purple-200 dark:border-purple-800 p-3 rounded-md">
-                            <p className="text-sm text-purple-800 dark:text-purple-400">
-                                <strong>Note:</strong> This will complete the night shift record by adding the time out
-                                and automatically verify it. Attendance points will be generated if there are violations.
+                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 rounded-md">
+                            <p className="text-sm text-amber-800 dark:text-amber-400">
+                                <strong>Note:</strong> This will partially approve the attendance based on the time-in record.
+                                Attendance points will be generated if there are violations (e.g., tardy).
+                                When the time-out becomes available, use the full verification to complete the record.
                             </p>
                         </div>
 
@@ -2458,10 +2576,101 @@ export default function AttendanceReview() {
                             <Button
                                 type="submit"
                                 disabled={partialProcessing}
-                                className="bg-purple-600 hover:bg-purple-700"
+                                className="bg-amber-600 hover:bg-amber-700"
                             >
                                 <Moon className="h-4 w-4 mr-2" />
-                                {partialProcessing ? "Completing..." : "Complete & Verify"}
+                                {partialProcessing ? "Approving..." : "Partially Approve"}
+                            </Button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
+
+            {/* Batch Partial Approval Dialog */}
+            <Dialog open={isBatchPartialDialogOpen} onOpenChange={setIsBatchPartialDialogOpen}>
+                <DialogContent className="max-w-[95vw] sm:max-w-lg">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <Moon className="h-5 w-5 text-amber-600" />
+                            Batch Partial Approval
+                        </DialogTitle>
+                        <DialogDescription>
+                            Partially approve {batchPartialData.record_ids.length} attendance record{batchPartialData.record_ids.length === 1 ? "" : "s"} that have time-in but are missing time-out.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <form onSubmit={handleBatchPartialApprove} className="space-y-4">
+                        {/* Summary of eligible records */}
+                        <div className="bg-muted p-4 rounded-md space-y-2 text-sm max-h-48 overflow-y-auto">
+                            <h4 className="font-semibold">Records to Partially Approve ({batchPartialData.record_ids.length})</h4>
+                            {attendanceData.data
+                                .filter(r => batchPartialData.record_ids.includes(r.id))
+                                .map(record => (
+                                    <div key={record.id} className="flex justify-between items-center py-1 border-b last:border-b-0">
+                                        <span>{record.user?.name || "Unknown"}</span>
+                                        <span className="text-muted-foreground text-xs">
+                                            {formatDate(record.shift_date)} &bull; {record.status?.replace('_', ' ')}
+                                        </span>
+                                    </div>
+                                ))}
+                        </div>
+
+                        {/* Verification Notes */}
+                        <div className="space-y-2">
+                            <Label>Verification Notes (applied to all)</Label>
+                            <div className="flex flex-wrap gap-2 mb-2">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setBatchPartialData("verification_notes", "Batch partially approved - time out pending.")}
+                                    className="h-7 text-xs"
+                                >
+                                    Time out pending
+                                </Button>
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setBatchPartialData("verification_notes", "Time-in verified. Awaiting biometric for time out.")}
+                                    className="h-7 text-xs"
+                                >
+                                    Awaiting biometric
+                                </Button>
+                            </div>
+                            <Textarea
+                                value={batchPartialData.verification_notes}
+                                onChange={e => setBatchPartialData("verification_notes", e.target.value)}
+                                placeholder="Optional notes applied to all records..."
+                                rows={2}
+                            />
+                        </div>
+
+                        <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 p-3 rounded-md">
+                            <p className="text-sm text-amber-800 dark:text-amber-400">
+                                <strong>Note:</strong> All eligible records will be partially approved based on their time-in data.
+                                Attendance points will be generated where applicable. Complete verification when time-out data becomes available.
+                            </p>
+                        </div>
+
+                        <DialogFooter className="flex-col sm:flex-row gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() => setIsBatchPartialDialogOpen(false)}
+                                disabled={batchPartialProcessing}
+                            >
+                                Cancel
+                            </Button>
+                            <Button
+                                type="submit"
+                                disabled={batchPartialProcessing || batchPartialData.record_ids.length === 0}
+                                className="bg-amber-600 hover:bg-amber-700"
+                            >
+                                <Moon className="h-4 w-4 mr-2" />
+                                {batchPartialProcessing
+                                    ? "Approving..."
+                                    : `Partially Approve ${batchPartialData.record_ids.length} Record${batchPartialData.record_ids.length === 1 ? "" : "s"}`}
                             </Button>
                         </DialogFooter>
                     </form>
