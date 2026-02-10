@@ -225,6 +225,13 @@ export default function Create({
         return format(date, 'yyyy-MM-dd');
     };
 
+    // Get date constraints for Maternity Leave (no min restriction, 1 year ahead for end)
+    const getMlMaxEndDate = (): string => {
+        const date = new Date();
+        date.setFullYear(date.getFullYear() + 1); // 1 year from now
+        return format(date, 'yyyy-MM-dd');
+    };
+
     // Handle start date change with weekend validation
     const handleStartDateChange = (value: string) => {
         if (isWeekend(value)) {
@@ -393,7 +400,7 @@ export default function Create({
             }
         }
 
-        // Check 2-week notice (only for VL and BL, not SL as it's unpredictable)
+        // Check 2-week notice (only for VL and BL, not SL/ML as they are special leave types)
         // Track separately for override capability
         if (data.start_date && ['VL', 'BL'].includes(data.leave_type)) {
             const start = parseISO(data.start_date);
@@ -410,14 +417,14 @@ export default function Create({
             }
         }
 
-        // Check attendance points for VL/BL
+        // Check attendance points for VL/BL (not ML - maternity leave is exempt)
         if (['VL', 'BL'].includes(data.leave_type) && attendancePoints > 6) {
             warnings.push(
                 `You have ${attendancePoints} attendance points (must be ≤6 for Vacation Leave).`
             );
         }
 
-        // Check recent absence for VL/BL
+        // Check recent absence for VL/BL (not ML)
         if (['VL', 'BL'].includes(data.leave_type) && hasRecentAbsence && nextEligibleLeaveDate) {
             warnings.push(
                 `You had an absence in the last 30 days. Next eligible date: ${format(parseISO(nextEligibleLeaveDate), 'MMMM d, yyyy')}`
@@ -966,8 +973,8 @@ export default function Create({
                     </>
                 )}
 
-                {/* Attendance Violations Display - Only show if points >= 6 */}
-                {attendanceViolations.length > 0 && attendancePoints >= 6 && (
+                {/* Attendance Violations Display - Only show if points >= 6, hide for ML */}
+                {attendanceViolations.length > 0 && attendancePoints >= 6 && data.leave_type !== 'ML' && (
                     <Card className="mb-6 border-orange-200 dark:border-orange-800">
                         <CardHeader className="pb-3">
                             <div className="flex items-center gap-2 text-orange-700 dark:text-orange-400">
@@ -1357,7 +1364,7 @@ export default function Create({
                                         placeholder="Select start date"
                                         className={weekendError.start ? 'border-red-500' : ''}
                                         minDate={data.leave_type === 'SL' ? getSlMinDate() : data.leave_type === 'SPL' ? getSplMinDate() : undefined}
-                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : undefined}
+                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
                                     />
                                     {weekendError.start && (
                                         <p className="text-sm text-red-500">{weekendError.start}</p>
@@ -1369,6 +1376,8 @@ export default function Create({
                                         <p className="text-xs text-muted-foreground">Sick Leave: Select from last 3 weeks to 1 month ahead</p>
                                     ) : data.leave_type === 'SPL' ? (
                                         <p className="text-xs text-muted-foreground">Solo Parent Leave: Select from last 2 weeks to 1 month ahead</p>
+                                    ) : data.leave_type === 'ML' ? (
+                                        <p className="text-xs text-muted-foreground">Maternity Leave: Up to 1 year ahead</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
@@ -1384,7 +1393,7 @@ export default function Create({
                                         placeholder="Select end date"
                                         className={weekendError.end ? 'border-red-500' : ''}
                                         minDate={data.start_date || (data.leave_type === 'SL' ? getSlMinDate() : data.leave_type === 'SPL' ? getSplMinDate() : undefined)}
-                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : undefined}
+                                        maxDate={data.leave_type === 'SL' ? getSlMaxEndDate() : data.leave_type === 'SPL' ? getSplMaxEndDate() : data.leave_type === 'ML' ? getMlMaxEndDate() : undefined}
                                         defaultMonth={data.start_date || undefined}
                                     />
                                     {weekendError.end && (
@@ -1397,6 +1406,8 @@ export default function Create({
                                         <p className="text-xs text-muted-foreground">Sick Leave: Up to 1 month from today</p>
                                     ) : data.leave_type === 'SPL' ? (
                                         <p className="text-xs text-muted-foreground">Solo Parent Leave: Up to 1 month from today</p>
+                                    ) : data.leave_type === 'ML' ? (
+                                        <p className="text-xs text-muted-foreground">Maternity Leave: Up to 1 year from today</p>
                                     ) : (
                                         <p className="text-xs text-muted-foreground">Weekends (Sat/Sun) are not allowed</p>
                                     )}
