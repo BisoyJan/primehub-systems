@@ -715,10 +715,10 @@ export default function Create({
             }
 
             // Validate file type
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
             if (!allowedTypes.includes(file.type)) {
                 toast.error('Invalid file type', {
-                    description: 'Please upload a JPEG, PNG, GIF, or WebP image.',
+                    description: 'Please upload a JPEG, PNG, GIF, WebP image or PDF file.',
                 });
                 e.target.value = '';
                 return;
@@ -727,12 +727,17 @@ export default function Create({
             setData('medical_cert_file', file);
             setData('medical_cert_submitted', true);
 
-            // Create preview
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setMedicalCertPreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            // Create preview for images only
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setMedicalCertPreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // For PDFs, just set a placeholder
+                setMedicalCertPreview('pdf');
+            }
         }
     };
 
@@ -1467,7 +1472,7 @@ export default function Create({
                                             <input
                                                 type="file"
                                                 id="medical_cert_file"
-                                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
                                                 onChange={handleMedicalCertChange}
                                                 className="hidden"
                                             />
@@ -1483,7 +1488,7 @@ export default function Create({
                                                         Click to upload {data.leave_type === 'SL' ? 'medical certificate' : data.leave_type === 'BL' ? 'death certificate' : 'supporting document'}
                                                     </p>
                                                     <p className="text-xs text-muted-foreground mt-1">
-                                                        JPEG, PNG, GIF, or WebP (max 4MB)
+                                                        JPEG, PNG, GIF, WebP or PDF (max 4MB)
                                                     </p>
                                                 </div>
                                             </label>
@@ -1508,13 +1513,19 @@ export default function Create({
                                                     Remove
                                                 </Button>
                                             </div>
-                                            <div className="relative aspect-video max-h-48 overflow-hidden rounded-md bg-muted">
-                                                <img
-                                                    src={medicalCertPreview}
-                                                    alt="Medical certificate preview"
-                                                    className="object-contain w-full h-full"
-                                                />
-                                            </div>
+                                            {medicalCertPreview && medicalCertPreview !== 'pdf' ? (
+                                                <div className="relative aspect-video max-h-48 overflow-hidden rounded-md bg-muted">
+                                                    <img
+                                                        src={medicalCertPreview}
+                                                        alt="Medical certificate preview"
+                                                        className="object-contain w-full h-full"
+                                                    />
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-center p-6 bg-muted rounded-md">
+                                                    <FileImage className="h-12 w-12 text-muted-foreground" />
+                                                </div>
+                                            )}
                                             {data.medical_cert_file && (
                                                 <p className="text-xs text-muted-foreground">
                                                     {data.medical_cert_file.name} ({(data.medical_cert_file.size / 1024 / 1024).toFixed(2)} MB)

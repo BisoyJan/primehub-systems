@@ -19,7 +19,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
-import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink } from 'lucide-react';
+import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
 import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
@@ -155,6 +155,18 @@ export default function Show({
     const [showDenyDialog, setShowDenyDialog] = useState(false);
     const [showPartialDenyDialog, setShowPartialDenyDialog] = useState(false);
     const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
+    const [medicalCertZoom, setMedicalCertZoom] = useState(100);
+
+    // Zoom controls
+    const handleZoomIn = () => setMedicalCertZoom(prev => Math.min(prev + 25, 300));
+    const handleZoomOut = () => setMedicalCertZoom(prev => Math.max(prev - 25, 50));
+    const handleZoomReset = () => setMedicalCertZoom(100);
+
+    // Reset zoom when dialog opens
+    const handleOpenMedicalCert = () => {
+        setMedicalCertZoom(100);
+        setShowMedicalCertDialog(true);
+    };
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [showTLApproveDialog, setShowTLApproveDialog] = useState(false);
@@ -734,7 +746,7 @@ export default function Show({
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => setShowMedicalCertDialog(true)}
+                                            onClick={handleOpenMedicalCert}
                                         >
                                             <FileImage className="h-4 w-4 mr-1" />
                                             View Certificate
@@ -1752,14 +1764,45 @@ export default function Show({
                         </DialogDescription>
                     </DialogHeader>
 
-                    <div className="flex flex-col items-center justify-center p-4">
-                        {leaveRequest.medical_cert_path && (
-                            <img
-                                src={leaveMedicalCertRoute(leaveRequest.id).url}
-                                alt={leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
-                                className="max-w-full max-h-[60vh] object-contain rounded-lg border"
-                            />
-                        )}
+                    <div className="flex flex-col gap-4">
+                        {/* Zoom Controls */}
+                        <div className="flex items-center justify-center gap-2 pb-2 border-b">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleZoomOut}
+                                disabled={medicalCertZoom <= 50}
+                            >
+                                <ZoomOut className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-medium min-w-[60px] text-center">{medicalCertZoom}%</span>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleZoomIn}
+                                disabled={medicalCertZoom >= 300}
+                            >
+                                <ZoomIn className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleZoomReset}
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        {/* Image Container */}
+                        <div className="flex justify-center items-start p-4 overflow-auto max-h-[60vh]">
+                            {leaveRequest.medical_cert_path && (
+                                <img
+                                    src={leaveMedicalCertRoute(leaveRequest.id).url}
+                                    alt={leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : 'Supporting Document'}
+                                    className="max-w-full object-contain rounded-lg border transition-transform duration-200"
+                                    style={{ width: `${medicalCertZoom}%`, height: 'auto' }}
+                                />
+                            )}
+                        </div>
                     </div>
 
                     <DialogFooter>

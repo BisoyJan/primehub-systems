@@ -251,9 +251,9 @@ export default function Edit({
         const file = e.target.files?.[0];
         if (file) {
             // Validate file type
-            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+            const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
             if (!allowedTypes.includes(file.type)) {
-                toast.error('Invalid file type. Please upload a JPEG, PNG, GIF, or WebP image.');
+                toast.error('Invalid file type. Please upload a JPEG, JPG, PNG, GIF, WebP image or PDF file.');
                 return;
             }
             // Validate file size (4MB max)
@@ -263,12 +263,17 @@ export default function Edit({
             }
             setData('medical_cert_file', file);
             setData('medical_cert_submitted', true);
-            // Create preview
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setMedicalCertPreview(reader.result as string);
-            };
-            reader.readAsDataURL(file);
+            // Create preview for images only
+            if (file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    setMedicalCertPreview(reader.result as string);
+                };
+                reader.readAsDataURL(file);
+            } else {
+                // For PDFs, just set a placeholder
+                setMedicalCertPreview('pdf');
+            }
         }
     };
 
@@ -1465,11 +1470,17 @@ export default function Edit({
                                     {/* Preview uploaded file */}
                                     {medicalCertPreview ? (
                                         <div className="relative">
-                                            <img
-                                                src={medicalCertPreview}
-                                                alt="Medical Certificate Preview"
-                                                className="max-h-48 rounded-lg border object-contain"
-                                            />
+                                            {medicalCertPreview !== 'pdf' ? (
+                                                <img
+                                                    src={medicalCertPreview}
+                                                    alt="Medical Certificate Preview"
+                                                    className="max-h-48 rounded-lg border object-contain"
+                                                />
+                                            ) : (
+                                                <div className="flex items-center justify-center p-6 bg-muted rounded-md">
+                                                    <FileImage className="h-12 w-12 text-muted-foreground" />
+                                                </div>
+                                            )}
                                             <Button
                                                 type="button"
                                                 variant="destructive"
@@ -1488,7 +1499,7 @@ export default function Edit({
                                             <input
                                                 id="medical_cert_file"
                                                 type="file"
-                                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                                                accept="image/jpeg,image/jpg,image/png,image/gif,image/webp,application/pdf"
                                                 onChange={handleMedicalCertChange}
                                                 className="hidden"
                                             />
@@ -1501,7 +1512,7 @@ export default function Edit({
                                                     Click to upload {data.leave_type === 'SL' ? 'medical certificate' : 'death certificate'}
                                                 </span>
                                                 <span className="text-xs text-muted-foreground">
-                                                    JPEG, PNG, GIF, WebP (max 4MB)
+                                                    JPEG, PNG, GIF, WebP or PDF (max 4MB)
                                                 </span>
                                             </label>
                                         </div>

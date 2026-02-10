@@ -33,6 +33,12 @@ sudo apt-get install -y php${PHP_VERSION} php${PHP_VERSION}-fpm php${PHP_VERSION
   php${PHP_VERSION}-curl php${PHP_VERSION}-zip php${PHP_VERSION}-mysql php${PHP_VERSION}-gd php${PHP_VERSION}-intl
 sudo systemctl enable php${PHP_VERSION}-fpm
 
+echo "[Provision] Configure PHP upload limits"
+PHP_INI="/etc/php/${PHP_VERSION}/fpm/php.ini"
+sudo sed -i 's/^upload_max_filesize = .*/upload_max_filesize = 10M/' ${PHP_INI}
+sudo sed -i 's/^post_max_size = .*/post_max_size = 10M/' ${PHP_INI}
+sudo systemctl restart php${PHP_VERSION}-fpm
+
 echo "[Provision] Install Composer"
 if ! command -v composer >/dev/null 2>&1; then
   curl -sS https://getcomposer.org/installer -o composer-setup.php
@@ -79,6 +85,8 @@ server {
 
     access_log /var/log/nginx/primehub_access.log;
     error_log  /var/log/nginx/primehub_error.log;
+
+    client_max_body_size 50M;
 
     location / {
         try_files $uri $uri/ /index.php?$query_string;

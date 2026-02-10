@@ -677,8 +677,8 @@ class LeaveRequestController extends Controller
             && $leaveRequest->status === 'approved'
             && ! $leaveEndDatePassed;
 
-        // Check if user can view medical certificate (Admin, HR, Super Admin only)
-        $canViewMedicalCert = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
+        // Check if user can view medical certificate (own request OR Admin, HR, Super Admin)
+        $canViewMedicalCert = $leaveRequest->user_id === $user->id || in_array($user->role, ['Super Admin', 'Admin', 'HR']);
 
         // Get earlier conflicts for VL/UPTO (first-come-first-serve)
         $earlierConflicts = $this->getEarlierConflicts($leaveRequest);
@@ -771,8 +771,8 @@ class LeaveRequestController extends Controller
     {
         $user = auth()->user();
 
-        // Only Admin, HR, Super Admin can view medical certificates
-        if (! in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
+        // Only the request owner OR Admin/HR/Super Admin can view medical certificates
+        if ($leaveRequest->user_id !== $user->id && ! in_array($user->role, ['Super Admin', 'Admin', 'HR'])) {
             abort(403, 'Unauthorized to view medical certificate.');
         }
 

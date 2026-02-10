@@ -36,7 +36,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -164,6 +164,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
     const [showMedicalCertDialog, setShowMedicalCertDialog] = useState(false);
     const [selectedMedicalCertLeaveId, setSelectedMedicalCertLeaveId] = useState<number | null>(null);
     const [selectedMedicalCertUserName, setSelectedMedicalCertUserName] = useState<string>('');
+    const [medicalCertZoom, setMedicalCertZoom] = useState(100);
 
     // Export dialog state
     const [showExportDialog, setShowExportDialog] = useState(false);
@@ -183,8 +184,14 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
     const handleViewMedicalCert = (leaveId: number, userName: string) => {
         setSelectedMedicalCertLeaveId(leaveId);
         setSelectedMedicalCertUserName(userName);
+        setMedicalCertZoom(100);
         setShowMedicalCertDialog(true);
     };
+
+    // Zoom controls
+    const handleZoomIn = () => setMedicalCertZoom(prev => Math.min(prev + 25, 300));
+    const handleZoomOut = () => setMedicalCertZoom(prev => Math.max(prev - 25, 50));
+    const handleZoomReset = () => setMedicalCertZoom(100);
 
     // Filter employees based on search query (from all employees list)
     const filteredEmployees = React.useMemo(() => {
@@ -768,7 +775,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                                         </Button>
                                                     </Link>
                                                     {/* Medical/Supporting Document Button - For SL, BL, and UPTO with uploaded cert */}
-                                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && isAdmin && (
+                                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
                                                         <Button
                                                             size="icon"
                                                             variant="outline"
@@ -883,7 +890,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                         </Button>
                                     </Link>
                                     {/* Medical/Supporting Document Button - Mobile */}
-                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && isAdmin && (
+                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -1055,19 +1062,50 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                             })()} submitted by {selectedMedicalCertUserName}
                         </DialogDescription>
                     </DialogHeader>
-                    <div className="flex justify-center items-center p-4 bg-muted/30 rounded-lg">
-                        {selectedMedicalCertLeaveId && (
-                            <img
-                                src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
-                                alt={(() => {
-                                    const leaveType = leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type;
-                                    if (leaveType === 'SL') return 'Medical Certificate';
-                                    if (leaveType === 'BL') return 'Death Certificate';
-                                    return 'Supporting Document';
-                                })()}
-                                className="max-w-full max-h-[60vh] object-contain rounded-lg shadow-lg"
-                            />
-                        )}
+                    <div className="flex flex-col gap-4">
+                        {/* Zoom Controls */}
+                        <div className="flex items-center justify-center gap-2 pb-2 border-b">
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleZoomOut}
+                                disabled={medicalCertZoom <= 50}
+                            >
+                                <ZoomOut className="h-4 w-4" />
+                            </Button>
+                            <span className="text-sm font-medium min-w-[60px] text-center">{medicalCertZoom}%</span>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleZoomIn}
+                                disabled={medicalCertZoom >= 300}
+                            >
+                                <ZoomIn className="h-4 w-4" />
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleZoomReset}
+                            >
+                                <RotateCcw className="h-4 w-4" />
+                            </Button>
+                        </div>
+                        {/* Image Container */}
+                        <div className="flex justify-center items-start p-4 bg-muted/30 rounded-lg overflow-auto max-h-[60vh]">
+                            {selectedMedicalCertLeaveId && (
+                                <img
+                                    src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
+                                    alt={(() => {
+                                        const leaveType = leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type;
+                                        if (leaveType === 'SL') return 'Medical Certificate';
+                                        if (leaveType === 'BL') return 'Death Certificate';
+                                        return 'Supporting Document';
+                                    })()}
+                                    className="max-w-full object-contain rounded-lg shadow-lg transition-transform duration-200"
+                                    style={{ width: `${medicalCertZoom}%`, height: 'auto' }}
+                                />
+                            )}
+                        </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowMedicalCertDialog(false)}>

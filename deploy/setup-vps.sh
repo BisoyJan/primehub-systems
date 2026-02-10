@@ -127,7 +127,14 @@ install_php() {
         php8.4-zip php8.4-mysql php8.4-gd php8.4-intl php8.4-bcmath php8.4-redis
     systemctl enable php8.4-fpm
     systemctl start php8.4-fpm
-    print_success "PHP 8.4 installed"
+
+    print_info "Configuring PHP upload limits..."
+    PHP_INI="/etc/php/8.4/fpm/php.ini"
+    sed -i 's/^upload_max_filesize = .*/upload_max_filesize = 10M/' $PHP_INI
+    sed -i 's/^post_max_size = .*/post_max_size = 10M/' $PHP_INI
+    systemctl restart php8.4-fpm
+
+    print_success "PHP 8.4 installed and configured"
 }
 
 install_mysql() {

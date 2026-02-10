@@ -17,7 +17,7 @@ This guide automates provisioning and deployment for the Laravel + React (Vite, 
    ./deploy/provision.sh
    ```
 
-This installs Nginx, PHP 8.2 + extensions, Composer, Node.js LTS, pnpm, Redis, Supervisor, Certbot; configures firewall, Nginx site, Supervisor, cron.
+This installs Nginx, PHP 8.4 + extensions, Composer, Node.js LTS, pnpm, Redis, Supervisor, Certbot; configures firewall, Nginx site, Supervisor, cron, and PHP upload limits (10MB).
 
 ## Prepare .env
 Create a production `.env` locally with values:
@@ -56,10 +56,15 @@ Template available in `deploy/nginx.conf`. The provision script writes a similar
 
 ## Troubleshooting
 - Nginx: `sudo nginx -t && sudo systemctl status nginx`
-- PHP-FPM: `sudo systemctl status php8.2-fpm`
+- PHP-FPM: `sudo systemctl status php8.4-fpm`
 - App logs: `storage/logs/laravel.log`
 - Permissions: ensure `storage/` and `bootstrap/cache` are writable by `www-data`.
 - Vite build: confirm `npm run build` outputs to `public/build/` and is referenced by Blade/Inertia (default Laravel Vite).
+- **File Upload Issues**: If medical certificates or large files fail to upload, increase PHP limits:
+  ```bash
+  sudo chmod +x deploy/configure-php-limits.sh
+  sudo ./deploy/configure-php-limits.sh
+  ```
 
 ## Updating
 Redeploy by re-running `deploy/deploy.sh` with the same parameters after pushing changes.
