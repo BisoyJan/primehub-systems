@@ -532,6 +532,7 @@ class LeaveRequestController extends Controller
             }
 
             // Create leave request
+            // Store credits_year at creation time so it's preserved through approval
             $leaveRequest = LeaveRequest::create([
                 'user_id' => $targetUser->id,
                 'leave_type' => $request->leave_type,
@@ -545,6 +546,7 @@ class LeaveRequestController extends Controller
                 'status' => 'pending',
                 'attendance_points_at_request' => $attendancePoints,
                 'requires_tl_approval' => $requiresTlApproval,
+                'credits_year' => now()->year,
                 // Short notice override tracking
                 'short_notice_override' => $shortNoticeOverride,
                 'short_notice_override_by' => $shortNoticeOverrideBy,
@@ -973,9 +975,10 @@ class LeaveRequestController extends Controller
 
         // Prepare data for validation
         // Use the leave request's created_at as the filing date for 2-week notice calculation
+        // Use the leave request's existing credits_year to preserve the original credit pool
         $validationData = array_merge($request->validated(), [
             'days_requested' => $daysRequested,
-            'credits_year' => now()->year,
+            'credits_year' => $leaveRequest->credits_year ?? now()->year,
             'short_notice_override' => $shortNoticeOverride,
             'filed_at' => $leaveRequest->created_at,
         ]);
@@ -1386,7 +1389,8 @@ class LeaveRequestController extends Controller
                     $this->handleSlApproval($leaveRequest, $leaveCreditService);
                 } elseif ($leaveRequest->requiresCredits()) {
                     // Other credited leave types (VL, BL) - normal deduction
-                    $year = $request->input('credits_year', now()->year);
+                    // Use the year the leave was filed (created_at), not current year
+                    $year = $request->input('credits_year', $leaveRequest->created_at->year);
 
                     // If partial denial, only deduct for approved days
                     if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
@@ -1585,7 +1589,8 @@ class LeaveRequestController extends Controller
             if ($leaveRequest->leave_type === 'SL') {
                 $this->handleSlApproval($leaveRequest, $leaveCreditService);
             } elseif ($leaveRequest->requiresCredits()) {
-                $year = $request->input('credits_year', now()->year);
+                // Use the year the leave was filed (created_at), not current year
+                $year = $request->input('credits_year', $leaveRequest->created_at->year);
 
                 // If partial denial, only deduct for approved days
                 if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
