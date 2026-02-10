@@ -3732,4 +3732,148 @@ class LeaveRequestController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Scan for leave requests with mismatched credits_year (filed in one year, deducted from another).
+     * Returns a preview of affected requests and users.
+     */
+    public function creditsYearMismatchScan(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $affected = LeaveRequest::whereColumn(DB::raw('YEAR(created_at)'), '!=', 'credits_year')
+            ->where('status', 'approved')
+            ->whereNotNull('credits_deducted')
+            ->where('credits_deducted', '>', 0)
+            ->with('user:id,first_name,last_name,email')
+            ->orderBy('user_id')
+            ->orderBy('start_date')
+            ->get();
+
+        $grouped = $affected->groupBy('user_id')->map(function ($requests) {
+            $user = $requests->first()->user;
+
+            return [
+                'user_id' => $user->id,
+                'name' => $user->first_name.' '.$user->last_name,
+                'email' => $user->email,
+                'requests' => $requests->map(fn ($lr) => [
+                    'id' => $lr->id,
+                    'leave_type' => $lr->leave_type,
+                    'start_date' => $lr->start_date->format('M d, Y'),
+                    'end_date' => $lr->end_date->format('M d, Y'),
+                    'days_requested' => $lr->days_requested,
+                    'credits_deducted' => $lr->credits_deducted,
+                    'current_credits_year' => $lr->credits_year,
+                    'correct_credits_year' => $lr->created_at->year,
+                    'filed_date' => $lr->created_at->format('M d, Y'),
+                ])->values()->toArray(),
+                'total_to_restore' => $requests->sum('credits_deducted'),
+            ];
+        })->values()->toArray();
+
+        return response()->json([
+            'total_requests' => $affected->count(),
+            'total_users' => count($grouped),
+            'total_credits' => $affected->sum('credits_deducted'),
+            'users' => $grouped,
+        ]);
+    }
+
+    /**
+     * Fix leave requests with mismatched credits_year by restoring credits
+     * from the wrong year and re-deducting from the correct year.
+     */
+    public function creditsYearMismatchFix(Request $request): JsonResponse
+    {
+        $user = auth()->user();
+        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
+            return response()->json(['error' => 'Unauthorized'], 403);
+        }
+
+        $affected = LeaveRequest::whereColumn(DB::raw('YEAR(created_at)'), '!=', 'credits_year')
+            ->where('status', 'approved')
+            ->whereNotNull('credits_deducted')
+            ->where('credits_deducted', '>', 0)
+            ->get();
+
+        if ($affected->isEmpty()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'No mismatched leave requests found.',
+                'summary' => ['fixed' => 0, 'total_credits_moved' => 0],
+            ]);
+        }
+
+        $leaveCreditService = $this->leaveCreditService;
+
+        DB::beginTransaction();
+        try {
+            $fixed = 0;
+            $totalCreditsMoved = 0;
+            $details = [];
+
+            foreach ($affected as $lr) {
+                $correctYear = $lr->created_at->year;
+                $wrongYear = $lr->credits_year;
+                $creditsMoved = (float) $lr->credits_deducted;
+
+                // 1. Restore credits from the wrong year
+                $leaveCreditService->restoreCredits($lr);
+
+                // 2. Update credits_year to the correct year
+                $lr->update(['credits_year' => $correctYear]);
+
+                // 3. Re-deduct from the correct year
+                $lr->refresh();
+                $leaveCreditService->deductCredits($lr, $correctYear);
+
+                $lr->refresh();
+                $fixed++;
+                $totalCreditsMoved += $creditsMoved;
+
+                $details[] = [
+                    'leave_request_id' => $lr->id,
+                    'user_name' => $lr->user->first_name.' '.$lr->user->last_name,
+                    'credits_moved' => $creditsMoved,
+                    'from_year' => $wrongYear,
+                    'to_year' => $correctYear,
+                ];
+            }
+
+            DB::commit();
+
+            \Log::info('Credits year mismatch fix completed', [
+                'fixed_by' => $user->id,
+                'fixed_count' => $fixed,
+                'total_credits_moved' => $totalCreditsMoved,
+                'details' => $details,
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => "Fixed {$fixed} leave request(s). {$totalCreditsMoved} credits moved to correct year.",
+                'summary' => [
+                    'fixed' => $fixed,
+                    'total_credits_moved' => $totalCreditsMoved,
+                    'details' => $details,
+                ],
+            ]);
+        } catch (\Exception $e) {
+            DB::rollBack();
+
+            \Log::error('Credits year mismatch fix failed', [
+                'error' => $e->getMessage(),
+                'attempted_by' => $user->id,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Fix failed: '.$e->getMessage().'. All changes have been rolled back.',
+            ], 500);
+        }
+    }
 }

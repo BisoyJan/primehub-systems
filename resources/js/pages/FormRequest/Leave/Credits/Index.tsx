@@ -56,7 +56,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
-import { Download, Eye, Filter, ChevronsUpDown, Check, Banknote, Clock, ArrowRight, Settings, RefreshCw, Play, Loader2, TrendingUp } from 'lucide-react';
+import { Download, Eye, Filter, ChevronsUpDown, Check, Banknote, Clock, ArrowRight, Settings, RefreshCw, Play, Loader2, TrendingUp, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -166,6 +166,33 @@ interface Props {
     availableYears: number[];
 }
 
+interface MismatchRequest {
+    id: number;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    days_requested: number;
+    credits_deducted: number;
+    current_credits_year: number;
+    correct_credits_year: number;
+    filed_date: string;
+}
+
+interface MismatchUser {
+    user_id: number;
+    name: string;
+    email: string;
+    requests: MismatchRequest[];
+    total_to_restore: number;
+}
+
+interface MismatchScanResult {
+    total_requests: number;
+    total_users: number;
+    total_credits: number;
+    users: MismatchUser[];
+}
+
 export default function Index({ creditsData, allEmployees, campaigns = [], teamLeadCampaignId, filters, availableYears }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Leave Credits',
@@ -206,6 +233,14 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
     const [isProcessing, setIsProcessing] = useState(false);
     const [confirmAction, setConfirmAction] = useState<string | null>(null);
     const [managementYear, setManagementYear] = useState(new Date().getFullYear());
+
+    // Mismatch dialog state
+    const [isMismatchDialogOpen, setIsMismatchDialogOpen] = useState(false);
+    const [isScanningMismatch, setIsScanningMismatch] = useState(false);
+    const [mismatchData, setMismatchData] = useState<MismatchScanResult | null>(null);
+    const [isFixingMismatch, setIsFixingMismatch] = useState(false);
+    const [confirmMismatchFix, setConfirmMismatchFix] = useState(false);
+    const [expandedMismatchUsers, setExpandedMismatchUsers] = useState<Set<number>>(new Set());
 
     // Filter employees based on search query (from all employees list)
     const filteredEmployees = useMemo(() => {
@@ -473,6 +508,82 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
         fetchManagementStats();
     };
 
+    // Mismatch scan/fix handlers
+    const scanMismatch = async () => {
+        setIsScanningMismatch(true);
+        setMismatchData(null);
+        setExpandedMismatchUsers(new Set());
+        try {
+            const response = await fetch('/form-requests/leave-requests/credits/mismatch/scan', {
+                headers: {
+                    'Accept': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+            if (!response.ok) throw new Error('Failed to scan');
+            const data: MismatchScanResult = await response.json();
+            setMismatchData(data);
+        } catch {
+            toast.error('Failed to scan for credits year mismatches');
+        } finally {
+            setIsScanningMismatch(false);
+        }
+    };
+
+    const openMismatchDialog = () => {
+        setIsMismatchDialogOpen(true);
+        scanMismatch();
+    };
+
+    const handleFixMismatch = async () => {
+        setIsFixingMismatch(true);
+        try {
+            const response = await fetch('/form-requests/leave-requests/credits/mismatch/fix', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Failed to fix mismatches');
+            }
+
+            const result = await response.json();
+
+            if (result.success) {
+                toast.success(result.message);
+                setMismatchData(null);
+                setConfirmMismatchFix(false);
+                setIsMismatchDialogOpen(false);
+                router.reload({ only: ['creditsData'] });
+            } else {
+                toast.error(result.error || 'Failed to fix mismatches');
+            }
+        } catch (e) {
+            toast.error(e instanceof Error ? e.message : 'Failed to fix mismatches');
+        } finally {
+            setIsFixingMismatch(false);
+            setConfirmMismatchFix(false);
+        }
+    };
+
+    const toggleMismatchUser = (userId: number) => {
+        setExpandedMismatchUsers(prev => {
+            const next = new Set(prev);
+            if (next.has(userId)) {
+                next.delete(userId);
+            } else {
+                next.add(userId);
+            }
+            return next;
+        });
+    };
+
     const getRoleBadgeVariant = (role: string) => {
         const variants: Record<string, 'default' | 'secondary' | 'outline' | 'destructive'> = {
             'Super Admin': 'destructive',
@@ -645,6 +756,11 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                             <Button variant="outline" onClick={openManagementDialog} className="flex-1 sm:flex-none">
                                 <Settings className="h-4 w-4 mr-2" />
                                 Management
+                            </Button>
+
+                            <Button variant="outline" onClick={openMismatchDialog} className="flex-1 sm:flex-none">
+                                <AlertTriangle className="h-4 w-4 mr-2" />
+                                Fix Credits Year
                             </Button>
                         </div>
                     </div>
@@ -1325,6 +1441,212 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            {/* Credits Year Mismatch Dialog */}
+            <Dialog open={isMismatchDialogOpen} onOpenChange={setIsMismatchDialogOpen}>
+                <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
+                            <AlertTriangle className="h-5 w-5 text-amber-500" />
+                            Fix Credits Year Mismatch
+                        </DialogTitle>
+                        <DialogDescription>
+                            Scans for approved leave requests where the credits were deducted from the wrong year
+                            (e.g., filed in 2025 but credits deducted from 2026). This will restore credits to the wrong year
+                            and re-deduct from the correct year.
+                        </DialogDescription>
+                    </DialogHeader>
+
+                    <div className="space-y-4 py-2">
+                        {isScanningMismatch ? (
+                            <div className="flex flex-col items-center justify-center py-8 gap-3">
+                                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                                <p className="text-sm text-muted-foreground">Scanning leave requests...</p>
+                            </div>
+                        ) : mismatchData ? (
+                            mismatchData.total_requests === 0 ? (
+                                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                                    <Check className="h-10 w-10 text-green-500" />
+                                    <p className="font-medium text-green-700 dark:text-green-400">No mismatches found</p>
+                                    <p className="text-sm text-muted-foreground">All leave request credits are assigned to the correct year.</p>
+                                </div>
+                            ) : (
+                                <>
+                                    {/* Summary */}
+                                    <div className="grid grid-cols-3 gap-3">
+                                        <div className="p-3 border rounded-lg text-center">
+                                            <p className="text-2xl font-bold text-amber-600">{mismatchData.total_users}</p>
+                                            <p className="text-xs text-muted-foreground">Affected Users</p>
+                                        </div>
+                                        <div className="p-3 border rounded-lg text-center">
+                                            <p className="text-2xl font-bold text-amber-600">{mismatchData.total_requests}</p>
+                                            <p className="text-xs text-muted-foreground">Leave Requests</p>
+                                        </div>
+                                        <div className="p-3 border rounded-lg text-center">
+                                            <p className="text-2xl font-bold text-amber-600">{mismatchData.total_credits}</p>
+                                            <p className="text-xs text-muted-foreground">Credits to Move</p>
+                                        </div>
+                                    </div>
+
+                                    {/* User list with expandable details */}
+                                    <div className="border rounded-lg divide-y max-h-[40vh] overflow-y-auto">
+                                        {mismatchData.users.map((user) => (
+                                            <div key={user.user_id}>
+                                                <button
+                                                    type="button"
+                                                    className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors text-left"
+                                                    onClick={() => toggleMismatchUser(user.user_id)}
+                                                >
+                                                    <div className="flex items-center gap-2">
+                                                        {expandedMismatchUsers.has(user.user_id) ? (
+                                                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                                                        ) : (
+                                                            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                                        )}
+                                                        <div>
+                                                            <p className="font-medium text-sm">{user.name}</p>
+                                                            <p className="text-xs text-muted-foreground">{user.email}</p>
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex items-center gap-3">
+                                                        <Badge variant="outline" className="text-xs">
+                                                            {user.requests.length} request{user.requests.length !== 1 ? 's' : ''}
+                                                        </Badge>
+                                                        <Badge variant="destructive" className="text-xs">
+                                                            {user.total_to_restore} credits
+                                                        </Badge>
+                                                    </div>
+                                                </button>
+
+                                                {expandedMismatchUsers.has(user.user_id) && (
+                                                    <div className="px-3 pb-3">
+                                                        <div className="bg-muted/30 rounded-md overflow-hidden">
+                                                            <Table>
+                                                                <TableHeader>
+                                                                    <TableRow className="text-xs">
+                                                                        <TableHead className="py-2 text-xs">Leave</TableHead>
+                                                                        <TableHead className="py-2 text-xs">Filed</TableHead>
+                                                                        <TableHead className="py-2 text-xs">Dates</TableHead>
+                                                                        <TableHead className="py-2 text-xs text-right">Credits</TableHead>
+                                                                        <TableHead className="py-2 text-xs text-center">Year Fix</TableHead>
+                                                                    </TableRow>
+                                                                </TableHeader>
+                                                                <TableBody>
+                                                                    {user.requests.map((req) => (
+                                                                        <TableRow key={req.id} className="text-xs">
+                                                                            <TableCell className="py-1.5">
+                                                                                <span className="font-medium">#{req.id}</span>
+                                                                                <span className="text-muted-foreground ml-1">{req.leave_type}</span>
+                                                                            </TableCell>
+                                                                            <TableCell className="py-1.5">{req.filed_date}</TableCell>
+                                                                            <TableCell className="py-1.5">
+                                                                                {req.start_date} — {req.end_date}
+                                                                            </TableCell>
+                                                                            <TableCell className="py-1.5 text-right font-medium">
+                                                                                {req.credits_deducted}
+                                                                            </TableCell>
+                                                                            <TableCell className="py-1.5 text-center">
+                                                                                <span className="text-red-500 line-through">{req.current_credits_year}</span>
+                                                                                <ArrowRight className="inline h-3 w-3 mx-1 text-muted-foreground" />
+                                                                                <span className="text-green-600 font-medium">{req.correct_credits_year}</span>
+                                                                            </TableCell>
+                                                                        </TableRow>
+                                                                    ))}
+                                                                </TableBody>
+                                                            </Table>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Warning notice */}
+                                    <div className="flex items-start gap-2 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg">
+                                        <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+                                        <div className="text-sm text-amber-700 dark:text-amber-300">
+                                            <p className="font-medium mb-1">What will happen</p>
+                                            <p>
+                                                For each affected leave request: credits will be <strong>restored</strong> to the wrong year,
+                                                then <strong>re-deducted</strong> from the correct year (based on the filing date).
+                                                All changes are executed in a single database transaction.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </>
+                            )
+                        ) : (
+                            <div className="text-center py-4">
+                                <p className="text-muted-foreground">Click scan to check for mismatches</p>
+                            </div>
+                        )}
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setIsMismatchDialogOpen(false)}>
+                            Close
+                        </Button>
+                        <Button variant="outline" onClick={scanMismatch} disabled={isScanningMismatch}>
+                            {isScanningMismatch ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Scanning...
+                                </>
+                            ) : (
+                                <>
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Rescan
+                                </>
+                            )}
+                        </Button>
+                        {mismatchData && mismatchData.total_requests > 0 && (
+                            <Button
+                                variant="destructive"
+                                onClick={() => setConfirmMismatchFix(true)}
+                                disabled={isFixingMismatch}
+                            >
+                                <AlertTriangle className="h-4 w-4 mr-2" />
+                                Fix {mismatchData.total_requests} Request{mismatchData.total_requests !== 1 ? 's' : ''}
+                            </Button>
+                        )}
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Mismatch Fix Confirmation */}
+            <AlertDialog open={confirmMismatchFix} onOpenChange={setConfirmMismatchFix}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Confirm Credits Year Fix</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            This will fix <strong>{mismatchData?.total_requests}</strong> leave request{(mismatchData?.total_requests ?? 0) !== 1 ? 's' : ''} across{' '}
+                            <strong>{mismatchData?.total_users}</strong> user{(mismatchData?.total_users ?? 0) !== 1 ? 's' : ''}, moving a total of{' '}
+                            <strong>{mismatchData?.total_credits}</strong> credits to their correct year.
+                            <br /><br />
+                            All changes run in a single transaction and will be rolled back if any error occurs.
+                            <br /><br />
+                            <strong>This action cannot be undone.</strong>
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isFixingMismatch}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={handleFixMismatch}
+                            disabled={isFixingMismatch}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                            {isFixingMismatch ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Fixing...
+                                </>
+                            ) : (
+                                'Confirm Fix'
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
 
             {/* Confirmation Dialog */}
             <AlertDialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>

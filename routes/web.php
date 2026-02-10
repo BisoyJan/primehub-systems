@@ -344,6 +344,8 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/regularization/process', [LeaveRequestController::class, 'processRegularization'])->name('regularization.process');
             Route::post('/accruals/process', [LeaveRequestController::class, 'processMonthlyAccruals'])->name('accruals.process');
             Route::post('/carryovers/process', [LeaveRequestController::class, 'processYearEndCarryovers'])->name('carryovers.process');
+            Route::get('/mismatch/scan', [LeaveRequestController::class, 'creditsYearMismatchScan'])->name('mismatch.scan');
+            Route::post('/mismatch/fix', [LeaveRequestController::class, 'creditsYearMismatchFix'])->name('mismatch.fix');
             Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');
         });
 
