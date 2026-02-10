@@ -29,14 +29,19 @@ class LeaveRequestRequest extends FormRequest
             // Sick Leave: start date can be up to 3 weeks ago, end date up to 1 month ahead
             $minStartDate = now()->subWeeks(3)->format('Y-m-d');
             $maxEndDate = now()->addMonth()->format('Y-m-d');
-            $startDateRule = ['required', 'date', 'after_or_equal:' . $minStartDate, 'before_or_equal:' . $maxEndDate];
-            $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:' . $maxEndDate];
+            $startDateRule = ['required', 'date', 'after_or_equal:'.$minStartDate, 'before_or_equal:'.$maxEndDate];
+            $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.$maxEndDate];
         } elseif ($leaveType === 'SPL') {
             // Solo Parent Leave: start date can be up to 2 weeks ago, end date up to 1 month ahead
             $minStartDate = now()->subWeeks(2)->format('Y-m-d');
             $maxEndDate = now()->addMonth()->format('Y-m-d');
-            $startDateRule = ['required', 'date', 'after_or_equal:' . $minStartDate, 'before_or_equal:' . $maxEndDate];
-            $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:' . $maxEndDate];
+            $startDateRule = ['required', 'date', 'after_or_equal:'.$minStartDate, 'before_or_equal:'.$maxEndDate];
+            $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.$maxEndDate];
+        } elseif ($leaveType === 'ML') {
+            // Maternity Leave: no minimum start date restriction, end date up to 1 year ahead
+            $maxEndDate = now()->addYear()->format('Y-m-d');
+            $startDateRule = ['required', 'date', 'before_or_equal:'.$maxEndDate];
+            $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.$maxEndDate];
         } else {
             // Other leave types: start date must be today or future
             $startDateRule = ['required', 'date', 'after_or_equal:today'];
@@ -72,10 +77,14 @@ class LeaveRequestRequest extends FormRequest
             'leave_type.in' => 'Invalid leave type selected.',
             'start_date.required' => 'Start date is required.',
             'start_date.after_or_equal' => 'Start date is outside the allowed range.',
-            'start_date.before_or_equal' => 'Start date cannot exceed 1 month from today.',
+            'start_date.before_or_equal' => $this->input('leave_type') === 'ML'
+                ? 'Start date cannot exceed 1 year from today.'
+                : 'Start date cannot exceed 1 month from today.',
             'end_date.required' => 'End date is required.',
             'end_date.after_or_equal' => 'End date must be on or after the start date.',
-            'end_date.before_or_equal' => 'End date cannot exceed 1 month from today.',
+            'end_date.before_or_equal' => $this->input('leave_type') === 'ML'
+                ? 'End date cannot exceed 1 year from today.'
+                : 'End date cannot exceed 1 month from today.',
             'reason.required' => 'Please provide a reason for your leave request.',
             'reason.min' => 'Reason must be at least 10 characters.',
             'reason.max' => 'Reason cannot exceed 1000 characters.',

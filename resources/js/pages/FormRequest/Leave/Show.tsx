@@ -804,38 +804,40 @@ export default function Show({
 
 
 
-                        {/* Attendance Points at Request - Highlighted if >= 6 */}
-                        <div>
-                            <p className="text-sm font-medium text-muted-foreground">
-                                Attendance Points at Request
-                            </p>
-                            <div className="flex items-center gap-2 mt-1">
-                                {Number(leaveRequest.attendance_points_at_request || 0) >= 6 ? (
-                                    <Badge variant="destructive" className="text-sm font-semibold px-3 py-1">
-                                        <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
-                                        {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)} Points (High)
-                                    </Badge>
-                                ) : (
-                                    <p className="text-base">
-                                        {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)}
-                                    </p>
-                                )}
-                                {activeAttendancePoints && activeAttendancePoints.length > 0 && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => setShowAttendancePointsDialog(true)}
-                                        className="h-8"
-                                    >
-                                        <Info className="h-4 w-4 mr-1" />
-                                        View Details
-                                    </Button>
-                                )}
+                        {/* Attendance Points at Request - Highlighted if >= 6, hidden for ML */}
+                        {leaveRequest.leave_type !== 'ML' && (
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">
+                                    Attendance Points at Request
+                                </p>
+                                <div className="flex items-center gap-2 mt-1">
+                                    {Number(leaveRequest.attendance_points_at_request || 0) >= 6 ? (
+                                        <Badge variant="destructive" className="text-sm font-semibold px-3 py-1">
+                                            <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                                            {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)} Points (High)
+                                        </Badge>
+                                    ) : (
+                                        <p className="text-base">
+                                            {Number(leaveRequest.attendance_points_at_request || 0).toFixed(1)}
+                                        </p>
+                                    )}
+                                    {activeAttendancePoints && activeAttendancePoints.length > 0 && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => setShowAttendancePointsDialog(true)}
+                                            className="h-8"
+                                        >
+                                            <Info className="h-4 w-4 mr-1" />
+                                            View Details
+                                        </Button>
+                                    )}
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        {/* High Attendance Points Alert - Hidden for cancelled leaves */}
-                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && leaveRequest.status !== 'cancelled' && (
+                        {/* High Attendance Points Alert - Hidden for cancelled leaves and ML */}
+                        {Number(leaveRequest.attendance_points_at_request || 0) >= 6 && leaveRequest.status !== 'cancelled' && leaveRequest.leave_type !== 'ML' && (
                             <Alert className="border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                 <AlertDescription className="text-red-800 dark:text-red-200">
                                     <strong>⚠️ High Attendance Points:</strong>  <p>This employee has{' '}
