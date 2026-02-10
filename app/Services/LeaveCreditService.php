@@ -969,10 +969,12 @@ class LeaveCreditService
 
         // Check 2-week advance notice for VL and BL only (SL is unpredictable)
         // Skip this check if short notice override is enabled
+        // Use filed_at (the original request creation date) if provided, otherwise use now()
         if (in_array($leaveType, ['VL', 'BL']) && ! $shortNoticeOverride) {
-            $twoWeeksFromNow = now()->addWeeks(2)->startOfDay();
-            if ($startDate->startOfDay()->lt($twoWeeksFromNow)) {
-                $errors[] = "Leave requests must be submitted at least 2 weeks in advance. Earliest date you can apply for is {$twoWeeksFromNow->format('F j, Y')}.";
+            $filedAt = isset($data['filed_at']) ? Carbon::parse($data['filed_at']) : now();
+            $twoWeeksFromFiled = $filedAt->copy()->addWeeks(2)->startOfDay();
+            if ($startDate->startOfDay()->lt($twoWeeksFromFiled)) {
+                $errors[] = "Leave requests must be submitted at least 2 weeks in advance. Earliest date you can apply for is {$twoWeeksFromFiled->format('F j, Y')}.";
             }
         }
 

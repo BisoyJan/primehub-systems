@@ -16,10 +16,10 @@ use App\Models\LeaveCreditCarryover;
 use App\Models\LeaveRequest;
 use App\Models\LeaveRequestDeniedDate;
 use App\Models\User;
+use App\Services\AttendancePoint\GbroCalculationService;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
 use App\Services\PermissionService;
-use \App\Services\AttendancePoint\GbroCalculationService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -855,8 +855,9 @@ class LeaveRequestController extends Controller
         $campaignsFromDb = Campaign::orderBy('name')->pluck('name')->toArray();
         $campaigns = array_merge(['Management (For TL/Admin)'], $campaignsFromDb);
 
-        // Calculate two weeks from now for 2-week notice validation
-        $twoWeeksFromNow = now()->addWeeks(2)->format('Y-m-d');
+        // Calculate two weeks from the date the request was filed (created_at), not from today
+        // This prevents false short notice warnings when editing an old request
+        $twoWeeksFromNow = $leaveRequest->created_at->copy()->addWeeks(2)->format('Y-m-d');
 
         // Check if user can override short notice (Admin/Super Admin only)
         $canOverrideShortNotice = in_array($user->role, ['Super Admin', 'Admin']);
@@ -971,10 +972,12 @@ class LeaveRequestController extends Controller
         }
 
         // Prepare data for validation
+        // Use the leave request's created_at as the filing date for 2-week notice calculation
         $validationData = array_merge($request->validated(), [
             'days_requested' => $daysRequested,
             'credits_year' => now()->year,
             'short_notice_override' => $shortNoticeOverride,
+            'filed_at' => $leaveRequest->created_at,
         ]);
 
         // Validate business rules
