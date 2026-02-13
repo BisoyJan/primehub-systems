@@ -553,6 +553,16 @@ export default function AttendanceReview() {
         });
     };
 
+    // Compute default dates (yesterday & today)
+    const getDefaultDates = () => {
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+        const fmt = (d: Date) => d.toISOString().split('T')[0];
+        return { defaultFrom: fmt(yesterday), defaultTo: fmt(today) };
+    };
+    const { defaultFrom, defaultTo } = getDefaultDates();
+
     const handleClearFilters = () => {
         setSelectedUserIds([]);
         setSelectedSiteId("");
@@ -565,8 +575,8 @@ export default function AttendanceReview() {
         }
         setVerifiedFilter("all");
         setLeaveConflictFilter("all");
-        setDateFrom("");
-        setDateTo("");
+        setDateFrom(defaultFrom);
+        setDateTo(defaultTo);
         router.get("/attendance/review", {}, { preserveState: true });
     };
 

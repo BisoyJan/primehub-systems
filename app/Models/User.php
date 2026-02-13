@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Fortify\TwoFactorAuthenticatable;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
@@ -41,6 +42,7 @@ class User extends Authenticatable
         'middle_name',
         'last_name',
         'email',
+        'avatar',
         'password',
         'role',
         'inactivity_timeout',
@@ -69,7 +71,7 @@ class User extends Authenticatable
      *
      * @var array
      */
-    protected $appends = ['name'];
+    protected $appends = ['name', 'avatar_url'];
 
     /**
      * Get the attributes that should be cast.
@@ -146,6 +148,18 @@ class User extends Authenticatable
         $name .= ' '.$this->last_name;
 
         return $name;
+    }
+
+    /**
+     * Get the URL for the user's avatar.
+     */
+    public function getAvatarUrlAttribute(): ?string
+    {
+        if (! $this->avatar) {
+            return null;
+        }
+
+        return Storage::disk('public')->url($this->avatar);
     }
 
     /**

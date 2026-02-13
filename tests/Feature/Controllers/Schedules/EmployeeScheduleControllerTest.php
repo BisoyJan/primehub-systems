@@ -15,6 +15,7 @@ class EmployeeScheduleControllerTest extends TestCase
     use RefreshDatabase;
 
     protected User $user;
+
     protected User $employee;
 
     protected function setUp(): void
@@ -340,5 +341,84 @@ class EmployeeScheduleControllerTest extends TestCase
             ->get(route('employee-schedules.getSchedule'));
 
         $response->assertSessionHasErrors(['user_id', 'date']);
+    }
+
+    public function test_index_hides_resigned_employees_by_default(): void
+    {
+        // Create a resigned employee (has hired_date but is_active = false)
+        $resignedEmployee = User::factory()->create([
+            'hired_date' => now()->subMonths(6),
+            'is_active' => false,
+            'is_approved' => true,
+        ]);
+        $resignedSchedule = EmployeeSchedule::factory()->create(['user_id' => $resignedEmployee->id]);
+
+        // Create an active employee
+        $activeEmployee = User::factory()->create([
+            'hired_date' => now()->subMonths(3),
+            'is_active' => true,
+            'is_approved' => true,
+        ]);
+        $activeSchedule = EmployeeSchedule::factory()->create(['user_id' => $activeEmployee->id]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('employee-schedules.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Attendance/EmployeeSchedules/Index')
+                ->has('schedules.data', 1) // Only 1 schedule (the active employee)
+                ->where('schedules.data.0.user.id', $activeEmployee->id)
+            );
+    }
+
+    public function test_index_shows_resigned_employees_when_filter_enabled(): void
+    {
+        // Create a resigned employee (has hired_date but is_active = false)
+        $resignedEmployee = User::factory()->create([
+            'hired_date' => now()->subMonths(6),
+            'is_active' => false,
+            'is_approved' => true,
+        ]);
+        $resignedSchedule = EmployeeSchedule::factory()->create(['user_id' => $resignedEmployee->id]);
+
+        // Create an active employee
+        $activeEmployee = User::factory()->create([
+            'hired_date' => now()->subMonths(3),
+            'is_active' => true,
+            'is_approved' => true,
+        ]);
+        $activeSchedule = EmployeeSchedule::factory()->create(['user_id' => $activeEmployee->id]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('employee-schedules.index', ['show_resigned' => true]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Attendance/EmployeeSchedules/Index')
+                ->has('schedules.data', 2) // Both schedules should be visible
+                ->where('filters.show_resigned', true)
+            );
+    }
+
+    public function test_index_shows_employees_without_hired_date(): void
+    {
+        // Create an employee without hired_date (not yet hired)
+        $notHiredEmployee = User::factory()->create([
+            'hired_date' => null,
+            'is_active' => false,
+            'is_approved' => true,
+        ]);
+        $notHiredSchedule = EmployeeSchedule::factory()->create(['user_id' => $notHiredEmployee->id]);
+
+        $response = $this->actingAs($this->user)
+            ->get(route('employee-schedules.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Attendance/EmployeeSchedules/Index')
+                ->has('schedules.data', 1) // Should be visible (no hired_date)
+                ->where('schedules.data.0.user.id', $notHiredEmployee->id)
+            );
     }
 }

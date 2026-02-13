@@ -13,6 +13,8 @@ Route::middleware('auth')->group(function () {
 
     Route::get('settings/account', [ProfileController::class, 'edit'])->name('account.edit');
     Route::patch('settings/account', [ProfileController::class, 'update'])->name('account.update');
+    Route::post('settings/account/avatar', [ProfileController::class, 'updateAvatar'])->name('account.avatar.update');
+    Route::delete('settings/account/avatar', [ProfileController::class, 'deleteAvatar'])->name('account.avatar.destroy');
     Route::delete('settings/account', [ProfileController::class, 'destroy'])->name('account.destroy');
 
     Route::get('settings/password', [PasswordController::class, 'edit'])->name('password.edit');

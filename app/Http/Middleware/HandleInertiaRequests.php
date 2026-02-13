@@ -57,13 +57,14 @@ class HandleInertiaRequests extends Middleware
             'auth' => [
                 'user' => $user ? [
                     ...$user->toArray(),
+                    'avatar' => $user->avatar_url,
                     'inactivity_timeout' => $user->inactivity_timeout, // null = disabled
                     'permissions' => $this->permissionService->getPermissionsForRole($user->role),
                 ] : null,
             ],
             'flash' => [
-                'message' => fn() => $request->session()->get('message'),
-                'type' => fn() => $request->session()->get('type'),
+                'message' => fn () => $request->session()->get('message'),
+                'type' => fn () => $request->session()->get('type'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
         ];

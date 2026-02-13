@@ -111,6 +111,7 @@ interface PageProps extends SharedData {
         shift_type?: string;
         is_active?: string;
         active_only?: boolean;
+        show_resigned?: boolean;
     };
     [key: string]: unknown;
 }
@@ -194,6 +195,7 @@ export default function EmployeeSchedulesIndex() {
     });
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
     const [activeOnly, setActiveOnly] = useState(appliedFilters.active_only || false);
+    const [showResigned, setShowResigned] = useState(appliedFilters.show_resigned || false);
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
 
@@ -205,7 +207,8 @@ export default function EmployeeSchedulesIndex() {
         setCampaignFilter(appliedFilters.campaign_id || "all");
         setStatusFilter(appliedFilters.is_active || "all");
         setActiveOnly(appliedFilters.active_only || false);
-    }, [appliedFilters.search, appliedFilters.user_id, appliedFilters.role, appliedFilters.campaign_id, appliedFilters.is_active, appliedFilters.active_only]);
+        setShowResigned(appliedFilters.show_resigned || false);
+    }, [appliedFilters.search, appliedFilters.user_id, appliedFilters.role, appliedFilters.campaign_id, appliedFilters.is_active, appliedFilters.active_only, appliedFilters.show_resigned]);
 
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
     const [scheduleToDelete, setScheduleToDelete] = useState<number | null>(null);
@@ -225,6 +228,7 @@ export default function EmployeeSchedulesIndex() {
         if (campaignFilter !== "all") params.campaign_id = campaignFilter;
         if (statusFilter !== "all") params.is_active = statusFilter;
         if (activeOnly) params.active_only = "1";
+        if (showResigned) params.show_resigned = "1";
 
         setLoading(true);
         router.get(employeeSchedulesIndex().url, params, {
@@ -251,6 +255,7 @@ export default function EmployeeSchedulesIndex() {
             if (campaignFilter !== "all") params.campaign_id = campaignFilter;
             if (statusFilter !== "all") params.is_active = statusFilter;
             if (activeOnly) params.active_only = "1";
+            if (showResigned) params.show_resigned = "1";
 
             router.get(employeeSchedulesIndex().url, params, {
                 preserveState: true,
@@ -270,6 +275,7 @@ export default function EmployeeSchedulesIndex() {
         campaignFilter !== "all" ||
         statusFilter !== "all" ||
         activeOnly ||
+        showResigned ||
         Boolean(search);
 
     const clearFilters = () => {
@@ -279,6 +285,7 @@ export default function EmployeeSchedulesIndex() {
         setCampaignFilter("all");
         setStatusFilter("all");
         setActiveOnly(false);
+        setShowResigned(false);
 
         // Trigger reload with cleared filters
         setLoading(true);
@@ -427,7 +434,7 @@ export default function EmployeeSchedulesIndex() {
                 />
 
                 <div className="flex flex-col gap-3">
-                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
+                    <div className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(0,3fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)]">
                         <Popover open={isUserPopoverOpen} onOpenChange={setIsUserPopoverOpen}>
                             <PopoverTrigger asChild>
                                 <Button
@@ -548,6 +555,15 @@ export default function EmployeeSchedulesIndex() {
                         >
                             <CheckCircle className="mr-2 h-4 w-4" />
                             Active Only
+                        </Button>
+
+                        <Button
+                            variant={showResigned ? "default" : "outline"}
+                            onClick={() => setShowResigned(!showResigned)}
+                            className="w-full"
+                        >
+                            <Users className="mr-2 h-4 w-4" />
+                            Show Resigned
                         </Button>
                     </div>
 

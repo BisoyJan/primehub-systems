@@ -369,10 +369,20 @@ export default function AttendanceIndex() {
         return () => clearInterval(interval);
     }, [autoRefreshEnabled, selectedUserIds, selectedSiteId, selectedCampaignIds, selectedStatuses, startDate, endDate, needsVerification, verifiedFilter, isRestrictedUser, userId]);
 
+    // Compute default dates (yesterday & today) for comparison
+    const getDefaultDates = () => {
+        const today = new Date();
+        const yesterday = new Date();
+        yesterday.setDate(today.getDate() - 1);
+        const fmt = (d: Date) => d.toISOString().split('T')[0];
+        return { defaultFrom: fmt(yesterday), defaultTo: fmt(today) };
+    };
+    const { defaultFrom, defaultTo } = getDefaultDates();
+
     const showClearFilters =
         selectedStatuses.length > 0 ||
-        Boolean(startDate) ||
-        Boolean(endDate) ||
+        (Boolean(startDate) && startDate !== defaultFrom) ||
+        (Boolean(endDate) && endDate !== defaultTo) ||
         needsVerification ||
         selectedUserIds.length > 0 ||
         Boolean(selectedSiteId) ||
@@ -384,8 +394,8 @@ export default function AttendanceIndex() {
         setSelectedSiteId("");
         setSelectedCampaignIds([]);
         setSelectedStatuses([]);
-        setStartDate("");
-        setEndDate("");
+        setStartDate(defaultFrom);
+        setEndDate(defaultTo);
         setNeedsVerification(false);
         setVerifiedFilter("all");
 

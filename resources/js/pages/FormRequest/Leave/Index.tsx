@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Head, Link, router } from '@inertiajs/react';
-import { format, parseISO } from 'date-fns';
+import { format, parseISO, getYear } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -715,8 +715,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                     {showEmployeeColumn && <TableHead>Employee</TableHead>}
                                     {showEmployeeColumn && <TableHead>Campaign</TableHead>}
                                     <TableHead>Type</TableHead>
-                                    <TableHead>Start Date</TableHead>
-                                    <TableHead>End Date</TableHead>
+                                    <TableHead>Period</TableHead>
                                     <TableHead>Days</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Submitted</TableHead>
@@ -727,7 +726,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                 {leaveRequests.data.length === 0 ? (
                                     <TableRow>
                                         <TableCell
-                                            colSpan={showEmployeeColumn ? 9 : 7}
+                                            colSpan={showEmployeeColumn ? 8 : 6}
                                             className="text-center py-8 text-muted-foreground"
                                         >
                                             No leave requests found
@@ -747,11 +746,14 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                                 </TableCell>
                                             )}
                                             <TableCell>{getLeaveTypeBadge(request.leave_type)}</TableCell>
-                                            <TableCell>
-                                                {format(parseISO(request.start_date), 'MMM d, yyyy')}
-                                            </TableCell>
-                                            <TableCell>
-                                                {format(parseISO(request.end_date), 'MMM d, yyyy')}
+                                            <TableCell className="whitespace-nowrap">
+                                                {(() => {
+                                                    const start = parseISO(request.start_date);
+                                                    const end = parseISO(request.end_date);
+                                                    return getYear(start) === getYear(end)
+                                                        ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
+                                                        : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
+                                                })()}
                                             </TableCell>
                                             <TableCell>
                                                 {request.has_partial_denial && request.approved_days !== null ? (
@@ -860,12 +862,16 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                         </div>
                                     )}
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Start Date:</span>
-                                        <span className="font-medium">{format(parseISO(request.start_date), 'MMM d, yyyy')}</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-muted-foreground">End Date:</span>
-                                        <span className="font-medium">{format(parseISO(request.end_date), 'MMM d, yyyy')}</span>
+                                        <span className="text-muted-foreground">Period:</span>
+                                        <span className="font-medium">
+                                            {(() => {
+                                                const start = parseISO(request.start_date);
+                                                const end = parseISO(request.end_date);
+                                                return getYear(start) === getYear(end)
+                                                    ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
+                                                    : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
+                                            })()}
+                                        </span>
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">{request.has_partial_denial ? 'Days Approved:' : 'Days Requested:'}</span>

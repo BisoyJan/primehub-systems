@@ -1,9 +1,10 @@
 import { send } from '@/routes/verification';
 import { type BreadcrumbItem, type SharedData } from '@/types';
 import { Transition } from '@headlessui/react';
-import { Form, Head, Link, usePage } from '@inertiajs/react';
+import { Form, Head, Link, usePage, router } from '@inertiajs/react';
 
 import InputError from '@/components/input-error';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -27,8 +28,10 @@ import {
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { edit, update, destroy } from '@/routes/account';
-import { useRef } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
+import { update as updateAvatar, destroy as destroyAvatar } from '@/routes/account/avatar';
+import { useInitials } from '@/hooks/use-initials';
+import { useRef, useState } from 'react';
+import { CheckCircle2, XCircle, AlertTriangle, Camera, Trash2 } from 'lucide-react';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -44,6 +47,43 @@ export default function AccountManagement({
 }) {
     const { auth } = usePage<SharedData>().props;
     const passwordInput = useRef<HTMLInputElement>(null);
+    const avatarInput = useRef<HTMLInputElement>(null);
+    const [avatarProcessing, setAvatarProcessing] = useState(false);
+    const [removeProcessing, setRemoveProcessing] = useState(false);
+    const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+    const getInitials = useInitials();
+    const fullName = `${auth.user.first_name} ${auth.user.middle_name ? auth.user.middle_name + '. ' : ''}${auth.user.last_name}`;
+
+    const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        // Show preview
+        const reader = new FileReader();
+        reader.onload = () => setAvatarPreview(reader.result as string);
+        reader.readAsDataURL(file);
+
+        setAvatarProcessing(true);
+        router.post(updateAvatar().url, { avatar: file }, {
+            forceFormData: true,
+            preserveScroll: true,
+            onFinish: () => {
+                setAvatarProcessing(false);
+                setAvatarPreview(null);
+                if (avatarInput.current) {
+                    avatarInput.current.value = '';
+                }
+            },
+        });
+    };
+
+    const handleRemoveAvatar = () => {
+        setRemoveProcessing(true);
+        router.delete(destroyAvatar().url, {
+            preserveScroll: true,
+            onFinish: () => setRemoveProcessing(false),
+        });
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -51,6 +91,75 @@ export default function AccountManagement({
 
             <SettingsLayout>
                 <div className="space-y-8">
+                    {/* Profile Picture Section */}
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Profile Picture</CardTitle>
+                            <CardDescription>
+                                Upload a photo to personalize your account
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="flex flex-col items-center gap-6 sm:flex-row">
+                                <div className="relative">
+                                    <Avatar className="size-24 overflow-hidden rounded-full border-2 border-muted">
+                                        <AvatarImage
+                                            src={avatarPreview || auth.user.avatar}
+                                            alt={fullName}
+                                        />
+                                        <AvatarFallback className="bg-neutral-200 text-2xl text-black dark:bg-neutral-700 dark:text-white">
+                                            {getInitials(fullName)}
+                                        </AvatarFallback>
+                                    </Avatar>
+                                    <button
+                                        type="button"
+                                        onClick={() => avatarInput.current?.click()}
+                                        className="absolute bottom-0 right-0 flex size-8 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+                                        disabled={avatarProcessing}
+                                    >
+                                        <Camera className="size-4" />
+                                    </button>
+                                </div>
+                                <div className="space-y-2 text-center sm:text-left">
+                                    <div className="flex flex-col gap-2 sm:flex-row">
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => avatarInput.current?.click()}
+                                            disabled={avatarProcessing}
+                                        >
+                                            {avatarProcessing ? 'Uploading...' : 'Change Photo'}
+                                        </Button>
+                                        {auth.user.avatar && (
+                                            <Button
+                                                type="button"
+                                                variant="ghost"
+                                                size="sm"
+                                                onClick={handleRemoveAvatar}
+                                                disabled={removeProcessing}
+                                                className="text-destructive hover:text-destructive"
+                                            >
+                                                <Trash2 className="mr-1 size-4" />
+                                                {removeProcessing ? 'Removing...' : 'Remove'}
+                                            </Button>
+                                        )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground">
+                                        JPG, JPEG, PNG or WebP. Max 2MB.
+                                    </p>
+                                </div>
+                                <input
+                                    ref={avatarInput}
+                                    type="file"
+                                    accept="image/jpeg,image/jpg,image/png,image/webp"
+                                    className="hidden"
+                                    onChange={handleAvatarChange}
+                                />
+                            </div>
+                        </CardContent>
+                    </Card>
+
                     {/* Account Information Section */}
                     <Card>
                         <CardHeader>

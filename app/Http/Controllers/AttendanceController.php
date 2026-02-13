@@ -309,9 +309,10 @@ class AttendanceController extends Controller
             }
         }
 
-        if ($request->has('start_date') && $request->has('end_date')) {
-            $query->dateRange($request->start_date, $request->end_date);
-        }
+        // Default date range: yesterday to today if not specified
+        $startDate = $request->input('start_date', Carbon::yesterday()->toDateString());
+        $endDate = $request->input('end_date', Carbon::today()->toDateString());
+        $query->dateRange($startDate, $endDate);
 
         if ($request->has('needs_verification') && $request->needs_verification) {
             $query->needsVerification();
@@ -354,7 +355,7 @@ class AttendanceController extends Controller
         $attendances = $query
             ->join('users', 'attendances.user_id', '=', 'users.id')
             ->select('attendances.*')
-            ->orderBy('attendances.shift_date', 'desc')
+            ->orderBy('attendances.shift_date', 'asc')
             ->orderBy('users.last_name', 'asc')
             ->paginate(60)
             ->withQueryString();
@@ -383,7 +384,10 @@ class AttendanceController extends Controller
             'sites' => $sites,
             'campaigns' => $campaigns,
             'teamLeadCampaignId' => $teamLeadCampaignId,
-            'filters' => $request->only(['search', 'status', 'start_date', 'end_date', 'user_id', 'site_id', 'campaign_id', 'needs_verification', 'verified_status']),
+            'filters' => array_merge(
+                $request->only(['search', 'status', 'user_id', 'site_id', 'campaign_id', 'needs_verification', 'verified_status']),
+                ['start_date' => $startDate, 'end_date' => $endDate]
+            ),
         ]);
     }
 
@@ -1455,13 +1459,11 @@ class AttendanceController extends Controller
             }
         }
 
-        // Filter by date range
-        if ($request->filled('date_from')) {
-            $query->where('shift_date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $query->where('shift_date', '<=', $request->date_to);
-        }
+        // Default date range: yesterday to today if not specified
+        $dateFrom = $request->input('date_from', Carbon::yesterday()->toDateString());
+        $dateTo = $request->input('date_to', Carbon::today()->toDateString());
+        $query->where('shift_date', '>=', $dateFrom);
+        $query->where('shift_date', '<=', $dateTo);
 
         // Filter by site (via employee schedule)
         if ($request->filled('site_id')) {
@@ -1503,7 +1505,7 @@ class AttendanceController extends Controller
         $attendances = $query
             ->join('users', 'attendances.user_id', '=', 'users.id')
             ->select('attendances.*')
-            ->orderBy('attendances.shift_date', 'desc')
+            ->orderBy('attendances.shift_date', 'asc')
             ->orderBy('users.last_name', 'asc')
             ->paginate(60)
             ->withQueryString();
@@ -1549,12 +1551,8 @@ class AttendanceController extends Controller
             }
         }
 
-        if ($request->filled('date_from')) {
-            $baseFilteredQuery->where('shift_date', '>=', $request->date_from);
-        }
-        if ($request->filled('date_to')) {
-            $baseFilteredQuery->where('shift_date', '<=', $request->date_to);
-        }
+        $baseFilteredQuery->where('shift_date', '>=', $dateFrom);
+        $baseFilteredQuery->where('shift_date', '<=', $dateTo);
 
         if ($request->filled('site_id')) {
             $baseFilteredQuery->whereHas('employeeSchedule', function ($q) use ($request) {
@@ -1628,8 +1626,8 @@ class AttendanceController extends Controller
                 'user_id' => $request->user_id,
                 'status' => $request->status,
                 'verified' => $request->verified,
-                'date_from' => $request->date_from,
-                'date_to' => $request->date_to,
+                'date_from' => $dateFrom,
+                'date_to' => $dateTo,
                 'site_id' => $request->site_id,
                 'campaign_id' => $request->campaign_id,
                 'leave_conflict' => $request->leave_conflict,

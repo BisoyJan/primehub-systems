@@ -2,10 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\EmployeeSchedule;
-use App\Models\User;
 use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\Site;
+use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -35,7 +35,7 @@ class EmployeeScheduleController extends Controller
             $search = $request->search;
             $query->whereHas('user', function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%");
+                    ->orWhere('last_name', 'like', "%{$search}%");
             });
         }
 
@@ -52,7 +52,7 @@ class EmployeeScheduleController extends Controller
 
         // Campaign filter - auto-filter for Team Leads
         $campaignIdToFilter = ($request->has('campaign_id') && $request->campaign_id !== 'all') ? $request->campaign_id : null;
-        if (!$campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
+        if (! $campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
             $campaignIdToFilter = $teamLeadCampaignId;
         }
         if ($campaignIdToFilter) {
@@ -65,6 +65,19 @@ class EmployeeScheduleController extends Controller
 
         if ($request->has('active_only') && $request->active_only) {
             $query->active();
+        }
+
+        // Filter out resigned employees by default
+        // Resigned = has hired_date AND is_active = false
+        $showResigned = $request->has('show_resigned') && $request->show_resigned;
+        if (! $showResigned) {
+            $query->whereHas('user', function ($q) {
+                $q->where(function ($subQuery) {
+                    // Either not hired yet (no hired_date) OR is active
+                    $subQuery->whereNull('hired_date')
+                        ->orWhere('is_active', true);
+                });
+            });
         }
 
         // Order by user name first for grouping, then by effective_date
@@ -98,8 +111,8 @@ class EmployeeScheduleController extends Controller
 
         // Get users with schedules but no active schedule
         $usersWithInactiveSchedules = User::whereHas('employeeSchedules', function ($query) {
-                // Has at least one schedule
-            })
+            // Has at least one schedule
+        })
             ->whereDoesntHave('employeeSchedules', function ($query) {
                 // But no active schedule
                 $query->where('is_active', true);
@@ -133,7 +146,7 @@ class EmployeeScheduleController extends Controller
             'usersWithoutSchedules' => $usersWithoutSchedules,
             'usersWithInactiveSchedules' => $usersWithInactiveSchedules,
             'usersWithMultipleSchedules' => $usersWithMultipleSchedules,
-            'filters' => $request->only(['search', 'user_id', 'role', 'campaign_id', 'is_active', 'active_only']),
+            'filters' => $request->only(['search', 'user_id', 'role', 'campaign_id', 'is_active', 'active_only', 'show_resigned']),
         ]);
     }
 
@@ -144,7 +157,7 @@ class EmployeeScheduleController extends Controller
     {
         $currentUser = $request->user();
         $isRestrictedRole = in_array($currentUser->role, ['Agent', 'Team Lead']);
-        $isFirstTimeSetup = $isRestrictedRole && !$currentUser->employeeSchedules()->exists();
+        $isFirstTimeSetup = $isRestrictedRole && ! $currentUser->employeeSchedules()->exists();
 
         // Get all users with their hired_date and schedule count
         $users = User::withCount('employeeSchedules')
@@ -185,7 +198,7 @@ class EmployeeScheduleController extends Controller
     {
         $currentUser = $request->user();
         $isRestrictedRole = in_array($currentUser->role, ['Agent', 'Team Lead']);
-        $isFirstTimeSetup = $isRestrictedRole && !$currentUser->employeeSchedules()->exists();
+        $isFirstTimeSetup = $isRestrictedRole && ! $currentUser->employeeSchedules()->exists();
 
         // Build validation rules based on user role
         $rules = [
@@ -233,7 +246,7 @@ class EmployeeScheduleController extends Controller
         }
 
         // Deactivate previous active schedules if this is active
-        if (!isset($validated['end_date'])) {
+        if (! isset($validated['end_date'])) {
             EmployeeSchedule::where('user_id', $validated['user_id'])
                 ->where('is_active', true)
                 ->update(['is_active' => false]);
@@ -331,7 +344,7 @@ class EmployeeScheduleController extends Controller
         }
 
         // If activating this schedule, deactivate other schedules for this user
-        if (isset($validated['is_active']) && $validated['is_active'] && !$employeeSchedule->is_active) {
+        if (isset($validated['is_active']) && $validated['is_active'] && ! $employeeSchedule->is_active) {
             EmployeeSchedule::where('user_id', $employeeSchedule->user_id)
                 ->where('id', '!=', $employeeSchedule->id)
                 ->update(['is_active' => false]);
@@ -359,7 +372,7 @@ class EmployeeScheduleController extends Controller
      */
     public function toggleActive(EmployeeSchedule $employeeSchedule)
     {
-        $newStatus = !$employeeSchedule->is_active;
+        $newStatus = ! $employeeSchedule->is_active;
 
         // If activating, deactivate other schedules for this user
         if ($newStatus) {
@@ -419,7 +432,7 @@ class EmployeeScheduleController extends Controller
         $currentUser = $request->user();
 
         // Only allow Agent and Team Lead roles
-        if (!in_array($currentUser->role, ['Agent', 'Team Lead'])) {
+        if (! in_array($currentUser->role, ['Agent', 'Team Lead'])) {
             return redirect()->route('dashboard')
                 ->with('flash', ['message' => 'You do not need to set up a schedule.', 'type' => 'info']);
         }
@@ -457,7 +470,7 @@ class EmployeeScheduleController extends Controller
         $currentUser = $request->user();
 
         // Only allow Agent and Team Lead roles
-        if (!in_array($currentUser->role, ['Agent', 'Team Lead'])) {
+        if (! in_array($currentUser->role, ['Agent', 'Team Lead'])) {
             return redirect()->route('dashboard')
                 ->with('flash', ['message' => 'You do not need to set up a schedule.', 'type' => 'info']);
         }
