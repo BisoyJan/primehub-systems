@@ -68,7 +68,7 @@ export const PendingLeaveApprovalsWidget: React.FC<PendingLeaveApprovalsWidgetPr
                     {requests.length > 0 ? (
                         <>
                             <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                                {requests.slice(0, 3).map((leave) => {
+                                {requests.map((leave) => {
                                     const days = daysUntil(leave.start_date);
                                     const urgencyClass = days <= 1 ? 'text-red-600' : days <= 3 ? 'text-orange-600' : 'text-yellow-600';
 

@@ -56,7 +56,7 @@ export const NotificationSummaryWidget: React.FC<NotificationSummaryWidgetProps>
                     {recent.length > 0 ? (
                         <>
                             <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                                {recent.slice(0, 3).map((notification) => (
+                                {recent.map((notification) => (
                                     <div
                                         key={notification.id}
                                         className="rounded-lg border p-2.5 space-y-0.5 hover:bg-muted/50 transition-colors"
