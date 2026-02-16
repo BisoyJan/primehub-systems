@@ -33,6 +33,7 @@ class Attendance extends Model
         'bio_in_site_id',
         'bio_out_site_id',
         'status',
+        'pre_leave_status',
         'secondary_status',
         'tardy_minutes',
         'undertime_minutes',

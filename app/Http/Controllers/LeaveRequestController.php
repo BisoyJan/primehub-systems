@@ -1907,21 +1907,31 @@ class LeaveRequestController extends Controller
                     // Get the user's active schedule for this date
                     $schedule = $this->getActiveScheduleForDate($leaveRequest->user_id, $dateStr);
 
-                    Attendance::updateOrCreate(
-                        [
+                    // Check if attendance record already exists to store pre_leave_status
+                    $existingAttendance = Attendance::where('user_id', $leaveRequest->user_id)
+                        ->where('shift_date', $dateStr)
+                        ->first();
+
+                    $attendanceData = [
+                        'employee_schedule_id' => $schedule?->id,
+                        'scheduled_time_in' => $schedule?->scheduled_time_in,
+                        'scheduled_time_out' => $schedule?->scheduled_time_out,
+                        'status' => 'on_leave',
+                        'leave_request_id' => $leaveRequest->id,
+                        'admin_verified' => true,
+                        'remarks' => "On approved leave ({$leaveRequest->leave_type}) - Partial approval",
+                    ];
+
+                    if ($existingAttendance) {
+                        $attendanceData['pre_leave_status'] = $existingAttendance->status;
+                        $existingAttendance->update($attendanceData);
+                    } else {
+                        // pre_leave_status null = created by leave approval
+                        Attendance::create(array_merge($attendanceData, [
                             'user_id' => $leaveRequest->user_id,
                             'shift_date' => $dateStr,
-                        ],
-                        [
-                            'employee_schedule_id' => $schedule?->id,
-                            'scheduled_time_in' => $schedule?->scheduled_time_in,
-                            'scheduled_time_out' => $schedule?->scheduled_time_out,
-                            'status' => 'on_leave',
-                            'leave_request_id' => $leaveRequest->id,
-                            'admin_verified' => true,
-                            'remarks' => "On approved leave ({$leaveRequest->leave_type}) - Partial approval",
-                        ]
-                    );
+                        ]));
+                    }
                 }
             }
 
@@ -2078,13 +2088,27 @@ class LeaveRequestController extends Controller
                 'date_modification_reason' => $adjustmentNote,
             ]);
 
-            // Delete attendance records for removed leave days
-            Attendance::where('leave_request_id', $leaveRequest->id)
+            // Rollback attendance records for removed leave days (out of new range)
+            $removedAttendances = Attendance::where('leave_request_id', $leaveRequest->id)
                 ->where(function ($query) use ($newStartDate, $newEndDate) {
                     $query->where('shift_date', '<', $newStartDate)
                         ->orWhere('shift_date', '>', $newEndDate);
                 })
-                ->delete();
+                ->get();
+
+            foreach ($removedAttendances as $attendance) {
+                if ($attendance->pre_leave_status !== null) {
+                    $attendance->update([
+                        'status' => $attendance->pre_leave_status,
+                        'pre_leave_status' => null,
+                        'leave_request_id' => null,
+                        'admin_verified' => false,
+                        'notes' => null,
+                    ]);
+                } else {
+                    $attendance->delete();
+                }
+            }
 
             // Approve the attendance record for the work day (if exists and pending)
             Attendance::where('user_id', $leaveRequest->user_id)
@@ -2149,8 +2173,9 @@ class LeaveRequestController extends Controller
             'cancellation_reason' => $reason,
         ]);
 
-        // Delete attendance records for this leave
-        Attendance::where('leave_request_id', $leaveRequest->id)->delete();
+        // Rollback excused points first (before attendance deletion cascades)
+        $this->rollbackExcusedAttendancePoints($leaveRequest);
+        $this->rollbackAttendanceForCancelledLeave($leaveRequest);
 
         // Approve the work day attendance
         Attendance::where('user_id', $leaveRequest->user_id)
@@ -2218,9 +2243,12 @@ class LeaveRequestController extends Controller
             // Restore credits if it was approved and credits were deducted
             if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
                 $leaveCreditService->restoreCredits($leaveRequest);
+            }
 
-                // Also delete attendance records for this leave
-                Attendance::where('leave_request_id', $leaveRequest->id)->delete();
+            // Rollback for approved leaves: un-excuse points first (before attendance cascade-delete)
+            if ($leaveRequest->status === 'approved') {
+                $this->rollbackExcusedAttendancePoints($leaveRequest);
+                $this->rollbackAttendanceForCancelledLeave($leaveRequest);
             }
 
             // Update cancellation tracking
@@ -2300,6 +2328,12 @@ class LeaveRequestController extends Controller
             // Restore credits if it was approved and credits were deducted
             if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
                 $leaveCreditService->restoreCredits($leaveRequest);
+            }
+
+            // Rollback for approved leaves: un-excuse points first (before attendance cascade-delete)
+            if ($leaveRequest->status === 'approved') {
+                $this->rollbackExcusedAttendancePoints($leaveRequest);
+                $this->rollbackAttendanceForCancelledLeave($leaveRequest);
             }
 
             $leaveRequest->delete();
@@ -2675,12 +2709,14 @@ class LeaveRequestController extends Controller
                 $attendance->update([
                     'notes' => $existingNotes."SL applied but NCNS status preserved - Leave Request #{$leaveRequest->id}",
                     'leave_request_id' => $leaveRequest->id,
+                    'pre_leave_status' => 'ncns',
                     'admin_verified' => true,
                 ]);
             } else {
                 // Non-NCNS: update status to advised_absence and deduct credit
                 $daysToDeduct++;
                 $attendance->update([
+                    'pre_leave_status' => $attendance->status,
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
@@ -2702,6 +2738,7 @@ class LeaveRequestController extends Controller
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
                 // No attendance record exists - create one with advised_absence
+                // pre_leave_status is null = record was created by leave approval
                 Attendance::create([
                     'user_id' => $user->id,
                     'employee_schedule_id' => $schedule?->id,
@@ -2804,6 +2841,7 @@ class LeaveRequestController extends Controller
                 $attendance->update([
                     'notes' => $existingNotes."SL applied but NCNS status preserved - Leave Request #{$leaveRequest->id}",
                     'leave_request_id' => $leaveRequest->id,
+                    'pre_leave_status' => 'ncns',
                     'admin_verified' => true,
                 ]);
 
@@ -2825,13 +2863,14 @@ class LeaveRequestController extends Controller
 
             if ($attendance) {
                 $attendance->update([
+                    'pre_leave_status' => $attendance->status,
                     'status' => $status,
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
                     'admin_verified' => true,
                 ]);
             } else {
-                // Create attendance record
+                // Create attendance record (pre_leave_status null = created by leave approval)
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
                 Attendance::create([
                     'user_id' => $user->id,
@@ -2908,11 +2947,13 @@ class LeaveRequestController extends Controller
                 $attendance->update([
                     'notes' => $existingNotes."SL applied (no credits) - NCNS status preserved - Leave Request #{$leaveRequest->id}",
                     'leave_request_id' => $leaveRequest->id,
+                    'pre_leave_status' => 'ncns',
                     'admin_verified' => true,
                 ]);
             } else {
                 // Update to advised_absence
                 $attendance->update([
+                    'pre_leave_status' => $attendance->status,
                     'status' => 'advised_absence',
                     'notes' => $leaveNote,
                     'leave_request_id' => $leaveRequest->id,
@@ -2932,6 +2973,7 @@ class LeaveRequestController extends Controller
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
+                // pre_leave_status null = created by leave approval
                 Attendance::create([
                     'user_id' => $user->id,
                     'employee_schedule_id' => $schedule?->id,
@@ -2953,6 +2995,105 @@ class LeaveRequestController extends Controller
             'sl_credits_applied' => false,
             'sl_no_credit_reason' => $reason,
         ]);
+    }
+
+    /**
+     * Rollback attendance records when a leave request is cancelled.
+     *
+     * Records with pre_leave_status (existing before approval) → revert to original status.
+     * Records with null pre_leave_status (created by approval) → delete entirely.
+     *
+     * @return array{reverted: int, deleted: int} Count of affected records
+     */
+    protected function rollbackAttendanceForCancelledLeave(LeaveRequest $leaveRequest): array
+    {
+        $attendances = Attendance::where('leave_request_id', $leaveRequest->id)->get();
+
+        $reverted = 0;
+        $deleted = 0;
+
+        foreach ($attendances as $attendance) {
+            if ($attendance->pre_leave_status !== null) {
+                // Record existed before approval — revert to original status
+                $attendance->update([
+                    'status' => $attendance->pre_leave_status,
+                    'pre_leave_status' => null,
+                    'leave_request_id' => null,
+                    'admin_verified' => false,
+                    'notes' => null,
+                ]);
+                $reverted++;
+            } else {
+                // Record was created by leave approval — delete it
+                $attendance->delete();
+                $deleted++;
+            }
+        }
+
+        \Log::info("Attendance rollback for Leave Request #{$leaveRequest->id}", [
+            'reverted' => $reverted,
+            'deleted' => $deleted,
+        ]);
+
+        return ['reverted' => $reverted, 'deleted' => $deleted];
+    }
+
+    /**
+     * Rollback auto-excused attendance points when a leave request is cancelled.
+     *
+     * Only un-excuses points that were auto-excused for this specific leave request
+     * (identified by excuse_reason containing the leave request ID).
+     * Recalculates GBRO after un-excusing.
+     *
+     * @return int Number of points un-excused
+     */
+    protected function rollbackExcusedAttendancePoints(LeaveRequest $leaveRequest): int
+    {
+        // Only SL and UPTO with medical cert had auto-excused points
+        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO'])) {
+            return 0;
+        }
+
+        if (! $leaveRequest->medical_cert_submitted) {
+            return 0;
+        }
+
+        $user = $leaveRequest->user;
+
+        // Find points auto-excused for this specific leave request
+        $pointsToRevert = AttendancePoint::where('user_id', $user->id)
+            ->where('is_excused', true)
+            ->where('excuse_reason', 'LIKE', "%Leave Request #{$leaveRequest->id}%")
+            ->get();
+
+        $unExcusedCount = 0;
+
+        foreach ($pointsToRevert as $point) {
+            $point->update([
+                'is_excused' => false,
+                'excused_by' => null,
+                'excused_at' => null,
+                'excuse_reason' => null,
+            ]);
+            $unExcusedCount++;
+        }
+
+        // Recalculate GBRO if any points were un-excused
+        if ($unExcusedCount > 0) {
+            try {
+                $gbroService = app(GbroCalculationService::class);
+                $gbroService->cascadeRecalculateGbro($user->id);
+            } catch (\Exception $e) {
+                \Log::warning("Failed to recalculate GBRO after un-excusing points: {$e->getMessage()}");
+            }
+        }
+
+        \Log::info("Un-excused {$unExcusedCount} attendance points for cancelled Leave Request #{$leaveRequest->id}", [
+            'user_id' => $user->id,
+            'leave_type' => $leaveRequest->leave_type,
+        ]);
+
+        return $unExcusedCount;
     }
 
     /**
@@ -3058,19 +3199,23 @@ class LeaveRequestController extends Controller
 
         // Update existing attendance records (these already have schedule data)
         // Only update dates that are NOT denied
-        $updateQuery = Attendance::where('user_id', $user->id)
+        // First, store pre_leave_status for each record individually
+        $existingAttendances = Attendance::where('user_id', $user->id)
             ->whereBetween('shift_date', [$startDate->format('Y-m-d'), $endDate->format('Y-m-d')]);
 
         if (! empty($deniedDates)) {
-            $updateQuery->whereNotIn('shift_date', $deniedDates);
+            $existingAttendances->whereNotIn('shift_date', $deniedDates);
         }
 
-        $updateQuery->update([
-            'status' => 'on_leave',
-            'notes' => $leaveNote,
-            'leave_request_id' => $leaveRequest->id,
-            'admin_verified' => true, // Auto-verify leave records
-        ]);
+        foreach ($existingAttendances->get() as $attendance) {
+            $attendance->update([
+                'pre_leave_status' => $attendance->status,
+                'status' => 'on_leave',
+                'notes' => $leaveNote,
+                'leave_request_id' => $leaveRequest->id,
+                'admin_verified' => true, // Auto-verify leave records
+            ]);
+        }
 
         // Create attendance records for days without existing records
         $existingDates = Attendance::where('user_id', $user->id)
@@ -3088,6 +3233,7 @@ class LeaveRequestController extends Controller
                 // Get the user's active schedule for this date
                 $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
 
+                // pre_leave_status null = created by leave approval
                 Attendance::create([
                     'user_id' => $user->id,
                     'employee_schedule_id' => $schedule?->id,
