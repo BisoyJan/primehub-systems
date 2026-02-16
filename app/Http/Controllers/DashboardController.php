@@ -49,12 +49,12 @@ class DashboardController extends Controller
         }
 
         // Cache key includes role for per-role caching
-        $cacheKey = 'dashboard_stats_'.$role.'_'.$presenceDate.'_'.$leaveCalendarMonth.'_campaign_'.($leaveCalendarCampaignId ?? 'all');
+        $cacheKey = 'dashboard_stats_'.$role.'_'.$presenceDate.'_'.$leaveCalendarMonth.'_campaign_'.($leaveCalendarCampaignId ?? 'all').'_user_'.$user->id;
 
         $dashboardData = Cache::remember(
             key: $cacheKey,
             ttl: 150,
-            callback: fn () => $this->dashboardService->getAllStats($role, $presenceDate, $leaveCalendarMonth, $leaveCalendarCampaignId)
+            callback: fn () => $this->dashboardService->getAllStats($user, $presenceDate, $leaveCalendarMonth, $leaveCalendarCampaignId)
         );
 
         // Build attendance query with filters

@@ -248,7 +248,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
             className="space-y-6"
         >
             {/* Attendance Filters */}
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="space-y-4">
                 <div>
                     <h3 className="text-lg font-semibold">Attendance Overview</h3>
                     <p className="text-sm text-muted-foreground">
@@ -258,44 +258,50 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                         }
                     </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:flex-wrap">
                     {!isRestrictedRole && campaigns && campaigns.length > 0 && (
-                        <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
-                            <SelectTrigger className="w-[160px]">
-                                <SelectValue placeholder="All Campaigns" />
+                        <div className="flex-1 min-w-[160px] max-w-[200px]">
+                            <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="All Campaigns" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Campaigns</SelectItem>
+                                    {campaigns.map((campaign) => (
+                                        <SelectItem key={campaign.id} value={String(campaign.id)}>
+                                            {campaign.name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+                    <div className="flex-1 min-w-[150px] max-w-[180px]">
+                        <Select value={verificationFilter} onValueChange={setVerificationFilter}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Verification" />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="all">All Campaigns</SelectItem>
-                                {campaigns.map((campaign) => (
-                                    <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}
-                                    </SelectItem>
-                                ))}
+                                <SelectItem value="all">All Records</SelectItem>
+                                <SelectItem value="verified">Verified Only</SelectItem>
+                                <SelectItem value="non_verified">Non-Verified</SelectItem>
                             </SelectContent>
                         </Select>
-                    )}
-                    <Select value={verificationFilter} onValueChange={setVerificationFilter}>
-                        <SelectTrigger className="w-[150px]">
-                            <SelectValue placeholder="Verification" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="all">All Records</SelectItem>
-                            <SelectItem value="verified">Verified Only</SelectItem>
-                            <SelectItem value="non_verified">Non-Verified</SelectItem>
-                        </SelectContent>
-                    </Select>
-                    <DatePicker
-                        value={dateRange.start}
-                        onChange={(value) => setDateRange({ ...dateRange, start: value })}
-                        placeholder="Start date"
-                    />
-                    <span className="text-muted-foreground text-sm">to</span>
-                    <DatePicker
-                        value={dateRange.end}
-                        onChange={(value) => setDateRange({ ...dateRange, end: value })}
-                        placeholder="End date"
-                    />
-                    <Button onClick={handleDateRangeChange} size="sm">
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+                        <DatePicker
+                            value={dateRange.start}
+                            onChange={(value) => setDateRange({ ...dateRange, start: value })}
+                            placeholder="Start date"
+                        />
+                        <span className="text-muted-foreground text-sm hidden sm:inline">to</span>
+                        <DatePicker
+                            value={dateRange.end}
+                            onChange={(value) => setDateRange({ ...dateRange, end: value })}
+                            placeholder="End date"
+                        />
+                    </div>
+                    <Button onClick={handleDateRangeChange} size="sm" className="w-full sm:w-auto">
                         Apply
                     </Button>
                 </div>

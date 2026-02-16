@@ -200,13 +200,14 @@ class DashboardService
     /**
      * Get all dashboard statistics, filtered by user role.
      *
-     * @param  string  $role  User role to filter stats for
+     * @param  User  $user  Authenticated user
      * @param  string|null  $presenceDate  Date for presence insights
      * @param  string|null  $leaveCalendarMonth  Month for leave calendar
      * @param  int|null  $leaveCalendarCampaignId  Campaign ID to filter leave calendar (for Agents to see same-campaign leaves)
      */
-    public function getAllStats(string $role, ?string $presenceDate = null, ?string $leaveCalendarMonth = null, ?int $leaveCalendarCampaignId = null): array
+    public function getAllStats(User $user, ?string $presenceDate = null, ?string $leaveCalendarMonth = null, ?int $leaveCalendarCampaignId = null): array
     {
+        $role = $user->role;
         $data = [];
 
         // Infrastructure stats — Super Admin, Admin, IT
@@ -241,9 +242,9 @@ class DashboardService
             $data['stockSummary'] = $this->getStockSummary();
         }
 
-        // User account stats — Super Admin, Admin
-        if (in_array($role, ['Super Admin', 'Admin'])) {
-            $data['userAccountStats'] = $this->getUserAccountStats();
+        // User account stats — Super Admin, Admin, Team Lead
+        if (in_array($role, ['Super Admin', 'Admin', 'Team Lead'])) {
+            $data['userAccountStats'] = $this->getUserAccountStats($user);
         }
 
         // Recent activity logs — Super Admin, Admin
@@ -697,10 +698,36 @@ class DashboardService
      *
      * @return array{total: int, by_role: array<string, int>, pending_approvals: int, recently_deactivated: int}
      */
-    public function getUserAccountStats(): array
+    public function getUserAccountStats(User $user): array
     {
+        $role = $user->role;
+
+        // For Team Lead: filter agents by same campaign
+        $campaignIds = [];
+        if ($role === 'Team Lead') {
+            $campaignIds = $user->employeeSchedules()
+                ->where('is_active', true)
+                ->pluck('campaign_id')
+                ->unique()
+                ->values()
+                ->toArray();
+        }
+
         // Query 1: Active users — role counts + pending approvals in one query (was 3 separate)
-        $activeRows = User::active()
+        $activeQuery = User::active();
+
+        // If Team Lead, filter Agent role by campaign
+        if ($role === 'Team Lead' && ! empty($campaignIds)) {
+            $activeQuery->where(function ($query) use ($campaignIds) {
+                $query->where('role', '!=', 'Agent')
+                    ->orWhereHas('employeeSchedules', function ($q) use ($campaignIds) {
+                        $q->whereIn('campaign_id', $campaignIds)
+                            ->where('is_active', true);
+                    });
+            });
+        }
+
+        $activeRows = $activeQuery
             ->selectRaw('role, COUNT(*) as count, SUM(CASE WHEN hired_date IS NULL THEN 1 ELSE 0 END) as pending')
             ->groupBy('role')
             ->get();
