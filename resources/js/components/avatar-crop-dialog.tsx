@@ -124,6 +124,7 @@ export function AvatarCropDialog({ open, imageSrc, onCropComplete, onClose }: Av
                         aspect={1}
                         cropShape="round"
                         showGrid={false}
+                        objectFit="contain"
                         onCropChange={onCropChange}
                         onZoomChange={onZoomChange}
                         onCropComplete={handleCropComplete}
