@@ -11,8 +11,11 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 use Inertia\Inertia;
 use Inertia\Response;
+use Intervention\Image\Encoders\WebpEncoder;
+use Intervention\Image\ImageManager;
 
 class ProfileController extends Controller
 {
@@ -67,9 +70,15 @@ class ProfileController extends Controller
                 Storage::disk('public')->delete($user->avatar);
             }
 
-            $path = $request->file('avatar')->store('avatars', 'public');
+            // Optimize image: resize to max 512x512 and convert to WebP
+            $image = ImageManager::gd()->read($request->file('avatar')->getPathname());
+            $image->scaleDown(512, 512);
+            $encoded = $image->encode(new WebpEncoder(quality: 80));
 
-            $user->update(['avatar' => $path]);
+            $filename = 'avatars/'.Str::uuid().'.webp';
+            Storage::disk('public')->put($filename, (string) $encoded);
+
+            $user->update(['avatar' => $filename]);
 
             return to_route('account.edit')->with('flash', [
                 'message' => 'Profile picture updated successfully.',

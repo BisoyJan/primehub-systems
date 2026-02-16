@@ -32,6 +32,29 @@ class AvatarTest extends TestCase
 
         $user->refresh();
         $this->assertNotNull($user->avatar);
+        $this->assertStringEndsWith('.webp', $user->avatar);
+        Storage::disk('public')->assertExists($user->avatar);
+    }
+
+    #[Test]
+    public function uploaded_avatar_is_optimized_and_converted_to_webp(): void
+    {
+        Storage::fake('public');
+
+        $user = User::factory()->create();
+
+        $response = $this
+            ->actingAs($user)
+            ->post(route('account.avatar.update'), [
+                'avatar' => UploadedFile::fake()->image('avatar.png', 1024, 1024),
+            ]);
+
+        $response->assertSessionHasNoErrors();
+
+        $user->refresh();
+        $this->assertNotNull($user->avatar);
+        $this->assertStringStartsWith('avatars/', $user->avatar);
+        $this->assertStringEndsWith('.webp', $user->avatar);
         Storage::disk('public')->assertExists($user->avatar);
     }
 
@@ -93,7 +116,7 @@ class AvatarTest extends TestCase
         // Upload first avatar
         $this->actingAs($user)
             ->post(route('account.avatar.update'), [
-                'avatar' => UploadedFile::fake()->image('first.jpg'),
+                'avatar' => UploadedFile::fake()->image('first.jpg', 200, 200),
             ]);
 
         $user->refresh();
@@ -103,7 +126,7 @@ class AvatarTest extends TestCase
         // Upload second avatar
         $this->actingAs($user)
             ->post(route('account.avatar.update'), [
-                'avatar' => UploadedFile::fake()->image('second.jpg'),
+                'avatar' => UploadedFile::fake()->image('second.jpg', 200, 200),
             ]);
 
         $user->refresh();

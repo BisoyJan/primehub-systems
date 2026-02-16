@@ -32,6 +32,7 @@ import { update as updateAvatar, destroy as destroyAvatar } from '@/routes/accou
 import { useInitials } from '@/hooks/use-initials';
 import { useRef, useState } from 'react';
 import { CheckCircle2, XCircle, AlertTriangle, Camera, Trash2 } from 'lucide-react';
+import { AvatarCropDialog } from '@/components/avatar-crop-dialog';
 
 const breadcrumbs: BreadcrumbItem[] = [
     {
@@ -51,6 +52,8 @@ export default function AccountManagement({
     const [avatarProcessing, setAvatarProcessing] = useState(false);
     const [removeProcessing, setRemoveProcessing] = useState(false);
     const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+    const [cropDialogOpen, setCropDialogOpen] = useState(false);
+    const [imageToCrop, setImageToCrop] = useState<string | null>(null);
     const getInitials = useInitials();
     const fullName = `${auth.user.first_name} ${auth.user.middle_name ? auth.user.middle_name + '. ' : ''}${auth.user.last_name}`;
 
@@ -58,23 +61,46 @@ export default function AccountManagement({
         const file = e.target.files?.[0];
         if (!file) return;
 
-        // Show preview
+        // Show crop dialog
         const reader = new FileReader();
-        reader.onload = () => setAvatarPreview(reader.result as string);
+        reader.onload = () => {
+            setImageToCrop(reader.result as string);
+            setCropDialogOpen(true);
+        };
         reader.readAsDataURL(file);
+    };
+
+    const handleCropComplete = (croppedBlob: Blob) => {
+        // Show preview
+        const previewUrl = URL.createObjectURL(croppedBlob);
+        setAvatarPreview(previewUrl);
 
         setAvatarProcessing(true);
-        router.post(updateAvatar().url, { avatar: file }, {
+        setCropDialogOpen(false);
+
+        router.post(updateAvatar().url, { avatar: croppedBlob }, {
             forceFormData: true,
             preserveScroll: true,
             onFinish: () => {
                 setAvatarProcessing(false);
                 setAvatarPreview(null);
+                setImageToCrop(null);
                 if (avatarInput.current) {
                     avatarInput.current.value = '';
                 }
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                }
             },
         });
+    };
+
+    const handleCropClose = () => {
+        setCropDialogOpen(false);
+        setImageToCrop(null);
+        if (avatarInput.current) {
+            avatarInput.current.value = '';
+        }
     };
 
     const handleRemoveAvatar = () => {
@@ -487,6 +513,16 @@ export default function AccountManagement({
                     </Card>
                 </div>
             </SettingsLayout>
+
+            {/* Avatar Crop Dialog */}
+            {imageToCrop && (
+                <AvatarCropDialog
+                    open={cropDialogOpen}
+                    imageSrc={imageToCrop}
+                    onCropComplete={handleCropComplete}
+                    onClose={handleCropClose}
+                />
+            )}
         </AppLayout>
     );
 }
