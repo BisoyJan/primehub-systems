@@ -6,15 +6,16 @@ use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Policies\LeaveRequestPolicy;
 use App\Services\PermissionService;
-use Tests\TestCase;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class LeaveRequestPolicyTest extends TestCase
 {
     use RefreshDatabase;
 
     protected LeaveRequestPolicy $policy;
+
     protected PermissionService $permissionService;
 
     protected function setUp(): void
@@ -179,5 +180,54 @@ class LeaveRequestPolicyTest extends TestCase
         ]);
 
         $this->assertTrue($this->policy->cancel($admin, $leaveRequest));
+    }
+
+    #[Test]
+    public function user_can_cancel_own_partially_approved_leave_request(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'has_partial_denial' => true,
+            'approved_days' => 3,
+            'start_date' => now()->addDays(5),
+            'end_date' => now()->addDays(7),
+        ]);
+
+        $this->assertTrue($this->policy->cancel($user, $leaveRequest));
+    }
+
+    #[Test]
+    public function user_cannot_cancel_partially_approved_leave_request_that_has_started(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'has_partial_denial' => true,
+            'approved_days' => 3,
+            'start_date' => now()->subDays(1),
+            'end_date' => now()->addDays(3),
+        ]);
+
+        $this->assertFalse($this->policy->cancel($user, $leaveRequest));
+    }
+
+    #[Test]
+    public function user_cannot_cancel_other_users_partially_approved_leave_request(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $otherUser->id,
+            'status' => 'approved',
+            'has_partial_denial' => true,
+            'approved_days' => 3,
+            'start_date' => now()->addDays(5),
+            'end_date' => now()->addDays(7),
+        ]);
+
+        $this->assertFalse($this->policy->cancel($user, $leaveRequest));
     }
 }

@@ -2,19 +2,18 @@
 
 namespace Tests\Feature\Controllers\FormRequests;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\LeaveRequest;
-use App\Models\LeaveCredit;
-use App\Models\EmployeeSchedule;
-use App\Models\Site;
+use App\Mail\LeaveRequestStatusUpdated;
+use App\Mail\LeaveRequestSubmitted;
 use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
+use App\Models\LeaveCredit;
+use App\Models\LeaveRequest;
+use App\Models\Site;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\LeaveRequestSubmitted;
-use App\Mail\LeaveRequestStatusUpdated;
-use Carbon\Carbon;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class LeaveRequestControllerTest extends TestCase
 {
@@ -26,12 +25,31 @@ class LeaveRequestControllerTest extends TestCase
         Mail::fake();
     }
 
+    protected function createAgentWithSchedule(array $overrides = []): User
+    {
+        $user = User::factory()->create(array_merge([
+            'role' => 'Agent',
+            'is_approved' => true,
+        ], $overrides));
+
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+
+        return $user;
+    }
+
     #[Test]
     public function it_displays_leave_requests_index()
     {
         $user = User::factory()->create([
             'role' => 'Agent',
-            'is_approved' => true
+            'is_approved' => true,
         ]);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $user->id]);
 
@@ -60,7 +78,7 @@ class LeaveRequestControllerTest extends TestCase
             'user_id' => $user->id,
             'site_id' => $site->id,
             'campaign_id' => $campaign->id,
-            'is_active' => true
+            'is_active' => true,
         ]);
 
         $response = $this->actingAs($user)->get(route('leave-requests.create'));
@@ -148,7 +166,7 @@ class LeaveRequestControllerTest extends TestCase
     {
         $user = User::factory()->create([
             'role' => 'Agent',
-            'is_approved' => true
+            'is_approved' => true,
         ]);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $user->id]);
 
@@ -166,7 +184,7 @@ class LeaveRequestControllerTest extends TestCase
     {
         $admin = User::factory()->create([
             'role' => 'Admin',
-            'is_approved' => true
+            'is_approved' => true,
         ]);
         $user = User::factory()->create([
             'role' => 'Agent',
@@ -212,7 +230,7 @@ class LeaveRequestControllerTest extends TestCase
     {
         $admin = User::factory()->create([
             'role' => 'Admin',
-            'is_approved' => true
+            'is_approved' => true,
         ]);
         $user = User::factory()->create([
             'role' => 'Agent',
@@ -244,10 +262,7 @@ class LeaveRequestControllerTest extends TestCase
     #[Test]
     public function it_allows_user_to_cancel_own_pending_request()
     {
-        $user = User::factory()->create([
-            'role' => 'Agent',
-            'is_approved' => true
-        ]);
+        $user = $this->createAgentWithSchedule();
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'pending',
@@ -255,7 +270,9 @@ class LeaveRequestControllerTest extends TestCase
             'days_requested' => 1,
         ]);
 
-        $response = $this->actingAs($user)->post(route('leave-requests.cancel', $leaveRequest));
+        $response = $this->actingAs($user)->post(route('leave-requests.cancel', $leaveRequest), [
+            'cancellation_reason' => 'I no longer need this leave.',
+        ]);
 
         $response->assertRedirect();
 
@@ -266,11 +283,86 @@ class LeaveRequestControllerTest extends TestCase
     }
 
     #[Test]
+    public function it_allows_user_to_cancel_own_partially_approved_request()
+    {
+        $user = $this->createAgentWithSchedule();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'leave_type' => 'VL',
+            'days_requested' => 5,
+            'has_partial_denial' => true,
+            'approved_days' => 3,
+            'start_date' => now()->addDays(5),
+            'end_date' => now()->addDays(9),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('leave-requests.cancel', $leaveRequest), [
+            'cancellation_reason' => 'Plans changed, cancelling partial approval.',
+        ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequest->id,
+            'status' => 'cancelled',
+            'cancelled_by' => $user->id,
+        ]);
+    }
+
+    #[Test]
+    public function it_prevents_user_from_cancelling_fully_approved_request()
+    {
+        $user = $this->createAgentWithSchedule();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'leave_type' => 'VL',
+            'days_requested' => 5,
+            'has_partial_denial' => false,
+            'start_date' => now()->addDays(5),
+            'end_date' => now()->addDays(9),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('leave-requests.cancel', $leaveRequest));
+
+        $response->assertForbidden();
+
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequest->id,
+            'status' => 'approved',
+        ]);
+    }
+
+    #[Test]
+    public function it_requires_cancellation_reason_when_cancelling()
+    {
+        $user = $this->createAgentWithSchedule();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'pending',
+            'leave_type' => 'VL',
+            'days_requested' => 1,
+        ]);
+
+        $response = $this->actingAs($user)->post(route('leave-requests.cancel', $leaveRequest), [
+            'cancellation_reason' => '',
+        ]);
+
+        $response->assertSessionHasErrors('cancellation_reason');
+
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequest->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    #[Test]
     public function it_calculates_days_correctly()
     {
         $user = User::factory()->create([
             'role' => 'Agent',
-            'is_approved' => true
+            'is_approved' => true,
         ]);
 
         $response = $this->actingAs($user)->post(route('leave-requests.api.calculate-days'), [

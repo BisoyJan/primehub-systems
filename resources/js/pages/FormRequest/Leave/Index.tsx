@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import { format, parseISO, getYear } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -45,6 +45,7 @@ import { LoadingOverlay } from '@/components/LoadingOverlay';
 import PaginationNav from '@/components/pagination-nav';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
 import { Progress } from '@/components/ui/progress';
 import {
     Dialog,
@@ -156,6 +157,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
     const [showCancelDialog, setShowCancelDialog] = useState(false);
     const [showDeleteDialog, setShowDeleteDialog] = useState(false);
     const [selectedLeaveId, setSelectedLeaveId] = useState<number | null>(null);
+    const cancelForm = useForm({ cancellation_reason: '' });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
     const [autoRefreshEnabled, setAutoRefreshEnabled] = useState(false);
     const [showEmployeeSearch, setShowEmployeeSearch] = useState(false);
@@ -270,6 +272,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
 
     const handleCancelRequest = (id: number) => {
         setSelectedLeaveId(id);
+        cancelForm.reset();
         setShowCancelDialog(true);
     };
 
@@ -281,17 +284,19 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
     const confirmCancel = () => {
         if (!selectedLeaveId) return;
 
-        router.post(
+        cancelForm.post(
             leaveCancelRoute(selectedLeaveId).url,
-            {},
             {
                 onSuccess: () => {
                     toast.success('Leave request cancelled successfully');
                     setShowCancelDialog(false);
                     setSelectedLeaveId(null);
+                    cancelForm.reset();
                 },
-                onError: () => {
-                    toast.error('Failed to cancel leave request');
+                onError: (errors) => {
+                    if (errors.error) {
+                        toast.error(errors.error);
+                    }
                 }
             }
         );
@@ -795,7 +800,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                                             </Button>
                                                         </Link>
                                                     )}
-                                                    {request.status === 'pending' && auth.user.id === request.user.id && (
+                                                    {(request.status === 'pending' || (request.status === 'approved' && request.has_partial_denial)) && auth.user.id === request.user.id && (
                                                         <Button
                                                             size="icon"
                                                             variant="outline"
@@ -915,7 +920,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                             </Button>
                                         </Link>
                                     )}
-                                    {request.status === 'pending' && auth.user.id === request.user.id && (
+                                    {(request.status === 'pending' || (request.status === 'approved' && request.has_partial_denial)) && auth.user.id === request.user.id && (
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -951,22 +956,41 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
             </div>
 
             {/* Cancel Confirmation Dialog */}
-            <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-                <AlertDialogContent>
-                    <AlertDialogHeader>
-                        <AlertDialogTitle>Cancel Leave Request</AlertDialogTitle>
-                        <AlertDialogDescription>
+            <Dialog open={showCancelDialog} onOpenChange={(open) => { setShowCancelDialog(open); if (!open) { setSelectedLeaveId(null); cancelForm.reset(); } }}>
+                <DialogContent>
+                    <DialogHeader>
+                        <DialogTitle>Cancel Leave Request</DialogTitle>
+                        <DialogDescription>
                             Are you sure you want to cancel this leave request? This action cannot be undone.
-                        </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                        <AlertDialogCancel onClick={() => setSelectedLeaveId(null)}>No, Keep It</AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmCancel} className="bg-red-600 hover:bg-red-700">
-                            Yes, Cancel Request
-                        </AlertDialogAction>
-                    </AlertDialogFooter>
-                </AlertDialogContent>
-            </AlertDialog>
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="index-cancel-reason">Reason for cancellation <span className="text-red-500">*</span></Label>
+                        <Textarea
+                            id="index-cancel-reason"
+                            placeholder="Please provide a reason for cancelling this leave request..."
+                            value={cancelForm.data.cancellation_reason}
+                            onChange={(e) => cancelForm.setData('cancellation_reason', e.target.value)}
+                            rows={3}
+                        />
+                        {cancelForm.errors.cancellation_reason && (
+                            <p className="text-sm text-red-500">{cancelForm.errors.cancellation_reason}</p>
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => { setShowCancelDialog(false); setSelectedLeaveId(null); cancelForm.reset(); }}>
+                            No, Keep It
+                        </Button>
+                        <Button
+                            variant="destructive"
+                            onClick={confirmCancel}
+                            disabled={cancelForm.processing || !cancelForm.data.cancellation_reason.trim()}
+                        >
+                            {cancelForm.processing ? 'Cancelling...' : 'Yes, Cancel Request'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             {/* Delete Confirmation Dialog */}
             <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

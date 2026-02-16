@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class LeaveRequest extends Model
 {
@@ -329,7 +329,16 @@ class LeaveRequest extends Model
      */
     public function canBeCancelled(): bool
     {
-        return $this->isPending() || ($this->isApproved() && $this->start_date > now());
+        return $this->isPending()
+            || ($this->isApproved() && $this->start_date > now());
+    }
+
+    /**
+     * Check if request is partially approved (approved with some dates denied).
+     */
+    public function isPartiallyApproved(): bool
+    {
+        return $this->isApproved() && $this->has_partial_denial === true;
     }
 
     /**
@@ -361,7 +370,7 @@ class LeaveRequest extends Model
      */
     public function hasPartialApproval(): bool
     {
-        return ($this->isAdminApproved() || $this->isHrApproved()) && !$this->isFullyApproved();
+        return ($this->isAdminApproved() || $this->isHrApproved()) && ! $this->isFullyApproved();
     }
 
     /**
@@ -378,7 +387,7 @@ class LeaveRequest extends Model
             if ($this->tl_rejected) {
                 return 'Rejected by Team Lead';
             }
-            if (!$this->isTlApproved()) {
+            if (! $this->isTlApproved()) {
                 return 'Pending Team Lead Approval';
             }
         }
@@ -427,11 +436,11 @@ class LeaveRequest extends Model
      */
     public function isReadyForAdminHrApproval(): bool
     {
-        if (!$this->requiresTlApproval()) {
+        if (! $this->requiresTlApproval()) {
             return true;
         }
 
-        return $this->isTlApproved() && !$this->isTlRejected();
+        return $this->isTlApproved() && ! $this->isTlRejected();
     }
 
     /**
@@ -439,7 +448,7 @@ class LeaveRequest extends Model
      */
     public function isCompletelyApproved(): bool
     {
-        if ($this->requiresTlApproval() && !$this->isTlApproved()) {
+        if ($this->requiresTlApproval() && ! $this->isTlApproved()) {
             return false;
         }
 

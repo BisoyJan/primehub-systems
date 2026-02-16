@@ -752,7 +752,8 @@ class LeaveRequestController extends Controller
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'isSuperAdmin' => $user->role === 'Super Admin',
-            'canCancel' => $leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id,
+            'canCancel' => ($leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id)
+                || ($leaveRequest->isPartiallyApproved() && $leaveRequest->user_id === $user->id && $leaveRequest->start_date > now()),
             'canAdminCancel' => $canAdminCancel,
             'canEditApproved' => $canEditApproved,
             'hasUserApproved' => $hasUserApproved,
@@ -2192,21 +2193,22 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
         $isOwnRequest = $leaveRequest->user_id === $user->id;
         $isApprovedLeave = $leaveRequest->status === 'approved';
+        $isPartiallyApproved = $leaveRequest->isPartiallyApproved();
 
-        // For approved leaves, only Admin/Super Admin can cancel
-        if ($isApprovedLeave && ! $isAdmin) {
+        // For approved leaves, only Admin/Super Admin or the owner (if partially approved) can cancel
+        if ($isApprovedLeave && ! $isAdmin && ! ($isOwnRequest && $isPartiallyApproved)) {
             return back()->withErrors(['error' => 'Only Admin or Super Admin can cancel approved leave requests.']);
         }
 
-        // For regular employees, check canBeCancelled
-        if (! $isAdmin && ! $leaveRequest->canBeCancelled()) {
+        // For regular employees, check canBeCancelled (or partially approved with future start date)
+        if (! $isAdmin && ! $leaveRequest->canBeCancelled() && ! ($isPartiallyApproved && $leaveRequest->start_date > now())) {
             return back()->withErrors(['error' => 'This leave request cannot be cancelled.']);
         }
 
-        // Get cancellation reason from request (required for admin cancellation of approved leaves)
+        // Get cancellation reason from request (always required)
         $cancellationReason = $request->input('cancellation_reason', '');
-        if ($isApprovedLeave && $isAdmin && empty($cancellationReason)) {
-            return back()->withErrors(['error' => 'A reason is required when cancelling an approved leave request.']);
+        if (empty(trim($cancellationReason))) {
+            return back()->withErrors(['cancellation_reason' => 'A reason is required when cancelling a leave request.']);
         }
 
         $leaveCreditService = $this->leaveCreditService;

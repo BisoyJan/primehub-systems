@@ -503,4 +503,47 @@ class LeaveRequestTest extends TestCase
 
         $this->assertFalse($leaveRequest->canBeCancelled());
     }
+
+    #[Test]
+    public function it_detects_partially_approved_request(): void
+    {
+        $user = User::factory()->create();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'has_partial_denial' => true,
+            'approved_days' => 3,
+            'start_date' => now()->addDays(5),
+        ]);
+
+        $this->assertTrue($leaveRequest->isPartiallyApproved());
+    }
+
+    #[Test]
+    public function it_does_not_detect_fully_approved_as_partially_approved(): void
+    {
+        $user = User::factory()->create();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'has_partial_denial' => false,
+            'start_date' => now()->addDays(5),
+        ]);
+
+        $this->assertFalse($leaveRequest->isPartiallyApproved());
+    }
+
+    #[Test]
+    public function it_does_not_detect_pending_with_partial_denial_as_partially_approved(): void
+    {
+        $user = User::factory()->create();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'pending',
+            'has_partial_denial' => true,
+            'start_date' => now()->addDays(5),
+        ]);
+
+        $this->assertFalse($leaveRequest->isPartiallyApproved());
+    }
 }

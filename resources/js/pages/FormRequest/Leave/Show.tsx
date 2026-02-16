@@ -195,6 +195,7 @@ export default function Show({
     });
     const [forceApprovePartialMode, setForceApprovePartialMode] = useState(false);
     const [forceApproveSelectedDates, setForceApproveSelectedDates] = useState<string[]>([]);
+    const cancelForm = useForm({ cancellation_reason: '' });
     const adminCancelForm = useForm({ cancellation_reason: '' });
     const adjustForWorkForm = useForm({
         work_date: '',
@@ -295,16 +296,13 @@ export default function Show({
     };
 
     const handleCancel = () => {
-        router.post(
-            leaveCancelRoute(leaveRequest.id).url,
-            {},
-            {
-                onSuccess: () => {
-                    setShowCancelDialog(false);
-                    toast.success('Leave request cancelled');
-                },
-            }
-        );
+        cancelForm.post(leaveCancelRoute(leaveRequest.id).url, {
+            onSuccess: () => {
+                setShowCancelDialog(false);
+                cancelForm.reset();
+                toast.success('Leave request cancelled');
+            },
+        });
     };
 
     const handleAdminCancel = () => {
@@ -553,7 +551,7 @@ export default function Show({
                                 <span className="hidden sm:inline">Cancel Approved</span>
                             </Button>
                         )}
-                        {canCancel && leaveRequest.status === 'pending' && (
+                        {canCancel && (leaveRequest.status === 'pending' || (leaveRequest.status === 'approved' && leaveRequest.has_partial_denial)) && (
                             <Can permission="leave.cancel">
                                 <Button variant="outline" size="sm" onClick={() => setShowCancelDialog(true)}>
                                     <Ban className="mr-1 h-4 w-4" />
@@ -1424,20 +1422,39 @@ export default function Show({
             </Dialog>
 
             {/* Cancel Dialog */}
-            <Dialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
+            <Dialog open={showCancelDialog} onOpenChange={(open) => { setShowCancelDialog(open); if (!open) cancelForm.reset(); }}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle>Cancel Leave Request</DialogTitle>
                         <DialogDescription>
-                            Are you sure you want to cancel this leave request? This action cannot be undone.
+                            {leaveRequest.status === 'approved' && leaveRequest.has_partial_denial
+                                ? 'This leave request was partially approved. Cancelling will restore any deducted credits and remove associated attendance records. This action cannot be undone.'
+                                : 'Are you sure you want to cancel this leave request? This action cannot be undone.'}
                         </DialogDescription>
                     </DialogHeader>
+                    <div className="space-y-2">
+                        <Label htmlFor="cancel-reason">Reason for cancellation <span className="text-red-500">*</span></Label>
+                        <Textarea
+                            id="cancel-reason"
+                            placeholder="Please provide a reason for cancelling this leave request..."
+                            value={cancelForm.data.cancellation_reason}
+                            onChange={(e) => cancelForm.setData('cancellation_reason', e.target.value)}
+                            rows={3}
+                        />
+                        {cancelForm.errors.cancellation_reason && (
+                            <p className="text-sm text-red-500">{cancelForm.errors.cancellation_reason}</p>
+                        )}
+                    </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowCancelDialog(false)}>
                             No, Keep It
                         </Button>
-                        <Button variant="destructive" onClick={handleCancel}>
-                            Yes, Cancel Request
+                        <Button
+                            variant="destructive"
+                            onClick={handleCancel}
+                            disabled={cancelForm.processing || !cancelForm.data.cancellation_reason.trim()}
+                        >
+                            {cancelForm.processing ? 'Cancelling...' : 'Yes, Cancel Request'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

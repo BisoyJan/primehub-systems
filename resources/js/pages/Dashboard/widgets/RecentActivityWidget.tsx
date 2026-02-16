@@ -87,7 +87,7 @@ export const RecentActivityWidget: React.FC<RecentActivityWidgetProps> = ({
                         ))}
                     </div>
                     <Link
-                        href="/activity-log"
+                        href="/activity-logs"
                         className="flex items-center justify-center gap-1 text-xs text-primary hover:underline pt-3"
                     >
                         View All

@@ -2,27 +2,28 @@
 
 namespace Tests\Feature\FormRequests;
 
-use App\Models\LeaveRequest;
-use App\Models\User;
+use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\LeaveCredit;
+use App\Models\LeaveRequest;
+use App\Models\Site;
+use App\Models\User;
 use App\Services\LeaveCreditService;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Notification;
-use App\Mail\LeaveRequestSubmitted;
-use App\Mail\LeaveRequestStatusUpdated;
 use Inertia\Testing\AssertableInertia as Assert;
-use Carbon\Carbon;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
-
 
 class LeaveRequestTest extends TestCase
 {
     use RefreshDatabase;
 
     protected User $employee;
+
     protected User $admin;
+
     protected LeaveCreditService $leaveCreditService;
 
     protected function setUp(): void
@@ -33,6 +34,16 @@ class LeaveRequestTest extends TestCase
             'role' => 'Agent',
             'is_approved' => true,
             'hired_date' => Carbon::now()->subMonths(7), // Eligible (>6 months)
+        ]);
+
+        // Create schedule for employee (required by EnsureUserHasSchedule middleware)
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $this->employee->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
         ]);
 
         // Admin role has leave.approve permissions
@@ -324,7 +335,9 @@ class LeaveRequestTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->employee)
-            ->post(route('leave-requests.cancel', $leaveRequest));
+            ->post(route('leave-requests.cancel', $leaveRequest), [
+                'cancellation_reason' => 'Changed my plans.',
+            ]);
 
         $response->assertRedirect();
 
@@ -348,7 +361,9 @@ class LeaveRequestTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->employee)
-            ->post(route('leave-requests.cancel', $leaveRequest));
+            ->post(route('leave-requests.cancel', $leaveRequest), [
+                'cancellation_reason' => 'Trying to cancel approved leave.',
+            ]);
 
         // Policy denies cancel on non-pending requests
         $response->assertForbidden();

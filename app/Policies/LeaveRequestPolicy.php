@@ -141,7 +141,7 @@ class LeaveRequestPolicy
         }
 
         // The leave request must require TL approval
-        if (!$leaveRequest->requiresTlApproval()) {
+        if (! $leaveRequest->requiresTlApproval()) {
             return false;
         }
 
@@ -185,6 +185,14 @@ class LeaveRequestPolicy
             }
         }
 
+        // Users can cancel their own partially-approved requests (approved with partial denial)
+        // as long as the leave hasn't started yet
+        if ($leaveRequest->isPartiallyApproved()
+            && $leaveRequest->user_id === $user->id
+            && $leaveRequest->start_date > now()) {
+            return $this->permissionService->userHasPermission($user, 'leave.cancel');
+        }
+
         // HR with cancel permission can cancel any pending request
         if ($leaveRequest->status === 'pending' &&
             $this->permissionService->userHasPermission($user, 'leave.cancel') &&
@@ -222,7 +230,7 @@ class LeaveRequestPolicy
     public function delete(User $user, LeaveRequest $leaveRequest): bool
     {
         // Only admins/HR with delete permission can delete leave requests
-        if (!$this->permissionService->userHasPermission($user, 'leave.delete')) {
+        if (! $this->permissionService->userHasPermission($user, 'leave.delete')) {
             return false;
         }
 
