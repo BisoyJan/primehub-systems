@@ -99,7 +99,7 @@ class DashboardController extends Controller
                     SUM(CASE WHEN status = 'tardy' THEN 1 ELSE 0 END) as tardy,
                     SUM(CASE WHEN status = 'half_day_absence' THEN 1 ELSE 0 END) as half_day,
                     SUM(CASE WHEN status = 'ncns' THEN 1 ELSE 0 END) as ncns,
-                    SUM(CASE WHEN status = 'advised_absence' THEN 1 ELSE 0 END) as advised
+                    SUM(CASE WHEN status IN ('advised_absence', 'on_leave') THEN 1 ELSE 0 END) as advised
                 ")
                 ->first();
 
@@ -132,7 +132,7 @@ class DashboardController extends Controller
                     SUM(CASE WHEN status = 'tardy' THEN 1 ELSE 0 END) as tardy,
                     SUM(CASE WHEN status = 'half_day_absence' THEN 1 ELSE 0 END) as half_day,
                     SUM(CASE WHEN status = 'ncns' THEN 1 ELSE 0 END) as ncns,
-                    SUM(CASE WHEN status = 'advised_absence' THEN 1 ELSE 0 END) as advised
+                    SUM(CASE WHEN status IN ('advised_absence', 'on_leave') THEN 1 ELSE 0 END) as advised
                 ")
                 ->groupBy('month')
                 ->orderBy('month')
@@ -151,7 +151,7 @@ class DashboardController extends Controller
                     SUM(CASE WHEN status = 'tardy' THEN 1 ELSE 0 END) as tardy,
                     SUM(CASE WHEN status = 'half_day_absence' THEN 1 ELSE 0 END) as half_day,
                     SUM(CASE WHEN status = 'ncns' THEN 1 ELSE 0 END) as ncns,
-                    SUM(CASE WHEN status = 'advised_absence' THEN 1 ELSE 0 END) as advised
+                    SUM(CASE WHEN status IN ('advised_absence', 'on_leave') THEN 1 ELSE 0 END) as advised
                 ")
                 ->groupBy('month', 'day')
                 ->orderBy('month')

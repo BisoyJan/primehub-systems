@@ -64,7 +64,7 @@ const ATTENDANCE_TREND_SLIDES = [
     { key: 'tardy', label: 'Tardy', description: 'Late arrivals', color: 'hsl(45, 93%, 47%)' },
     { key: 'half_day', label: 'Half Day', description: 'Half day leaves', color: 'hsl(25, 95%, 53%)' },
     { key: 'ncns', label: 'NCNS', description: 'No Call No Show', color: 'hsl(0, 84%, 60%)' },
-    { key: 'advised', label: 'Advised', description: 'Advised absences', color: 'hsl(221, 83%, 53%)' },
+    { key: 'advised', label: 'Advised / On Leave', description: 'Advised absences and approved leaves', color: 'hsl(221, 83%, 53%)' },
 ];
 
 export const AttendanceTab: React.FC<AttendanceTabProps> = ({
@@ -155,7 +155,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
         { name: "Tardy", label: "Tardy Rate", value: filteredStatistics.total > 0 ? ((filteredStatistics.tardy / filteredStatistics.total) * 100) : 0, fill: "hsl(45, 93%, 47%)", count: filteredStatistics.tardy },
         { name: "Half Day", label: "Half Day Rate", value: filteredStatistics.total > 0 ? ((filteredStatistics.half_day / filteredStatistics.total) * 100) : 0, fill: "hsl(25, 95%, 53%)", count: filteredStatistics.half_day },
         { name: "NCNS", label: "NCNS Rate", value: filteredStatistics.total > 0 ? ((filteredStatistics.ncns / filteredStatistics.total) * 100) : 0, fill: "hsl(0, 84%, 60%)", count: filteredStatistics.ncns },
-        { name: "Advised", label: "Advised Rate", value: filteredStatistics.total > 0 ? ((filteredStatistics.advised / filteredStatistics.total) * 100) : 0, fill: "hsl(221, 83%, 53%)", count: filteredStatistics.advised },
+        { name: "Advised / On Leave", label: "Advised / On Leave Rate", value: filteredStatistics.total > 0 ? ((filteredStatistics.advised / filteredStatistics.total) * 100) : 0, fill: "hsl(221, 83%, 53%)", count: filteredStatistics.advised },
     ];
 
     const currentRadialData = radialChartData[radialChartIndex];
@@ -393,7 +393,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
 
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                        <CardTitle className="text-sm font-medium">Advised Absence</CardTitle>
+                        <CardTitle className="text-sm font-medium">Advised / On Leave</CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="text-2xl font-bold text-blue-600">{filteredStatistics.advised}</div>
@@ -950,7 +950,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                                                 </div>
                                                 <div className="flex items-center gap-2 text-xs">
                                                     <div className="h-2.5 w-2.5 rounded-full bg-blue-500" />
-                                                    <span className="text-muted-foreground">Advised</span>
+                                                    <span className="text-muted-foreground">Advised / On Leave</span>
                                                     <span className="ml-auto font-medium">{attendanceStatistics.advised}</span>
                                                 </div>
                                             </div>
