@@ -7,6 +7,8 @@ import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useInitials } from '@/hooks/use-initials';
 import {
     Select,
     SelectContent,
@@ -43,6 +45,8 @@ interface LeaveRequest {
         id: number;
         name: string;
         email: string;
+        avatar?: string;
+        avatar_url?: string;
     };
     dateModifier?: {
         id: number;
@@ -159,6 +163,7 @@ export default function Edit({
     const [campaignConflicts, setCampaignConflicts] = useState<CampaignConflict[]>([]);
     const [suggestedDates, setSuggestedDates] = useState<DateSuggestion[]>([]);
     const [futureCredits, setFutureCredits] = useState<number>(0);
+    const getInitials = useInitials();
 
     const requiresCredits = ['VL', 'SL'].includes(data.leave_type);
 
@@ -798,9 +803,18 @@ export default function Edit({
                             : 'Update your pending leave request'}
                     </p>
                     {leaveRequest.user && (
-                        <p className="text-sm text-muted-foreground mt-1">
-                            Employee: <span className="font-medium">{leaveRequest.user.name}</span>
-                        </p>
+                        <div className="flex items-center gap-3 mt-3 p-3 bg-muted/30 rounded-lg">
+                            <Avatar className="h-16 w-16 overflow-hidden rounded-full">
+                                <AvatarImage src={leaveRequest.user.avatar_url} alt={leaveRequest.user.name} />
+                                <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-lg">
+                                    {getInitials(leaveRequest.user.name)}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div>
+                                <p className="text-sm text-muted-foreground">Employee</p>
+                                <p className="font-medium">{leaveRequest.user.name}</p>
+                            </div>
+                        </div>
                     )}
                 </div>
 

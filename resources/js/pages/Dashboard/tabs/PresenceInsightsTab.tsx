@@ -6,8 +6,10 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { DatePicker } from '@/components/ui/date-picker';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, XAxis, YAxis } from 'recharts';
+import { useInitials } from '@/hooks/use-initials';
 import {
     AlertCircle,
     AlertTriangle,
@@ -53,6 +55,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
         }
         return new Date();
     });
+    const getInitials = useInitials();
 
     const closeDialog = () => {
         setActiveDialog(null);
@@ -497,10 +500,18 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                     if (!leave) return <div className="text-center text-muted-foreground py-4">Leave not found</div>;
                     return (
                         <div className="space-y-4">
-                            <div>
-                                <div className="text-sm font-medium text-muted-foreground">Employee</div>
-                                <div className="text-lg font-semibold">{leave.user_name}</div>
-                                <div className="text-sm text-muted-foreground">{leave.campaign_name}</div>
+                            <div className="flex items-start gap-4">
+                                <Avatar className="h-16 w-16 overflow-hidden rounded-full">
+                                    <AvatarImage src={leave.avatar_url} alt={leave.user_name} />
+                                    <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-lg">
+                                        {getInitials(leave.user_name)}
+                                    </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1">
+                                    <div className="text-sm font-medium text-muted-foreground">Employee</div>
+                                    <div className="text-lg font-semibold">{leave.user_name}</div>
+                                    <div className="text-sm text-muted-foreground">{leave.campaign_name}</div>
+                                </div>
                             </div>
                             <Separator />
                             <div className="grid grid-cols-2 gap-4">

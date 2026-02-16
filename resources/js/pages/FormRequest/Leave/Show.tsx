@@ -11,6 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Can } from '@/components/authorization';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useInitials } from '@/hooks/use-initials';
 import {
     Dialog,
     DialogContent,
@@ -28,6 +30,8 @@ interface User {
     id: number;
     name: string;
     email: string;
+    avatar?: string;
+    avatar_url?: string;
 }
 
 interface DeniedDate {
@@ -177,6 +181,7 @@ export default function Show({
     const [selectedApprovedDates, setSelectedApprovedDates] = useState<string[]>([]);
     const [showAttendancePointsDialog, setShowAttendancePointsDialog] = useState(false);
     const { can } = usePermission();
+    const getInitials = useInitials();
 
     const approveForm = useForm({ review_notes: '' });
     const denyForm = useForm({ review_notes: '' });
@@ -579,14 +584,22 @@ export default function Show({
                     </CardHeader>
                     <CardContent className="space-y-6">
                         {/* Employee Info */}
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Employee</p>
-                                <p className="text-base">{leaveRequest.user.name}</p>
-                            </div>
-                            <div>
-                                <p className="text-sm font-medium text-muted-foreground">Email</p>
-                                <p className="text-base break-all">{leaveRequest.user.email}</p>
+                        <div className="flex items-start gap-4 pb-4 border-b">
+                            <Avatar className="h-16 w-16 overflow-hidden rounded-full">
+                                <AvatarImage src={leaveRequest.user.avatar_url} alt={leaveRequest.user.name} />
+                                <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-lg">
+                                    {getInitials(leaveRequest.user.name)}
+                                </AvatarFallback>
+                            </Avatar>
+                            <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                <div>
+                                    <p className="text-sm font-medium text-muted-foreground">Employee</p>
+                                    <p className="text-base font-semibold">{leaveRequest.user.name}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-muted-foreground">Email</p>
+                                    <p className="text-base break-all">{leaveRequest.user.email}</p>
+                                </div>
                             </div>
                         </div>
 

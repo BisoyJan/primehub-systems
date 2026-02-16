@@ -3471,6 +3471,8 @@ class LeaveRequestController extends Controller
                 'email' => $user->email,
                 'role' => $user->role,
                 'hired_date' => $user->hired_date->format('Y-m-d'),
+                'avatar' => $user->avatar,
+                'avatar_url' => $user->avatar_url,
             ],
             'year' => (int) $year,
             'summary' => [

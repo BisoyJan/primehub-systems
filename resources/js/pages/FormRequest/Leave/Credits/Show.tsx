@@ -3,6 +3,8 @@ import { Head, Link, router } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { useInitials } from '@/hooks/use-initials';
 import {
     Table,
     TableBody,
@@ -83,6 +85,8 @@ interface Props {
         email: string;
         role: string;
         hired_date: string;
+        avatar?: string;
+        avatar_url?: string;
     };
     year: number;
     summary: {
@@ -103,6 +107,8 @@ interface Props {
 }
 
 export default function Show({ user, year, summary, carryoverSummary, carryoverReceived, monthlyCredits, leaveRequests, availableYears, canViewAll }: Props) {
+    const getInitials = useInitials();
+
     const { title, breadcrumbs } = usePageMeta({
         title: canViewAll ? `Leave Credits - ${user.name}` : 'My Leave Credits',
         breadcrumbs: canViewAll
@@ -149,27 +155,36 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                     </div>
                 )}
 
-                <PageHeader
-                    title={canViewAll ? user.name : 'My Leave Credits'}
-                    description={`${user.email} • ${user.role} • Hired: ${format(new Date(user.hired_date), 'MMM d, yyyy')}`}
-                    actions={
-                        <div className="flex items-center gap-2">
-                            <span className="text-sm text-muted-foreground">Year:</span>
-                            <Select value={year.toString()} onValueChange={handleYearChange}>
-                                <SelectTrigger className="w-28">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {availableYears.map((y) => (
-                                        <SelectItem key={y} value={y.toString()}>
-                                            {y}
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                        </div>
-                    }
-                />
+                {/* Employee Info with Avatar */}
+                <div className="flex items-start gap-4 pb-4 border-b">
+                    <Avatar className="h-16 w-16 overflow-hidden rounded-full">
+                        <AvatarImage src={user.avatar_url} alt={user.name} />
+                        <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-lg">
+                            {getInitials(user.name)}
+                        </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                        <h1 className="text-2xl font-bold">{canViewAll ? user.name : 'My Leave Credits'}</h1>
+                        <p className="text-sm text-muted-foreground mt-1">
+                            {user.email} • {user.role} • Hired: {format(new Date(user.hired_date), 'MMM d, yyyy')}
+                        </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                        <span className="text-sm text-muted-foreground">Year:</span>
+                        <Select value={year.toString()} onValueChange={handleYearChange}>
+                            <SelectTrigger className="w-28">
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {availableYears.map((y) => (
+                                    <SelectItem key={y} value={y.toString()}>
+                                        {y}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                </div>
 
                 {/* Summary Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

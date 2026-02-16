@@ -7,6 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import AppLayout from "@/layouts/app-layout";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { useInitials } from "@/hooks/use-initials";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
@@ -61,6 +63,8 @@ interface User {
     approved_at: string | null;
     deleted_at: string | null;
     deletion_confirmed_at: string | null;
+    avatar?: string;
+    avatar_url?: string;
 }
 
 interface UserOption {
@@ -92,6 +96,7 @@ interface Filters {
 export default function AccountIndex() {
     const { users, allUsers = [], filters } = usePage<{ users: UsersPayload; allUsers: UserOption[]; filters: Filters }>().props;
     const [loading, setLoading] = useState(false);
+    const getInitials = useInitials();
     const [search, setSearch] = useState(filters.search || "");
     const [selectedUserId, setSelectedUserId] = useState(filters.user_id || "");
     const [isUserPopoverOpen, setIsUserPopoverOpen] = useState(false);
@@ -744,9 +749,7 @@ export default function AccountIndex() {
                                             </div>
                                         </TableHead>
                                     </Can>
-                                    <TableHead>First Name</TableHead>
-                                    <TableHead>M.I.</TableHead>
-                                    <TableHead>Last Name</TableHead>
+                                    <TableHead>Name</TableHead>
                                     <TableHead>Email</TableHead>
                                     <TableHead>Role</TableHead>
                                     <TableHead>Employee Status</TableHead>
@@ -782,9 +785,19 @@ export default function AccountIndex() {
                                                     )}
                                                 </TableCell>
                                             </Can>
-                                            <TableCell className="font-medium">{user.first_name}</TableCell>
-                                            <TableCell>{user.middle_name || '-'}</TableCell>
-                                            <TableCell className="font-medium">{user.last_name}</TableCell>
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-3">
+                                                    <Avatar className="h-10 w-10 overflow-hidden rounded-full">
+                                                        <AvatarImage src={user.avatar_url} alt={`${user.first_name} ${user.last_name}`} />
+                                                        <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-sm">
+                                                            {getInitials(`${user.first_name} ${user.last_name}`)}
+                                                        </AvatarFallback>
+                                                    </Avatar>
+                                                    <span>
+                                                        {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
+                                                    </span>
+                                                </div>
+                                            </TableCell>
                                             <TableCell>{user.email}</TableCell>
                                             <TableCell>
                                                 <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
@@ -952,7 +965,7 @@ export default function AccountIndex() {
                                 })}
                                 {users.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={12} className="py-8 text-center text-gray-500">
+                                        <TableCell colSpan={10} className="py-8 text-center text-gray-500">
                                             No user accounts found
                                         </TableCell>
                                     </TableRow>
@@ -990,10 +1003,20 @@ export default function AccountIndex() {
                                             )}
                                         </Can>
                                         <div>
-                                            <h3 className="font-semibold text-lg">
-                                                {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
-                                            </h3>
-                                            <p className="text-sm text-gray-600">{user.email}</p>
+                                            <div className="flex items-center gap-3">
+                                                <Avatar className="h-10 w-10 overflow-hidden rounded-full">
+                                                    <AvatarImage src={user.avatar_url} alt={`${user.first_name} ${user.last_name}`} />
+                                                    <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-sm">
+                                                        {getInitials(`${user.first_name} ${user.last_name}`)}
+                                                    </AvatarFallback>
+                                                </Avatar>
+                                                <div>
+                                                    <h3 className="font-semibold text-lg">
+                                                        {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
+                                                    </h3>
+                                                    <p className="text-sm text-gray-600">{user.email}</p>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                     <div className="flex flex-col gap-2 items-end">
