@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { router, usePage } from '@inertiajs/react';
+import { router } from '@inertiajs/react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {

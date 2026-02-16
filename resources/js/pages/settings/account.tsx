@@ -111,14 +111,14 @@ export default function AccountManagement({
                                             {getInitials(fullName)}
                                         </AvatarFallback>
                                     </Avatar>
-                                    <button
+                                    <Button
                                         type="button"
                                         onClick={() => avatarInput.current?.click()}
                                         className="absolute bottom-0 right-0 flex size-8 items-center justify-center rounded-full border-2 border-background bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
                                         disabled={avatarProcessing}
                                     >
                                         <Camera className="size-4" />
-                                    </button>
+                                    </Button>
                                 </div>
                                 <div className="space-y-2 text-center sm:text-left">
                                     <div className="flex flex-col gap-2 sm:flex-row">
@@ -149,7 +149,7 @@ export default function AccountManagement({
                                         JPG, JPEG, PNG or WebP. Max 2MB.
                                     </p>
                                 </div>
-                                <input
+                                <Input
                                     ref={avatarInput}
                                     type="file"
                                     accept="image/jpeg,image/jpg,image/png,image/webp"

@@ -102,7 +102,7 @@ interface Props {
     canViewAll: boolean;
 }
 
-export default function Show({ user, year, summary, carryoverSummary, carryoverReceived, regularization, monthlyCredits, leaveRequests, availableYears, canViewAll }: Props) {
+export default function Show({ user, year, summary, carryoverSummary, carryoverReceived, monthlyCredits, leaveRequests, availableYears, canViewAll }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: canViewAll ? `Leave Credits - ${user.name}` : 'My Leave Credits',
         breadcrumbs: canViewAll

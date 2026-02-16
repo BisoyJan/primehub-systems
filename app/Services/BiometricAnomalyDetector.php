@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\BiometricRecord;
 use Carbon\Carbon;
-use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 
 class BiometricAnomalyDetector
@@ -65,7 +64,8 @@ class BiometricAnomalyDetector
     {
         $maxTravelMinutes = 30; // Assume 30 minutes to travel between sites
 
-        $records = BiometricRecord::whereBetween('record_date', [$startDate, $endDate])
+        $records = BiometricRecord::with(['user', 'site'])
+            ->whereBetween('record_date', [$startDate, $endDate])
             ->whereNotNull('user_id')
             ->whereNotNull('site_id')
             ->orderBy('user_id')
@@ -116,7 +116,8 @@ class BiometricAnomalyDetector
      */
     protected function detectImpossibleTimeGaps(Carbon $startDate, Carbon $endDate): array
     {
-        $records = BiometricRecord::whereBetween('record_date', [$startDate, $endDate])
+        $records = BiometricRecord::with('user')
+            ->whereBetween('record_date', [$startDate, $endDate])
             ->whereNotNull('user_id')
             ->orderBy('user_id')
             ->orderBy('datetime')
@@ -126,7 +127,7 @@ class BiometricAnomalyDetector
         $groupedByUser = $records->groupBy('user_id');
 
         foreach ($groupedByUser as $userId => $userRecords) {
-            $dailyRecords = $userRecords->groupBy(fn($r) => $r->datetime->format('Y-m-d'));
+            $dailyRecords = $userRecords->groupBy(fn ($r) => $r->datetime->format('Y-m-d'));
 
             foreach ($dailyRecords as $date => $dayRecords) {
                 if ($dayRecords->count() >= 2) {
@@ -162,29 +163,38 @@ class BiometricAnomalyDetector
         $minuteGroupExpr = $this->getMinuteGroupExpression();
 
         $duplicates = BiometricRecord::select(
-                'user_id',
-                DB::raw("{$minuteGroupExpr} as minute_group"),
-                DB::raw('COUNT(*) as scan_count')
-            )
+            'user_id',
+            DB::raw("{$minuteGroupExpr} as minute_group"),
+            DB::raw('COUNT(*) as scan_count')
+        )
             ->whereBetween('record_date', [$startDate, $endDate])
             ->whereNotNull('user_id')
             ->groupBy('user_id', 'minute_group')
             ->having('scan_count', '>', 1)
             ->get();
 
+        if ($duplicates->isEmpty()) {
+            return [];
+        }
+
+        // Batch-load all detail records for duplicate groups (was N queries in loop)
+        $dupUserIds = $duplicates->pluck('user_id')->unique();
+        $allDupRecords = BiometricRecord::with('user')
+            ->whereBetween('record_date', [$startDate, $endDate])
+            ->whereIn('user_id', $dupUserIds)
+            ->get();
+
         $anomalies = [];
 
         foreach ($duplicates as $dup) {
-            $records = BiometricRecord::where('user_id', $dup->user_id)
-                ->whereRaw("{$minuteGroupExpr} = ?", [$dup->minute_group])
-                ->with('user')
-                ->get();
+            $records = $allDupRecords->where('user_id', $dup->user_id)
+                ->filter(fn ($r) => $r->datetime->format('Y-m-d H:i') === Carbon::parse($dup->minute_group)->format('Y-m-d H:i'));
 
             $anomalies[] = [
                 'type' => 'duplicate_scans',
                 'severity' => $dup->scan_count > 3 ? 'high' : 'low',
                 'user_id' => $dup->user_id,
-                'user_name' => $records->first()->user?->name ?? 'Unknown',
+                'user_name' => $records->first()?->user?->name ?? 'Unknown',
                 'datetime' => Carbon::parse($dup->minute_group),
                 'scan_count' => $dup->scan_count,
                 'record_ids' => $records->pluck('id'),
@@ -236,32 +246,42 @@ class BiometricAnomalyDetector
         $maxScansPerDay = 6; // Normal: 2-4 scans (time in/out × lunch break)
 
         $dailyScans = BiometricRecord::select(
-                'user_id',
-                'record_date',
-                DB::raw('COUNT(*) as scan_count')
-            )
+            'user_id',
+            'record_date',
+            DB::raw('COUNT(*) as scan_count')
+        )
             ->whereBetween('record_date', [$startDate, $endDate])
             ->whereNotNull('user_id')
             ->groupBy('user_id', 'record_date')
             ->having('scan_count', '>', $maxScansPerDay)
-            ->with('user')
             ->get();
+
+        if ($dailyScans->isEmpty()) {
+            return [];
+        }
+
+        // Batch-load all detail records for excessive scan days (was N queries in loop)
+        $excessiveUserIds = $dailyScans->pluck('user_id')->unique();
+        $excessiveDates = $dailyScans->pluck('record_date')->unique();
+        $allExcessiveRecords = BiometricRecord::with(['user', 'site'])
+            ->whereIn('user_id', $excessiveUserIds)
+            ->whereIn('record_date', $excessiveDates)
+            ->get()
+            ->groupBy(fn ($r) => $r->user_id.'_'.$r->record_date);
 
         $anomalies = [];
 
         foreach ($dailyScans as $day) {
-            $records = BiometricRecord::where('user_id', $day->user_id)
-                ->where('record_date', $day->record_date)
-                ->get();
+            $records = $allExcessiveRecords->get($day->user_id.'_'.$day->record_date, collect());
 
             $anomalies[] = [
                 'type' => 'excessive_scans',
                 'severity' => $day->scan_count > 10 ? 'high' : 'medium',
                 'user_id' => $day->user_id,
-                'user_name' => $records->first()->user?->name ?? 'Unknown',
+                'user_name' => $records->first()?->user?->name ?? 'Unknown',
                 'date' => $day->record_date,
                 'scan_count' => $day->scan_count,
-                'scans' => $records->map(fn($r) => [
+                'scans' => $records->map(fn ($r) => [
                     'id' => $r->id,
                     'datetime' => $r->datetime,
                     'site' => $r->site?->name ?? "Site {$r->site_id}",
@@ -297,6 +317,7 @@ class BiometricAnomalyDetector
         foreach ($anomalies as $type => $items) {
             $count += collect($items)->where('severity', $severity)->count();
         }
+
         return $count;
     }
 }
