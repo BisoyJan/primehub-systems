@@ -269,6 +269,11 @@ class DashboardService
             $data['pointsByCampaign'] = $this->getPointsByCampaign();
         }
 
+        // Pending leave approvals — Team Lead, Admin, HR, Super Admin
+        if (in_array($role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])) {
+            $data['pendingLeaveApprovals'] = $this->getPendingLeaveApprovals($user);
+        }
+
         return $data;
     }
 
@@ -1238,5 +1243,78 @@ class DashboardService
             ->filter()
             ->values()
             ->toArray();
+    }
+
+    /**
+     * Get pending leave requests that need approval within the next 5 days.
+     * For Team Leads: only shows requests from users in the same campaign.
+     * For Admin/HR: shows all pending requests.
+     *
+     * @param  User  $user  The authenticated approver
+     * @return array{count: int, requests: array}
+     */
+    public function getPendingLeaveApprovals(User $user): array
+    {
+        $role = $user->role;
+        $tenDaysFromNow = now()->addDays(10)->endOfDay();
+        $today = now()->startOfDay();
+
+        $query = LeaveRequest::with(['user:id,first_name,last_name,role'])
+            ->where('status', 'pending')
+            ->where('start_date', '<=', $tenDaysFromNow)
+            ->where('start_date', '>=', $today)
+            ->orderBy('start_date', 'asc');
+
+        if ($role === 'Team Lead') {
+            // Get the TL's active campaign IDs
+            $tlCampaignIds = EmployeeSchedule::where('user_id', $user->id)
+                ->where('is_active', true)
+                ->pluck('campaign_id')
+                ->filter()
+                ->toArray();
+
+            if (empty($tlCampaignIds)) {
+                return ['count' => 0, 'requests' => []];
+            }
+
+            // Only show requests from users in the same campaign(s)
+            $query->whereHas('user.employeeSchedules', function ($q) use ($tlCampaignIds) {
+                $q->where('is_active', true)
+                    ->whereIn('campaign_id', $tlCampaignIds);
+            });
+
+            // TL-specific: only pending TL approval
+            $query->where('requires_tl_approval', true)
+                ->whereNull('tl_approved_by')
+                ->where(function ($q) {
+                    $q->whereNull('tl_rejected')
+                        ->orWhere('tl_rejected', false);
+                });
+        } elseif ($role === 'Admin' || $role === 'Super Admin') {
+            // Admin: pending admin approval
+            $query->whereNull('admin_approved_by');
+        } elseif ($role === 'HR') {
+            // HR: pending HR approval
+            $query->whereNull('hr_approved_by');
+        }
+
+        $requests = $query->limit(10)->get();
+
+        return [
+            'count' => $requests->count(),
+            'requests' => $requests->map(function (LeaveRequest $leave) {
+                return [
+                    'id' => $leave->id,
+                    'user_name' => ($leave->user?->last_name ?? '').', '.($leave->user?->first_name ?? ''),
+                    'leave_type' => $leave->leave_type,
+                    'start_date' => $leave->start_date->format('Y-m-d'),
+                    'end_date' => $leave->end_date->format('Y-m-d'),
+                    'days_requested' => (float) $leave->days_requested,
+                    'campaign_department' => $leave->campaign_department,
+                    'reason' => $leave->reason,
+                    'created_at' => $leave->created_at->toISOString(),
+                ];
+            })->toArray(),
+        ];
     }
 }

@@ -55,24 +55,26 @@ export const NotificationSummaryWidget: React.FC<NotificationSummaryWidgetProps>
                 <CardContent className="space-y-2">
                     {recent.length > 0 ? (
                         <>
-                            {recent.slice(0, 5).map((notification) => (
-                                <div
-                                    key={notification.id}
-                                    className="rounded-lg border p-2.5 space-y-0.5 hover:bg-muted/50 transition-colors"
-                                >
-                                    <div className="flex items-start justify-between gap-2">
-                                        <p className="text-xs font-medium leading-tight line-clamp-1">
-                                            {notification.title}
+                            <div className="max-h-[220px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                                {recent.slice(0, 3).map((notification) => (
+                                    <div
+                                        key={notification.id}
+                                        className="rounded-lg border p-2.5 space-y-0.5 hover:bg-muted/50 transition-colors"
+                                    >
+                                        <div className="flex items-start justify-between gap-2">
+                                            <p className="text-xs font-medium leading-tight line-clamp-1">
+                                                {notification.title}
+                                            </p>
+                                            <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
+                                                {formatTimeAgo(notification.created_at)}
+                                            </span>
+                                        </div>
+                                        <p className="text-[11px] text-muted-foreground line-clamp-2">
+                                            {notification.message}
                                         </p>
-                                        <span className="text-[10px] text-muted-foreground whitespace-nowrap shrink-0">
-                                            {formatTimeAgo(notification.created_at)}
-                                        </span>
                                     </div>
-                                    <p className="text-[11px] text-muted-foreground line-clamp-2">
-                                        {notification.message}
-                                    </p>
-                                </div>
-                            ))}
+                                ))}
+                            </div>
                             <Link
                                 href="/notifications"
                                 className="flex items-center justify-center gap-1 text-xs text-primary hover:underline pt-1"

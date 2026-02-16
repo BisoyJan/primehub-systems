@@ -31,14 +31,14 @@ export const TAB_CONFIG: Record<TabType, { label: string; iconName: string }> = 
 
 // ─── Widget Types ────────────────────────────────────────────────────────────
 
-export type WidgetType = 'notifications' | 'user-accounts' | 'recent-activity' | 'biometric-anomalies';
+export type WidgetType = 'notifications' | 'user-accounts' | 'recent-activity' | 'biometric-anomalies' | 'pending-leave-approvals';
 
 export const ROLE_WIDGETS: Record<UserRole, WidgetType[]> = {
-    'Super Admin': ['notifications', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
-    'Admin': ['notifications', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
-    'HR': ['notifications', 'biometric-anomalies'],
+    'Super Admin': ['notifications', 'pending-leave-approvals', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
+    'Admin': ['notifications', 'pending-leave-approvals', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
+    'HR': ['notifications', 'pending-leave-approvals', 'biometric-anomalies'],
     'IT': ['notifications'],
-    'Team Lead': ['notifications'],
+    'Team Lead': ['notifications', 'pending-leave-approvals'],
     'Agent': ['notifications'],
     'Utility': ['notifications'],
 };
@@ -148,6 +148,23 @@ export interface BiometricAnomalies {
     unusual_hours: number;
     excessive_scans: number;
     total: number;
+}
+
+export interface PendingLeaveApproval {
+    id: number;
+    user_name: string;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    days_requested: number;
+    campaign_department: string;
+    reason: string;
+    created_at: string;
+}
+
+export interface PendingLeaveApprovals {
+    count: number;
+    requests: PendingLeaveApproval[];
 }
 
 // ─── Phase 4: Enhanced Analytics Types ───────────────────────────────────────
@@ -445,4 +462,7 @@ export interface DashboardProps {
 
     /** Attendance points grouped by campaign */
     pointsByCampaign?: PointsByCampaignItem[];
+
+    /** Pending leave requests needing approval (TL/Admin/HR widget) */
+    pendingLeaveApprovals?: PendingLeaveApprovals;
 }

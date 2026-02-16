@@ -10,6 +10,7 @@ use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
 use App\Models\LeaveCredit;
+use App\Models\LeaveRequest;
 use App\Models\PcMaintenance;
 use App\Models\PcSpec;
 use App\Models\Site;
@@ -736,5 +737,169 @@ class DashboardServiceTest extends TestCase
 
         $this->assertArrayNotHasKey('ssdPcs', $result);
         $this->assertArrayNotHasKey('hddPcs', $result);
+    }
+
+    // ─── Pending Leave Approvals ─────────────────────────────────────────
+
+    #[Test]
+    public function it_returns_pending_leave_approvals_for_admin(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+
+        // Pending leave starting in 3 days — should appear
+        LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(3)->format('Y-m-d'),
+            'end_date' => now()->addDays(3)->format('Y-m-d'),
+            'admin_approved_by' => null,
+        ]);
+
+        // Pending leave starting in 15 days — should NOT appear (beyond 10-day window)
+        LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(15)->format('Y-m-d'),
+            'end_date' => now()->addDays(15)->format('Y-m-d'),
+            'admin_approved_by' => null,
+        ]);
+
+        $result = $this->service->getPendingLeaveApprovals($admin);
+
+        $this->assertEquals(1, $result['count']);
+        $this->assertCount(1, $result['requests']);
+        $this->assertArrayHasKey('user_name', $result['requests'][0]);
+        $this->assertArrayHasKey('leave_type', $result['requests'][0]);
+    }
+
+    #[Test]
+    public function it_returns_pending_leave_approvals_for_hr(): void
+    {
+        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+
+        LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(2)->format('Y-m-d'),
+            'end_date' => now()->addDays(2)->format('Y-m-d'),
+            'hr_approved_by' => null,
+        ]);
+
+        $result = $this->service->getPendingLeaveApprovals($hr);
+
+        $this->assertEquals(1, $result['count']);
+    }
+
+    #[Test]
+    public function it_filters_pending_leave_approvals_by_campaign_for_team_lead(): void
+    {
+        $campaign = Campaign::factory()->create();
+        $otherCampaign = Campaign::factory()->create();
+        $site = Site::factory()->create();
+
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $tl->id,
+            'campaign_id' => $campaign->id,
+            'site_id' => $site->id,
+            'is_active' => true,
+        ]);
+
+        // Agent in same campaign
+        $sameCampaignAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $sameCampaignAgent->id,
+            'campaign_id' => $campaign->id,
+            'site_id' => $site->id,
+            'is_active' => true,
+        ]);
+
+        // Agent in different campaign
+        $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $otherAgent->id,
+            'campaign_id' => $otherCampaign->id,
+            'site_id' => $site->id,
+            'is_active' => true,
+        ]);
+
+        // Leave from same campaign agent — should appear
+        LeaveRequest::factory()->create([
+            'user_id' => $sameCampaignAgent->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(2)->format('Y-m-d'),
+            'end_date' => now()->addDays(2)->format('Y-m-d'),
+            'requires_tl_approval' => true,
+            'tl_approved_by' => null,
+            'tl_rejected' => false,
+        ]);
+
+        // Leave from other campaign agent — should NOT appear
+        LeaveRequest::factory()->create([
+            'user_id' => $otherAgent->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(2)->format('Y-m-d'),
+            'end_date' => now()->addDays(2)->format('Y-m-d'),
+            'requires_tl_approval' => true,
+            'tl_approved_by' => null,
+            'tl_rejected' => false,
+        ]);
+
+        $result = $this->service->getPendingLeaveApprovals($tl);
+
+        $this->assertEquals(1, $result['count']);
+        $this->assertCount(1, $result['requests']);
+    }
+
+    #[Test]
+    public function it_excludes_already_approved_leave_from_pending(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+
+        // Already admin-approved — should NOT appear
+        LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'pending',
+            'start_date' => now()->addDays(3)->format('Y-m-d'),
+            'end_date' => now()->addDays(3)->format('Y-m-d'),
+            'admin_approved_by' => $admin->id,
+        ]);
+
+        $result = $this->service->getPendingLeaveApprovals($admin);
+
+        $this->assertEquals(0, $result['count']);
+    }
+
+    #[Test]
+    public function it_returns_empty_for_tl_without_active_schedule(): void
+    {
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        $result = $this->service->getPendingLeaveApprovals($tl);
+
+        $this->assertEquals(0, $result['count']);
+        $this->assertEmpty($result['requests']);
+    }
+
+    #[Test]
+    public function it_excludes_past_leave_requests_from_pending(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        // Leave starting yesterday — should NOT appear
+        LeaveRequest::factory()->create([
+            'user_id' => User::factory()->create()->id,
+            'status' => 'pending',
+            'start_date' => now()->subDay()->format('Y-m-d'),
+            'end_date' => now()->subDay()->format('Y-m-d'),
+            'admin_approved_by' => null,
+        ]);
+
+        $result = $this->service->getPendingLeaveApprovals($admin);
+
+        $this->assertEquals(0, $result['count']);
     }
 }

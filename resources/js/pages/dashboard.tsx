@@ -20,6 +20,7 @@ import { NotificationSummaryWidget } from './Dashboard/widgets/NotificationSumma
 import { UserAccountStatsWidget } from './Dashboard/widgets/UserAccountStatsWidget';
 import { RecentActivityWidget } from './Dashboard/widgets/RecentActivityWidget';
 import { BiometricAnomalyWidget } from './Dashboard/widgets/BiometricAnomalyWidget';
+import { PendingLeaveApprovalsWidget } from './Dashboard/widgets/PendingLeaveApprovalsWidget';
 import type { DashboardProps, TabType } from './Dashboard/types';
 import { ROLE_TABS, TAB_CONFIG, ROLE_WIDGETS } from './Dashboard/types';
 
@@ -92,6 +93,7 @@ export default function Dashboard({
     leaveUtilization,
     campaignPresence,
     pointsByCampaign,
+    pendingLeaveApprovals,
 }: DashboardProps) {
     // Get user role from shared data
     const { auth } = usePage<SharedData>().props;
@@ -296,6 +298,9 @@ export default function Dashboard({
                         >
                             {availableWidgets.includes('notifications') && (
                                 <NotificationSummaryWidget notificationSummary={notificationSummary} />
+                            )}
+                            {availableWidgets.includes('pending-leave-approvals') && (
+                                <PendingLeaveApprovalsWidget pendingLeaveApprovals={pendingLeaveApprovals} />
                             )}
                             {availableWidgets.includes('user-accounts') && (
                                 <UserAccountStatsWidget userAccountStats={userAccountStats} />
