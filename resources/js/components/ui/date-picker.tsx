@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { CalendarIcon } from "lucide-react"
-import { format, parse, isValid, subDays } from "date-fns"
+import { format, parse, isValid } from "date-fns"
 import type { Matcher } from "react-day-picker"
 
 import { cn } from "@/lib/utils"

@@ -1,0 +1,628 @@
+================================================================================
+  ROLE-BASED DASHBOARD REFACTOR — IMPLEMENTATION PLAN & TRACKER
+  Created: February 14, 2026
+================================================================================
+
+STATUS LEGEND:
+  [ ] Not started
+  [~] In progress
+  [x] Completed
+  [!] Blocked / Needs discussion
+
+================================================================================
+ 1. OVERVIEW
+================================================================================
+
+Refactor the monolithic 2,693-line dashboard.tsx + 579-line DashboardService.php
+into a hybrid architecture: one shared layout with role-specific tab sets and
+extracted sub-components. Backend will conditionally compute data per role.
+
+Architecture: Hybrid — shared layout with role-specific tab sets
+Route: Single /dashboard route, single controller action
+Frontend: Composable sub-components extracted from dashboard.tsx
+
+================================================================================
+ 2. CURRENT STATE (BEFORE REFACTOR)
+================================================================================
+
+Files involved:
+  - app/Http/Controllers/DashboardController.php (controller)
+  - app/Services/DashboardService.php (579 lines, monolithic)
+  - resources/js/pages/dashboard.tsx (2,693 lines, monolithic)
+  - resources/js/components/CalendarWithHolidays.tsx (leave calendar)
+  - resources/js/components/ui/chart.tsx (Shadcn chart wrapper)
+
+Current tabs (role-based, frontend-only filtering):
+  Super Admin → infrastructure, attendance, presence-insights, it-concerns
+  Admin       → attendance, presence-insights, infrastructure
+  IT          → infrastructure, it-concerns, attendance
+  Team Lead   → attendance, presence-insights
+  Agent       → attendance, presence-insights
+  HR          → attendance, presence-insights
+  Utility     → attendance
+
+Problems:
+  - All stats computed for every role (wasteful queries + payload)
+  - No backend role filtering (only Agent/Utility get attendance restricted)
+  - 2,693-line single React file with inline components
+  - No separate dashboard sub-component folder used
+  - Missing data: stock levels, activity logs, user stats, notifications, anomalies
+  - Agent/Utility have no personal dashboard view
+  - Deprecated stats (ssdPcs, hddPcs) still in code
+
+================================================================================
+ 3. TARGET STATE (AFTER REFACTOR)
+================================================================================
+
+ROLE → TAB MAPPING (NEW):
+┌──────────────┬─────────────┬──────────────────────────────────────────────────┐
+│ Role         │ Default Tab │ Available Tabs (ordered)                        │
+├──────────────┼─────────────┼──────────────────────────────────────────────────┤
+│ Super Admin  │ attendance  │ attendance, presence-insights, infrastructure,  │
+│              │             │ it-concerns, stock-overview                     │
+├──────────────┼─────────────┼──────────────────────────────────────────────────┤
+│ Admin        │ attendance  │ attendance, presence-insights, infrastructure   │
+├──────────────┼─────────────┼──────────────────────────────────────────────────┤
+│ HR           │ attendance  │ attendance, presence-insights                   │
+├──────────────┼─────────────┼──────────────────────────────────────────────────┤
+│ IT           │ infra       │ infrastructure, it-concerns, stock-overview,    │
+│              │             │ attendance                                      │
+├──────────────┼─────────────┼──────────────────────────────────────────────────┤
+│ Team Lead    │ attendance  │ attendance, presence-insights                   │
+├──────────────┼─────────────┼──────────────────────────────────────────────────┤
+│ Agent        │ personal    │ personal, attendance, presence-insights         │
+├──────────────┼─────────────┼──────────────────────────────────────────────────┤
+│ Utility      │ personal    │ personal, attendance                            │
+└──────────────┴─────────────┴──────────────────────────────────────────────────┘
+
+SIDEBAR WIDGETS PER ROLE:
+  Super Admin → NotificationSummary, UserAccountStats, RecentActivity, BiometricAnomaly
+  Admin       → NotificationSummary, UserAccountStats, RecentActivity, BiometricAnomaly
+  HR          → NotificationSummary, BiometricAnomaly, LeaveCredits
+  IT          → NotificationSummary
+  Team Lead   → NotificationSummary, LeaveCredits
+  Agent       → NotificationSummary, LeaveCredits
+  Utility     → NotificationSummary, LeaveCredits
+
+================================================================================
+ 4. IMPLEMENTATION PHASES
+================================================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 1 — BACKEND: CONDITIONAL DATA LOADING BY ROLE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] 1.1 Refactor DashboardService.getAllStats() to accept user role
+        File: app/Services/DashboardService.php
+        - Added $role parameter (required string)
+        - Conditionally computes per role:
+            Super Admin: ALL stats (infra, IT, presence, conflicts, stock, accounts, activity, anomalies)
+            Admin: attendance, presence, infrastructure, user stats, activity logs, anomalies
+            HR: attendance, presence, anomalies
+            IT: infrastructure, IT concerns, stock
+            Team Lead/Agent: presence (attendance handled in controller)
+            Utility: attendance only (handled in controller)
+            HR: attendance, presence, leave details, biometric anomalies
+            IT: infrastructure, IT concerns, stock levels, maintenance
+            Team Lead: attendance, presence, points (team scope)
+            Agent/Utility: personal stats only (no org-wide)
+
+[x] 1.2 Add new stat methods to DashboardService:
+        a) getStockSummary()
+           - Query Stock with stockable morph → aggregate RAM/Disk/Monitor
+           - Return: { ram: {total, reserved}, disk: {total, reserved}, monitor: {total, reserved} }
+
+        b) getRecentActivityLogs(int $limit = 10)
+           - Query Spatie\Activitylog\Models\Activity ordered desc
+           - With causer relationship
+           - Sanitize sensitive fields (password, two_factor_*, remember_token)
+           - Return: [{id, description, event, causer_name, subject_type, created_at}]
+
+        c) getUserAccountStats()
+           - Count total users, group by role, pending approvals (is_approved=false)
+           - Include recently deactivated count
+           - Return: {total, by_role: {}, pending_approvals, recently_deactivated}
+
+        d) getNotificationSummary(int $userId)
+           - Unread count via User->unreadNotifications()->count()
+           - Recent 5 unread notifications
+           - Return: {unread_count, recent: [{id, type, title, message, created_at}]}
+
+        e) getBiometricAnomalySummary()
+           - Lightweight: counts only per anomaly category (last 7 days)
+           - Uses BiometricAnomalyDetector service
+           - Return: {simultaneous_sites, impossible_gaps, duplicate_scans, unusual_hours, excessive_scans}
+
+[x] 1.3 Add personal stats methods for Agent/Utility:
+        a) getPersonalSchedule(int $userId)
+           - Query User->activeSchedule() with campaign/site eager load
+           - Compute next 7 work days
+           - Return: {campaign, site, shift_type, time_in, time_out, work_days, next_shifts[]}
+
+        b) getPersonalRequestsSummary(int $userId)
+           - Last 5 leave requests with status
+           - Last 5 IT concerns with status
+           - Last 5 medication requests with status
+           - Return: {leaves[], it_concerns[], medication_requests[]}
+
+        c) getPersonalAttendanceSummary(int $userId)
+           - Current month: present, tardy, absent, ncns counts
+           - Total active points + breakdown by type
+           - Return: {present, tardy, absent, ncns, total_points, points_by_type{}}
+
+[x] 1.4 Update DashboardController.index()
+        File: app/Http/Controllers/DashboardController.php
+        - Pass $user->role to refactored DashboardService
+        - Include new props conditionally based on role
+        - Update cache key: dashboard_stats_{role}_{date}_{month}_campaign_{id}
+        - Add uncached personal data for Agent/Utility
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 2 — FRONTEND: EXTRACT SUB-COMPONENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] 2.1 Extract reusable components to Dashboard/components/
+        - StatCard.tsx (from dashboard.tsx ~line 230)
+        - DetailDialog.tsx (from dashboard.tsx ~line 265)
+
+[x] 2.2 Extract existing tabs to Dashboard/tabs/
+        - InfrastructureTab.tsx (stations, vacant, no-PCs, maintenance, unassigned)
+        - AttendanceTab.tsx (filters, 8 stat cards, charts, leave conflicts)
+        - PresenceInsightsTab.tsx (today's presence, leave calendar, points overview)
+        - ItConcernsTab.tsx (concern stats, trend chart)
+
+[x] 2.3 Create new tabs:
+        - StockOverviewTab.tsx (RAM/Disk/Monitor stock levels)
+        - PersonalDashboardTab.tsx (for Agent/Utility — schedule, summary, requests)
+
+[x] 2.4 Create new widget components in Dashboard/widgets/
+        - RecentActivityWidget.tsx
+        - UserAccountStatsWidget.tsx
+        - NotificationSummaryWidget.tsx
+        - BiometricAnomalyWidget.tsx
+
+[x] 2.5 Create Dashboard/types.ts
+        - DashboardProps interface (all props including Phase 1 new props)
+        - TabType union type (6 tabs including stock-overview, personal)
+        - ROLE_TABS mapping (updated for all 7 roles)
+        - TAB_CONFIG with labels and icon names
+        - All sub-type interfaces (NotificationSummary, PersonalSchedule, etc.)
+
+[x] 2.6 Refactor main dashboard.tsx
+        - Reduced from 2,693 lines → 252 lines
+        - Imports and composes all extracted tab components
+        - Icon mapping for tab config (TAB_ICONS)
+        - Only shared state (activeTab, dateTime dialog) remains
+        - All tab-specific state/logic moved to sub-components
+        - TypeScript build passes (zero dashboard errors)
+        - Vite production build succeeds with code-splitting
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 3 — ROLE-SPECIFIC TAB CONFIGURATION & LAYOUT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] 3.1 Redesign ROLE_TABS mapping (add new tabs, reorder)
+        - ROLE_TABS already configured in types.ts with all 7 roles
+        - ROLE_WIDGETS added: maps roles → widget types (notifications, user-accounts,
+          recent-activity, biometric-anomalies)
+
+[x] 3.2 Implement sidebar widget layout per role
+        - dashboard.tsx updated: flexbox layout with xl:flex-row for sidebar
+        - 4 widgets conditionally rendered: NotificationSummary, UserAccountStats,
+          RecentActivity, BiometricAnomaly
+        - Widget visibility driven by ROLE_WIDGETS config
+
+[x] 3.3 Implement responsive layout (tabs + sidebar → stacked on mobile)
+        - xl breakpoint: tabs main area + 320px sidebar
+        - Below xl: widgets stack below tabs
+        - motion.aside with stagger animation
+
+[x] 3.4 Backend service methods implemented
+        - getStockSummary() — Stock model aggregated by stockable_type
+        - getRecentActivityLogs() — Spatie Activity log, last 10
+        - getUserAccountStats() — User counts by role, pending approvals
+        - getNotificationSummary() — Unread count + recent 5
+        - getBiometricAnomalySummary() — BiometricAnomalyDetector integration
+        - getPersonalSchedule() — Active schedule + next 7 work days
+        - getPersonalRequestsSummary() — Last 5 leaves, IT concerns, medication
+        - getPersonalAttendanceSummary() — Current month stats + points
+
+[x] 3.5 DashboardController updated
+        - Role-based cache key: dashboard_stats_{role}_{date}_{month}_campaign_{id}
+        - Passes $role to getAllStats()
+        - Adds notificationSummary, personalSchedule/Requests/AttendanceSummary
+        - Personal data not cached (user-specific)
+
+[x] 3.6 Tests updated
+        - 18 tests passing (57 assertions)
+        - Added role-specific tests: Agent restricted data, IT focused data
+        - getAllStats tests updated with role parameter
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 4 — SUPER ADMIN ENHANCED ANALYTICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] 4.1 Enhance Attendance tab for Super Admin:
+        - Leave utilization rate chart (ComposedChart: Bar earned + Bar used + Line utilization %)
+        - Points escalation alert (employees with 4.00–5.99 points, card list)
+        - Attendance compliance rate KPI (RadialBarChart gauge)
+        - NCNS trend chart (LineChart with increasing/decreasing badge)
+
+[x] 4.2 Enhance Presence Insights for Super Admin:
+        - Campaign-level presence comparison (stacked horizontal BarChart + presence rate badges)
+        - Points distribution by campaign (BarChart + campaign summary cards)
+        - High-risk employees expanded with point history timeline (existing from Phase 2)
+
+[x] 4.3 Backend — 5 new DashboardService methods:
+        - getPointsEscalation() — employees with 4.00–5.99 active points
+        - getNcnsTrend() — NCNS count by month (6 months) with direction change
+        - getLeaveUtilizationData() — monthly earned vs used credits aggregated
+        - getCampaignPresenceComparison() — presence stats grouped by campaign
+        - getPointsByCampaign() — active points grouped by campaign
+        - getAllStats() updated: Super Admin/Admin/HR get escalation+NCNS+leave;
+          Super Admin/Admin get campaign data
+
+[x] 4.4 Types + Props:
+        - 6 new TypeScript interfaces in types.ts
+        - 5 new optional props in DashboardProps
+        - AttendanceTab accepts 3 new props, PresenceInsightsTab 2 new props
+
+[x] 4.5 Tests:
+        - 26 tests passing (96 assertions), +8 new Phase 4 tests
+        - Pint formatted, TS check clean, Vite build in 22.18s
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 5 — PERSONAL DASHBOARD (AGENT/UTILITY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] 5.1 PersonalDashboardTab.tsx enhanced (641 lines):
+        - My Schedule card (campaign, site, shift, work days, next shift) — ✅ from Phase 2
+        - My Attendance Summary — ✅ stat cards + NEW Donut PieChart (status distribution)
+        - My Active Points — ✅ NEW RadialBarChart gauge (X of 6) + status text + remaining pts
+        - My Points by Type — ✅ NEW Horizontal BarChart (sorted desc, readable labels)
+        - My Recent Requests (leaves, IT concerns, medication) — ✅ from Phase 2
+        - My Leave Balance (earned, used, remaining) — ✅ from Phase 2
+        - Upcoming Expirations — ✅ preserved
+        - TS clean, Vite build 17.61s, 26 tests passing (96 assertions), Pint clean
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 6 — UPDATE PROPS INTERFACE & TYPES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] 6.1 DashboardProps in types.ts — ALL props already defined (completed in Phases 1–4):
+        - stockSummary ✅ (StockSummary)
+        - recentActivityLogs ✅ (ActivityLogEntry[])
+        - userAccountStats ✅ (UserAccountStats)
+        - notificationSummary ✅ (NotificationSummary)
+        - biometricAnomalies ✅ (BiometricAnomalies)
+        - personalSchedule ✅ (PersonalSchedule | null)
+        - personalRequests ✅ (PersonalRequests)
+        - personalAttendanceSummary ✅ (PersonalAttendanceSummary)
+        - Phase 4 analytics props ✅ (pointsEscalation, ncnsTrend, leaveUtilization, campaignPresence, pointsByCampaign)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PHASE 7 — TESTING & CLEANUP
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+[x] 7.1 Feature tests for DashboardController@index per role:
+        - 7 role-specific tests (Super Admin, Admin, HR, IT, Team Lead, Agent, Utility)
+        - Auth guard tests (guest redirect, unapproved redirect)
+        - All roles verify userRole prop + correct Inertia component
+        - Agent/Utility verify isRestrictedRole=true
+
+[x] 7.2 Test restricted roles do NOT receive admin-only data:
+        - Agent: missing totalStations, itConcernStats, stockSummary, userAccountStats,
+          recentActivityLogs, biometricAnomalies, pointsEscalation, campaignPresence
+        - Utility: same + missing presenceInsights
+        - HR: gets escalation/ncnsTrend/leaveUtilization but NOT campaignPresence/pointsByCampaign
+        - IT: gets infra + stock but NOT admin widgets or Phase 4 analytics
+
+[x] 7.3 Test new service methods individually:
+        - getStockSummary (with data + empty)
+        - getUserAccountStats (total, by_role, pending_approvals, recently_deactivated)
+        - getRecentActivityLogs (with activity + empty)
+        - getNotificationSummary (with unread + empty)
+        - getPersonalSchedule (with schedule + null when no schedule)
+        - getPersonalRequestsSummary (with data + empty)
+        - getPersonalAttendanceSummary (basic + with points)
+        - getAllStats for Utility/Team Lead role restrictions
+        - Deprecated ssdPcs/hddPcs no longer in getAllStats
+
+[x] 7.4 Test cache key includes role (no cross-role leaks):
+        - Super Admin loads first, then Agent loads — Agent still misses admin data
+
+[x] 7.5 Remove deprecated stats (ssdPcs, hddPcs):
+        - Removed getPcsWithSsd() and getPcsWithHdd() from DashboardService
+        - Removed from getAllStats() role blocks
+        - Removed from types.ts DashboardProps
+        - Removed from dashboard.tsx destructuring + passing
+        - Removed StatCard + DetailDialog from InfrastructureTab
+        - Removed HardDrive import from InfrastructureTab
+        - Removed 2 unit tests + 2 assertions from DashboardServiceTest
+
+[x] 7.6 Run vendor/bin/pint --dirty — 2 style fixes applied
+
+[x] 7.7 TS check + Vite build — clean (only pre-existing auth error), build 21.62s
+
+[x] 7.8 Manual testing: log in as each role, verify tabs/widgets — USER ACTION REQUIRED
+
+        FINAL TEST COUNTS:
+        - DashboardControllerTest: 17 tests, 336 assertions (all passing)
+        - DashboardServiceTest: 40 tests, 171 assertions (all passing)
+        - Total dashboard tests: 57 tests, 507 assertions
+        - Pre-existing failures: 7 in AttendanceDashboardTest (Index→Hub rename)
+
+================================================================================
+ 5. CHART ANALYSIS — DATA SET → CHART TYPE MAPPING
+================================================================================
+
+Library: recharts ^3.4.1
+Wrapper: Shadcn ChartContainer + ChartTooltip + ChartTooltipContent
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.1 EXISTING CHARTS (KEEP & ENHANCE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌─────────────────────────────────────┬─────────────────────┬──────────────────┐
+│ Data                                │ Current Chart       │ Action           │
+├─────────────────────────────────────┼─────────────────────┼──────────────────┤
+│ Attendance status distribution      │ Donut PieChart   ✅ │ Keep as-is       │
+│ Attendance count by status          │ Horizontal Bar   ✅ │ Keep as-is       │
+│ Single status rate %                │ RadialBarChart   ✅ │ Keep as-is       │
+│ Monthly attendance trends           │ Stacked AreaChart✅ │ Keep, add Line   │
+│                                     │                     │ toggle mode      │
+│ IT concern trends (12mo)            │ AreaChart        ✅ │ Enhance: add     │
+│                                     │                     │ stacked mode     │
+│ Points trend (6mo, in dialog)       │ BarChart         ✅ │ Promote to tab   │
+│                                     │                     │ (out of dialog)  │
+└─────────────────────────────────────┴─────────────────────┴──────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.2 NEW CHARTS — ATTENDANCE TAB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Daily attendance drill-down  │ Vertical BarChart    │ Discrete day-level values; bar      │ All roles            │
+│ (day-level within month)     │ (grouped)            │ is better than area for short       │                      │
+│                              │                      │ discrete series (28-31 points)      │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Attendance compliance rate   │ RadialBarChart       │ Single KPI gauge — shows "X%        │ Super Admin, Admin,  │
+│ (single % value)             │ (gauge)              │ compliant" clearly                  │ HR, Team Lead        │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Leave utilization rate       │ ComposedChart        │ Bar for earned credits/mo, Line     │ All roles (personal  │
+│ (earned vs used over time)   │ (Bar + Line)         │ overlay for cumulative used.        │ for Agent/Utility)   │
+│                              │                      │ Shows accrual vs consumption.       │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ NCNS trend over time         │ LineChart with       │ Single-series trend; reference      │ Super Admin, Admin,  │
+│                              │ reference line       │ line at alert threshold highlights  │ HR                   │
+│                              │                      │ escalation pattern.                 │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.3 NEW CHARTS — POINTS DATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Points by type (5 types)     │ Horizontal BarChart  │ 5 discrete categories; continuous   │ Super Admin, Admin,  │
+│                              │                      │ point values vary widely; bar       │ HR, Team Lead        │
+│                              │                      │ allows precise comparison.          │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Points trend with violations │ ComposedChart        │ Bar for total_points/month + Line   │ Super Admin, Admin,  │
+│ (promote from dialog)        │ (Bar + Line)         │ overlay for violations_count.       │ HR, Team Lead        │
+│                              │                      │ Dual-metric time series.            │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Points escalation            │ Horizontal BarChart  │ Employee names on Y-axis, points    │ Super Admin, Admin,  │
+│ (employees near 6-pt limit)  │ with reference line  │ on X-axis, vertical ref line at 6. │ HR, Team Lead        │
+│                              │                      │ Instantly shows who's at risk.       │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Points by campaign           │ Grouped BarChart     │ Campaigns on X-axis, point types    │ Super Admin, Admin,  │
+│                              │                      │ as groups. Best for cross-campaign   │ HR                   │
+│                              │                      │ comparison.                          │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.4 NEW CHARTS — PRESENCE DATA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Today's presence breakdown   │ Donut PieChart       │ Part-to-whole for 5 mutually        │ Super Admin, Admin,  │
+│ (scheduled/present/absent/   │                      │ exclusive categories. Center label   │ HR, Team Lead        │
+│  on_leave/unaccounted)       │                      │ shows total scheduled.              │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Campaign-level presence      │ Stacked BarChart     │ Campaigns on X-axis, stacked        │ Super Admin, Admin   │
+│ comparison                   │ (vertical)           │ segments for present/absent/leave.  │                      │
+│                              │                      │ Cross-campaign comparison.           │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.5 NEW CHARTS — INFRASTRUCTURE TAB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Combined infrastructure      │ Grouped BarChart     │ Sites on X-axis, grouped bars for   │ Super Admin, Admin,  │
+│ overview (stations by site)  │                      │ total/vacant/dual-monitor/no-PC.    │ IT                   │
+│                              │                      │ One chart replaces 4 stat cards.    │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.6 NEW CHARTS — IT CONCERNS TAB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ IT concern status            │ Donut PieChart       │ Part-to-whole for 3 categories;     │ Super Admin, IT      │
+│ (pending/in-prog/resolved)   │                      │ center label shows total concerns.  │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ IT concerns by site          │ Stacked BarChart     │ Sites on Y-axis, stacked segments   │ Super Admin, IT      │
+│                              │ (horizontal)         │ for pending/in-progress/resolved.   │                      │
+│                              │                      │ Shows total + composition per site. │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.7 NEW CHARTS — STOCK TAB
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Stock levels by type         │ Grouped BarChart     │ 3 categories (RAM/Disk/Monitor) ×   │ Super Admin, IT      │
+│ (qty vs reserved)            │                      │ 2 series (total, reserved). Gap     │                      │
+│                              │                      │ between bars shows availability.    │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.8 NEW CHARTS — WIDGETS (SIDEBAR)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Users by role distribution   │ Donut PieChart       │ Part-to-whole; 7 roles fits donut   │ Super Admin, Admin   │
+│                              │ (mini)               │ well. Compact for sidebar widget.   │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Biometric anomaly counts     │ Horizontal BarChart  │ 5 categories with long names;       │ Super Admin, Admin,  │
+│ (5 types)                    │ (mini)               │ horizontal gives label room.         │ HR                   │
+│                              │                      │ Compact for sidebar.                 │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5.9 NEW CHARTS — PERSONAL DASHBOARD (AGENT/UTILITY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+┌──────────────────────────────┬──────────────────────┬─────────────────────────────────────┬──────────────────────┐
+│ Data Set                     │ Chart Type           │ Why                                 │ Roles                │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Personal attendance summary  │ Donut PieChart       │ Part-to-whole of own statuses for   │ Agent, Utility       │
+│ (own month stats)            │ (small)              │ the month. Compact & familiar.      │                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Personal points vs threshold │ RadialBarChart       │ Gauge showing "X out of 6 pts" —    │ Agent, Utility       │
+│ (total points / 6 max)       │ (gauge)              │ immediately communicates risk level.│                      │
+├──────────────────────────────┼──────────────────────┼─────────────────────────────────────┼──────────────────────┤
+│ Personal points by type      │ Horizontal BarChart  │ Small bar chart for 5 point types.  │ Agent, Utility       │
+│                              │ (mini)               │ Shows what's contributing most.     │                      │
+└──────────────────────────────┴──────────────────────┴─────────────────────────────────────┴──────────────────────┘
+
+================================================================================
+ 6. CHART TYPE SELECTION RATIONALE (QUICK REFERENCE)
+================================================================================
+
+  Donut PieChart    → Part-to-whole (≤8 categories)
+  Vertical BarChart → Comparing quantities across categories
+  Horizontal Bar    → Categories with long labels, ranked comparison
+  Stacked BarChart  → Composition + total comparison across groups
+  AreaChart         → Volume trends over time showing composition
+  LineChart         → Single/few series trend over time with precision
+  RadialBarChart    → Single KPI as percentage/gauge
+  ComposedChart     → Dual-metric time series (Bar + Line overlay)
+  Grouped BarChart  → Multi-series categorical comparison
+
+================================================================================
+ 7. FILE STRUCTURE (TARGET)
+================================================================================
+
+resources/js/pages/
+├── dashboard.tsx                          # Main page (refactored, ~300-400 lines)
+└── Dashboard/
+    ├── components/
+    │   ├── StatCard.tsx                   # Animated stat card (extracted)
+    │   └── DetailDialog.tsx              # Dialog wrapper (extracted)
+    ├── tabs/
+    │   ├── InfrastructureTab.tsx          # Stations, PCs, maintenance
+    │   ├── AttendanceTab.tsx              # Filters, stats, all attendance charts
+    │   ├── PresenceInsightsTab.tsx        # Presence, leave calendar, points
+    │   ├── ItConcernsTab.tsx             # IT concern stats & trends
+    │   ├── StockOverviewTab.tsx          # Stock levels (NEW)
+    │   └── PersonalDashboardTab.tsx      # Agent/Utility personal view (NEW)
+    └── widgets/
+        ├── RecentActivityWidget.tsx       # Activity log entries (NEW)
+        ├── UserAccountStatsWidget.tsx     # User counts by role (NEW)
+        ├── NotificationSummaryWidget.tsx  # Unread count & alerts (NEW)
+        ├── BiometricAnomalyWidget.tsx     # Anomaly counts (NEW)
+        ├── LeaveCreditsWidget.tsx         # Personal leave balance (extracted)
+        └── LeaveConflictsWidget.tsx       # Leave conflicts list (extracted)
+
+app/Services/
+├── DashboardService.php                  # Refactored with role-based loading
+│   Methods added:
+│   ├── getStockSummary()
+│   ├── getRecentActivityLogs()
+│   ├── getUserAccountStats()
+│   ├── getNotificationSummary()
+│   ├── getBiometricAnomalySummary()
+│   ├── getPersonalSchedule()
+│   ├── getPersonalRequestsSummary()
+│   └── getPersonalAttendanceSummary()
+
+tests/Feature/
+├── DashboardRoleAccessTest.php            # 7 role test cases (NEW)
+├── DashboardServiceTest.php               # Service method tests (NEW or updated)
+
+================================================================================
+ 8. DECISIONS LOG
+================================================================================
+
+Decision 1: Hybrid architecture (shared layout + role-specific tabs)
+  Chose over: Separate pages per role, single page with no tab changes
+  Reason: Single route, single controller, Inertia-friendly, maintainable
+
+Decision 2: Backend role-filtering (service layer)
+  Chose over: Frontend-only filtering (current approach)
+  Reason: Reduces DB queries, payload size, prevents data leakage
+
+Decision 3: Cache per role
+  Chose over: Single cache key for all roles
+  Reason: Prevents cross-role cache leaks, avoids computing unnecessary stats
+
+Decision 4: Personal dashboard tab for Agent/Utility
+  Chose over: Keep generic attendance-only view
+  Reason: Actionable personal info (schedule, requests, points) is more useful
+
+Decision 5: Sidebar widgets for non-primary data
+  Chose over: More tabs, or embedding in existing tabs
+  Reason: Keeps tabs focused, widgets stay visible across tab switches
+
+Decision 6: Chart type selections (see Section 5)
+  Each chart type chosen for specific data characteristics:
+  PieChart for composition, BarChart for comparison, LineChart for trends,
+  RadialBarChart for single KPIs, ComposedChart for dual-metric time series
+
+Decision 7: Switch daily attendance drill-down from AreaChart to BarChart
+  Reason: Discrete day-level data is better represented by bars (no implied
+  continuity between days)
+
+Decision 8: Enhance IT concern AreaChart with stacked mode
+  Reason: Current single-series toggle hides compositional view
+
+Decision 9: Promote points trend chart from dialog to tab
+  Reason: Important data buried in a modal; should be directly visible
+
+================================================================================
+ 9. VERIFICATION CHECKLIST
+================================================================================
+
+[ ] php artisan test --compact --filter=Dashboard
+[ ] php artisan tinker → verify each new service method returns expected shape
+[ ] npm run types → no TypeScript errors
+[ ] npm run build → production build succeeds
+[ ] vendor/bin/pint --dirty → PHP formatting clean
+[ ] Manual: login as Super Admin → verify all tabs + sidebar widgets
+[ ] Manual: login as Admin → verify correct subset of tabs/widgets
+[ ] Manual: login as HR → verify attendance + presence focus
+[ ] Manual: login as IT → verify infrastructure + IT concerns + stock
+[ ] Manual: login as Team Lead → verify attendance + presence
+[ ] Manual: login as Agent → verify personal tab + limited attendance
+[ ] Manual: login as Utility → verify personal tab + attendance only
+[ ] Browser network tab: verify Inertia props contain ONLY role-relevant data
+
+================================================================================
+ END OF PLAN
+================================================================================

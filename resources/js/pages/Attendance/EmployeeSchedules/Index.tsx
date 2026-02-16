@@ -267,7 +267,7 @@ export default function EmployeeSchedulesIndex() {
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, userFilter, roleFilter, campaignFilter, statusFilter, activeOnly]);
+    }, [autoRefreshEnabled, search, userFilter, roleFilter, campaignFilter, statusFilter, activeOnly, showResigned]);
 
     const showClearFilters =
         userFilter !== "all" ||

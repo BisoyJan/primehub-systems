@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
@@ -283,7 +283,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         });
     };
 
-    const buildFilterParams = () => {
+    const buildFilterParams = useCallback(() => {
         const params: Record<string, string> = {};
         if (search.trim()) {
             params.search = search.trim();
@@ -295,7 +295,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
             params.site = siteFilter;
         }
         return params;
-    };
+    }, [search, status, siteFilter]);
 
     const requestWithFilters = (params: Record<string, string>, clearSelection = false) => {
         setIsFilterLoading(true);
@@ -350,7 +350,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
         }, 30000);
 
         return () => clearInterval(interval);
-    }, [autoRefreshEnabled, search, status, siteFilter]);
+    }, [autoRefreshEnabled, buildFilterParams]);
 
     const handleDelete = (id: number) => {
         setIsMutating(true);
