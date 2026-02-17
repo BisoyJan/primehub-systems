@@ -2,16 +2,16 @@
 
 namespace Tests\Feature\Controllers\FormRequests;
 
-use Tests\TestCase;
-use App\Models\User;
-use App\Models\MedicationRequest;
-use App\Services\NotificationService;
-use App\Mail\MedicationRequestSubmitted;
 use App\Mail\MedicationRequestStatusUpdated;
+use App\Mail\MedicationRequestSubmitted;
+use App\Models\MedicationRequest;
+use App\Models\User;
+use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
-use PHPUnit\Framework\Attributes\Test;
 use Inertia\Testing\AssertableInertia as Assert;
+use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 class MedicationRequestControllerTest extends TestCase
 {
@@ -22,7 +22,11 @@ class MedicationRequestControllerTest extends TestCase
         parent::setUp();
         // Mock NotificationService
         $this->mock(NotificationService::class, function ($mock) {
-            $mock->shouldReceive('notifyHrRolesAboutNewMedicationRequest')->andReturnNull();
+            $mock->shouldReceive('notifyHrRolesAboutNewMedicationRequest')
+                ->withArgs(function ($name, $type, $requestId, $userId = 0, $role = 'Agent', $campaignId = null) {
+                    return is_string($name) && is_string($type) && is_int($requestId);
+                })
+                ->andReturnNull();
             $mock->shouldReceive('notifyMedicationRequestStatusChange')->andReturn(\Mockery::mock(\App\Models\Notification::class));
             $mock->shouldReceive('notifyHrRolesAboutMedicationRequestCancellation')->andReturnNull();
         });

@@ -3,14 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\MedicationRequestRequest;
+use App\Mail\MedicationRequestStatusUpdated;
+use App\Mail\MedicationRequestSubmitted;
 use App\Models\MedicationRequest;
 use App\Models\User;
 use App\Services\NotificationService;
-use App\Mail\MedicationRequestSubmitted;
-use App\Mail\MedicationRequestStatusUpdated;
-use Illuminate\Support\Facades\Mail;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Mail;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -46,7 +46,7 @@ class MedicationRequestController extends Controller
 
         // Auto-filter for Team Leads when no campaign is specified
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (!$campaignIdToFilter && $teamLeadCampaignId) {
+        if (! $campaignIdToFilter && $teamLeadCampaignId) {
             $campaignIdToFilter = $teamLeadCampaignId;
         }
 
@@ -125,7 +125,7 @@ class MedicationRequestController extends Controller
         $this->authorize('create', MedicationRequest::class);
 
         $userId = $request->validated()['requested_for_user_id'] ?? auth()->id();
-        $user = User::findOrFail($userId);
+        $user = User::with('activeSchedule')->findOrFail($userId);
 
         $medicationRequest = MedicationRequest::create([
             ...$request->validated(),
@@ -133,11 +133,14 @@ class MedicationRequestController extends Controller
             'name' => $user->name,
         ]);
 
-        // Notify HR/Admin
+        // Notify relevant roles based on requester's role and campaign
         $this->notificationService->notifyHrRolesAboutNewMedicationRequest(
             $user->name,
             $medicationRequest->medication_type,
-            $medicationRequest->id
+            $medicationRequest->id,
+            $user->id,
+            $user->role,
+            $user->activeSchedule?->campaign_id,
         );
 
         // Send confirmation email to the employee

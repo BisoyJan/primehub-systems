@@ -173,6 +173,48 @@ class NotificationService
     }
 
     /**
+     * Send notification to users with specific role, excluding a specific user.
+     *
+     * @return int Number of users notified.
+     */
+    public function notifyUsersByRoleExcluding(string $role, string $type, string $title, string $message, ?array $data = null, ?int $excludeUserId = null): int
+    {
+        $query = User::where('role', $role)->where('is_approved', true);
+
+        if ($excludeUserId) {
+            $query->where('id', '!=', $excludeUserId);
+        }
+
+        $userIds = $query->pluck('id')->toArray();
+        $this->createForMultipleUsers($userIds, $type, $title, $message, $data);
+
+        return count($userIds);
+    }
+
+    /**
+     * Send notification to users with specific role in a specific campaign, excluding a specific user.
+     *
+     * @return int Number of users notified.
+     */
+    public function notifyUsersByRoleAndCampaign(string $role, int $campaignId, string $type, string $title, string $message, ?array $data = null, ?int $excludeUserId = null): int
+    {
+        $query = User::where('role', $role)
+            ->where('is_approved', true)
+            ->whereHas('activeSchedule', function ($q) use ($campaignId) {
+                $q->where('campaign_id', $campaignId);
+            });
+
+        if ($excludeUserId) {
+            $query->where('id', '!=', $excludeUserId);
+        }
+
+        $userIds = $query->pluck('id')->toArray();
+        $this->createForMultipleUsers($userIds, $type, $title, $message, $data);
+
+        return count($userIds);
+    }
+
+    /**
      * Notify about attendance status.
      */
     public function notifyAttendanceStatus(User|int $user, string $status, string $date, ?float $points = null): Notification
@@ -524,10 +566,22 @@ class NotificationService
     }
 
     /**
-     * Notify HR roles about a new medication request.
+     * Notify relevant roles about a new medication request.
+     *
+     * For agents: Team Lead notification is scoped to the agent's campaign.
+     *   - If no Team Lead exists in the campaign, Super Admin is already notified globally.
+     *   - If the agent has no active campaign, all Team Leads are notified (fallback).
+     * For non-agent roles: Team Lead notification is skipped entirely.
+     * HR, Admin, and Super Admin are always notified globally (excluding the requester).
      */
-    public function notifyHrRolesAboutNewMedicationRequest(string $requesterName, string $medicationType, int $requestId): void
-    {
+    public function notifyHrRolesAboutNewMedicationRequest(
+        string $requesterName,
+        string $medicationType,
+        int $requestId,
+        int $requestingUserId = 0,
+        string $requesterRole = 'Agent',
+        ?int $campaignId = null,
+    ): void {
         $title = 'New Medication Request';
         $message = "{$requesterName} has requested {$medicationType}.";
 
@@ -538,10 +592,24 @@ class NotificationService
             'link' => route('medication-requests.show', $requestId),
         ];
 
-        $this->notifyUsersByRole('Team Lead', 'medication_request', $title, $message, $data);
-        $this->notifyUsersByRole('HR', 'medication_request', $title, $message, $data);
-        $this->notifyUsersByRole('Admin', 'medication_request', $title, $message, $data);
-        $this->notifyUsersByRole('Super Admin', 'medication_request', $title, $message, $data);
+        $excludeId = $requestingUserId ?: null;
+
+        // Team Lead notification logic
+        if ($requesterRole === 'Agent') {
+            if ($campaignId) {
+                // Scope Team Lead notification to the requester's campaign
+                $this->notifyUsersByRoleAndCampaign('Team Lead', $campaignId, 'medication_request', $title, $message, $data, $excludeId);
+            } else {
+                // No active campaign — fallback to notifying all Team Leads
+                $this->notifyUsersByRoleExcluding('Team Lead', 'medication_request', $title, $message, $data, $excludeId);
+            }
+        }
+        // Non-agent roles: skip Team Lead notification entirely
+
+        // Always notify HR, Admin, and Super Admin globally (excluding the requester)
+        $this->notifyUsersByRoleExcluding('HR', 'medication_request', $title, $message, $data, $excludeId);
+        $this->notifyUsersByRoleExcluding('Admin', 'medication_request', $title, $message, $data, $excludeId);
+        $this->notifyUsersByRoleExcluding('Super Admin', 'medication_request', $title, $message, $data, $excludeId);
     }
 
     /**
