@@ -58,9 +58,9 @@ class LeaveRequestRequest extends FormRequest
             'medical_cert_file' => ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,pdf', 'max:4096'], // 4MB max - Accept images and PDF
         ];
 
-        // Allow employee_id for admins
+        // Allow employee_id for admins and team leads
         $user = $this->user();
-        if ($user && in_array($user->role, ['Super Admin', 'Admin'])) {
+        if ($user && in_array($user->role, ['Super Admin', 'Admin', 'Team Lead'])) {
             $rules['employee_id'] = ['sometimes', 'nullable', 'exists:users,id'];
         }
 

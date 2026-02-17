@@ -96,7 +96,7 @@ interface Props {
     campaigns: string[];
     selectedCampaign: string | null;
     twoWeeksFromNow: string;
-    isAdmin: boolean;
+    canFileForOthers: boolean;
     employees: Employee[];
     selectedEmployeeId: number;
     canOverrideShortNotice: boolean;
@@ -113,7 +113,7 @@ export default function Create({
     campaigns,
     selectedCampaign,
     twoWeeksFromNow,
-    isAdmin,
+    canFileForOthers = false,
     employees,
     selectedEmployeeId,
     canOverrideShortNotice = false,
@@ -1246,8 +1246,8 @@ export default function Create({
                     </CardHeader>
                     <CardContent>
                         <form onSubmit={handleSubmit} className="space-y-6">
-                            {/* Employee Selection (Admin Only) */}
-                            {isAdmin && (
+                            {/* Employee Selection (Admin/Team Lead) */}
+                            {canFileForOthers && (
                                 <div className="space-y-2">
                                     <Label htmlFor="employee_id">
                                         Employee <span className="text-red-500">*</span>

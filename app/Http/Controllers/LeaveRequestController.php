@@ -307,11 +307,23 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $leaveCreditService = $this->leaveCreditService;
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+        $isTeamLead = $user->role === 'Team Lead';
+        $canFileForOthers = $isAdmin || $isTeamLead;
 
-        // For admins creating leave for employees, check if employee_id is provided
+        // For admins/team leads creating leave for employees, check if employee_id is provided
         $targetUser = $user;
-        if ($isAdmin && $request->filled('employee_id')) {
+        if ($canFileForOthers && $request->filled('employee_id')) {
             $targetUser = User::findOrFail($request->employee_id);
+
+            // Team Leads can only file for agents in their campaign
+            if ($isTeamLead) {
+                $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+                $targetCampaignId = $targetUser->activeSchedule?->campaign_id;
+
+                if (! $teamLeadCampaignId || $targetCampaignId !== $teamLeadCampaignId || $targetUser->role !== 'Agent') {
+                    abort(403, 'You can only file leave requests for agents in your campaign.');
+                }
+            }
         }
 
         // Check if user has pending leave requests
@@ -365,7 +377,7 @@ class LeaveRequestController extends Controller
             $selectedCampaign = $activeSchedule->campaign->name;
         }
 
-        // Get all employees for admin selection
+        // Get employees for admin/team lead selection
         $employees = [];
         if ($isAdmin) {
             $employees = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
@@ -379,6 +391,27 @@ class LeaveRequestController extends Controller
                         'email' => $emp->email,
                     ];
                 });
+        } elseif ($isTeamLead) {
+            // Team Leads can only file for agents in their campaign
+            $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+            if ($teamLeadCampaignId) {
+                $employees = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
+                    ->where('role', 'Agent')
+                    ->where('is_approved', true)
+                    ->whereHas('activeSchedule', function ($query) use ($teamLeadCampaignId) {
+                        $query->where('campaign_id', $teamLeadCampaignId);
+                    })
+                    ->orderBy('first_name')
+                    ->orderBy('last_name')
+                    ->get()
+                    ->map(function ($emp) {
+                        return [
+                            'id' => $emp->id,
+                            'name' => $emp->name,
+                            'email' => $emp->email,
+                        ];
+                    });
+            }
         }
 
         // Calculate two weeks from now for 2-week notice validation
@@ -412,7 +445,7 @@ class LeaveRequestController extends Controller
             'campaigns' => $campaigns,
             'selectedCampaign' => $selectedCampaign,
             'twoWeeksFromNow' => $twoWeeksFromNow,
-            'isAdmin' => $isAdmin,
+            'canFileForOthers' => $canFileForOthers,
             'employees' => $employees,
             'selectedEmployeeId' => $targetUser->id,
             'canOverrideShortNotice' => $canOverrideShortNotice,
@@ -428,10 +461,20 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $leaveCreditService = $this->leaveCreditService;
 
-        // For admins, allow creating leave for other employees
+        // For admins/team leads, allow creating leave for other employees
         $targetUser = $user;
-        if (in_array($user->role, ['Super Admin', 'Admin']) && $request->filled('employee_id')) {
+        if (in_array($user->role, ['Super Admin', 'Admin', 'Team Lead']) && $request->filled('employee_id')) {
             $targetUser = User::findOrFail($request->employee_id);
+
+            // Team Leads can only file for agents in their campaign
+            if ($user->role === 'Team Lead') {
+                $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+                $targetCampaignId = $targetUser->activeSchedule?->campaign_id;
+
+                if (! $teamLeadCampaignId || $targetCampaignId !== $teamLeadCampaignId || $targetUser->role !== 'Agent') {
+                    return back()->withErrors(['error' => 'You can only file leave requests for agents in your campaign.'])->withInput();
+                }
+            }
         }
 
         // Check if user has a duplicate pending leave request
