@@ -1077,7 +1077,11 @@ class LeaveCreditService
         // Check credits balance
         $year = Carbon::parse($leaveRequest->start_date)->year;
         $balance = $this->getBalance($user, $year);
-        $daysRequested = (float) $leaveRequest->days_requested;
+
+        // Use approved_days when there's a partial denial, otherwise use days_requested
+        $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
+            ? (float) $leaveRequest->approved_days
+            : (float) $leaveRequest->days_requested;
 
         if ($balance <= 0) {
             // No credits at all - convert entire request to UPTO

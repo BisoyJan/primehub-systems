@@ -1838,29 +1838,9 @@ class LeaveRequestController extends Controller
                 ]);
             }
 
-            // Determine credits to deduct (only for approved days)
-            $creditsToDeduct = 0;
-            $creditsYear = Carbon::parse($leaveRequest->start_date)->year;
-
-            if ($leaveRequest->requiresCredits()) {
-                // For VL/SL, deduct credits only for approved days
-                $employee = $leaveRequest->user;
-                $balance = $this->leaveCreditService->getBalance($employee, $creditsYear);
-
-                // Deduct up to available credits
-                $creditsToDeduct = min($approvedDaysCount, $balance);
-
-                if ($creditsToDeduct > 0) {
-                    // Create a temporary copy with approved days for deduction
-                    $tempLeaveRequest = $leaveRequest->replicate();
-                    $tempLeaveRequest->days_requested = $creditsToDeduct;
-                    $this->leaveCreditService->deductCredits($tempLeaveRequest, $creditsYear);
-
-                    // Update the actual leave request with deduction info
-                    $leaveRequest->credits_deducted = $creditsToDeduct;
-                    $leaveRequest->credits_year = $creditsYear;
-                }
-            }
+            // Note: Credits are NOT deducted during partial denial.
+            // Credits will be deducted during final approval (Admin/HR approve or force approve)
+            // to prevent double deduction when TL partially approves first.
 
             // Build review notes
             $roleLabel = $user->role === 'Team Lead' ? 'Team Lead' : (in_array($user->role, ['Admin', 'Super Admin']) ? 'Admin' : 'HR');
