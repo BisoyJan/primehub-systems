@@ -1925,36 +1925,29 @@ class LeaveRequestController extends Controller
                 $leaveRequest->reviewed_at = now();
                 $leaveRequest->review_notes = $reviewNote;
 
-                // Create attendance records only for approved dates
-                foreach ($approvedDates as $dateStr) {
-                    // Get the user's active schedule for this date
-                    $schedule = $this->getActiveScheduleForDate($leaveRequest->user_id, $dateStr);
+                // Handle leave credit deduction based on leave type
+                $leaveCreditService = $this->leaveCreditService;
 
-                    // Check if attendance record already exists to store pre_leave_status
-                    $existingAttendance = Attendance::where('user_id', $leaveRequest->user_id)
-                        ->where('shift_date', $dateStr)
-                        ->first();
+                if ($leaveRequest->leave_type === 'SL') {
+                    // Sick Leave - special handling with attendance check
+                    $this->handleSlApproval($leaveRequest, $leaveCreditService);
+                } elseif ($leaveRequest->requiresCredits()) {
+                    // Other credited leave types (VL, BL) - deduct for approved days only
+                    $year = $leaveRequest->created_at->year;
 
-                    $attendanceData = [
-                        'employee_schedule_id' => $schedule?->id,
-                        'scheduled_time_in' => $schedule?->scheduled_time_in,
-                        'scheduled_time_out' => $schedule?->scheduled_time_out,
-                        'status' => 'on_leave',
-                        'leave_request_id' => $leaveRequest->id,
-                        'admin_verified' => true,
-                        'remarks' => "On approved leave ({$leaveRequest->leave_type}) - Partial approval",
-                    ];
+                    $originalDays = $leaveRequest->days_requested;
+                    $leaveRequest->days_requested = $approvedDaysCount;
+                    $leaveCreditService->deductCredits($leaveRequest, $year);
+                    $leaveRequest->days_requested = $originalDays;
 
-                    if ($existingAttendance) {
-                        $attendanceData['pre_leave_status'] = $existingAttendance->status;
-                        $existingAttendance->update($attendanceData);
-                    } else {
-                        // pre_leave_status null = created by leave approval
-                        Attendance::create(array_merge($attendanceData, [
-                            'user_id' => $leaveRequest->user_id,
-                            'shift_date' => $dateStr,
-                        ]));
-                    }
+                    // Update credits_deducted to reflect actual deduction
+                    $leaveRequest->credits_deducted = $approvedDaysCount;
+
+                    // Update attendance records for approved dates
+                    $this->updateAttendanceForApprovedLeave($leaveRequest);
+                } else {
+                    // Non-credited leave types - no credit deduction, but still update attendance
+                    $this->updateAttendanceForApprovedLeave($leaveRequest);
                 }
             }
 
