@@ -812,10 +812,9 @@ class AttendanceController extends Controller
             'verification_notes' => $hasLeaveConflict
                 ? 'Manual entry during approved leave - requires HR review. Created by '.auth()->user()->name
                 : 'Manually created by '.auth()->user()->name,
-            'notes' => $validated['notes'],
-            'remarks' => $hasLeaveConflict
+            'notes' => $hasLeaveConflict
                 ? 'Leave conflict: Employee on approved leave but has attendance entry. Pending HR review.'
-                : null,
+                : ($validated['notes'] ?? null),
             'undertime_approval_status' => $undertimeApprovalStatus,
             'undertime_approval_reason' => $undertimeApprovalReason,
             'undertime_approved_by' => $undertimeApprovalBy,
