@@ -164,40 +164,36 @@ class LeaveRequestPolicy
      */
     public function cancel(User $user, LeaveRequest $leaveRequest): bool
     {
-        // Cannot cancel if the leave end date has already passed
-        if ($leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast()) {
+        // Block cancellation of fully approved leaves with past end dates for ALL roles
+        // This prevents rolling back deducted leave credits
+        // Partially approved leaves (has_partial_denial) are still cancellable by agents
+        if ($leaveRequest->status === 'approved'
+            && ! $leaveRequest->has_partial_denial
+            && $leaveRequest->end_date
+            && $leaveRequest->end_date->endOfDay()->isPast()) {
             return false;
         }
 
-        // Super Admin and Admin can cancel ANY pending or approved request
-        if (in_array($user->role, ['Super Admin', 'Admin'])) {
+        // Privileged roles: Super Admin, Admin, HR, Team Lead
+        // Can cancel any leave request (pending or approved with future/current dates) with leave.cancel permission
+        if (in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])) {
             if (in_array($leaveRequest->status, ['pending', 'approved'])) {
                 return $this->permissionService->userHasPermission($user, 'leave.cancel');
             }
         }
 
-        // For employees: Only pending requests can be cancelled directly
-        // For approved requests, only if start date is in the future
-        if ($leaveRequest->status === 'pending') {
-            // Users can cancel their own pending requests if they have permission
-            if ($leaveRequest->user_id === $user->id) {
-                return $this->permissionService->userHasPermission($user, 'leave.cancel');
-            }
-        }
+        // Non-privileged roles: cannot cancel if the leave end date has already passed
+        // unless it's pending or partially approved (agents can cancel their own past-date pending/partially approved)
+        $isOwnRequest = $leaveRequest->user_id === $user->id;
 
-        // Users can cancel their own partially-approved requests (approved with partial denial)
-        // as long as the leave hasn't started yet
-        if ($leaveRequest->isPartiallyApproved()
-            && $leaveRequest->user_id === $user->id
-            && $leaveRequest->start_date > now()) {
+        // Users can cancel their own pending requests (any date, including past)
+        if ($leaveRequest->status === 'pending' && $isOwnRequest) {
             return $this->permissionService->userHasPermission($user, 'leave.cancel');
         }
 
-        // HR with cancel permission can cancel any pending request
-        if ($leaveRequest->status === 'pending' &&
-            $this->permissionService->userHasPermission($user, 'leave.cancel') &&
-            $user->role === 'HR') {
-            return true;
+        // Users can cancel their own partially-approved requests (any date, including past)
+        if ($leaveRequest->isPartiallyApproved() && $isOwnRequest) {
+            return $this->permissionService->userHasPermission($user, 'leave.cancel');
         }
 
         return false;
@@ -205,7 +201,7 @@ class LeaveRequestPolicy
 
     /**
      * Determine whether the user can cancel an approved leave request.
-     * Only Super Admin and Admin can cancel approved leaves.
+     * Super Admin, Admin, HR, and Team Lead can cancel approved leaves (but NOT past-date).
      */
     public function cancelApproved(User $user, LeaveRequest $leaveRequest): bool
     {
@@ -214,13 +210,14 @@ class LeaveRequestPolicy
             return false;
         }
 
-        // Cannot cancel if the leave end date has already passed
+        // Block cancellation of approved leaves with past end dates
+        // This prevents rolling back deducted leave credits
         if ($leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast()) {
             return false;
         }
 
-        // Only Super Admin and Admin can cancel approved leaves
-        return in_array($user->role, ['Super Admin', 'Admin']) &&
+        // Super Admin, Admin, HR, and Team Lead can cancel approved leaves (future/current dates only)
+        return in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead']) &&
                $this->permissionService->userHasPermission($user, 'leave.cancel');
     }
 

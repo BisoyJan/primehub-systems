@@ -61,14 +61,15 @@ class TeamLeadLeaveFilingTest extends TestCase
             'is_active' => true,
         ]);
 
-        // Give agent leave credits
+        // Give agent sufficient leave credits for VL requests
         LeaveCredit::create([
             'user_id' => $this->agent->id,
             'year' => now()->year,
             'month' => now()->month,
             'vacation_leave_balance' => 10,
             'sick_leave_balance' => 10,
-            'credits_earned' => 1.25,
+            'credits_earned' => 10,
+            'credits_used' => 0,
             'credits_balance' => 10,
             'accrued_at' => now(),
         ]);

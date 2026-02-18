@@ -466,13 +466,29 @@ class LeaveRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_allows_cancelling_approved_future_request(): void
+    public function it_does_not_allow_owner_cancelling_fully_approved_request(): void
     {
         $user = User::factory()->create();
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'approved',
+            'has_partial_denial' => false,
             'start_date' => now()->addDays(5),
+        ]);
+
+        $this->assertFalse($leaveRequest->canBeCancelled());
+    }
+
+    #[Test]
+    public function it_allows_cancelling_partially_approved_past_request(): void
+    {
+        $user = User::factory()->create();
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'has_partial_denial' => true,
+            'approved_days' => 3,
+            'start_date' => now()->subDays(5),
         ]);
 
         $this->assertTrue($leaveRequest->canBeCancelled());

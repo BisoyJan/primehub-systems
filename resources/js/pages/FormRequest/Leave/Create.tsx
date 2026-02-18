@@ -141,6 +141,7 @@ export default function Create({
 
     const [calculatedDays, setCalculatedDays] = useState<number>(0);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const [creditError, setCreditError] = useState<string | null>(null);
     const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
@@ -431,15 +432,15 @@ export default function Create({
             );
         }
 
-        // Check leave credits balance (only block for VL/BL, SL can proceed without credits)
-        // Use available balance (total balance - pending credits + future credits) for validation
-        if (['VL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
+        // Check leave credits balance for VL only (blocks submission)
+        // SL handles insufficient credits at approval time (SL→UPTO conversion)
+        // BL does not consume credits (non-credited leave type)
+        let newCreditError: string | null = null;
+        if (data.leave_type === 'VL' && calculatedDays > 0) {
             const projectedCredits = data.start_date ? calculateFutureCredits(data.start_date) : 0;
             const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + projectedCredits);
             if (availableBalance < calculatedDays) {
-                warnings.push(
-                    `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} days${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} days`
-                );
+                newCreditError = `Insufficient leave credits. Available: ${Math.floor(availableBalance)} day(s)${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} day(s). Please reduce your leave days to match your available credits.`;
             }
         }
 
@@ -470,6 +471,7 @@ export default function Create({
         }
 
         setValidationWarnings(warnings);
+        setCreditError(newCreditError);
         setShortNoticeWarning(shortNotice);
     }, [
         data.leave_type,
@@ -497,7 +499,13 @@ export default function Create({
             setSlCreditInfo('Leave credits will NOT be deducted - You are not yet eligible for leave credits (less than 6 months employment)');
         } else if (creditsSummary.balance < calculatedDays && calculatedDays > 0) {
             if (data.medical_cert_submitted) {
-                setSlCreditInfo(`⚠️ This SL will be converted to UPTO (Unpaid Time Off) - Insufficient credits (balance: ${creditsSummary.balance} days, requesting: ${calculatedDays} days)`);
+                const creditedDays = Math.floor(creditsSummary.balance);
+                const uptoDays = calculatedDays - creditedDays;
+                setSlCreditInfo(
+                    creditedDays > 0
+                        ? `⚠️ Partial UPTO conversion - ${creditedDays} day(s) will be credited from your balance, ${uptoDays} day(s) will be converted to UPTO (Unpaid Time Off)`
+                        : `⚠️ All ${calculatedDays} day(s) will be converted to UPTO (Unpaid Time Off) - No whole credits available (balance: ${creditsSummary.balance.toFixed(2)} days)`
+                );
             } else {
                 setSlCreditInfo('Leave credits will NOT be deducted - Insufficient balance. Submit a medical certificate to convert to UPTO.');
             }
@@ -1033,10 +1041,10 @@ export default function Create({
                                             })}
                                         </div>
                                         {attendancePoints > 6 && (
-                                            <Alert variant="destructive" className="mt-4">
+                                            <Alert className="mt-4 border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                                                 <AlertCircle className="h-4 w-4" />
-                                                <AlertTitle>High Attendance Points</AlertTitle>
-                                                <AlertDescription>
+                                                <AlertTitle className="text-red-800 dark:text-red-200">High Attendance Points</AlertTitle>
+                                                <AlertDescription className="text-red-700 dark:text-red-300">
                                                     Your attendance points exceed 6.0. This may result in automatic denial of Vacation Leave (VL) and Bereavement Leave (BL) requests. Please work on improving attendance or wait for points to expire.
                                                 </AlertDescription>
                                             </Alert>
@@ -1046,6 +1054,17 @@ export default function Create({
                             </Accordion>
                         </CardContent>
                     </Card>
+                )}
+
+                {/* Credit Error - Blocks Submission */}
+                {creditError && (
+                    <Alert className="mb-6 border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle className="text-red-800 dark:text-red-200">Insufficient Leave Credits</AlertTitle>
+                        <AlertDescription className="text-red-700 dark:text-red-300">
+                            <p>{creditError}</p>
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 {/* Validation Warnings */}
@@ -1600,10 +1619,10 @@ export default function Create({
 
                             {/* Form Errors */}
                             {(errors as Record<string, string | string[]>).validation && (
-                                <Alert variant="destructive">
+                                <Alert className="border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                                     <AlertCircle className="h-4 w-4" />
-                                    <AlertTitle>Cannot Submit Request</AlertTitle>
-                                    <AlertDescription>
+                                    <AlertTitle className="text-red-800 dark:text-red-200">Cannot Submit Request</AlertTitle>
+                                    <AlertDescription className="text-red-700 dark:text-red-300">
                                         <ul className="list-disc list-inside space-y-1">
                                             {Array.isArray((errors as Record<string, string | string[]>).validation) ? (
                                                 ((errors as Record<string, string | string[]>).validation as string[]).map((error: string, idx: number) => (
@@ -1619,7 +1638,7 @@ export default function Create({
 
                             {/* Submit Button */}
                             <div className="flex gap-4">
-                                <Button type="submit" disabled={processing || !!weekendError.start || !!weekendError.end}>
+                                <Button type="submit" disabled={processing || !!weekendError.start || !!weekendError.end || !!creditError}>
                                     {processing ? 'Submitting...' : 'Submit Leave Request'}
                                 </Button>
                                 <Button

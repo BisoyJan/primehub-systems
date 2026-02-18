@@ -43,8 +43,8 @@ class LeaveRequestRequest extends FormRequest
             $startDateRule = ['required', 'date', 'before_or_equal:'.$maxEndDate];
             $endDateRule = ['required', 'date', 'after_or_equal:start_date', 'before_or_equal:'.$maxEndDate];
         } else {
-            // Other leave types: start date must be today or future
-            $startDateRule = ['required', 'date', 'after_or_equal:today'];
+            // Other leave types (VL, BL, LOA, LDV, UPTO): no minimum start date restriction
+            $startDateRule = ['required', 'date'];
             $endDateRule = ['required', 'date', 'after_or_equal:start_date'];
         }
 

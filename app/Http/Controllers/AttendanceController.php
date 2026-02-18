@@ -611,6 +611,87 @@ class AttendanceController extends Controller
             ->where('end_date', '>=', $validated['shift_date'])
             ->first();
 
+        // Check for pending leave request on this date and auto-cancel if attendance is being created
+        $pendingLeave = \App\Models\LeaveRequest::where('user_id', $validated['user_id'])
+            ->where('status', 'pending')
+            ->where('start_date', '<=', $validated['shift_date'])
+            ->where('end_date', '>=', $validated['shift_date'])
+            ->first();
+
+        if ($pendingLeave && ($validated['actual_time_in'] || $validated['actual_time_out'])) {
+            $employee = \App\Models\User::find($validated['user_id']);
+            $notificationService = app(\App\Services\NotificationService::class);
+            $leaveType = str_replace('_', ' ', ucfirst($pendingLeave->leave_type));
+            $startDate = Carbon::parse($pendingLeave->start_date)->format('M d, Y');
+            $endDate = Carbon::parse($pendingLeave->end_date)->format('M d, Y');
+            $isMultiDayLeave = Carbon::parse($pendingLeave->start_date)->diffInDays(Carbon::parse($pendingLeave->end_date)) > 0;
+
+            if ($isMultiDayLeave) {
+                // Multi-day pending leave: notify HR, Super Admin, and Team Lead for review, don't auto-cancel
+                $conflictTitle = 'Pending Leave Conflict - Review Required';
+                $conflictMessage = "{$employee->name} has manual attendance during pending {$leaveType} leave.\n\n"
+                    ."Leave Period: {$startDate} to {$endDate}\n"
+                    .'Attendance Date: '.Carbon::parse($validated['shift_date'])->format('M d, Y')."\n\n"
+                    ."Please review and decide:\n"
+                    ."• Cancel the pending leave if employee is no longer taking leave\n"
+                    .'• No action needed if employee only worked this one day';
+                $conflictData = [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'leave_request_id' => $pendingLeave->id,
+                    'leave_type' => $leaveType,
+                    'link' => route('leave-requests.show', $pendingLeave->id),
+                ];
+
+                $notificationService->notifyUsersByRole('HR', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+                $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+                $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+
+                \Log::info('Multi-day pending leave conflict flagged for HR review (manual attendance)', [
+                    'leave_request_id' => $pendingLeave->id,
+                    'user_id' => $validated['user_id'],
+                    'shift_date' => $validated['shift_date'],
+                ]);
+            } else {
+                // Single-day pending leave: auto-cancel
+                $pendingLeave->update([
+                    'status' => 'cancelled',
+                    'auto_cancelled' => true,
+                    'auto_cancelled_reason' => 'Manual attendance was created for '.Carbon::parse($validated['shift_date'])->format('M d, Y').'. Pending leave request was automatically cancelled.',
+                    'auto_cancelled_at' => now(),
+                ]);
+
+                $notificationService->notifyLeaveRequestAutoCancelled(
+                    $employee,
+                    $leaveType,
+                    $startDate,
+                    $endDate,
+                    'Manual attendance was created for the leave period',
+                    $pendingLeave->id
+                );
+
+                $autoCancelTitle = 'Pending Leave Auto-Cancelled';
+                $autoCancelMessage = "{$employee->name}'s pending {$leaveType} leave ({$startDate} to {$endDate}) was automatically cancelled because manual attendance was created for ".Carbon::parse($validated['shift_date'])->format('M d, Y').'.';
+                $autoCancelData = [
+                    'employee_id' => $employee->id,
+                    'employee_name' => $employee->name,
+                    'leave_request_id' => $pendingLeave->id,
+                    'leave_type' => $leaveType,
+                    'link' => route('leave-requests.show', $pendingLeave->id),
+                ];
+
+                $notificationService->notifyUsersByRole('HR', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+                $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+                $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+
+                \Log::info('Pending leave auto-cancelled due to manual attendance creation', [
+                    'leave_request_id' => $pendingLeave->id,
+                    'user_id' => $validated['user_id'],
+                    'shift_date' => $validated['shift_date'],
+                ]);
+            }
+        }
+
         // Flag if this is a leave conflict (attendance during approved leave)
         $hasLeaveConflict = $approvedLeave && ($validated['actual_time_in'] || $validated['actual_time_out']);
 
@@ -914,6 +995,87 @@ class AttendanceController extends Controller
                     ->where('start_date', '<=', $validated['shift_date'])
                     ->where('end_date', '>=', $validated['shift_date'])
                     ->first();
+
+                // Check for pending leave request on this date and auto-cancel
+                $pendingLeave = \App\Models\LeaveRequest::where('user_id', $userId)
+                    ->where('status', 'pending')
+                    ->where('start_date', '<=', $validated['shift_date'])
+                    ->where('end_date', '>=', $validated['shift_date'])
+                    ->first();
+
+                if ($pendingLeave && ($actualTimeIn || $actualTimeOut)) {
+                    $employee = \App\Models\User::find($userId);
+                    $notificationService = app(\App\Services\NotificationService::class);
+                    $leaveType = str_replace('_', ' ', ucfirst($pendingLeave->leave_type));
+                    $startDate = Carbon::parse($pendingLeave->start_date)->format('M d, Y');
+                    $endDate = Carbon::parse($pendingLeave->end_date)->format('M d, Y');
+                    $isMultiDayLeave = Carbon::parse($pendingLeave->start_date)->diffInDays(Carbon::parse($pendingLeave->end_date)) > 0;
+
+                    if ($isMultiDayLeave) {
+                        // Multi-day pending leave: notify HR, Super Admin, and Team Lead for review, don't auto-cancel
+                        $conflictTitle = 'Pending Leave Conflict - Review Required';
+                        $conflictMessage = "{$employee->name} has bulk attendance during pending {$leaveType} leave.\n\n"
+                            ."Leave Period: {$startDate} to {$endDate}\n"
+                            .'Attendance Date: '.Carbon::parse($validated['shift_date'])->format('M d, Y')."\n\n"
+                            ."Please review and decide:\n"
+                            ."• Cancel the pending leave if employee is no longer taking leave\n"
+                            .'• No action needed if employee only worked this one day';
+                        $conflictData = [
+                            'employee_id' => $employee->id,
+                            'employee_name' => $employee->name,
+                            'leave_request_id' => $pendingLeave->id,
+                            'leave_type' => $leaveType,
+                            'link' => route('leave-requests.show', $pendingLeave->id),
+                        ];
+
+                        $notificationService->notifyUsersByRole('HR', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+                        $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+                        $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+
+                        \Log::info('Multi-day pending leave conflict flagged for HR review (bulk attendance)', [
+                            'leave_request_id' => $pendingLeave->id,
+                            'user_id' => $userId,
+                            'shift_date' => $validated['shift_date'],
+                        ]);
+                    } else {
+                        // Single-day pending leave: auto-cancel
+                        $pendingLeave->update([
+                            'status' => 'cancelled',
+                            'auto_cancelled' => true,
+                            'auto_cancelled_reason' => 'Bulk attendance was created for '.Carbon::parse($validated['shift_date'])->format('M d, Y').'. Pending leave request was automatically cancelled.',
+                            'auto_cancelled_at' => now(),
+                        ]);
+
+                        $notificationService->notifyLeaveRequestAutoCancelled(
+                            $employee,
+                            $leaveType,
+                            $startDate,
+                            $endDate,
+                            'Bulk attendance was created for the leave period',
+                            $pendingLeave->id
+                        );
+
+                        $autoCancelTitle = 'Pending Leave Auto-Cancelled';
+                        $autoCancelMessage = "{$employee->name}'s pending {$leaveType} leave ({$startDate} to {$endDate}) was automatically cancelled because bulk attendance was created for ".Carbon::parse($validated['shift_date'])->format('M d, Y').'.';
+                        $autoCancelData = [
+                            'employee_id' => $employee->id,
+                            'employee_name' => $employee->name,
+                            'leave_request_id' => $pendingLeave->id,
+                            'leave_type' => $leaveType,
+                            'link' => route('leave-requests.show', $pendingLeave->id),
+                        ];
+
+                        $notificationService->notifyUsersByRole('HR', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+                        $notificationService->notifyUsersByRole('Super Admin', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+                        $notificationService->notifyUsersByRole('Team Lead', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+
+                        \Log::info('Pending leave auto-cancelled due to bulk attendance creation', [
+                            'leave_request_id' => $pendingLeave->id,
+                            'user_id' => $userId,
+                            'shift_date' => $validated['shift_date'],
+                        ]);
+                    }
+                }
 
                 // Calculate tardy, undertime, overtime if schedule exists and times are provided
                 $tardyMinutes = null;

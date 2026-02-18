@@ -1,0 +1,245 @@
+================================================================================
+VL CREDIT ENFORCEMENT & VL→UPTO SPLIT IMPLEMENTATION TRACKER
+================================================================================
+Date Started: February 19, 2026
+Issue: Agents can submit VL requests for more days than available leave credits
+       (e.g., 5 days requested with only 1.25 credits available)
+================================================================================
+
+OVERVIEW OF CHANGES
+-------------------
+- BL (Bereavement Leave) does NOT consume credits → excluded from credit checks
+- SL (Sick Leave) updated: partial credits now create linked UPTO request
+  (instead of attendance-level differentiation); zero credits still converts in-place
+- VL (Vacation Leave) blocked at submission when credits insufficient (hard block)
+- At approval time, if credits changed, system handles VL→UPTO split gracefully
+- Two-request approach: linked UPTO companion auto-created for excess days (VL & SL)
+
+================================================================================
+PHASE 1: BLOCK VL SUBMISSION WHEN CREDITS INSUFFICIENT
+================================================================================
+Status: COMPLETED ✓
+
+1.1 Backend — LeaveCreditService::validateLeaveRequest()
+    File: app/Services/LeaveCreditService.php
+    Change: Added credit balance validation for VL type
+    - Computes availableBalance = getBalance() - getPendingCredits()
+    - If availableBalance < daysRequested → pushes blocking error
+    - Only applies to VL (not SL, not BL)
+    Status: [x] DONE
+
+1.2 Frontend — Create.tsx credit check
+    File: resources/js/pages/FormRequest/Leave/Create.tsx
+    Changes:
+    - Added creditError state (separate from warnings)
+    - Moved VL insufficient credit check from warnings[] to creditError
+    - Removed BL from credit warning check (BL doesn't consume credits)
+    - Added red "Insufficient Leave Credits" alert (destructive variant)
+    - Disabled submit button when creditError exists
+    Status: [x] DONE
+
+1.3 BL Credit Consistency Audit
+    File: app/Services/LeaveCreditService.php
+    Change: Removed BL from getPendingCredits() query (VL, SL only now)
+    File: app/Http/Controllers/LeaveRequestController.php
+    Change: Fixed stale comments that said "VL, BL" for credit deduction
+    Status: [x] DONE
+
+1.4 Tests
+    File: tests/Unit/Services/LeaveCreditServiceTest.php (7 new tests)
+    - it_blocks_vl_submission_when_credits_insufficient ✓
+    - it_allows_vl_submission_when_credits_sufficient ✓
+    - it_accounts_for_pending_credits_in_vl_validation ✓
+    - it_does_not_block_bl_submission_regardless_of_credits ✓
+    - it_does_not_block_sl_submission_regardless_of_credits ✓
+    - it_excludes_bl_from_pending_credits_calculation ✓
+
+    File: tests/Feature/Controllers/FormRequests/LeaveRequestControllerTest.php (2 new tests)
+    - it_blocks_vl_submission_when_credits_insufficient ✓
+    - it_allows_sl_submission_without_sufficient_credits ✓
+
+    Fixed existing tests:
+    - it_stores_new_leave_request: credits_earned 1.25→10 (now needs sufficient credits)
+    - it_prevents_duplicate_pending_requests: added LeaveCredit with sufficient credits
+
+    File: tests/Feature/Controllers/FormRequests/TeamLeadLeaveFilingTest.php
+    - Fixed setUp: credits_earned 1.25→10 for agent
+    Status: [x] DONE
+
+1.5 Format & Verify
+    - vendor/bin/pint --dirty → PASS
+    - LeaveCreditServiceTest → 23 passed ✓
+    - LeaveRequestControllerTest → 22 passed ✓
+    - TeamLeadLeaveFilingTest → 9 passed ✓
+    - LeaveRequestCancellationRollbackTest → 14 passed ✓
+    - LeaveRequestPartialDenialCreditTest → 10 passed ✓
+    - 1 pre-existing failure in LeaveRequestRequestTest (unrelated custom messages)
+    Status: [x] DONE
+
+================================================================================
+PHASE 2: MIGRATION — ADD LINKED REQUEST SUPPORT
+================================================================================
+Status: COMPLETED ✓
+
+2.1 Create migration: add_linked_request_fields_to_leave_requests_table
+    File: database/migrations/2026_02_19_032359_add_linked_request_fields_to_leave_requests_table.php
+    - linked_request_id (nullable FK → leave_requests.id, nullOnDelete)
+    - vl_credits_applied (boolean, nullable)
+    - vl_no_credit_reason (string, nullable)
+    - Migration run successfully ✓
+    Status: [x] DONE
+
+2.2 Update LeaveRequest model
+    File: app/Models/LeaveRequest.php
+    - Added linked_request_id, vl_credits_applied, vl_no_credit_reason to $fillable
+    - Added vl_credits_applied => 'boolean' cast
+    - Added linkedRequest() BelongsTo relationship
+    - Added companionRequests() HasMany relationship
+    - Added HasMany import
+    Status: [x] DONE
+
+2.3 Verify
+    - vendor/bin/pint --dirty → PASS
+    - LeaveRequestTest (model) → 41 passed ✓
+    - LeaveRequestControllerTest → 22 passed ✓
+    Status: [x] DONE
+
+================================================================================
+PHASE 3: VL→UPTO SPLIT AT APPROVAL TIME + SL LINKED UPTO
+================================================================================
+Status: COMPLETED ✓
+
+3.1 Add checkVlCreditDeduction() in LeaveCreditService
+    File: app/Services/LeaveCreditService.php
+    - Mirrors checkSlCreditDeduction() but for VL
+    - Checks eligibility (6-month rule), current balance at approval time
+    - Returns: should_deduct, convert_to_upto, partial_credit, credits_to_deduct,
+              upto_days, reason
+    - Three outcomes: full credits, partial credits, no credits
+    Status: [x] DONE
+
+3.2 Add handleVlApproval() + handlePartialVlApproval() in LeaveRequestController
+    File: app/Http/Controllers/LeaveRequestController.php
+    - Full credits → normal deductCredits() + updateAttendanceForApprovedLeave()
+    - Partial credits → split dates, create linked UPTO request, deduct available
+    - Zero credits → convert VL to UPTO in-place
+    Status: [x] DONE
+
+3.3 Add createLinkedUptoRequest() helper
+    File: app/Http/Controllers/LeaveRequestController.php
+    - Reusable method for both VL and SL linked UPTO creation
+    - Auto-approves UPTO, copies approval info from parent
+    - Sets linked_request_id foreign key
+    Status: [x] DONE
+
+3.4 Add createOrUpdateAttendanceForDate() helper
+    File: app/Http/Controllers/LeaveRequestController.php
+    - Reusable attendance record creation/update for a single date
+    - Handles NCNS preservation
+    Status: [x] DONE
+
+3.5 Update handleSlApproval() — linked UPTO for SL
+    File: app/Http/Controllers/LeaveRequestController.php
+    - Partial credit branch: now creates linked UPTO request instead of
+      attendance-level differentiation via handlePartialSlApproval()
+    - Zero credit (convert_to_upto) branch: unchanged (converts SL→UPTO in-place)
+    - Full credits: unchanged
+    Status: [x] DONE
+
+3.6 Update approve(), forceApprove(), partialDenyApproval()
+    File: app/Http/Controllers/LeaveRequestController.php
+    - VL now routes through handleVlApproval() instead of direct deductCredits()
+    - All 3 approval paths updated (approve, forceApprove, partial denial)
+    Status: [x] DONE
+
+3.7 Update overlapping date validation
+    File: app/Http/Controllers/LeaveRequestController.php
+    - store() and update() overlap checks now exclude linked companion requests
+      (whereNull('linked_request_id')) to avoid false positives
+    Status: [x] DONE
+
+3.8 Format & Verify
+    - vendor/bin/pint --dirty → PASS (1 style fix applied)
+    - LeaveCreditServiceTest → 23 passed ✓
+    - LeaveRequestControllerTest → 22 passed ✓
+    - TeamLeadLeaveFilingTest → 9 passed ✓ (via combined run)
+    - LeaveRequestTest (model) → 41 passed ✓
+    Status: [x] DONE
+
+================================================================================
+PHASE 4: FRONTEND — SHOW PAGE UPDATES
+================================================================================
+Status: COMPLETED ✓
+
+4.1 Backend — show() method props
+    File: app/Http/Controllers/LeaveRequestController.php
+    - Eager-loads linkedRequest and companionRequests relationships
+    - Builds linkedRequestData (parent request summary for UPTO companions)
+    - Builds companionRequestsData (linked UPTO summaries for parent VL/SL)
+    - Computes creditPreview for pending VL/SL using checkVl/SlCreditDeduction()
+    - Passes creditPreview, linkedRequest, companionRequests to Inertia
+    Status: [x] DONE
+
+4.2 Show.tsx — Interfaces & props
+    File: resources/js/pages/FormRequest/Leave/Show.tsx
+    - Added vl_credits_applied, vl_no_credit_reason, linked_request_id to LeaveRequest interface
+    - Added CreditPreview interface (should_deduct, convert_to_upto, partial_credit, credits_to_deduct, upto_days)
+    - Added LinkedRequestSummary interface (id, leave_type, dates, days, status)
+    - Added creditPreview, linkedRequest, companionRequests props
+    - Imported show route from Wayfinder for linked request URLs
+    Status: [x] DONE
+
+4.3 Show.tsx — VL credit info alerts
+    File: resources/js/pages/FormRequest/Leave/Show.tsx
+    - VL no credits applied alert (blue, info)
+    - VL partial credits alert (amber, warning)
+    - VL→UPTO conversion notice (amber, for UPTO requests originally filed as VL)
+    Status: [x] DONE
+
+4.4 Show.tsx — Linked request notices
+    File: resources/js/pages/FormRequest/Leave/Show.tsx
+    - Parent request link on UPTO companions (purple, info with link to parent)
+    - Companion UPTO links on parent VL/SL requests (purple, lists all companions)
+    - Uses Wayfinder show route for type-safe URLs
+    Status: [x] DONE
+
+4.5 Show.tsx — Approval dialog credit preview
+    File: resources/js/pages/FormRequest/Leave/Show.tsx
+    - Approve dialog: shows credit split preview for VL/SL
+      - Green alert: full credits available
+      - Amber alert: partial credits (X days as VL/SL, Y days as linked UPTO)
+      - Red alert: no credits (will convert to UPTO)
+    - Force approve dialog: same credit preview for Super Admin
+    Status: [x] DONE
+
+4.6 Format & Verify
+    - vendor/bin/pint --dirty → PASS
+    - TypeScript check → no new errors (9 pre-existing in auto-generated Wayfinder files)
+    - LeaveCreditServiceTest → 23 passed ✓
+    - LeaveRequestControllerTest → 22 passed ✓
+    - LeaveRequestTest (model) → 41 passed ✓
+    - TeamLeadLeaveFilingTest → 9 passed ✓
+    - Total: 95 tests, 0 failures
+    Status: [x] DONE
+
+================================================================================
+PHASE 5: TESTS FOR PHASES 2-4
+================================================================================
+Status: NOT STARTED
+
+5.1 VL approval full credits → normal deduction
+5.2 VL approval partial credits → linked UPTO created
+5.3 VL approval zero credits → converts to UPTO in-place
+5.4 Linked UPTO has correct dates, status, approval fields
+5.5 Cancelling VL with linked UPTO cancels both
+5.6 Run full test suite
+
+================================================================================
+NOTES
+================================================================================
+- BL is in NON_CREDITED_LEAVE_TYPES already but getPendingCredits() was updated
+  to only count VL and SL
+- SL partial credits now creates linked UPTO request (same approach as VL)
+- SL zero credits still converts SL→UPTO in-place (for backward compatibility)
+- Admin/Super Admin filing on behalf of others: validation applies to target user
+- handlePartialSlApproval() is now unused but kept for reference/backward compat

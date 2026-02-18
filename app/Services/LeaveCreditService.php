@@ -249,7 +249,7 @@ class LeaveCreditService
     {
         return LeaveRequest::where('user_id', $user->id)
             ->where('status', 'pending')
-            ->whereIn('leave_type', ['VL', 'SL', 'BL']) // Only credit-requiring leave types
+            ->whereIn('leave_type', ['VL', 'SL']) // Only credit-requiring leave types (BL does not consume credits)
             ->sum('days_requested');
     }
 
@@ -999,10 +999,20 @@ class LeaveCreditService
         // Reviewers can see the absence info on the Show page to make approval decisions
         // The rule is NOT enforced as a blocking validation anymore
 
-        // NOTE: Insufficient credits is now informational only
-        // Users can submit leave requests even without sufficient credits
-        // Reviewers can see the credit balance on the Show page to make approval decisions
-        // Credits will only be deducted if approved AND user has sufficient balance
+        // Enforce credit balance validation for VL only
+        // VL requires sufficient credits at submission time
+        // SL handles insufficient credits at approval time (SL→UPTO conversion)
+        // BL does not consume credits (non-credited leave type)
+        if ($leaveType === 'VL') {
+            $daysRequested = $data['days_requested'] ?? $this->calculateDays($startDate, $endDate);
+            $balance = $this->getBalance($user, $year);
+            $pendingCredits = $this->getPendingCredits($user, $year);
+            $availableBalance = max(0, $balance - $pendingCredits);
+
+            if ($availableBalance < $daysRequested) {
+                $errors[] = "Insufficient leave credits. Available: {$availableBalance} day(s), Requested: {$daysRequested} day(s). Please reduce your leave days to match your available credits.";
+            }
+        }
 
         return [
             'valid' => empty($errors),
@@ -1096,26 +1106,136 @@ class LeaveCreditService
         }
 
         if ($balance < $daysRequested) {
-            // Has some credits but not enough - use partial credits
-            $uptoDays = $daysRequested - $balance;
+            // Floor to whole number: only deduct full days (1 credit = 1 day)
+            $wholeCredits = (int) floor($balance);
+
+            if ($wholeCredits <= 0) {
+                // Fractional balance only (e.g. 0.75) - treat as zero, convert to UPTO
+                return [
+                    'should_deduct' => false,
+                    'reason' => "No whole SL credits available (balance: {$balance} days) - Converted to UPTO",
+                    'convert_to_upto' => true,
+                    'partial_credit' => false,
+                    'credits_to_deduct' => 0,
+                    'upto_days' => $daysRequested,
+                ];
+            }
+
+            $uptoDays = $daysRequested - $wholeCredits;
 
             return [
                 'should_deduct' => true,
-                'reason' => "Partial SL credits used (balance: {$balance} days, requested: {$daysRequested} days) - {$balance} day(s) as SL, {$uptoDays} day(s) as UPTO",
+                'reason' => "Partial SL credits used (balance: {$balance} days, requested: {$daysRequested} days) - {$wholeCredits} day(s) as SL, {$uptoDays} day(s) as UPTO",
                 'convert_to_upto' => false,
                 'partial_credit' => true,
-                'credits_to_deduct' => $balance,
+                'credits_to_deduct' => $wholeCredits,
                 'upto_days' => $uptoDays,
             ];
         }
 
-        // Full credits available
+        // Full credits available - floor to whole number
+        $wholeCredits = (int) floor($balance);
+
+        // If requesting exactly the floored balance or less, deduct only whole days requested
         return [
             'should_deduct' => true,
             'reason' => null,
             'convert_to_upto' => false,
             'partial_credit' => false,
-            'credits_to_deduct' => $daysRequested,
+            'credits_to_deduct' => (int) $daysRequested,
+            'upto_days' => 0,
+        ];
+    }
+
+    /**
+     * Check if VL credits should be deducted at approval time and return detailed info.
+     * Supports partial credit usage - if user has some credits but not enough,
+     * use available credits for covered days and create a linked UPTO request for the rest.
+     *
+     * @return array{should_deduct: bool, reason: string|null, convert_to_upto: bool, partial_credit: bool, credits_to_deduct: float, upto_days: float}
+     */
+    public function checkVlCreditDeduction(User $user, LeaveRequest $leaveRequest): array
+    {
+        if ($leaveRequest->leave_type !== 'VL') {
+            return ['should_deduct' => true, 'reason' => null, 'convert_to_upto' => false, 'partial_credit' => false];
+        }
+
+        // Must be eligible (6+ months) - check eligibility based on leave start date
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        if (! $this->isEligible($user, $startDate)) {
+            $hireDate = $user->hired_date ? Carbon::parse($user->hired_date)->format('M d, Y') : 'unknown';
+
+            return [
+                'should_deduct' => false,
+                'reason' => "Not eligible for VL credits (less than 6 months of employment, hired: {$hireDate})",
+                'convert_to_upto' => true,
+                'partial_credit' => false,
+                'credits_to_deduct' => 0,
+                'upto_days' => ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
+                    ? (float) $leaveRequest->approved_days
+                    : (float) $leaveRequest->days_requested,
+            ];
+        }
+
+        // Check credits balance
+        $year = $startDate->year;
+        $balance = $this->getBalance($user, $year);
+
+        // Use approved_days when there's a partial denial, otherwise use days_requested
+        $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
+            ? (float) $leaveRequest->approved_days
+            : (float) $leaveRequest->days_requested;
+
+        if ($balance <= 0) {
+            // No credits at all - convert entire request to UPTO
+            return [
+                'should_deduct' => false,
+                'reason' => 'No VL credits available (balance: 0 days) - Converted to UPTO',
+                'convert_to_upto' => true,
+                'partial_credit' => false,
+                'credits_to_deduct' => 0,
+                'upto_days' => $daysRequested,
+            ];
+        }
+
+        if ($balance < $daysRequested) {
+            // Floor to whole number: only deduct full days (1 credit = 1 day)
+            $wholeCredits = (int) floor($balance);
+
+            if ($wholeCredits <= 0) {
+                // Fractional balance only (e.g. 0.75) - treat as zero, convert to UPTO
+                return [
+                    'should_deduct' => false,
+                    'reason' => "No whole VL credits available (balance: {$balance} days) - Converted to UPTO",
+                    'convert_to_upto' => true,
+                    'partial_credit' => false,
+                    'credits_to_deduct' => 0,
+                    'upto_days' => $daysRequested,
+                ];
+            }
+
+            $uptoDays = $daysRequested - $wholeCredits;
+
+            return [
+                'should_deduct' => true,
+                'reason' => "Partial VL credits used (balance: {$balance} days, requested: {$daysRequested} days) - {$wholeCredits} day(s) as VL, {$uptoDays} day(s) as UPTO",
+                'convert_to_upto' => false,
+                'partial_credit' => true,
+                'credits_to_deduct' => $wholeCredits,
+                'upto_days' => $uptoDays,
+            ];
+        }
+
+        // Full credits available - floor to whole number
+        $wholeCredits = (int) floor($balance);
+
+        // If requesting exactly the floored balance or less, deduct only whole days requested
+        return [
+            'should_deduct' => true,
+            'reason' => null,
+            'convert_to_upto' => false,
+            'partial_credit' => false,
+            'credits_to_deduct' => (int) $daysRequested,
             'upto_days' => 0,
         ];
     }

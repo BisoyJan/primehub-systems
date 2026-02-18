@@ -155,6 +155,7 @@ export default function Edit({
 
     const [calculatedDays, setCalculatedDays] = useState<number>(leaveRequest.days_requested);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
+    const [creditError, setCreditError] = useState<string | null>(null);
     const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
@@ -292,6 +293,7 @@ export default function Edit({
     // Clear selected medical certificate
     const clearMedicalCert = () => {
         setData('medical_cert_file', null);
+        setData('medical_cert_submitted', false);
         setMedicalCertPreview(null);
         // Reset file input
         const fileInput = document.getElementById('medical_cert_file') as HTMLInputElement;
@@ -465,15 +467,15 @@ export default function Edit({
             );
         }
 
-        // Check leave credits balance (only block for VL/BL, SL can proceed)
-        // Use available balance (total balance - pending credits + future credits) for validation
-        if (['VL', 'BL'].includes(data.leave_type) && calculatedDays > 0) {
+        // Check leave credits balance for VL only (blocks submission)
+        // SL handles insufficient credits at approval time (SL→UPTO conversion)
+        // BL does not consume credits (non-credited leave type)
+        let newCreditError: string | null = null;
+        if (data.leave_type === 'VL' && calculatedDays > 0) {
             const projectedCredits = data.start_date ? calculateFutureCredits(data.start_date) : 0;
             const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + (requiresCredits ? leaveRequest.days_requested : 0) + projectedCredits);
             if (availableBalance < calculatedDays) {
-                warnings.push(
-                    `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} days${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} days`
-                );
+                newCreditError = `Insufficient leave credits. Available: ${Math.floor(availableBalance)} day(s)${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} day(s). Please reduce your leave days to match your available credits.`;
             }
         }
 
@@ -504,6 +506,7 @@ export default function Edit({
         }
 
         setValidationWarnings(warnings);
+        setCreditError(newCreditError);
         setShortNoticeWarning(shortNotice);
     }, [
         data.leave_type,
@@ -533,7 +536,13 @@ export default function Edit({
             setSlCreditInfo('Leave credits will NOT be deducted - You are not yet eligible for leave credits (less than 6 months employment)');
         } else if (creditsSummary.balance < calculatedDays && calculatedDays > 0) {
             if (data.medical_cert_submitted) {
-                setSlCreditInfo(`⚠️ This SL will be converted to UPTO (Unpaid Time Off) - Insufficient credits (balance: ${creditsSummary.balance} days, requesting: ${calculatedDays} days)`);
+                const creditedDays = Math.floor(creditsSummary.balance);
+                const uptoDays = calculatedDays - creditedDays;
+                setSlCreditInfo(
+                    creditedDays > 0
+                        ? `⚠️ Partial UPTO conversion - ${creditedDays} day(s) will be credited from your balance, ${uptoDays} day(s) will be converted to UPTO (Unpaid Time Off)`
+                        : `⚠️ All ${calculatedDays} day(s) will be converted to UPTO (Unpaid Time Off) - No whole credits available (balance: ${creditsSummary.balance.toFixed(2)} days)`
+                );
             } else {
                 setSlCreditInfo('Leave credits will NOT be deducted - Insufficient balance. Submit a medical certificate to convert to UPTO.');
             }
@@ -1107,10 +1116,10 @@ export default function Edit({
                                             })}
                                         </div>
                                         {attendancePoints > 6 && (
-                                            <Alert variant="destructive" className="mt-4">
+                                            <Alert className="mt-4 border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                                                 <AlertCircle className="h-4 w-4" />
-                                                <AlertTitle>High Attendance Points</AlertTitle>
-                                                <AlertDescription>
+                                                <AlertTitle className="text-red-800 dark:text-red-200">High Attendance Points</AlertTitle>
+                                                <AlertDescription className="text-red-700 dark:text-red-300">
                                                     Your attendance points exceed 6.0. This may result in automatic denial of Vacation Leave (VL) and Bereavement Leave (BL) requests. Please work on improving attendance or wait for points to expire.
                                                 </AlertDescription>
                                             </Alert>
@@ -1120,6 +1129,17 @@ export default function Edit({
                             </Accordion>
                         </CardContent>
                     </Card>
+                )}
+
+                {/* Insufficient VL Credits Error (blocks submission) */}
+                {creditError && (
+                    <Alert className="mb-6 border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertTitle className="text-red-800 dark:text-red-200">Insufficient Leave Credits</AlertTitle>
+                        <AlertDescription className="text-red-700 dark:text-red-300">
+                            <p>{creditError}</p>
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 {/* Validation Warnings */}
@@ -1622,10 +1642,10 @@ export default function Edit({
 
                             {/* Form Errors */}
                             {(errors as Record<string, string | string[]>).validation && (
-                                <Alert variant="destructive">
+                                <Alert className="border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                                     <AlertCircle className="h-4 w-4" />
-                                    <AlertTitle>Cannot Update Request</AlertTitle>
-                                    <AlertDescription>
+                                    <AlertTitle className="text-red-800 dark:text-red-200">Cannot Update Request</AlertTitle>
+                                    <AlertDescription className="text-red-700 dark:text-red-300">
                                         <ul className="list-disc list-inside space-y-1">
                                             {Array.isArray((errors as Record<string, string | string[]>).validation) ? (
                                                 ((errors as Record<string, string | string[]>).validation as string[]).map((error: string, idx: number) => (
@@ -1640,10 +1660,10 @@ export default function Edit({
                             )}
 
                             {(errors as Record<string, string>).error && (
-                                <Alert variant="destructive">
+                                <Alert className="border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                                     <AlertCircle className="h-4 w-4" />
-                                    <AlertTitle>Error</AlertTitle>
-                                    <AlertDescription>
+                                    <AlertTitle className="text-red-800 dark:text-red-200">Error</AlertTitle>
+                                    <AlertDescription className="text-red-700 dark:text-red-300">
                                         {(errors as Record<string, string>).error}
                                     </AlertDescription>
                                 </Alert>
@@ -1657,6 +1677,7 @@ export default function Edit({
                                         processing ||
                                         !!weekendError.start ||
                                         !!weekendError.end ||
+                                        !!creditError ||
                                         (isApprovedLeave && datesChanged && !data.date_modification_reason.trim())
                                     }
                                 >

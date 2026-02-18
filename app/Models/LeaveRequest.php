@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -75,6 +76,10 @@ class LeaveRequest extends Model
         'approved_days',
         'sl_credits_applied',
         'sl_no_credit_reason',
+        // Linked request fields (VL→UPTO split creates a companion UPTO request)
+        'linked_request_id',
+        'vl_credits_applied',
+        'vl_no_credit_reason',
     ];
 
     protected function casts(): array
@@ -110,6 +115,8 @@ class LeaveRequest extends Model
             'has_partial_denial' => 'boolean',
             'approved_days' => 'decimal:2',
             'sl_credits_applied' => 'boolean',
+            // Linked request (VL→UPTO split)
+            'vl_credits_applied' => 'boolean',
         ];
     }
 
@@ -221,6 +228,22 @@ class LeaveRequest extends Model
     }
 
     /**
+     * Get the linked/companion leave request (e.g., UPTO created from VL split).
+     */
+    public function linkedRequest(): BelongsTo
+    {
+        return $this->belongsTo(LeaveRequest::class, 'linked_request_id');
+    }
+
+    /**
+     * Get companion requests that were created from this request (e.g., UPTO requests linked to this VL).
+     */
+    public function companionRequests(): HasMany
+    {
+        return $this->hasMany(LeaveRequest::class, 'linked_request_id');
+    }
+
+    /**
      * Check if this leave type requires leave credits.
      */
     public function requiresCredits(): bool
@@ -325,12 +348,14 @@ class LeaveRequest extends Model
     }
 
     /**
-     * Check if request can be cancelled.
+     * Check if request can be cancelled by the request owner.
+     * Owners can cancel: pending (any date) or partially approved (any date).
+     * Fully approved leaves require privileged role cancellation.
      */
     public function canBeCancelled(): bool
     {
         return $this->isPending()
-            || ($this->isApproved() && $this->start_date > now());
+            || $this->isPartiallyApproved();
     }
 
     /**

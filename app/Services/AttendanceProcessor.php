@@ -464,6 +464,165 @@ class AttendanceProcessor
     }
 
     /**
+     * Check if user has a pending leave request for the given date.
+     */
+    protected function checkPendingLeave(User $user, Carbon $date): ?LeaveRequest
+    {
+        return LeaveRequest::where('user_id', $user->id)
+            ->where('status', 'pending')
+            ->where('start_date', '<=', $date)
+            ->where('end_date', '>=', $date)
+            ->first();
+    }
+
+    /**
+     * Auto-cancel a pending leave request because the employee reported to work.
+     * Notifies both the employee and HR about the auto-cancellation.
+     */
+    protected function autoCancelPendingLeave(
+        LeaveRequest $leaveRequest,
+        User $user,
+        Carbon $workDate,
+        Collection $biometricRecords
+    ): void {
+        $scanTimes = $biometricRecords->pluck('datetime')
+            ->map(fn ($dt) => $dt->format('H:i'))
+            ->implode(', ');
+
+        $workDuration = $this->calculateWorkDuration($biometricRecords);
+        $scanCount = $biometricRecords->count();
+
+        $reason = "Employee reported to work on {$workDate->format('M d, Y')} "
+            ."(Scans: {$scanCount}, Times: {$scanTimes}, Est. Duration: {$workDuration} hrs). "
+            .'Pending leave request was automatically cancelled.';
+
+        try {
+            $leaveRequest->update([
+                'status' => 'cancelled',
+                'auto_cancelled' => true,
+                'auto_cancelled_reason' => $reason,
+                'auto_cancelled_at' => now(),
+            ]);
+
+            // Notify the employee about auto-cancellation
+            if ($this->notificationService) {
+                $startDate = Carbon::parse($leaveRequest->start_date)->format('M d, Y');
+                $endDate = Carbon::parse($leaveRequest->end_date)->format('M d, Y');
+                $leaveType = str_replace('_', ' ', ucfirst($leaveRequest->leave_type));
+
+                $this->notificationService->notifyLeaveRequestAutoCancelled(
+                    $user,
+                    $leaveType,
+                    $startDate,
+                    $endDate,
+                    'You reported to work (biometric attendance detected)',
+                    $leaveRequest->id
+                );
+
+                // Notify HR, Super Admin, and Team Lead about the auto-cancellation
+                $autoCancelTitle = 'Pending Leave Auto-Cancelled';
+                $autoCancelMessage = "{$user->name}'s pending {$leaveType} leave ({$startDate} to {$endDate}) "
+                    ."was automatically cancelled because the employee reported to work on {$workDate->format('M d, Y')}.\n\n"
+                    ."Scans: {$scanCount} ({$scanTimes})\n"
+                    ."Est. Duration: {$workDuration} hours";
+                $autoCancelData = [
+                    'employee_id' => $user->id,
+                    'employee_name' => $user->name,
+                    'leave_request_id' => $leaveRequest->id,
+                    'leave_type' => $leaveType,
+                    'activity_date' => $workDate->format('M d, Y'),
+                    'link' => route('leave-requests.show', $leaveRequest->id),
+                ];
+
+                $this->notificationService->notifyUsersByRole('HR', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+                $this->notificationService->notifyUsersByRole('Super Admin', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+                $this->notificationService->notifyUsersByRole('Team Lead', 'leave_request', $autoCancelTitle, $autoCancelMessage, $autoCancelData);
+            }
+
+            Log::info('Pending leave request auto-cancelled due to biometric attendance', [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'leave_request_id' => $leaveRequest->id,
+                'work_date' => $workDate->format('Y-m-d'),
+                'scan_count' => $scanCount,
+                'work_duration_hours' => $workDuration,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to auto-cancel pending leave request', [
+                'leave_request_id' => $leaveRequest->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
+     * Flag a multi-day pending leave request for HR review when employee has biometric activity.
+     * Does NOT auto-cancel — notifies HR to investigate and decide.
+     */
+    protected function flagPendingLeaveForReview(
+        LeaveRequest $leaveRequest,
+        User $user,
+        Carbon $workDate,
+        Collection $biometricRecords
+    ): void {
+        $scanTimes = $biometricRecords->pluck('datetime')
+            ->map(fn ($dt) => $dt->format('H:i'))
+            ->implode(', ');
+
+        $workDuration = $this->calculateWorkDuration($biometricRecords);
+        $scanCount = $biometricRecords->count();
+
+        $startDate = Carbon::parse($leaveRequest->start_date)->format('M d, Y');
+        $endDate = Carbon::parse($leaveRequest->end_date)->format('M d, Y');
+        $leaveType = str_replace('_', ' ', ucfirst($leaveRequest->leave_type));
+
+        try {
+            if ($this->notificationService) {
+                $conflictTitle = 'Pending Leave Conflict - Review Required';
+                $conflictMessage = "{$user->name} has biometric activity during pending {$leaveType} leave.\n\n"
+                    ."Leave Period: {$startDate} to {$endDate}\n"
+                    ."Activity Date: {$workDate->format('M d, Y')}\n"
+                    ."Scans: {$scanCount} ({$scanTimes})\n"
+                    ."Est. Duration: {$workDuration} hours\n\n"
+                    ."This is a multi-day leave, so it was NOT auto-cancelled.\n"
+                    ."Please review and decide:\n"
+                    ."• Cancel the pending leave if employee is no longer taking leave\n"
+                    .'• No action needed if employee only worked this one day';
+                $conflictData = [
+                    'employee_id' => $user->id,
+                    'employee_name' => $user->name,
+                    'leave_request_id' => $leaveRequest->id,
+                    'leave_type' => $leaveType,
+                    'activity_date' => $workDate->format('M d, Y'),
+                    'scan_count' => $scanCount,
+                    'work_duration_hours' => $workDuration,
+                    'link' => route('leave-requests.show', $leaveRequest->id),
+                ];
+
+                $this->notificationService->notifyUsersByRole('HR', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+                $this->notificationService->notifyUsersByRole('Super Admin', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+                $this->notificationService->notifyUsersByRole('Team Lead', 'leave_request', $conflictTitle, $conflictMessage, $conflictData);
+            }
+
+            Log::info('Multi-day pending leave conflict flagged for HR review', [
+                'user_id' => $user->id,
+                'user_name' => $user->name,
+                'leave_request_id' => $leaveRequest->id,
+                'work_date' => $workDate->format('Y-m-d'),
+                'scan_count' => $scanCount,
+                'work_duration_hours' => $workDuration,
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Failed to flag pending leave conflict for review', [
+                'leave_request_id' => $leaveRequest->id,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    /**
      * Process records for a single employee.
      * Auto-detects shift dates from time in records.
      *
@@ -833,11 +992,42 @@ class AttendanceProcessor
             ];
         }
 
+        // Check if user has a pending leave request for this date
+        // If employee reported to work, auto-cancel single-day pending leaves
+        // For multi-day pending leaves, flag for HR review instead
+        $pendingLeave = $this->checkPendingLeave($user, $detectedShiftDate);
+        $pendingLeaveCancelled = false;
+        $pendingLeaveFlagged = false;
+
+        if ($pendingLeave && $this->hasSufficientWorkScans($records)) {
+            $isMultiDayLeave = Carbon::parse($pendingLeave->start_date)->diffInDays(Carbon::parse($pendingLeave->end_date)) > 0;
+
+            if ($isMultiDayLeave) {
+                // Multi-day pending leave: flag for HR review, don't auto-cancel
+                $this->flagPendingLeaveForReview($pendingLeave, $user, $detectedShiftDate, $records);
+                $pendingLeaveFlagged = true;
+            } else {
+                // Single-day pending leave: auto-cancel
+                $this->autoCancelPendingLeave($pendingLeave, $user, $detectedShiftDate, $records);
+                $pendingLeaveCancelled = true;
+
+                Log::info('Pending leave auto-cancelled due to biometric attendance', [
+                    'user_id' => $user->id,
+                    'user_name' => $user->name,
+                    'leave_request_id' => $pendingLeave->id,
+                    'shift_date' => $detectedShiftDate->format('Y-m-d'),
+                    'scan_count' => $records->count(),
+                ]);
+            }
+        }
+
         // Process attendance for this shift
         $result = $this->processAttendance($user, $schedule, $records, $detectedShiftDate, $biometricSiteId);
 
         return [
             'processed' => $result['matched'] ?? false,
+            'pending_leave_cancelled' => $pendingLeaveCancelled,
+            'pending_leave_flagged' => $pendingLeaveFlagged,
             'error' => ! empty($result['errors']) ? implode(', ', $result['errors']) : null,
         ];
     }

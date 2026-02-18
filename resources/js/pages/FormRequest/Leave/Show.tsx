@@ -24,7 +24,7 @@ import {
 import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, show as leaveShowRoute } from '@/routes/leave-requests';
 
 interface User {
     id: number;
@@ -90,6 +90,9 @@ interface LeaveRequest {
     approved_days?: number;
     sl_credits_applied?: boolean;
     sl_no_credit_reason?: string;
+    vl_credits_applied?: boolean;
+    vl_no_credit_reason?: string;
+    linked_request_id?: number;
     denied_dates?: DeniedDate[];
 }
 
@@ -113,6 +116,24 @@ interface ActiveAttendancePoint {
     expired_at: string | null;
 }
 
+interface CreditPreview {
+    should_deduct: boolean;
+    reason: string | null;
+    convert_to_upto: boolean;
+    partial_credit: boolean;
+    credits_to_deduct?: number;
+    upto_days?: number;
+}
+
+interface LinkedRequestSummary {
+    id: number;
+    leave_type: string;
+    start_date: string;
+    end_date: string;
+    days_requested: number;
+    status: string;
+}
+
 interface Props {
     leaveRequest: LeaveRequest;
     isAdmin: boolean;
@@ -128,6 +149,9 @@ interface Props {
     earlierConflicts?: EarlierConflict[];
     absenceWindowInfo?: AbsenceWindowInfo | null;
     activeAttendancePoints?: ActiveAttendancePoint[];
+    creditPreview?: CreditPreview | null;
+    linkedRequest?: LinkedRequestSummary | null;
+    companionRequests?: LinkedRequestSummary[];
 }
 
 interface EarlierConflict {
@@ -154,6 +178,9 @@ export default function Show({
     earlierConflicts = [],
     absenceWindowInfo = null,
     activeAttendancePoints = [],
+    creditPreview = null,
+    linkedRequest = null,
+    companionRequests = [],
 }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
@@ -540,7 +567,7 @@ export default function Show({
                                 </Button>
                             </>
                         )}
-                        {canAdminCancel && leaveRequest.status === 'approved' && (
+                        {canAdminCancel && (
                             <Button
                                 variant="outline"
                                 size="sm"
@@ -548,10 +575,10 @@ export default function Show({
                                 onClick={() => setShowAdminCancelDialog(true)}
                             >
                                 <Ban className="mr-1 h-4 w-4" />
-                                <span className="hidden sm:inline">Cancel Approved</span>
+                                <span className="hidden sm:inline">{leaveRequest.status === 'approved' ? 'Cancel Approved' : 'Cancel'}</span>
                             </Button>
                         )}
-                        {canCancel && (leaveRequest.status === 'pending' || (leaveRequest.status === 'approved' && leaveRequest.has_partial_denial)) && (
+                        {canCancel && !canAdminCancel && (leaveRequest.status === 'pending' || (leaveRequest.status === 'approved' && leaveRequest.has_partial_denial)) && (
                             <Can permission="leave.cancel">
                                 <Button variant="outline" size="sm" onClick={() => setShowCancelDialog(true)}>
                                     <Ban className="mr-1 h-4 w-4" />
@@ -809,6 +836,76 @@ export default function Show({
                                 <AlertTriangle className="h-4 w-4 text-amber-600" />
                                 <AlertDescription className="text-amber-800 dark:text-amber-200">
                                     <strong>Originally filed as Sick Leave (SL):</strong> {leaveRequest.sl_no_credit_reason}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* VL No Credit Reason - Show when VL has partial or no credits applied */}
+                        {leaveRequest.leave_type === 'VL' && leaveRequest.vl_credits_applied === false && leaveRequest.vl_no_credit_reason && (
+                            <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                <Info className="h-4 w-4 text-blue-600" />
+                                <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                    <strong>VL Credits Not Deducted:</strong> {leaveRequest.vl_no_credit_reason}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* VL with partial credits - reason displayed */}
+                        {leaveRequest.leave_type === 'VL' && leaveRequest.vl_credits_applied === true && leaveRequest.vl_no_credit_reason && (
+                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <strong>Partial VL Credits:</strong> {leaveRequest.vl_no_credit_reason}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* VL Converted to UPTO - Show when UPTO was converted from VL due to insufficient credits */}
+                        {leaveRequest.leave_type === 'UPTO' && leaveRequest.vl_no_credit_reason && leaveRequest.vl_no_credit_reason.includes('Converted to UPTO') && (
+                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <strong>Originally filed as Vacation Leave (VL):</strong> {leaveRequest.vl_no_credit_reason}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* Linked Parent Request - Show on UPTO companion requests */}
+                        {linkedRequest && (
+                            <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
+                                <Info className="h-4 w-4 text-purple-600" />
+                                <AlertDescription className="text-purple-800 dark:text-purple-200">
+                                    <strong>Linked Request:</strong> This UPTO was auto-created from{' '}
+                                    <Link
+                                        href={leaveShowRoute(linkedRequest.id).url}
+                                        className="underline font-semibold hover:text-purple-600"
+                                    >
+                                        {linkedRequest.leave_type} Request #{linkedRequest.id}
+                                    </Link>
+                                    {' '}({linkedRequest.days_requested} day(s), {format(parseISO(linkedRequest.start_date), 'MMM d, yyyy')} – {format(parseISO(linkedRequest.end_date), 'MMM d, yyyy')})
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
+                        {/* Companion UPTO Requests - Show on parent VL/SL requests */}
+                        {companionRequests && companionRequests.length > 0 && (
+                            <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
+                                <Info className="h-4 w-4 text-purple-600" />
+                                <AlertDescription className="text-purple-800 dark:text-purple-200">
+                                    <strong>Linked UPTO Request{companionRequests.length > 1 ? 's' : ''}:</strong>{' '}
+                                    {companionRequests.map((companion, idx) => (
+                                        <span key={companion.id}>
+                                            {idx > 0 && ', '}
+                                            <Link
+                                                href={leaveShowRoute(companion.id).url}
+                                                className="underline font-semibold hover:text-purple-600"
+                                            >
+                                                UPTO #{companion.id}
+                                            </Link>
+                                            {' '}({companion.days_requested} day(s))
+                                        </span>
+                                    ))}
+                                    {' '}— auto-created for excess days with insufficient credits.
                                 </AlertDescription>
                             </Alert>
                         )}
@@ -1180,6 +1277,38 @@ export default function Show({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
+                        {/* Credit Split Preview for VL/SL */}
+                        {creditPreview && (leaveRequest.leave_type === 'VL' || leaveRequest.leave_type === 'SL') && (
+                            <>
+                                {creditPreview.convert_to_upto && (
+                                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                                        <AlertDescription className="text-red-800 dark:text-red-200">
+                                            <strong>No {leaveRequest.leave_type} credits available.</strong> This request will be converted to UPTO (Unpaid Time Off) upon approval.
+                                            {creditPreview.reason && <span className="block mt-1 text-sm">{creditPreview.reason}</span>}
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                {creditPreview.partial_credit && (
+                                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                            <strong>Partial {leaveRequest.leave_type} credits available.</strong>{' '}
+                                            {creditPreview.credits_to_deduct} day(s) will use {leaveRequest.leave_type} credits, and{' '}
+                                            {creditPreview.upto_days} day(s) will be filed as a linked UPTO request.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                {!creditPreview.convert_to_upto && !creditPreview.partial_credit && creditPreview.should_deduct && (
+                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <AlertDescription className="text-green-800 dark:text-green-200">
+                                            Full {leaveRequest.leave_type} credits available. {creditPreview.credits_to_deduct} day(s) will be deducted.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                            </>
+                        )}
                         <div>
                             <label className="text-sm font-medium">
                                 Review Notes <span className="text-red-500">*</span>
@@ -1460,28 +1589,32 @@ export default function Show({
                 </DialogContent>
             </Dialog>
 
-            {/* Admin Cancel Approved Leave Dialog */}
+            {/* Admin Cancel Leave Dialog */}
             <Dialog open={showAdminCancelDialog} onOpenChange={setShowAdminCancelDialog}>
                 <DialogContent>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-red-600" />
-                            Cancel Approved Leave Request
+                            {leaveRequest.status === 'approved' ? 'Cancel Approved Leave Request' : 'Cancel Leave Request'}
                         </DialogTitle>
                         <DialogDescription>
-                            You are about to cancel an approved leave request. This will restore the employee's leave credits and delete any associated attendance records.
+                            {leaveRequest.status === 'approved'
+                                ? 'You are about to cancel an approved leave request. This will restore the employee\'s leave credits and delete any associated attendance records.'
+                                : 'You are about to cancel this pending leave request. This action cannot be undone.'}
                         </DialogDescription>
                     </DialogHeader>
-                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <AlertDescription className="text-amber-800 dark:text-amber-200">
-                            <ul className="list-disc list-inside text-sm space-y-1">
-                                <li>Leave credits ({leaveRequest.days_requested} days) will be restored</li>
-                                <li>Attendance records for leave dates will be deleted</li>
-                                <li>The employee will be notified of this cancellation</li>
-                            </ul>
-                        </AlertDescription>
-                    </Alert>
+                    {leaveRequest.status === 'approved' && (
+                        <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                            <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                <ul className="list-disc list-inside text-sm space-y-1">
+                                    <li>Leave credits ({leaveRequest.days_requested} days) will be restored</li>
+                                    <li>Attendance records for leave dates will be deleted</li>
+                                    <li>The employee will be notified of this cancellation</li>
+                                </ul>
+                            </AlertDescription>
+                        </Alert>
+                    )}
                     <div className="space-y-4">
                         <div className="space-y-2">
                             <Label htmlFor="cancellation_reason">Reason for Cancellation <span className="text-red-500">*</span></Label>
@@ -1489,7 +1622,9 @@ export default function Show({
                                 id="cancellation_reason"
                                 value={adminCancelForm.data.cancellation_reason}
                                 onChange={(e) => adminCancelForm.setData('cancellation_reason', e.target.value)}
-                                placeholder="Please provide a reason for cancelling this approved leave..."
+                                placeholder={leaveRequest.status === 'approved'
+                                    ? 'Please provide a reason for cancelling this approved leave...'
+                                    : 'Please provide a reason for cancelling this leave request...'}
                                 rows={3}
                             />
                             <p className="text-xs text-muted-foreground">
@@ -1499,14 +1634,14 @@ export default function Show({
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowAdminCancelDialog(false)}>
-                            Keep Approved
+                            {leaveRequest.status === 'approved' ? 'Keep Approved' : 'Keep Request'}
                         </Button>
                         <Button
                             variant="destructive"
                             onClick={handleAdminCancel}
                             disabled={adminCancelForm.processing || !adminCancelForm.data.cancellation_reason.trim()}
                         >
-                            Cancel Approved Leave
+                            {leaveRequest.status === 'approved' ? 'Cancel Approved Leave' : 'Cancel Leave Request'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>
@@ -1557,6 +1692,36 @@ export default function Show({
                             This will override any pending approvals from Team Lead, Admin, or HR.
                         </AlertDescription>
                     </Alert>
+                    {/* Credit Split Preview for VL/SL in Force Approve */}
+                    {creditPreview && (leaveRequest.leave_type === 'VL' || leaveRequest.leave_type === 'SL') && (
+                        <>
+                            {creditPreview.convert_to_upto && (
+                                <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                    <AlertTriangle className="h-4 w-4 text-red-600" />
+                                    <AlertDescription className="text-red-800 dark:text-red-200">
+                                        <strong>No {leaveRequest.leave_type} credits available.</strong> Will be converted to UPTO upon approval.
+                                        {creditPreview.reason && <span className="block mt-1 text-sm">{creditPreview.reason}</span>}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                            {creditPreview.partial_credit && (
+                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <strong>Partial credits:</strong> {creditPreview.credits_to_deduct} day(s) as {leaveRequest.leave_type}, {creditPreview.upto_days} day(s) as linked UPTO.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                            {!creditPreview.convert_to_upto && !creditPreview.partial_credit && creditPreview.should_deduct && (
+                                <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                    <AlertDescription className="text-green-800 dark:text-green-200">
+                                        Full {leaveRequest.leave_type} credits available ({creditPreview.credits_to_deduct} day(s)).
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                        </>
+                    )}
                     <div className="space-y-4">
                         {/* Partial Approval Toggle */}
                         {workDays.length > 1 && (

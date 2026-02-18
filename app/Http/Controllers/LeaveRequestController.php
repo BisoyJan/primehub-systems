@@ -491,11 +491,13 @@ class LeaveRequestController extends Controller
         }
 
         // Check for overlapping dates with existing pending or approved leave requests
+        // Exclude linked companion UPTO requests (they share date ranges with parent requests)
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
 
         $overlappingRequest = LeaveRequest::where('user_id', $targetUser->id)
             ->whereIn('status', ['pending', 'approved'])
+            ->whereNull('linked_request_id')
             ->where(function ($query) use ($startDate, $endDate) {
                 // Check if any existing request overlaps with the new date range
                 $query->where(function ($q) use ($startDate, $endDate) {
@@ -681,7 +683,7 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
         $isTeamLead = $user->role === 'Team Lead';
 
-        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'deniedDates.denier']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'deniedDates.denier', 'linkedRequest', 'companionRequests']);
 
         // Check if current user has already approved
         $hasUserApproved = false;
@@ -712,10 +714,13 @@ class LeaveRequestController extends Controller
         // Check if leave end date has passed (cannot modify past leaves)
         $leaveEndDatePassed = $leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast();
 
-        // Check if Admin/Super Admin can cancel approved leave (not if dates passed)
-        $canAdminCancel = in_array($user->role, ['Super Admin', 'Admin'])
-            && $leaveRequest->status === 'approved'
-            && ! $leaveEndDatePassed;
+        // Check if privileged roles (Super Admin, Admin, HR, Team Lead) can cancel leave
+        // Privileged roles can cancel pending/approved leaves, but NOT fully approved leaves with past end dates
+        $isApprovedPastDate = $leaveRequest->status === 'approved' && ! $leaveRequest->has_partial_denial && $leaveEndDatePassed;
+        $canAdminCancel = in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])
+            && in_array($leaveRequest->status, ['pending', 'approved'])
+            && ! $isApprovedPastDate
+            && app(PermissionService::class)->userHasPermission($user, 'leave.cancel');
 
         // Check if Admin/Super Admin can edit approved leave dates (not if dates passed)
         $canEditApproved = in_array($user->role, ['Super Admin', 'Admin'])
@@ -790,13 +795,50 @@ class LeaveRequestController extends Controller
                 ];
             });
 
+        // Credit split preview for VL/SL pending requests (shown in approval dialog)
+        $creditPreview = null;
+        if ($leaveRequest->status === 'pending' && $isAdmin) {
+            $leaveCreditService = app(LeaveCreditService::class);
+            if ($leaveRequest->leave_type === 'VL') {
+                $creditPreview = $leaveCreditService->checkVlCreditDeduction($leaveRequest->user, $leaveRequest);
+            } elseif ($leaveRequest->leave_type === 'SL') {
+                $creditPreview = $leaveCreditService->checkSlCreditDeduction($leaveRequest->user, $leaveRequest);
+            }
+        }
+
+        // Build linked request summary data
+        $linkedRequestData = null;
+        if ($leaveRequest->linked_request_id) {
+            $parent = $leaveRequest->linkedRequest;
+            if ($parent) {
+                $linkedRequestData = [
+                    'id' => $parent->id,
+                    'leave_type' => $parent->leave_type,
+                    'start_date' => $parent->start_date->format('Y-m-d'),
+                    'end_date' => $parent->end_date->format('Y-m-d'),
+                    'days_requested' => $parent->days_requested,
+                    'status' => $parent->status,
+                ];
+            }
+        }
+
+        $companionRequestsData = $leaveRequest->companionRequests->map(function ($companion) {
+            return [
+                'id' => $companion->id,
+                'leave_type' => $companion->leave_type,
+                'start_date' => $companion->start_date->format('Y-m-d'),
+                'end_date' => $companion->end_date->format('Y-m-d'),
+                'days_requested' => $companion->days_requested,
+                'status' => $companion->status,
+            ];
+        });
+
         return Inertia::render('FormRequest/Leave/Show', [
             'leaveRequest' => $leaveRequestData,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'isSuperAdmin' => $user->role === 'Super Admin',
-            'canCancel' => ($leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id)
-                || ($leaveRequest->isPartiallyApproved() && $leaveRequest->user_id === $user->id && $leaveRequest->start_date > now()),
+            'canCancel' => ($leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id),
             'canAdminCancel' => $canAdminCancel,
             'canEditApproved' => $canEditApproved,
             'hasUserApproved' => $hasUserApproved,
@@ -806,6 +848,9 @@ class LeaveRequestController extends Controller
             'earlierConflicts' => $earlierConflicts,
             'absenceWindowInfo' => $absenceWindowInfo,
             'activeAttendancePoints' => $activeAttendancePoints,
+            'creditPreview' => $creditPreview,
+            'linkedRequest' => $linkedRequestData,
+            'companionRequests' => $companionRequestsData,
         ]);
     }
 
@@ -975,12 +1020,14 @@ class LeaveRequestController extends Controller
         }
 
         // Check for overlapping dates with existing pending or approved leave requests (exclude current request)
+        // Exclude linked companion UPTO requests (they share date ranges with parent requests)
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
 
         $overlappingRequest = LeaveRequest::where('user_id', $leaveRequest->user_id)
             ->where('id', '!=', $leaveRequest->id)
             ->whereIn('status', ['pending', 'approved'])
+            ->whereNull('linked_request_id')
             ->where(function ($query) use ($startDate, $endDate) {
                 $query->where('start_date', '<=', $endDate)
                     ->where('end_date', '>=', $startDate);
@@ -1429,28 +1476,25 @@ class LeaveRequestController extends Controller
 
                 // Handle leave credit deduction based on leave type
                 if ($leaveRequest->leave_type === 'SL') {
-                    // Sick Leave - special handling with attendance check
+                    // Sick Leave - special handling with attendance check and linked UPTO
                     $this->handleSlApproval($leaveRequest, $leaveCreditService);
+                } elseif ($leaveRequest->leave_type === 'VL') {
+                    // Vacation Leave - credit check at approval with linked UPTO for excess
+                    $this->handleVlApproval($leaveRequest, $leaveCreditService);
                 } elseif ($leaveRequest->requiresCredits()) {
-                    // Other credited leave types (VL, BL) - normal deduction
-                    // Use the year the leave was filed (created_at), not current year
+                    // Other credited leave types - normal deduction
                     $year = $request->input('credits_year', $leaveRequest->created_at->year);
 
-                    // If partial denial, only deduct for approved days
                     if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
-                        // Temporarily adjust days_requested for credit deduction
                         $originalDays = $leaveRequest->days_requested;
                         $leaveRequest->days_requested = $leaveRequest->approved_days;
                         $leaveCreditService->deductCredits($leaveRequest, $year);
                         $leaveRequest->days_requested = $originalDays;
-
-                        // Update credits_deducted to reflect actual deduction
                         $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
                     } else {
                         $leaveCreditService->deductCredits($leaveRequest, $year);
                     }
 
-                    // Update attendance records to on_leave status
                     $this->updateAttendanceForApprovedLeave($leaveRequest);
                 } else {
                     // Non-credited leave types (UPTO, LOA, BL, SPL, LDV, ML) - no credit deduction, but still update attendance
@@ -1632,19 +1676,18 @@ class LeaveRequestController extends Controller
             // Handle leave credit deduction based on leave type
             if ($leaveRequest->leave_type === 'SL') {
                 $this->handleSlApproval($leaveRequest, $leaveCreditService);
+            } elseif ($leaveRequest->leave_type === 'VL') {
+                // Vacation Leave - credit check at approval with linked UPTO for excess
+                $this->handleVlApproval($leaveRequest, $leaveCreditService);
             } elseif ($leaveRequest->requiresCredits()) {
-                // Use the year the leave was filed (created_at), not current year
+                // Other credited leave types - normal deduction
                 $year = $request->input('credits_year', $leaveRequest->created_at->year);
 
-                // If partial denial, only deduct for approved days
                 if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
-                    // Temporarily adjust days_requested for credit deduction
                     $originalDays = $leaveRequest->days_requested;
                     $leaveRequest->days_requested = $leaveRequest->approved_days;
                     $leaveCreditService->deductCredits($leaveRequest, $year);
                     $leaveRequest->days_requested = $originalDays;
-
-                    // Update credits_deducted to reflect actual deduction
                     $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
                 } else {
                     $leaveCreditService->deductCredits($leaveRequest, $year);
@@ -1929,10 +1972,13 @@ class LeaveRequestController extends Controller
                 $leaveCreditService = $this->leaveCreditService;
 
                 if ($leaveRequest->leave_type === 'SL') {
-                    // Sick Leave - special handling with attendance check
+                    // Sick Leave - special handling with attendance check and linked UPTO
                     $this->handleSlApproval($leaveRequest, $leaveCreditService);
+                } elseif ($leaveRequest->leave_type === 'VL') {
+                    // Vacation Leave - credit check at approval with linked UPTO for excess
+                    $this->handleVlApproval($leaveRequest, $leaveCreditService);
                 } elseif ($leaveRequest->requiresCredits()) {
-                    // Other credited leave types (VL, BL) - deduct for approved days only
+                    // Other credited leave types - deduct for approved days only
                     $year = $leaveRequest->created_at->year;
 
                     $originalDays = $leaveRequest->days_requested;
@@ -1940,10 +1986,8 @@ class LeaveRequestController extends Controller
                     $leaveCreditService->deductCredits($leaveRequest, $year);
                     $leaveRequest->days_requested = $originalDays;
 
-                    // Update credits_deducted to reflect actual deduction
                     $leaveRequest->credits_deducted = $approvedDaysCount;
 
-                    // Update attendance records for approved dates
                     $this->updateAttendanceForApprovedLeave($leaveRequest);
                 } else {
                     // Non-credited leave types - no credit deduction, but still update attendance
@@ -2231,18 +2275,24 @@ class LeaveRequestController extends Controller
         $this->authorize('cancel', $leaveRequest);
 
         $user = auth()->user();
-        $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+        $isPrivileged = in_array($user->role, ['Super Admin', 'Admin', 'HR', 'Team Lead']);
         $isOwnRequest = $leaveRequest->user_id === $user->id;
         $isApprovedLeave = $leaveRequest->status === 'approved';
         $isPartiallyApproved = $leaveRequest->isPartiallyApproved();
 
-        // For approved leaves, only Admin/Super Admin or the owner (if partially approved) can cancel
-        if ($isApprovedLeave && ! $isAdmin && ! ($isOwnRequest && $isPartiallyApproved)) {
-            return back()->withErrors(['error' => 'Only Admin or Super Admin can cancel approved leave requests.']);
+        // Block cancellation of fully approved leaves with past end dates (prevents rolling back credits)
+        // Partially approved leaves (has_partial_denial) are still cancellable
+        if ($isApprovedLeave && ! $leaveRequest->has_partial_denial && $leaveRequest->end_date && $leaveRequest->end_date->endOfDay()->isPast()) {
+            return back()->withErrors(['error' => 'Cannot cancel approved leave requests with past dates. Leave credits have already been deducted.']);
         }
 
-        // For regular employees, check canBeCancelled (or partially approved with future start date)
-        if (! $isAdmin && ! $leaveRequest->canBeCancelled() && ! ($isPartiallyApproved && $leaveRequest->start_date > now())) {
+        // For approved leaves, only privileged roles or the owner (if partially approved or future start) can cancel
+        if ($isApprovedLeave && ! $isPrivileged && ! ($isOwnRequest && ($isPartiallyApproved || $leaveRequest->start_date > now()))) {
+            return back()->withErrors(['error' => 'Only Admin, Super Admin, HR, or Team Lead can cancel approved leave requests.']);
+        }
+
+        // For non-privileged users, check canBeCancelled
+        if (! $isPrivileged && ! $leaveRequest->canBeCancelled()) {
             return back()->withErrors(['error' => 'This leave request cannot be cancelled.']);
         }
 
@@ -2280,8 +2330,8 @@ class LeaveRequestController extends Controller
 
             $leaveRequest->update($updateData);
 
-            // Notify the employee about cancellation (if cancelled by admin)
-            if ($isAdmin && ! $isOwnRequest) {
+            // Notify the employee about cancellation (if cancelled by privileged role)
+            if ($isPrivileged && ! $isOwnRequest) {
                 $this->notificationService->notifyLeaveRequestCancelledByAdmin(
                     $leaveRequest->user_id,
                     str_replace('_', ' ', ucfirst($leaveRequest->leave_type)),
@@ -2635,6 +2685,290 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Handle Vacation Leave approval with credit deduction logic.
+     * At approval time, re-checks credits and handles three scenarios:
+     * - Full credits: normal deduction for all days
+     * - Partial credits: reduce VL to credited days, create linked UPTO for remainder
+     * - No credits: convert VL to UPTO entirely
+     */
+    protected function handleVlApproval(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $year = $startDate->year;
+
+        $creditCheck = $leaveCreditService->checkVlCreditDeduction($user, $leaveRequest);
+
+        // Use approved_days when there's a partial denial, otherwise use days_requested
+        $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
+            ? (float) $leaveRequest->approved_days
+            : (float) $leaveRequest->days_requested;
+
+        if (! $creditCheck['should_deduct']) {
+            if ($creditCheck['convert_to_upto'] ?? false) {
+                // No credits at all - convert entire VL to UPTO
+                $leaveRequest->update([
+                    'leave_type' => 'UPTO',
+                    'vl_credits_applied' => false,
+                    'vl_no_credit_reason' => $creditCheck['reason'],
+                    'credits_deducted' => 0,
+                ]);
+
+                $this->updateAttendanceForApprovedLeave($leaveRequest);
+
+                \Log::info("VL→UPTO full conversion for Leave Request #{$leaveRequest->id}", [
+                    'user_id' => $user->id,
+                    'reason' => $creditCheck['reason'],
+                    'days' => $daysRequested,
+                ]);
+
+                return;
+            }
+
+            // Should not happen for VL (no med cert check) but handle gracefully
+            $this->updateAttendanceForApprovedLeave($leaveRequest);
+
+            return;
+        }
+
+        // Handle partial credit scenario
+        if ($creditCheck['partial_credit'] ?? false) {
+            $creditsToDeduct = $creditCheck['credits_to_deduct'];
+            $uptoDays = $creditCheck['upto_days'];
+
+            $this->handlePartialVlApproval($leaveRequest, $leaveCreditService, $creditsToDeduct, $uptoDays);
+
+            return;
+        }
+
+        // Full credits available - normal deduction
+        if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
+            $originalDays = $leaveRequest->days_requested;
+            $leaveRequest->days_requested = $leaveRequest->approved_days;
+            $leaveCreditService->deductCredits($leaveRequest, $year);
+            $leaveRequest->days_requested = $originalDays;
+            $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
+        } else {
+            $leaveCreditService->deductCredits($leaveRequest, $year);
+            $leaveRequest->update([
+                'credits_deducted' => $daysRequested,
+                'vl_credits_applied' => true,
+                'vl_no_credit_reason' => null,
+            ]);
+        }
+
+        $this->updateAttendanceForApprovedLeave($leaveRequest);
+    }
+
+    /**
+     * Handle partial VL approval where user has some credits but not enough.
+     * Reduces VL days_requested to credited days, creates a linked UPTO request for the remainder.
+     */
+    protected function handlePartialVlApproval(
+        LeaveRequest $leaveRequest,
+        LeaveCreditService $leaveCreditService,
+        float $creditsToDeduct,
+        float $uptoDays
+    ): void {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+        $year = $startDate->year;
+
+        // Get denied dates if partial denial
+        $deniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $deniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
+        }
+
+        // Collect all valid working dates (excluding denied dates)
+        $allDates = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if (! in_array($dateStr, $deniedDates)) {
+                $allDates[] = $dateStr;
+            }
+            $currentDate->addDay();
+        }
+
+        // Split dates: first N covered by VL credits, rest by UPTO
+        $vlDates = array_slice($allDates, 0, (int) $creditsToDeduct);
+        $uptoDates = array_slice($allDates, (int) $creditsToDeduct);
+
+        // Create linked UPTO request for the remaining days
+        $uptoRequest = null;
+        if (! empty($uptoDates)) {
+            $uptoRequest = $this->createLinkedUptoRequest(
+                $leaveRequest,
+                'VL',
+                $uptoDates,
+                'Auto-created UPTO for excess VL days (insufficient VL credits)'
+            );
+        }
+
+        // Update attendance for VL-covered days
+        foreach ($vlDates as $dateStr) {
+            $this->createOrUpdateAttendanceForDate(
+                $user,
+                $dateStr,
+                'on_leave',
+                "Covered by approved Vacation Leave (VL) - Leave Request #{$leaveRequest->id}",
+                $leaveRequest->id
+            );
+        }
+
+        // Update attendance for UPTO days (linked to the UPTO request)
+        if ($uptoRequest) {
+            foreach ($uptoDates as $dateStr) {
+                $this->createOrUpdateAttendanceForDate(
+                    $user,
+                    $dateStr,
+                    'on_leave',
+                    "UPTO (Unpaid Time Off) - Insufficient VL credits - Leave Request #{$uptoRequest->id}",
+                    $uptoRequest->id
+                );
+            }
+        }
+
+        // Deduct VL credits for credited days
+        if ($creditsToDeduct > 0) {
+            $originalDays = $leaveRequest->days_requested;
+            $leaveRequest->days_requested = $creditsToDeduct;
+            $leaveCreditService->deductCredits($leaveRequest, $year);
+            $leaveRequest->days_requested = $originalDays;
+        }
+
+        // Update VL request with partial credit info and narrow dates to credited days only
+        $updateData = [
+            'credits_deducted' => $creditsToDeduct,
+            'vl_credits_applied' => $creditsToDeduct > 0,
+            'vl_no_credit_reason' => "Partial VL credits used: {$creditsToDeduct} day(s) as VL, {$uptoDays} day(s) as UPTO",
+        ];
+
+        // Narrow parent's date range to cover only the credited VL days
+        if (! empty($vlDates)) {
+            $updateData['start_date'] = $vlDates[0];
+            $updateData['end_date'] = end($vlDates);
+        }
+
+        $leaveRequest->update($updateData);
+
+        \Log::info("Partial VL approval for Leave Request #{$leaveRequest->id}", [
+            'user_id' => $user->id,
+            'vl_days' => $creditsToDeduct,
+            'upto_days' => $uptoDays,
+            'upto_request_id' => $uptoRequest?->id,
+        ]);
+    }
+
+    /**
+     * Create a linked UPTO leave request as a companion to a credited leave.
+     * The UPTO request is auto-approved and linked via linked_request_id.
+     *
+     * @param  LeaveRequest  $parentRequest  The original credited leave request
+     * @param  string  $sourceType  The original leave type (VL or SL)
+     * @param  array  $dates  The dates to cover with UPTO
+     * @param  string  $reason  Reason for the UPTO conversion
+     */
+    protected function createLinkedUptoRequest(
+        LeaveRequest $parentRequest,
+        string $sourceType,
+        array $dates,
+        string $reason
+    ): LeaveRequest {
+        sort($dates);
+        $uptoStartDate = $dates[0];
+        $uptoEndDate = end($dates);
+        $uptoDays = count($dates);
+
+        $uptoRequest = LeaveRequest::create([
+            'user_id' => $parentRequest->user_id,
+            'leave_type' => 'UPTO',
+            'start_date' => $uptoStartDate,
+            'end_date' => $uptoEndDate,
+            'days_requested' => $uptoDays,
+            'reason' => "{$reason} - Linked to {$sourceType} Request #{$parentRequest->id}",
+            'campaign_department' => $parentRequest->campaign_department,
+            'status' => 'approved',
+            'linked_request_id' => $parentRequest->id,
+            'credits_deducted' => 0,
+            // Copy approval info from parent
+            'admin_approved_by' => $parentRequest->admin_approved_by,
+            'admin_approved_at' => $parentRequest->admin_approved_at,
+            'admin_review_notes' => "Auto-approved: Linked UPTO for {$sourceType} Request #{$parentRequest->id}",
+            'hr_approved_by' => $parentRequest->hr_approved_by,
+            'hr_approved_at' => $parentRequest->hr_approved_at,
+            'hr_review_notes' => "Auto-approved: Linked UPTO for {$sourceType} Request #{$parentRequest->id}",
+            'reviewed_by' => $parentRequest->reviewed_by ?? auth()->id(),
+            'reviewed_at' => now(),
+            'review_notes' => "Auto-approved: Linked UPTO for {$sourceType} Request #{$parentRequest->id}",
+        ]);
+
+        \Log::info("Created linked UPTO Request #{$uptoRequest->id} for {$sourceType} Request #{$parentRequest->id}", [
+            'user_id' => $parentRequest->user_id,
+            'upto_days' => $uptoDays,
+            'dates' => $dates,
+        ]);
+
+        return $uptoRequest;
+    }
+
+    /**
+     * Create or update an attendance record for a specific date.
+     */
+    protected function createOrUpdateAttendanceForDate(
+        User $user,
+        string $dateStr,
+        string $status,
+        string $notes,
+        int $leaveRequestId
+    ): void {
+        $attendance = Attendance::where('user_id', $user->id)
+            ->where('shift_date', $dateStr)
+            ->first();
+
+        if ($attendance) {
+            // Skip NCNS days
+            if ($attendance->status === 'ncns') {
+                $existingNotes = $attendance->notes ? $attendance->notes."\n" : '';
+                $attendance->update([
+                    'notes' => $existingNotes."Leave applied but NCNS status preserved - Leave Request #{$leaveRequestId}",
+                    'leave_request_id' => $leaveRequestId,
+                    'pre_leave_status' => 'ncns',
+                    'admin_verified' => true,
+                ]);
+
+                return;
+            }
+
+            $attendance->update([
+                'pre_leave_status' => $attendance->status,
+                'status' => $status,
+                'notes' => $notes,
+                'leave_request_id' => $leaveRequestId,
+                'admin_verified' => true,
+            ]);
+        } else {
+            $schedule = $this->getActiveScheduleForDate($user->id, $dateStr);
+            Attendance::create([
+                'user_id' => $user->id,
+                'employee_schedule_id' => $schedule?->id,
+                'shift_date' => $dateStr,
+                'scheduled_time_in' => $schedule?->scheduled_time_in,
+                'scheduled_time_out' => $schedule?->scheduled_time_out,
+                'status' => $status,
+                'notes' => $notes,
+                'leave_request_id' => $leaveRequestId,
+                'admin_verified' => true,
+            ]);
+        }
+    }
+
+    /**
      * Handle Sick Leave approval with special credit deduction logic.
      * Credits are only deducted if:
      * - Employee is eligible (6+ months)
@@ -2663,18 +2997,24 @@ class LeaveRequestController extends Controller
         if (! $creditCheck['should_deduct']) {
             // Check if this should be converted to UPTO (has med cert but no credits)
             if ($creditCheck['convert_to_upto'] ?? false) {
-                // Convert SL to UPTO
+                // No SL credits at all - convert entire request to UPTO
                 $leaveRequest->update([
                     'leave_type' => 'UPTO',
                     'sl_credits_applied' => false,
                     'sl_no_credit_reason' => $creditCheck['reason'],
                     'credits_deducted' => 0,
                 ]);
+
                 // Update attendance for UPTO (unpaid leave)
                 $this->updateAttendanceForApprovedLeave($leaveRequest);
 
                 // Auto-excuse attendance points if medical cert submitted
                 $this->autoExcuseAttendancePoints($leaveRequest);
+
+                \Log::info("SL→UPTO full conversion for Leave Request #{$leaveRequest->id}", [
+                    'user_id' => $user->id,
+                    'reason' => $creditCheck['reason'],
+                ]);
 
                 return;
             }
@@ -2688,13 +3028,91 @@ class LeaveRequestController extends Controller
             return;
         }
 
-        // Handle partial credit scenario - use available credits, rest as UPTO
+        // Handle partial credit scenario - use available credits, create linked UPTO for rest
         if ($creditCheck['partial_credit'] ?? false) {
             $creditsToDeduct = $creditCheck['credits_to_deduct'];
             $uptoDays = $creditCheck['upto_days'];
 
-            // Update attendance records and deduct partial credits
-            $this->handlePartialSlApproval($leaveRequest, $leaveCreditService, $creditsToDeduct, $uptoDays, $deniedDates);
+            // Collect all valid dates (excluding denied)
+            $allDates = [];
+            $currentDate = $startDate->copy();
+            while ($currentDate->lte($endDate)) {
+                $dateStr = $currentDate->format('Y-m-d');
+                if (! in_array($dateStr, $deniedDates)) {
+                    $allDates[] = $dateStr;
+                }
+                $currentDate->addDay();
+            }
+
+            // Split dates: first N covered by SL credits, rest by UPTO
+            $slDates = array_slice($allDates, 0, (int) $creditsToDeduct);
+            $uptoDates = array_slice($allDates, (int) $creditsToDeduct);
+
+            // Create linked UPTO request for excess days
+            $uptoRequest = null;
+            if (! empty($uptoDates)) {
+                $uptoRequest = $this->createLinkedUptoRequest(
+                    $leaveRequest,
+                    'SL',
+                    $uptoDates,
+                    'Auto-created UPTO for excess SL days (insufficient SL credits)'
+                );
+            }
+
+            // Update attendance for SL-covered days
+            foreach ($slDates as $dateStr) {
+                $this->createOrUpdateAttendanceForDate(
+                    $user,
+                    $dateStr,
+                    'advised_absence',
+                    "Covered by approved Sick Leave (SL) - Leave Request #{$leaveRequest->id}",
+                    $leaveRequest->id
+                );
+            }
+
+            // Update attendance for UPTO days (linked to the UPTO request)
+            if ($uptoRequest) {
+                foreach ($uptoDates as $dateStr) {
+                    $this->createOrUpdateAttendanceForDate(
+                        $user,
+                        $dateStr,
+                        'on_leave',
+                        "UPTO (Unpaid Time Off) - Insufficient SL credits - Leave Request #{$uptoRequest->id}",
+                        $uptoRequest->id
+                    );
+                }
+            }
+
+            // Deduct SL credits for credited days
+            if ($creditsToDeduct > 0) {
+                $year = $startDate->year;
+                $originalDays = $leaveRequest->days_requested;
+                $leaveRequest->days_requested = $creditsToDeduct;
+                $leaveCreditService->deductCredits($leaveRequest, $year);
+                $leaveRequest->days_requested = $originalDays;
+            }
+
+            // Update SL request with partial credit info and narrow dates to credited days only
+            $updateData = [
+                'credits_deducted' => $creditsToDeduct,
+                'sl_credits_applied' => $creditsToDeduct > 0,
+                'sl_no_credit_reason' => "Partial SL credits used: {$creditsToDeduct} day(s) as SL, {$uptoDays} day(s) as UPTO",
+            ];
+
+            // Narrow parent's date range to cover only the credited SL days
+            if (! empty($slDates)) {
+                $updateData['start_date'] = $slDates[0];
+                $updateData['end_date'] = end($slDates);
+            }
+
+            $leaveRequest->update($updateData);
+
+            \Log::info("Partial SL approval with linked UPTO for Leave Request #{$leaveRequest->id}", [
+                'user_id' => $user->id,
+                'sl_days' => $creditsToDeduct,
+                'upto_days' => $uptoDays,
+                'upto_request_id' => $uptoRequest?->id,
+            ]);
 
             // Auto-excuse attendance points if medical cert submitted
             $this->autoExcuseAttendancePoints($leaveRequest);

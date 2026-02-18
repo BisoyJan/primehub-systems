@@ -507,10 +507,11 @@ class LeaveRequestPartialDenialCreditTest extends TestCase
 
         $result = $service->checkSlCreditDeduction($this->employee, $leaveRequest);
 
-        // Should detect partial credit scenario: 0.50 < 1.0 (approved_days)
-        $this->assertTrue($result['should_deduct']);
-        $this->assertTrue($result['partial_credit'], 'Should be partial credit when balance (0.50) < approved_days (1.0)');
-        $this->assertEquals(0.50, $result['credits_to_deduct'], 'Should plan to deduct available balance (0.50)');
-        $this->assertEquals(0.50, $result['upto_days'], 'Remaining days should be converted to UPTO');
+        // floor(0.50) = 0, so this becomes a full UPTO conversion (no whole credits to deduct)
+        $this->assertFalse($result['should_deduct']);
+        $this->assertTrue($result['convert_to_upto'], 'Should convert to UPTO when floor(0.50) = 0');
+        $this->assertFalse($result['partial_credit']);
+        $this->assertEquals(0, $result['credits_to_deduct'], 'No whole credits to deduct from 0.50 balance');
+        $this->assertEquals(1, $result['upto_days'], 'All approved days should convert to UPTO');
     }
 }

@@ -811,6 +811,17 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                                             <Ban className="h-4 w-4" />
                                                         </Button>
                                                     )}
+                                                    {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
+                                                        <Button
+                                                            size="icon"
+                                                            variant="outline"
+                                                            onClick={() => handleCancelRequest(request.id)}
+                                                            title="Cancel Request"
+                                                            className="text-red-600 hover:text-red-700 border-red-300"
+                                                        >
+                                                            <Ban className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
                                                     {can('leave.delete') && (
                                                         <Button
                                                             size="icon"
@@ -926,6 +937,17 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                             variant="outline"
                                             onClick={() => handleCancelRequest(request.id)}
                                             className="flex-1 text-orange-600 hover:text-orange-700 border-orange-300"
+                                        >
+                                            <Ban className="mr-2 h-4 w-4" />
+                                            Cancel
+                                        </Button>
+                                    )}
+                                    {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            onClick={() => handleCancelRequest(request.id)}
+                                            className="flex-1 text-red-600 hover:text-red-700 border-red-300"
                                         >
                                             <Ban className="mr-2 h-4 w-4" />
                                             Cancel
