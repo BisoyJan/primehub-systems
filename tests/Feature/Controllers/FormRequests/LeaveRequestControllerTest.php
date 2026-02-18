@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Controllers\FormRequests;
 
+use App\Http\Middleware\EnsureUserHasSchedule;
 use App\Mail\LeaveRequestStatusUpdated;
 use App\Mail\LeaveRequestSubmitted;
 use App\Models\Campaign;
@@ -10,6 +11,7 @@ use App\Models\LeaveCredit;
 use App\Models\LeaveRequest;
 use App\Models\Site;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
@@ -23,6 +25,10 @@ class LeaveRequestControllerTest extends TestCase
     {
         parent::setUp();
         Mail::fake();
+        $this->withoutMiddleware([
+            ValidateCsrfToken::class,
+            EnsureUserHasSchedule::class,
+        ]);
     }
 
     protected function createAgentWithSchedule(array $overrides = []): User
@@ -140,20 +146,26 @@ class LeaveRequestControllerTest extends TestCase
     #[Test]
     public function it_prevents_duplicate_pending_requests()
     {
-        $user = User::factory()->create([
-            'role' => 'Agent',
-            'is_approved' => true,
+        $user = $this->createAgentWithSchedule([
             'hired_date' => now()->subYear(),
         ]);
+
+        // Use same dates and leave type for the existing and new request
+        $startDate = now()->addWeeks(3)->startOfWeek()->format('Y-m-d');
+        $endDate = now()->addWeeks(3)->startOfWeek()->addDay()->format('Y-m-d');
+
         LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'pending',
+            'leave_type' => 'VL',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
         ]);
 
         $response = $this->actingAs($user)->post(route('leave-requests.store'), [
             'leave_type' => 'VL',
-            'start_date' => now()->addWeeks(3)->format('Y-m-d'),
-            'end_date' => now()->addWeeks(3)->addDay()->format('Y-m-d'),
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'reason' => 'Vacation Leave Request for Testing',
             'campaign_department' => 'Tech',
         ]);
@@ -186,6 +198,10 @@ class LeaveRequestControllerTest extends TestCase
             'role' => 'Admin',
             'is_approved' => true,
         ]);
+        $hr = User::factory()->create([
+            'role' => 'HR',
+            'is_approved' => true,
+        ]);
         $user = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
@@ -210,8 +226,23 @@ class LeaveRequestControllerTest extends TestCase
             'accrued_at' => now(),
         ]);
 
+        // Admin approves first (partial approval - still needs HR)
         $response = $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Approved',
+            'review_notes' => 'Approved by Admin for this request.',
+        ]);
+
+        $response->assertRedirect();
+
+        // Status should still be pending (waiting for HR)
+        $this->assertDatabaseHas('leave_requests', [
+            'id' => $leaveRequest->id,
+            'status' => 'pending',
+            'admin_approved_by' => $admin->id,
+        ]);
+
+        // HR approves second (completes dual approval)
+        $response = $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
+            'review_notes' => 'Approved by HR for this request.',
         ]);
 
         $response->assertRedirect();
@@ -219,7 +250,7 @@ class LeaveRequestControllerTest extends TestCase
         $this->assertDatabaseHas('leave_requests', [
             'id' => $leaveRequest->id,
             'status' => 'approved',
-            'reviewed_by' => $admin->id,
+            'reviewed_by' => $hr->id,
         ]);
 
         Mail::assertQueued(LeaveRequestStatusUpdated::class);

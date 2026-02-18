@@ -232,7 +232,7 @@ class LeaveRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_credits_for_bl_leave_type(): void
+    public function it_does_not_require_credits_for_bl_leave_type(): void
     {
         $user = User::factory()->create();
         $leaveRequest = LeaveRequest::factory()->create([
@@ -240,7 +240,7 @@ class LeaveRequestTest extends TestCase
             'leave_type' => 'BL',
         ]);
 
-        $this->assertTrue($leaveRequest->requiresCredits());
+        $this->assertFalse($leaveRequest->requiresCredits());
     }
 
     #[Test]

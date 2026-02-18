@@ -7,6 +7,7 @@ use App\Models\EmployeeSchedule;
 use App\Models\LeaveCredit;
 use App\Models\Site;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use PHPUnit\Framework\Attributes\Test;
@@ -28,6 +29,7 @@ class TeamLeadLeaveFilingTest extends TestCase
     {
         parent::setUp();
         Mail::fake();
+        $this->withoutMiddleware(ValidateCsrfToken::class);
 
         $this->site = Site::factory()->create();
         $this->campaign = Campaign::factory()->create();
