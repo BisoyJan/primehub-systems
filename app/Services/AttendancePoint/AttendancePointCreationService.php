@@ -179,7 +179,7 @@ class AttendancePointCreationService
         $expiresAt = $isNcnsOrFtn ? $shiftDate->copy()->addYear() : $shiftDate->copy()->addMonths(6);
         $gbroExpiresAt = $isNcnsOrFtn ? null : $shiftDate->copy()->addDays(60)->format('Y-m-d');
 
-        $isHalfDay = $attendance->remarks && str_contains(strtolower($attendance->remarks), 'half');
+        $isHalfDay = $attendance->notes && str_contains(strtolower($attendance->notes), 'half');
         $pointType = $isHalfDay ? 'half_day_absence' : 'whole_day_absence';
         $points = $isHalfDay ? 0.50 : 1.00;
 

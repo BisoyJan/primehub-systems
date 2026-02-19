@@ -959,7 +959,7 @@ class AttendanceProcessor
                     $attendance->update([
                         'admin_verified' => false, // Requires HR approval due to leave conflict
                         'leave_request_id' => $approvedLeave->id,
-                        'remarks' => ($attendance->remarks ? $attendance->remarks.' | ' : '').
+                        'notes' => ($attendance->notes ? $attendance->notes.' | ' : '').
                             'Leave conflict: Employee on approved leave but has biometric activity. '.
                             "Duration: {$flagResult['work_duration']} hrs. Pending HR review.",
                     ]);

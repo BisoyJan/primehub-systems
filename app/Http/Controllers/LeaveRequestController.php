@@ -2185,7 +2185,6 @@ class LeaveRequestController extends Controller
                     'admin_verified' => true,
                     'leave_request_id' => null, // No longer a leave conflict
                     'verification_notes' => "Leave adjusted - employee worked this day. Verified by {$user->name}",
-                    'remarks' => null,
                 ]);
 
             // Notify employee
@@ -2252,7 +2251,6 @@ class LeaveRequestController extends Controller
                 'admin_verified' => true,
                 'leave_request_id' => null,
                 'verification_notes' => "Leave cancelled - employee worked. Verified by {$user->name}",
-                'remarks' => null,
             ]);
 
         // Notify employee
