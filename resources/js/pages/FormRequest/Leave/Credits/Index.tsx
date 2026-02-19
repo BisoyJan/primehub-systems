@@ -1913,7 +1913,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                         <Button onClick={submitEditCarryover} disabled={
                             editCarryoverForm.processing
                             || !editCarryoverForm.data.reason
-                            || (editingEmployee.carryover_received !== null && editingEmployee.pending_count > 0 && editingEmployee.balance - (editingEmployee.carryover_received.credits - editCarryoverForm.data.carryover_credits) < editingEmployee.pending_credits && !pendingAcknowledged)
+                            || (editingEmployee != null && editingEmployee.carryover_received !== null && editingEmployee.pending_count > 0 && editingEmployee.balance - (editingEmployee.carryover_received.credits - editCarryoverForm.data.carryover_credits) < editingEmployee.pending_credits && !pendingAcknowledged)
                         }>
                             {editCarryoverForm.processing ? (
                                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
