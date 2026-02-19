@@ -841,6 +841,7 @@ class LeaveRequestController extends Controller
             'canCancel' => ($leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id),
             'canAdminCancel' => $canAdminCancel,
             'canEditApproved' => $canEditApproved,
+            'canDelete' => $user->can('delete', $leaveRequest),
             'hasUserApproved' => $hasUserApproved,
             'canTlApprove' => $canTlApprove,
             'userRole' => $user->role,
@@ -2376,30 +2377,19 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Delete a leave request (Admin/HR only).
+     * Delete a leave request.
+     * Note: Deleting does NOT restore leave credits or rollback attendance.
+     * Users should cancel the request first if credits need to be restored.
      */
     public function destroy(LeaveRequest $leaveRequest)
     {
         $this->authorize('delete', $leaveRequest);
-
-        $leaveCreditService = $this->leaveCreditService;
 
         DB::beginTransaction();
         try {
             // Delete medical certificate file if exists
             if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
                 Storage::disk('local')->delete($leaveRequest->medical_cert_path);
-            }
-
-            // Restore credits if it was approved and credits were deducted
-            if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
-                $leaveCreditService->restoreCredits($leaveRequest);
-            }
-
-            // Rollback for approved leaves: un-excuse points first (before attendance cascade-delete)
-            if ($leaveRequest->status === 'approved') {
-                $this->rollbackExcusedAttendancePoints($leaveRequest);
-                $this->rollbackAttendanceForCancelledLeave($leaveRequest);
             }
 
             $leaveRequest->delete();

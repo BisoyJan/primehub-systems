@@ -226,6 +226,11 @@ class LeaveRequestPolicy
      */
     public function delete(User $user, LeaveRequest $leaveRequest): bool
     {
+        // Users can delete their own cancelled or denied leave requests
+        if ($leaveRequest->user_id === $user->id && in_array($leaveRequest->status, ['cancelled', 'denied'])) {
+            return true;
+        }
+
         // Only admins/HR with delete permission can delete leave requests
         if (! $this->permissionService->userHasPermission($user, 'leave.delete')) {
             return false;

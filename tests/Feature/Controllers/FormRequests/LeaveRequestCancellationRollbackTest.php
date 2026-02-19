@@ -723,11 +723,11 @@ class LeaveRequestCancellationRollbackTest extends TestCase
     }
 
     // ────────────────────────────────────────────────
-    // Destroy Rollback Tests
+    // Destroy Tests (no credit/attendance rollback)
     // ────────────────────────────────────────────────
 
     #[Test]
-    public function it_rollbacks_attendance_when_approved_leave_is_deleted(): void
+    public function it_does_not_rollback_attendance_or_credits_when_approved_leave_is_deleted(): void
     {
         $shiftDate = now()->addDays(5)->format('Y-m-d');
 
@@ -753,7 +753,7 @@ class LeaveRequestCancellationRollbackTest extends TestCase
             'admin_verified' => true,
         ]);
 
-        LeaveCredit::create([
+        $leaveCredit = LeaveCredit::create([
             'user_id' => $this->employee->id,
             'year' => now()->year,
             'month' => now()->month,
@@ -764,17 +764,27 @@ class LeaveRequestCancellationRollbackTest extends TestCase
             'accrued_at' => now(),
         ]);
 
+        $originalBalance = $leaveCredit->vacation_leave_balance;
+
         $response = $this->actingAs($this->admin)->delete(
             route('leave-requests.destroy', $leaveRequest)
         );
 
         $response->assertRedirect();
 
-        // Attendance should be reverted before the leave request is deleted
+        // Leave request should be deleted
+        $this->assertDatabaseMissing('leave_requests', ['id' => $leaveRequest->id]);
+
+        // Attendance should NOT be reverted (delete does not rollback status)
+        // But leave_request_id is set to null by FK constraint (onDelete set null)
         $attendance->refresh();
-        $this->assertEquals('on_time', $attendance->status);
-        $this->assertNull($attendance->pre_leave_status);
+        $this->assertEquals('on_leave', $attendance->status);
+        $this->assertEquals('on_time', $attendance->pre_leave_status);
         $this->assertNull($attendance->leave_request_id);
+
+        // Leave credits should NOT be restored (delete does not restore credits)
+        $leaveCredit->refresh();
+        $this->assertEquals($originalBalance, $leaveCredit->vacation_leave_balance);
     }
 
     // ────────────────────────────────────────────────

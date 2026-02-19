@@ -36,7 +36,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ZoomIn, ZoomOut, RotateCcw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -822,7 +822,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                                             <Ban className="h-4 w-4" />
                                                         </Button>
                                                     )}
-                                                    {can('leave.delete') && (
+                                                    {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
                                                         <Button
                                                             size="icon"
                                                             variant="outline"
@@ -953,7 +953,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                             Cancel
                                         </Button>
                                     )}
-                                    {can('leave.delete') && (
+                                    {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
                                         <Button
                                             size="sm"
                                             variant="outline"
@@ -1023,6 +1023,23 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                             Are you sure you want to permanently delete this leave request? This action cannot be undone and will remove all associated data.
                         </AlertDialogDescription>
                     </AlertDialogHeader>
+                    {(() => {
+                        const selectedRequest = selectedLeaveId ? leaveRequests.data.find(r => r.id === selectedLeaveId) : null;
+                        if (selectedRequest && selectedRequest.status === 'approved') {
+                            return (
+                                <div className="rounded-md border border-amber-300 bg-amber-50 p-3 dark:border-amber-700 dark:bg-amber-950">
+                                    <div className="flex items-start gap-2">
+                                        <AlertTriangle className="h-5 w-5 text-amber-600 mt-0.5 flex-shrink-0" />
+                                        <div className="text-sm text-amber-800 dark:text-amber-200">
+                                            <p className="font-semibold">Leave credits will NOT be restored.</p>
+                                            <p className="mt-1">Deleting does not restore deducted leave credits or rollback attendance records. If you need credits restored, cancel the leave request first, then delete it.</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        }
+                        return null;
+                    })()}
                     <AlertDialogFooter>
                         <AlertDialogCancel onClick={() => setSelectedLeaveId(null)}>Cancel</AlertDialogCancel>
                         <AlertDialogAction onClick={confirmDelete} className="bg-red-600 hover:bg-red-700">

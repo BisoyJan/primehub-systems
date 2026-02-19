@@ -441,4 +441,108 @@ class LeaveRequestPolicyTest extends TestCase
 
         $this->assertFalse($this->policy->cancelApproved($agent, $leaveRequest));
     }
+
+    // ==========================================
+    // Delete Policy Tests
+    // ==========================================
+
+    #[Test]
+    public function user_can_delete_own_cancelled_leave_request(): void
+    {
+        $agent = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'cancelled',
+        ]);
+
+        $this->assertTrue($this->policy->delete($agent, $leaveRequest));
+    }
+
+    #[Test]
+    public function user_can_delete_own_denied_leave_request(): void
+    {
+        $agent = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'denied',
+        ]);
+
+        $this->assertTrue($this->policy->delete($agent, $leaveRequest));
+    }
+
+    #[Test]
+    public function user_cannot_delete_own_pending_leave_request(): void
+    {
+        $agent = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'pending',
+        ]);
+
+        $this->assertFalse($this->policy->delete($agent, $leaveRequest));
+    }
+
+    #[Test]
+    public function user_cannot_delete_own_approved_leave_request(): void
+    {
+        $agent = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $agent->id,
+            'status' => 'approved',
+        ]);
+
+        $this->assertFalse($this->policy->delete($agent, $leaveRequest));
+    }
+
+    #[Test]
+    public function user_cannot_delete_other_users_cancelled_leave_request(): void
+    {
+        $agent = User::factory()->create(['role' => 'Agent']);
+        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $otherUser->id,
+            'status' => 'cancelled',
+        ]);
+
+        $this->assertFalse($this->policy->delete($agent, $leaveRequest));
+    }
+
+    #[Test]
+    public function admin_can_delete_any_leave_request(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin']);
+        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $otherUser->id,
+            'status' => 'pending',
+        ]);
+
+        $this->assertTrue($this->policy->delete($admin, $leaveRequest));
+    }
+
+    #[Test]
+    public function hr_can_delete_any_leave_request(): void
+    {
+        $hr = User::factory()->create(['role' => 'HR']);
+        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $otherUser->id,
+            'status' => 'pending',
+        ]);
+
+        $this->assertTrue($this->policy->delete($hr, $leaveRequest));
+    }
+
+    #[Test]
+    public function team_lead_cannot_delete_leave_requests(): void
+    {
+        $tl = User::factory()->create(['role' => 'Team Lead']);
+        $otherUser = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $otherUser->id,
+            'status' => 'cancelled',
+        ]);
+
+        $this->assertFalse($this->policy->delete($tl, $leaveRequest));
+    }
 }
