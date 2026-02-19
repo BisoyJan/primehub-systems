@@ -344,6 +344,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/regularization/process', [LeaveRequestController::class, 'processRegularization'])->name('regularization.process');
             Route::post('/accruals/process', [LeaveRequestController::class, 'processMonthlyAccruals'])->name('accruals.process');
             Route::post('/carryovers/process', [LeaveRequestController::class, 'processYearEndCarryovers'])->name('carryovers.process');
+            Route::post('/cash-conversion/process', [LeaveRequestController::class, 'processCashConversions'])->name('cash-conversion.process');
             Route::get('/mismatch/scan', [LeaveRequestController::class, 'creditsYearMismatchScan'])->name('mismatch.scan');
             Route::post('/mismatch/fix', [LeaveRequestController::class, 'creditsYearMismatchFix'])->name('mismatch.fix');
 
@@ -353,6 +354,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
                 ->middleware('permission:leave_credits.edit');
             Route::put('/{user}/credits/{leaveCredit}', [LeaveRequestController::class, 'creditsUpdateMonthly'])
                 ->name('update-monthly')
+                ->middleware('permission:leave_credits.edit');
+            Route::post('/{user}/cash-conversion', [LeaveRequestController::class, 'convertUserCarryover'])
+                ->name('cash-conversion')
                 ->middleware('permission:leave_credits.edit');
 
             Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');

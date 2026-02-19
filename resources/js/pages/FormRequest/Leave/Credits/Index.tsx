@@ -56,7 +56,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
-import { Download, Eye, Filter, ChevronsUpDown, Check, Banknote, Clock, ArrowRight, Settings, RefreshCw, Play, Loader2, TrendingUp, AlertTriangle, ChevronDown, ChevronRight, Pencil, Info } from 'lucide-react';
+import { Download, Eye, Filter, ChevronsUpDown, Check, Banknote, Clock, ArrowRight, Settings, RefreshCw, Play, Loader2, TrendingUp, AlertTriangle, ChevronDown, ChevronRight, Pencil, Info, ArrowRightLeft } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -68,7 +68,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { creditsUpdateCarryover } from '@/actions/App/Http/Controllers/LeaveRequestController';
+import { creditsUpdateCarryover, processCashConversions, convertUserCarryover } from '@/actions/App/Http/Controllers/LeaveRequestController';
 
 interface RegularizationStats {
     pending_count: number;
@@ -261,6 +261,11 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
     });
 
     const [pendingAcknowledged, setPendingAcknowledged] = useState(false);
+
+    // Cash conversion state
+    const [convertingEmployeeId, setConvertingEmployeeId] = useState<number | null>(null);
+    const [convertingEmployeeName, setConvertingEmployeeName] = useState<string>('');
+    const [isConverting, setIsConverting] = useState(false);
 
     const openEditCarryover = (employee: CreditData) => {
         if (!employee.carryover_received) return;
@@ -506,6 +511,76 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
         } finally {
             setIsProcessing(false);
             setConfirmAction(null);
+        }
+    };
+
+    const handleProcessCashConversions = async () => {
+        setIsProcessing(true);
+        try {
+            const response = await fetch(processCashConversions().url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    year: managementYear,
+                }),
+            });
+
+            if (!response.ok) throw new Error('Failed to process cash conversions');
+
+            const result = await response.json();
+
+            if (result.success) {
+                toast.success(
+                    `Cash conversion processed: ${result.summary.processed} carryovers converted, ${result.summary.total_converted.toFixed(2)} total credits`
+                );
+                router.reload({ only: ['creditsData'] });
+                fetchManagementStats();
+            } else {
+                toast.error(result.error || 'Failed to process cash conversions');
+            }
+        } catch {
+            toast.error('Failed to process cash conversions');
+        } finally {
+            setIsProcessing(false);
+            setConfirmAction(null);
+        }
+    };
+
+    const handleConvertSingleCarryover = async (employeeId: number) => {
+        setIsConverting(true);
+        try {
+            const response = await fetch(convertUserCarryover({ user: employeeId }).url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    year: parseInt(yearFilter),
+                }),
+            });
+
+            const result = await response.json();
+
+            if (result.success) {
+                toast.success(result.message);
+                router.reload({ only: ['creditsData'] });
+            } else {
+                toast.error(result.error || 'Failed to convert carryover');
+            }
+        } catch {
+            toast.error('Failed to convert carryover');
+        } finally {
+            setIsConverting(false);
+            setConvertingEmployeeId(null);
+            setConvertingEmployeeName('');
         }
     };
 
@@ -957,26 +1032,38 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                             <TooltipTrigger asChild>
                                                                 <Badge
                                                                     variant="outline"
-                                                                    className={employee.carryover_received.is_first_regularization
-                                                                        ? "border-green-500 text-green-600 bg-green-50 cursor-help"
-                                                                        : "border-blue-500 text-blue-600 bg-blue-50 cursor-help"
+                                                                    className={employee.carryover_received.cash_converted
+                                                                        ? "border-gray-400 text-gray-500 bg-gray-50 cursor-help line-through"
+                                                                        : employee.carryover_received.is_first_regularization
+                                                                            ? "border-green-500 text-green-600 bg-green-50 cursor-help"
+                                                                            : "border-blue-500 text-blue-600 bg-blue-50 cursor-help"
                                                                     }
                                                                 >
-                                                                    <Check className="h-3 w-3 mr-1" />
+                                                                    {employee.carryover_received.cash_converted
+                                                                        ? <Banknote className="h-3 w-3 mr-1" />
+                                                                        : <Check className="h-3 w-3 mr-1" />
+                                                                    }
                                                                     {employee.carryover_received.credits.toFixed(2)}
                                                                 </Badge>
                                                             </TooltipTrigger>
                                                             <TooltipContent>
                                                                 <p className="font-medium">
-                                                                    {employee.carryover_received.is_first_regularization
-                                                                        ? 'First Regularization Transfer'
-                                                                        : 'Carryover Received'
+                                                                    {employee.carryover_received.cash_converted
+                                                                        ? 'Converted to Cash'
+                                                                        : employee.carryover_received.is_first_regularization
+                                                                            ? 'First Regularization Transfer'
+                                                                            : 'Carryover Received'
                                                                     }
                                                                 </p>
                                                                 <p className="text-xs">
                                                                     {employee.carryover_received.credits.toFixed(2)} credits from {employee.carryover_received.from_year}
                                                                 </p>
-                                                                {employee.carryover_received.is_first_regularization && (
+                                                                {employee.carryover_received.cash_converted && (
+                                                                    <p className="text-xs text-green-600 mt-1">
+                                                                        Credits converted to cash — not available for leave
+                                                                    </p>
+                                                                )}
+                                                                {employee.carryover_received.is_first_regularization && !employee.carryover_received.cash_converted && (
                                                                     <p className="text-xs text-green-600 mt-1">
                                                                         All credits transferred (first regularization)
                                                                     </p>
@@ -1043,6 +1130,29 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                         >
                                                             <Pencil className="h-4 w-4" />
                                                         </Button>
+                                                    )}
+                                                    {canEdit && employee.carryover_received && !employee.carryover_received.cash_converted && !employee.carryover_received.is_first_regularization && (
+                                                        <TooltipProvider>
+                                                            <Tooltip>
+                                                                <TooltipTrigger asChild>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        title="Convert Carryover to Cash"
+                                                                        onClick={() => {
+                                                                            setConvertingEmployeeId(employee.id);
+                                                                            setConvertingEmployeeName(employee.name);
+                                                                        }}
+                                                                        disabled={isConverting}
+                                                                    >
+                                                                        <ArrowRightLeft className="h-4 w-4" />
+                                                                    </Button>
+                                                                </TooltipTrigger>
+                                                                <TooltipContent>
+                                                                    <p>Convert {employee.carryover_received.credits.toFixed(2)} carryover credits to cash</p>
+                                                                </TooltipContent>
+                                                            </Tooltip>
+                                                        </TooltipProvider>
                                                     )}
                                                 </div>
                                             </TableCell>
@@ -1176,24 +1286,38 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
 
                                     {/* Carryover Received (from previous year) - Mobile */}
                                     {employee.carryover_received && (
-                                        <div className="flex items-center justify-between p-2 rounded-md border bg-green-50 border-green-200">
+                                        <div className={`flex items-center justify-between p-2 rounded-md border ${employee.carryover_received.cash_converted
+                                            ? 'bg-gray-50 border-gray-300'
+                                            : 'bg-green-50 border-green-200'
+                                            }`}>
                                             <div className="flex items-center gap-2">
-                                                <Check className="h-4 w-4 text-green-600" />
+                                                {employee.carryover_received.cash_converted
+                                                    ? <Banknote className="h-4 w-4 text-gray-500" />
+                                                    : <Check className="h-4 w-4 text-green-600" />
+                                                }
                                                 <div className="flex flex-col">
-                                                    <span className="text-sm text-green-700">
+                                                    <span className={`text-sm ${employee.carryover_received.cash_converted ? 'text-gray-500 line-through' : 'text-green-700'}`}>
                                                         {employee.carryover_received.is_first_regularization
                                                             ? 'Regularization Transfer'
                                                             : 'Received from ' + employee.carryover_received.from_year
                                                         }
                                                     </span>
-                                                    {employee.carryover_received.is_first_regularization && (
+                                                    {employee.carryover_received.cash_converted && (
+                                                        <span className="text-xs text-green-600 font-medium">
+                                                            Converted to cash
+                                                        </span>
+                                                    )}
+                                                    {employee.carryover_received.is_first_regularization && !employee.carryover_received.cash_converted && (
                                                         <span className="text-xs text-green-500">
                                                             From {employee.carryover_received.from_year} (all credits)
                                                         </span>
                                                     )}
                                                 </div>
                                             </div>
-                                            <Badge variant="outline" className="border-green-500 text-green-600">
+                                            <Badge variant="outline" className={employee.carryover_received.cash_converted
+                                                ? 'border-gray-400 text-gray-500'
+                                                : 'border-green-500 text-green-600'
+                                            }>
                                                 {employee.carryover_received.credits.toFixed(2)}
                                             </Badge>
                                         </div>
@@ -1234,6 +1358,21 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                         >
                                             <Pencil className="h-4 w-4 mr-2" />
                                             Edit Carryover
+                                        </Button>
+                                    )}
+                                    {canEdit && employee.carryover_received && !employee.carryover_received.cash_converted && !employee.carryover_received.is_first_regularization && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                            disabled={isConverting}
+                                            onClick={() => {
+                                                setConvertingEmployeeId(employee.id);
+                                                setConvertingEmployeeName(employee.name);
+                                            }}
+                                        >
+                                            <ArrowRightLeft className="h-4 w-4 mr-2" />
+                                            Convert to Cash
                                         </Button>
                                     )}
                                 </div>
@@ -1447,6 +1586,17 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     <Banknote className="h-4 w-4 mr-2" />
                                     Process Year-End Carryovers
                                     <span className="ml-auto text-xs text-muted-foreground">{managementYear - 1} → {managementYear}</span>
+                                </Button>
+
+                                <Button
+                                    variant="outline"
+                                    className="justify-start"
+                                    disabled={isProcessing}
+                                    onClick={() => setConfirmAction('process-cash-conversion')}
+                                >
+                                    <ArrowRightLeft className="h-4 w-4 mr-2" />
+                                    Convert Carryover to Cash
+                                    <span className="ml-auto text-xs text-muted-foreground">{managementYear}</span>
                                 </Button>
                             </div>
                         </div>
@@ -1725,6 +1875,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                             {confirmAction === 'process-regularization' && 'Process Regularization Transfers'}
                             {confirmAction === 'process-accruals' && 'Process Monthly Accruals'}
                             {confirmAction === 'process-carryovers' && 'Process Year-End Carryovers'}
+                            {confirmAction === 'process-cash-conversion' && 'Convert Carryover Credits to Cash'}
                         </AlertDialogTitle>
                         <AlertDialogDescription>
                             {confirmAction === 'process-dry-run' && (
@@ -1763,6 +1914,17 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     <strong>This should be run at the start of each year.</strong>
                                 </>
                             )}
+                            {confirmAction === 'process-cash-conversion' && (
+                                <>
+                                    This will convert all eligible carryover credits for {managementYear} to cash.
+                                    <br /><br />
+                                    <strong>Converted credits will no longer be available for VL or SL leave applications.</strong>
+                                    <br /><br />
+                                    First-regularization carryovers will be skipped (they are not eligible for cash conversion).
+                                    <br /><br />
+                                    <strong>This action cannot be undone.</strong>
+                                </>
+                            )}
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
@@ -1777,6 +1939,8 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     handleProcessMonthlyAccruals();
                                 } else if (confirmAction === 'process-carryovers') {
                                     handleProcessYearEndCarryovers();
+                                } else if (confirmAction === 'process-cash-conversion') {
+                                    handleProcessCashConversions();
                                 }
                             }}
                             disabled={isProcessing}
@@ -1792,7 +1956,49 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     {confirmAction === 'process-regularization' && 'Process Transfers'}
                                     {confirmAction === 'process-accruals' && 'Process Accruals'}
                                     {confirmAction === 'process-carryovers' && 'Process Carryovers'}
+                                    {confirmAction === 'process-cash-conversion' && 'Convert to Cash'}
                                 </>
+                            )}
+                        </AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+
+            {/* Per-Employee Cash Conversion Confirmation */}
+            <AlertDialog open={!!convertingEmployeeId} onOpenChange={(open) => {
+                if (!open) {
+                    setConvertingEmployeeId(null);
+                    setConvertingEmployeeName('');
+                }
+            }}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                        <AlertDialogTitle>Convert Carryover to Cash</AlertDialogTitle>
+                        <AlertDialogDescription>
+                            Are you sure you want to convert <strong>{convertingEmployeeName}</strong>&apos;s carryover credits to cash?
+                            <br /><br />
+                            <strong>This will make the carryover credits permanently unavailable for VL or SL leave applications.</strong>
+                            <br /><br />
+                            This action cannot be undone.
+                        </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogCancel disabled={isConverting}>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                            onClick={() => {
+                                if (convertingEmployeeId) {
+                                    handleConvertSingleCarryover(convertingEmployeeId);
+                                }
+                            }}
+                            disabled={isConverting}
+                        >
+                            {isConverting ? (
+                                <>
+                                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                    Converting...
+                                </>
+                            ) : (
+                                'Convert to Cash'
                             )}
                         </AlertDialogAction>
                     </AlertDialogFooter>

@@ -554,6 +554,18 @@ class LeaveCreditService
         $carryoverExpirationDate = Carbon::create($year, 3, 31)->endOfDay();
         $canUseCarryover = $leaveStartDate->lte($carryoverExpirationDate);
 
+        // Also check if carryover has been cash-converted — cannot use converted credits
+        if ($canUseCarryover) {
+            $carryoverRecord = LeaveCreditCarryover::forUser($userId)
+                ->toYear($year)
+                ->where('is_first_regularization', false)
+                ->first();
+
+            if ($carryoverRecord && $carryoverRecord->cash_converted) {
+                $canUseCarryover = false;
+            }
+        }
+
         // Ensure carryover credit record exists for this year (month 0)
         // Only create if carryover is still valid
         if ($canUseCarryover) {
@@ -666,6 +678,11 @@ class LeaveCreditService
 
         if (! $carryover || $carryover->carryover_credits <= 0) {
             return; // No carryover to create
+        }
+
+        // Don't create carryover credit record if it has been cash-converted
+        if ($carryover->cash_converted) {
+            return;
         }
 
         // Create LeaveCredit record for month 0 (carryover)
@@ -1349,6 +1366,143 @@ class LeaveCreditService
             'cash_converted_at' => now(),
             'processed_by' => $processedBy,
         ]);
+    }
+
+    /**
+     * Convert a single carryover to cash.
+     * This marks the carryover as cash-converted and zeros out the month=0 LeaveCredit balance
+     * so these credits can no longer be used for VL/SL applications.
+     *
+     * Only regular carryovers can be converted (not first-regularization transfers).
+     *
+     * @param  int|null  $processedBy  User ID who processed the conversion
+     * @return array{success: bool, message: string, credits_converted: float}
+     */
+    public function convertCarryoverToCash(LeaveCreditCarryover $carryover, ?int $processedBy = null): array
+    {
+        // Validate: must NOT be first regularization
+        if ($carryover->is_first_regularization) {
+            return [
+                'success' => false,
+                'message' => 'First regularization carryovers cannot be cash-converted.',
+                'credits_converted' => 0,
+            ];
+        }
+
+        // Validate: must NOT already be cash-converted
+        if ($carryover->cash_converted) {
+            return [
+                'success' => false,
+                'message' => 'This carryover has already been cash-converted.',
+                'credits_converted' => 0,
+            ];
+        }
+
+        // Validate: must have credits > 0
+        if ($carryover->carryover_credits <= 0) {
+            return [
+                'success' => false,
+                'message' => 'No carryover credits available to convert.',
+                'credits_converted' => 0,
+            ];
+        }
+
+        $creditsConverted = (float) $carryover->carryover_credits;
+        $userId = $carryover->user_id;
+        $toYear = $carryover->to_year;
+
+        DB::beginTransaction();
+
+        try {
+            // Mark the carryover as cash-converted
+            $this->markAsCashConverted($carryover, $processedBy);
+
+            // Zero out the month=0 LeaveCredit record for this user/year
+            $month0Credit = LeaveCredit::forUser($userId)
+                ->forYear($toYear)
+                ->where('month', 0)
+                ->first();
+
+            if ($month0Credit) {
+                // If some carryover was already used for leave, keep credits_earned = credits_used
+                // and set balance to 0. This preserves the deduction history.
+                $alreadyUsed = (float) $month0Credit->credits_used;
+                $month0Credit->update([
+                    'credits_earned' => $alreadyUsed,
+                    'credits_balance' => 0,
+                ]);
+
+                // The actual credits converted is the original minus what was already used
+                $creditsConverted = max(0, $creditsConverted - $alreadyUsed);
+            }
+
+            // Log the activity
+            $user = User::find($userId);
+            if ($user) {
+                $this->logActivity('carryover_cash_converted', $user, $carryover, [
+                    'credits_converted' => $creditsConverted,
+                    'from_year' => $carryover->from_year,
+                    'to_year' => $toYear,
+                    'processed_by' => $processedBy,
+                ]);
+            }
+
+            DB::commit();
+
+            return [
+                'success' => true,
+                'message' => "Successfully converted {$creditsConverted} carryover credits to cash.",
+                'credits_converted' => $creditsConverted,
+            ];
+        } catch (\Exception $e) {
+            DB::rollBack();
+            \Log::error('Failed to convert carryover to cash', [
+                'carryover_id' => $carryover->id,
+                'user_id' => $userId,
+                'error' => $e->getMessage(),
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Process bulk cash conversion for all eligible carryovers in a given year.
+     * Only converts regular carryovers (not first-regularization transfers).
+     *
+     * @return array{processed: int, skipped: int, total_converted: float}
+     */
+    public function processBulkCashConversion(int $toYear, ?int $processedBy = null): array
+    {
+        $pendingCarryovers = $this->getPendingCashConversions($toYear);
+
+        $processed = 0;
+        $skipped = 0;
+        $totalConverted = 0;
+
+        foreach ($pendingCarryovers as $carryover) {
+            // Skip first-regularization carryovers
+            if ($carryover->is_first_regularization) {
+                $skipped++;
+
+                continue;
+            }
+
+            $result = $this->convertCarryoverToCash($carryover, $processedBy);
+
+            if ($result['success']) {
+                $processed++;
+                $totalConverted += $result['credits_converted'];
+            } else {
+                $skipped++;
+            }
+        }
+
+        return [
+            'processed' => $processed,
+            'skipped' => $skipped,
+            'total_converted' => $totalConverted,
+        ];
     }
 
     /**

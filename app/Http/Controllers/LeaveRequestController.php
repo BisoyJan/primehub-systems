@@ -4126,6 +4126,8 @@ class LeaveRequestController extends Controller
                 'credits_balance' => $carryoverCredit ? (float) $carryoverCredit->credits_balance : (float) $carryoverReceived->carryover_credits,
                 'from_year' => $carryoverReceived->from_year,
                 'is_first_regularization' => (bool) $carryoverReceived->is_first_regularization,
+                'cash_converted' => (bool) $carryoverReceived->cash_converted,
+                'cash_converted_at' => $carryoverReceived->cash_converted_at?->format('M d, Y'),
             ] : null,
             'regularization' => [
                 'is_regularized' => $regularizationInfo['is_regularized'],
@@ -4635,6 +4637,94 @@ class LeaveRequestController extends Controller
             return response()->json([
                 'success' => false,
                 'error' => 'Fix failed: '.$e->getMessage().'. All changes have been rolled back.',
+            ], 500);
+        }
+    }
+
+    /**
+     * Process bulk cash conversion for all eligible carryovers.
+     * Converts regular carryover credits to cash, making them unusable for VL/SL.
+     */
+    public function processCashConversions(Request $request): JsonResponse
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $validated = $request->validate([
+            'year' => 'required|integer|min:2024',
+        ]);
+
+        $year = $validated['year'];
+
+        try {
+            $result = $this->leaveCreditService->processBulkCashConversion($year, auth()->id());
+
+            return response()->json([
+                'success' => true,
+                'message' => "Cash conversion processed: {$result['processed']} carryovers converted, {$result['total_converted']} total credits.",
+                'summary' => [
+                    'processed' => $result['processed'],
+                    'skipped' => $result['skipped'],
+                    'total_converted' => $result['total_converted'],
+                ],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('Cash conversion processing error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to process cash conversions: '.$e->getMessage(),
+            ], 500);
+        }
+    }
+
+    /**
+     * Convert a single user's carryover credits to cash.
+     */
+    public function convertUserCarryover(Request $request, User $user): JsonResponse
+    {
+        $this->authorize('viewAny', LeaveRequest::class);
+
+        $validated = $request->validate([
+            'year' => 'required|integer|min:2024',
+        ]);
+
+        $year = $validated['year'];
+
+        $carryover = LeaveCreditCarryover::forUser($user->id)
+            ->toYear($year)
+            ->first();
+
+        if (! $carryover) {
+            return response()->json([
+                'success' => false,
+                'error' => 'No carryover record found for this user and year.',
+            ], 404);
+        }
+
+        try {
+            $result = $this->leaveCreditService->convertCarryoverToCash($carryover, auth()->id());
+
+            if (! $result['success']) {
+                return response()->json([
+                    'success' => false,
+                    'error' => $result['message'],
+                ], 422);
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => $result['message'],
+                'credits_converted' => $result['credits_converted'],
+            ]);
+        } catch (\Exception $e) {
+            \Log::error('User cash conversion error: '.$e->getMessage(), [
+                'user_id' => $user->id,
+                'year' => $year,
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'error' => 'Failed to convert carryover: '.$e->getMessage(),
             ], 500);
         }
     }

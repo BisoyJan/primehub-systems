@@ -83,6 +83,8 @@ interface CarryoverReceived {
     credits_balance?: number;
     from_year: number;
     is_first_regularization: boolean;
+    cash_converted: boolean;
+    cash_converted_at: string | null;
 }
 
 interface RegularizationInfo {
@@ -345,14 +347,18 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
 
                 {/* Carryover Credits Section - For Conversion/Leave */}
                 {carryoverSummary && carryoverSummary.carryover_credits > 0 && (
-                    <Card className={`${carryoverSummary.is_processed
-                        ? 'border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20'
-                        : 'border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20'
+                    <Card className={`${carryoverSummary.cash_converted
+                        ? 'border-green-200 bg-green-50/50 dark:border-green-800 dark:bg-green-950/20'
+                        : carryoverSummary.is_processed
+                            ? 'border-amber-200 bg-amber-50/50 dark:border-amber-800 dark:bg-amber-950/20'
+                            : 'border-blue-200 bg-blue-50/50 dark:border-blue-800 dark:bg-blue-950/20'
                         }`}>
                         <CardHeader>
-                            <CardTitle className={`flex items-center gap-2 ${carryoverSummary.is_processed
-                                ? 'text-amber-700 dark:text-amber-400'
-                                : 'text-blue-700 dark:text-blue-400'
+                            <CardTitle className={`flex items-center gap-2 ${carryoverSummary.cash_converted
+                                ? 'text-green-700 dark:text-green-400'
+                                : carryoverSummary.is_processed
+                                    ? 'text-amber-700 dark:text-amber-400'
+                                    : 'text-blue-700 dark:text-blue-400'
                                 }`}>
                                 <Banknote className="h-5 w-5" />
                                 Carryover Credits to {carryoverSummary.to_year} (For Conversion/Leave)
@@ -402,22 +408,26 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                     )}
                                 </div>
                             </div>
-                            <Alert className={`${carryoverSummary.is_expired
-                                ? 'border-red-300 bg-red-100/50 dark:border-red-700 dark:bg-red-900/30'
-                                : carryoverSummary.is_processed
-                                    ? 'border-amber-300 bg-amber-100/50 dark:border-amber-700 dark:bg-amber-900/30'
-                                    : 'border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30'
+                            <Alert className={`${carryoverSummary.cash_converted
+                                ? 'border-green-300 bg-green-100/50 dark:border-green-700 dark:bg-green-900/30'
+                                : carryoverSummary.is_expired
+                                    ? 'border-red-300 bg-red-100/50 dark:border-red-700 dark:bg-red-900/30'
+                                    : carryoverSummary.is_processed
+                                        ? 'border-amber-300 bg-amber-100/50 dark:border-amber-700 dark:bg-amber-900/30'
+                                        : 'border-blue-300 bg-blue-100/50 dark:border-blue-700 dark:bg-blue-900/30'
                                 }`}>
-                                <AlertCircle className={`h-4 w-4 ${carryoverSummary.is_expired ? 'text-red-600' : carryoverSummary.is_processed ? 'text-amber-600' : 'text-blue-600'}`} />
-                                <AlertTitle className={carryoverSummary.is_expired ? 'text-red-700 dark:text-red-400' : carryoverSummary.is_processed ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}>
-                                    {carryoverSummary.is_expired ? 'Credits Expired' : carryoverSummary.is_processed ? 'Important Note' : 'Projected Carryover'}
+                                <AlertCircle className={`h-4 w-4 ${carryoverSummary.cash_converted ? 'text-green-600' : carryoverSummary.is_expired ? 'text-red-600' : carryoverSummary.is_processed ? 'text-amber-600' : 'text-blue-600'}`} />
+                                <AlertTitle className={carryoverSummary.cash_converted ? 'text-green-700 dark:text-green-400' : carryoverSummary.is_expired ? 'text-red-700 dark:text-red-400' : carryoverSummary.is_processed ? 'text-amber-700 dark:text-amber-400' : 'text-blue-700 dark:text-blue-400'}>
+                                    {carryoverSummary.cash_converted ? 'Cash Converted' : carryoverSummary.is_expired ? 'Credits Expired' : carryoverSummary.is_processed ? 'Important Note' : 'Projected Carryover'}
                                 </AlertTitle>
-                                <AlertDescription className={carryoverSummary.is_expired ? 'text-red-600 dark:text-red-300' : carryoverSummary.is_processed ? 'text-amber-600 dark:text-amber-300' : 'text-blue-600 dark:text-blue-300'}>
-                                    {carryoverSummary.is_expired
-                                        ? <p> These carryover credits have <strong>expired</strong> as March has passed. They can no longer be used for leave requests or conversion. </p>
-                                        : carryoverSummary.is_processed
-                                            ? <p> Carryover credits can be used for <strong>leave requests or conversion</strong> until end of March. After March, unused carryover credits will expire. Maximum of 4 credits can be carried over per year. </p>
-                                            : <p> This is a <strong>projected carryover</strong> based on the current balance. The actual carryover will be processed at year end (January 1st, {carryoverSummary.to_year}). </p>
+                                <AlertDescription className={carryoverSummary.cash_converted ? 'text-green-600 dark:text-green-300' : carryoverSummary.is_expired ? 'text-red-600 dark:text-red-300' : carryoverSummary.is_processed ? 'text-amber-600 dark:text-amber-300' : 'text-blue-600 dark:text-blue-300'}>
+                                    {carryoverSummary.cash_converted
+                                        ? <p> These carryover credits have been <strong>converted to cash</strong>{carryoverSummary.cash_converted_at ? ` on ${carryoverSummary.cash_converted_at}` : ''}. They are no longer available for leave requests. </p>
+                                        : carryoverSummary.is_expired
+                                            ? <p> These carryover credits have <strong>expired</strong> as March has passed. They can no longer be used for leave requests or conversion. </p>
+                                            : carryoverSummary.is_processed
+                                                ? <p> Carryover credits can be used for <strong>leave requests or conversion</strong> until end of March. After March, unused carryover credits will expire. Maximum of 4 credits can be carried over per year. </p>
+                                                : <p> This is a <strong>projected carryover</strong> based on the current balance. The actual carryover will be processed at year end (January 1st, {carryoverSummary.to_year}). </p>
                                     }
                                 </AlertDescription>
                             </Alert>
@@ -461,24 +471,37 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                         <TableBody>
                                             {/* Show carryover received as first row if applicable */}
                                             {carryoverReceived && (
-                                                <TableRow className="bg-green-50 dark:bg-green-900/20">
-                                                    <TableCell className="font-medium text-green-700 dark:text-green-400">
-                                                        Carryover from {carryoverReceived.from_year}
-                                                        {carryoverReceived.is_first_regularization && (
-                                                            <Badge variant="outline" className="ml-2 text-xs border-purple-500 text-purple-600">
-                                                                First Reg
-                                                            </Badge>
-                                                        )}
+                                                <TableRow className={carryoverReceived.cash_converted
+                                                    ? 'bg-gray-50 dark:bg-gray-900/20'
+                                                    : 'bg-green-50 dark:bg-green-900/20'
+                                                }>
+                                                    <TableCell className={`font-medium ${carryoverReceived.cash_converted ? 'text-gray-500 dark:text-gray-400' : 'text-green-700 dark:text-green-400'}`}>
+                                                        <div className="flex items-center gap-2 flex-wrap">
+                                                            <span className={carryoverReceived.cash_converted ? 'line-through' : ''}>
+                                                                Carryover from {carryoverReceived.from_year}
+                                                            </span>
+                                                            {carryoverReceived.is_first_regularization && (
+                                                                <Badge variant="outline" className="text-xs border-purple-500 text-purple-600">
+                                                                    First Reg
+                                                                </Badge>
+                                                            )}
+                                                            {carryoverReceived.cash_converted && (
+                                                                <Badge variant="outline" className="text-xs border-green-500 text-green-600 bg-green-50">
+                                                                    <Banknote className="h-3 w-3 mr-1" />
+                                                                    Converted{carryoverReceived.cash_converted_at ? ` ${carryoverReceived.cash_converted_at}` : ''}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
                                                     </TableCell>
-                                                    <TableCell className="text-right text-green-600">
+                                                    <TableCell className={`text-right ${carryoverReceived.cash_converted ? 'text-gray-400 line-through' : 'text-green-600'}`}>
                                                         +{carryoverReceived.credits.toFixed(2)}
                                                     </TableCell>
-                                                    <TableCell className="text-right text-red-600">
+                                                    <TableCell className={`text-right ${carryoverReceived.cash_converted ? 'text-gray-400' : 'text-red-600'}`}>
                                                         {carryoverReceived.credits_used && carryoverReceived.credits_used > 0
                                                             ? `-${carryoverReceived.credits_used.toFixed(2)}`
                                                             : '—'}
                                                     </TableCell>
-                                                    <TableCell className="text-right font-medium text-green-600">
+                                                    <TableCell className={`text-right font-medium ${carryoverReceived.cash_converted ? 'text-gray-400' : 'text-green-600'}`}>
                                                         {(carryoverReceived.credits_balance ?? carryoverReceived.credits).toFixed(2)}
                                                     </TableCell>
                                                     {canEdit && (
@@ -600,11 +623,10 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                             <div className="space-y-3">
                                 {creditEditHistory.map((entry) => (
                                     <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30">
-                                        <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${
-                                            entry.event === 'carryover_manually_adjusted'
+                                        <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${entry.event === 'carryover_manually_adjusted'
                                                 ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400'
                                                 : 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
-                                        }`}>
+                                            }`}>
                                             <Pencil className="h-3.5 w-3.5" />
                                         </div>
                                         <div className="flex-1 min-w-0 space-y-1">
