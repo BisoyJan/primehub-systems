@@ -571,6 +571,9 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
 
             if (result.success) {
                 toast.success(result.message);
+                if (result.pending_warning) {
+                    toast.warning(result.pending_warning, { duration: 8000 });
+                }
                 router.reload({ only: ['creditsData'] });
             } else {
                 toast.error(result.error || 'Failed to convert carryover');
@@ -1921,6 +1924,25 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     <strong>Converted credits will no longer be available for VL or SL leave applications.</strong>
                                     <br /><br />
                                     First-regularization carryovers will be skipped (they are not eligible for cash conversion).
+                                    {(() => {
+                                        const employeesWithPending = creditsData.data.filter(e =>
+                                            e.carryover_received &&
+                                            !e.carryover_received.cash_converted &&
+                                            !e.carryover_received.is_first_regularization &&
+                                            e.pending_count > 0
+                                        );
+                                        if (employeesWithPending.length > 0) {
+                                            return (
+                                                <>
+                                                    <br /><br />
+                                                    <span className="flex items-start gap-2 p-3 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30 text-sm text-amber-700 dark:text-amber-400">
+                                                        <strong>Warning:</strong> {employeesWithPending.length} employee{employeesWithPending.length > 1 ? 's' : ''} with eligible carryovers {employeesWithPending.length > 1 ? 'have' : 'has'} pending VL/SL requests. Converting may cause insufficient credits when those requests are approved.
+                                                    </span>
+                                                </>
+                                            );
+                                        }
+                                        return null;
+                                    })()}
                                     <br /><br />
                                     <strong>This action cannot be undone.</strong>
                                 </>
@@ -1974,12 +1996,34 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                 <AlertDialogContent>
                     <AlertDialogHeader>
                         <AlertDialogTitle>Convert Carryover to Cash</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            Are you sure you want to convert <strong>{convertingEmployeeName}</strong>&apos;s carryover credits to cash?
-                            <br /><br />
-                            <strong>This will make the carryover credits permanently unavailable for VL or SL leave applications.</strong>
-                            <br /><br />
-                            This action cannot be undone.
+                        <AlertDialogDescription asChild>
+                            <div className="space-y-3">
+                                <p>
+                                    Are you sure you want to convert <strong>{convertingEmployeeName}</strong>&apos;s carryover credits to cash?
+                                </p>
+                                <p>
+                                    <strong>This will make the carryover credits permanently unavailable for VL or SL leave applications.</strong>
+                                </p>
+                                {(() => {
+                                    const emp = creditsData.data.find(e => e.id === convertingEmployeeId);
+                                    if (emp && emp.pending_count > 0) {
+                                        return (
+                                            <div className="flex items-start gap-2 p-3 rounded-md border border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950/30">
+                                                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                                                <div className="text-sm text-amber-700 dark:text-amber-400">
+                                                    <p className="font-medium">Pending Leave Requests</p>
+                                                    <p>
+                                                        This employee has <strong>{emp.pending_count}</strong> pending VL/SL request{emp.pending_count > 1 ? 's' : ''} totaling <strong>{emp.pending_credits.toFixed(2)}</strong> credit{emp.pending_credits !== 1 ? 's' : ''}.
+                                                        Converting may cause insufficient credits when those requests are approved.
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                    return null;
+                                })()}
+                                <p className="text-muted-foreground">This action cannot be undone.</p>
+                            </div>
                         </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>

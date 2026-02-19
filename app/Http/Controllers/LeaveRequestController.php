@@ -4711,10 +4711,18 @@ class LeaveRequestController extends Controller
                 ], 422);
             }
 
+            // Check for pending leave requests that may be affected
+            $pendingInfo = $this->leaveCreditService->getPendingLeaveInfo($user->id, $year);
+            $pendingWarning = null;
+            if ($pendingInfo['pending_count'] > 0) {
+                $pendingWarning = "{$user->name} has {$pendingInfo['pending_count']} pending leave request(s) totaling {$pendingInfo['pending_credits']} credit(s). Those requests may have insufficient credits upon approval.";
+            }
+
             return response()->json([
                 'success' => true,
-                'message' => $result['message'],
+                'message' => $result['message'].($pendingWarning ? " Warning: {$pendingWarning}" : ''),
                 'credits_converted' => $result['credits_converted'],
+                'pending_warning' => $pendingWarning,
             ]);
         } catch (\Exception $e) {
             \Log::error('User cash conversion error: '.$e->getMessage(), [

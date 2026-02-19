@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\LeaveCredit;
 use App\Models\LeaveCreditCarryover;
+use App\Models\LeaveRequest;
 use App\Models\User;
 use App\Services\LeaveCreditService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -384,6 +385,84 @@ class LeaveCreditCashConversionTest extends TestCase
         $response->assertStatus(422)
             ->assertJson([
                 'success' => false,
+            ]);
+    }
+
+    #[Test]
+    public function per_employee_endpoint_returns_pending_warning_when_pending_leave_exists(): void
+    {
+        $carryover = LeaveCreditCarryover::factory()->create([
+            'user_id' => $this->employee->id,
+            'carryover_credits' => 3.00,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'is_first_regularization' => false,
+            'cash_converted' => false,
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $this->employee->id,
+            'year' => 2026,
+            'month' => 0,
+            'credits_earned' => 3.00,
+            'credits_used' => 0,
+            'credits_balance' => 3.00,
+        ]);
+
+        // Create a pending VL request
+        LeaveRequest::factory()->pending()->create([
+            'user_id' => $this->employee->id,
+            'leave_type' => 'VL',
+            'start_date' => '2026-02-15',
+            'end_date' => '2026-02-16',
+            'days_requested' => 2,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson("/form-requests/leave-requests/credits/{$this->employee->id}/cash-conversion", [
+                'year' => 2026,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+            ])
+            ->assertJsonStructure(['pending_warning']);
+
+        $this->assertNotNull($response->json('pending_warning'));
+        $this->assertStringContainsString('pending leave request', $response->json('pending_warning'));
+    }
+
+    #[Test]
+    public function per_employee_endpoint_returns_no_pending_warning_when_no_pending_leave(): void
+    {
+        $carryover = LeaveCreditCarryover::factory()->create([
+            'user_id' => $this->employee->id,
+            'carryover_credits' => 3.00,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'is_first_regularization' => false,
+            'cash_converted' => false,
+        ]);
+
+        LeaveCredit::factory()->create([
+            'user_id' => $this->employee->id,
+            'year' => 2026,
+            'month' => 0,
+            'credits_earned' => 3.00,
+            'credits_used' => 0,
+            'credits_balance' => 3.00,
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->postJson("/form-requests/leave-requests/credits/{$this->employee->id}/cash-conversion", [
+                'year' => 2026,
+            ]);
+
+        $response->assertStatus(200)
+            ->assertJson([
+                'success' => true,
+                'pending_warning' => null,
             ]);
     }
 }
