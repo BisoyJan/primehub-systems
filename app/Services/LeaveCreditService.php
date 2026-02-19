@@ -242,15 +242,19 @@ class LeaveCreditService
 
     /**
      * Get total days from pending leave requests that require credits.
-     * Note: We count ALL pending requests regardless of year, since they represent
-     * credits that will be deducted from the user's balance when approved.
+     * When a year is provided, only counts requests starting in that year.
      */
     public function getPendingCredits(User $user, ?int $year = null): float
     {
-        return LeaveRequest::where('user_id', $user->id)
+        $query = LeaveRequest::where('user_id', $user->id)
             ->where('status', 'pending')
-            ->whereIn('leave_type', ['VL', 'SL']) // Only credit-requiring leave types (BL does not consume credits)
-            ->sum('days_requested');
+            ->whereIn('leave_type', ['VL', 'SL']);
+
+        if ($year !== null) {
+            $query->whereYear('start_date', $year);
+        }
+
+        return $query->sum('days_requested');
     }
 
     /**
@@ -1003,14 +1007,18 @@ class LeaveCreditService
         // VL requires sufficient credits at submission time
         // SL handles insufficient credits at approval time (SL→UPTO conversion)
         // BL does not consume credits (non-credited leave type)
+        // Uses projected balance to include future credit accrual before the leave start date
         if ($leaveType === 'VL') {
             $daysRequested = $data['days_requested'] ?? $this->calculateDays($startDate, $endDate);
-            $balance = $this->getBalance($user, $year);
+            $projected = $this->getProjectedBalance($user, $startDate, $year);
             $pendingCredits = $this->getPendingCredits($user, $year);
-            $availableBalance = max(0, $balance - $pendingCredits);
+            $availableBalance = max(0, $projected['projected'] - $pendingCredits);
 
             if ($availableBalance < $daysRequested) {
-                $errors[] = "Insufficient leave credits. Available: {$availableBalance} day(s), Requested: {$daysRequested} day(s). Please reduce your leave days to match your available credits.";
+                $futureNote = $projected['future_accrual'] > 0
+                    ? " (includes {$projected['future_accrual']} future credits)"
+                    : '';
+                $errors[] = "Insufficient leave credits. Available: {$availableBalance} day(s){$futureNote}, Requested: {$daysRequested} day(s). Please reduce your leave days to match your available credits.";
             }
         }
 
@@ -2144,7 +2152,285 @@ class LeaveCreditService
                 $properties['deleted_credits'] ?? 0,
                 $properties['deleted_carryovers'] ?? 0
             ),
+            'carryover_manually_adjusted' => sprintf(
+                'Carryover manually adjusted for %s: %.2f → %.2f (%d). Reason: %s',
+                $user->name,
+                $properties['old_carryover'] ?? 0,
+                $properties['new_carryover'] ?? 0,
+                $properties['year'] ?? 0,
+                $properties['reason'] ?? ''
+            ),
+            'credit_manually_adjusted' => sprintf(
+                'Monthly credit manually adjusted for %s: %.2f → %.2f (%d-%02d). Reason: %s',
+                $user->name,
+                $properties['old_earned'] ?? 0,
+                $properties['new_earned'] ?? 0,
+                $properties['year'] ?? 0,
+                $properties['month'] ?? 0,
+                $properties['reason'] ?? ''
+            ),
             default => "Leave credit action: {$action} for {$user->name}",
         };
+    }
+
+    /**
+     * Update carryover credits for a user.
+     *
+     * Updates the LeaveCreditCarryover record and syncs the month=0 LeaveCredit.
+     * If the new value is less than consumed, excess is redistributed via FIFO.
+     *
+     * @return array{old_value: float, new_value: float, excess_redistributed: float, unabsorbed: float}
+     */
+    public function updateCarryoverCredits(LeaveCreditCarryover $carryover, float $newCredits, string $reason, ?int $editorId = null): array
+    {
+        $oldCredits = (float) $carryover->carryover_credits;
+        $year = $carryover->to_year;
+        $userId = $carryover->user_id;
+
+        // Get month=0 credit record to determine consumed
+        $month0 = LeaveCredit::forUser($userId)->forYear($year)->where('month', 0)->first();
+        $consumed = $month0 ? (float) $month0->credits_used : 0;
+
+        // Update the carryover record
+        $carryover->update([
+            'carryover_credits' => $newCredits,
+            'forfeited_credits' => max(0, (float) $carryover->credits_from_previous_year - $newCredits),
+            'notes' => $reason,
+        ]);
+
+        // Handle month=0 LeaveCredit record
+        $excessRedistributed = 0;
+        $unabsorbed = 0;
+
+        if ($month0) {
+            if ($consumed > $newCredits) {
+                // Consumed exceeds new value — set earned=new, used=new, balance=0 and redistribute excess
+                $excess = $consumed - $newCredits;
+                $month0->update([
+                    'credits_earned' => $newCredits,
+                    'credits_used' => $newCredits,
+                    'credits_balance' => 0,
+                ]);
+                $unabsorbed = $this->redistributeExcessConsumption($userId, $year, $excess);
+                $excessRedistributed = $excess - $unabsorbed;
+            } else {
+                // Normal update: earned=new, used stays, balance=new-used
+                $month0->update([
+                    'credits_earned' => $newCredits,
+                    'credits_balance' => $newCredits - $consumed,
+                ]);
+            }
+        } elseif ($newCredits > 0) {
+            // Create month=0 record if it doesn't exist and new credits > 0
+            LeaveCredit::create([
+                'user_id' => $userId,
+                'year' => $year,
+                'month' => 0,
+                'credits_earned' => $newCredits,
+                'credits_used' => 0,
+                'credits_balance' => $newCredits,
+                'accrued_at' => "{$year}-01-01",
+            ]);
+        }
+
+        // Log activity
+        $user = User::find($userId);
+        $editor = $editorId ? User::find($editorId) : null;
+        $this->logActivity('carryover_manually_adjusted', $user, $carryover, [
+            'old_carryover' => $oldCredits,
+            'new_carryover' => $newCredits,
+            'year' => $year,
+            'reason' => $reason,
+            'excess_redistributed' => $excessRedistributed,
+            'unabsorbed' => $unabsorbed,
+            'editor_id' => $editorId,
+        ], $editor);
+
+        return [
+            'old_value' => $oldCredits,
+            'new_value' => $newCredits,
+            'excess_redistributed' => $excessRedistributed,
+            'unabsorbed' => $unabsorbed,
+        ];
+    }
+
+    /**
+     * Redistribute excess consumption from carryover/monthly to other monthly records (FIFO).
+     *
+     * When a credit record is reduced below its consumed amount, the excess
+     * must be absorbed by other monthly credit records.
+     *
+     * @return float Unabsorbed amount (0 = all redistributed)
+     */
+    public function redistributeExcessConsumption(int $userId, int $year, float $excess): float
+    {
+        $monthlies = LeaveCredit::forUser($userId)
+            ->forYear($year)
+            ->where('month', '>', 0)
+            ->where('credits_balance', '>', 0)
+            ->orderBy('month')
+            ->get();
+
+        $remaining = $excess;
+
+        foreach ($monthlies as $credit) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $canAbsorb = (float) $credit->credits_balance;
+            $absorb = min($canAbsorb, $remaining);
+
+            $credit->update([
+                'credits_used' => (float) $credit->credits_used + $absorb,
+                'credits_balance' => (float) $credit->credits_balance - $absorb,
+            ]);
+
+            $remaining -= $absorb;
+        }
+
+        return round($remaining, 2);
+    }
+
+    /**
+     * Update monthly credit earned amount.
+     *
+     * If new earned is less than used, excess is redistributed to other months.
+     *
+     * @return array{old_earned: float, new_earned: float, old_balance: float, new_balance: float, excess_redistributed: float, unabsorbed: float}
+     */
+    public function updateMonthlyCredit(LeaveCredit $credit, float $newEarned, string $reason, ?int $editorId = null): array
+    {
+        $oldEarned = (float) $credit->credits_earned;
+        $used = (float) $credit->credits_used;
+        $oldBalance = (float) $credit->credits_balance;
+
+        $excessRedistributed = 0;
+        $unabsorbed = 0;
+
+        if ($used > $newEarned) {
+            // Consumed exceeds new earned — redistribute excess to OTHER months
+            $excess = $used - $newEarned;
+            $credit->update([
+                'credits_earned' => $newEarned,
+                'credits_used' => $newEarned,
+                'credits_balance' => 0,
+            ]);
+            $unabsorbed = $this->redistributeExcessConsumption($credit->user_id, $credit->year, $excess);
+            $excessRedistributed = $excess - $unabsorbed;
+        } else {
+            $credit->update([
+                'credits_earned' => $newEarned,
+                'credits_balance' => $newEarned - $used,
+            ]);
+        }
+
+        // Log activity
+        $user = User::find($credit->user_id);
+        $editor = $editorId ? User::find($editorId) : null;
+        $this->logActivity('credit_manually_adjusted', $user, $credit, [
+            'old_earned' => $oldEarned,
+            'new_earned' => $newEarned,
+            'year' => $credit->year,
+            'month' => $credit->month,
+            'reason' => $reason,
+            'excess_redistributed' => $excessRedistributed,
+            'unabsorbed' => $unabsorbed,
+            'editor_id' => $editorId,
+        ], $editor);
+
+        return [
+            'old_earned' => $oldEarned,
+            'new_earned' => $newEarned,
+            'old_balance' => $oldBalance,
+            'new_balance' => (float) $credit->fresh()->credits_balance,
+            'excess_redistributed' => $excessRedistributed,
+            'unabsorbed' => $unabsorbed,
+        ];
+    }
+
+    /**
+     * Get carryover edit information for the edit dialog.
+     *
+     * @return array{carryover_id: int|null, current_credits: float, credits_from_prev: float, consumed: float, forfeited: float, is_first_reg: bool, can_edit: bool}
+     */
+    public function getCarryoverEditInfo(int $userId, int $year): array
+    {
+        $carryover = LeaveCreditCarryover::forUser($userId)->toYear($year)->first();
+
+        if (! $carryover) {
+            return [
+                'carryover_id' => null,
+                'current_credits' => 0,
+                'credits_from_prev' => 0,
+                'consumed' => 0,
+                'forfeited' => 0,
+                'is_first_reg' => false,
+                'can_edit' => false,
+            ];
+        }
+
+        $month0 = LeaveCredit::forUser($userId)->forYear($year)->where('month', 0)->first();
+
+        return [
+            'carryover_id' => $carryover->id,
+            'current_credits' => (float) $carryover->carryover_credits,
+            'credits_from_prev' => (float) $carryover->credits_from_previous_year,
+            'consumed' => $month0 ? (float) $month0->credits_used : 0,
+            'forfeited' => (float) $carryover->forfeited_credits,
+            'is_first_reg' => (bool) $carryover->is_first_regularization,
+            'can_edit' => true,
+        ];
+    }
+
+    /**
+     * Get pending leave request info for a user in a specific year.
+     *
+     * Returns count, total credits, individual request details, the latest
+     * start date, and future accrual amount between now and that date.
+     * Future accrual helps determine if pending requests would still be
+     * covered even after a credit reduction.
+     */
+    public function getPendingLeaveInfo(int $userId, int $year): array
+    {
+        $requests = LeaveRequest::where('user_id', $userId)
+            ->where('status', 'pending')
+            ->whereIn('leave_type', LeaveRequest::CREDITED_LEAVE_TYPES)
+            ->whereYear('start_date', $year)
+            ->select('id', 'leave_type', 'start_date', 'end_date', 'days_requested')
+            ->orderBy('start_date')
+            ->get();
+
+        if ($requests->isEmpty()) {
+            return [
+                'pending_count' => 0,
+                'pending_credits' => 0,
+                'pending_requests' => [],
+                'future_accrual' => 0,
+            ];
+        }
+
+        $latestStartDate = $requests->max('start_date');
+        $user = User::find($userId);
+
+        // Calculate future accrual up to the latest pending leave date
+        $futureAccrual = 0;
+        if ($user) {
+            $projected = $this->getProjectedBalance($user, Carbon::parse($latestStartDate), $year);
+            $futureAccrual = $projected['future_accrual'];
+        }
+
+        return [
+            'pending_count' => $requests->count(),
+            'pending_credits' => (float) $requests->sum('days_requested'),
+            'pending_requests' => $requests->map(fn ($r) => [
+                'id' => $r->id,
+                'leave_type' => $r->leave_type,
+                'start_date' => $r->start_date->format('Y-m-d'),
+                'end_date' => $r->end_date->format('Y-m-d'),
+                'days_requested' => (float) $r->days_requested,
+            ])->toArray(),
+            'future_accrual' => $futureAccrual,
+        ];
     }
 }

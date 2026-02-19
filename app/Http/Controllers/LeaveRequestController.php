@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Http\Requests\LeaveRequestRequest;
+use App\Http\Requests\UpdateLeaveCarryoverRequest;
+use App\Http\Requests\UpdateLeaveCreditRequest;
 use App\Jobs\GenerateLeaveCreditsExportExcel;
 use App\Mail\LeaveRequestStatusUpdated;
 use App\Mail\LeaveRequestSubmitted;
@@ -30,6 +32,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Inertia\Inertia;
+use Spatie\Activitylog\Models\Activity;
 
 class LeaveRequestController extends Controller
 {
@@ -841,7 +844,6 @@ class LeaveRequestController extends Controller
             'canCancel' => ($leaveRequest->canBeCancelled() && $leaveRequest->user_id === $user->id),
             'canAdminCancel' => $canAdminCancel,
             'canEditApproved' => $canEditApproved,
-            'canDelete' => $user->can('delete', $leaveRequest),
             'hasUserApproved' => $hasUserApproved,
             'canTlApprove' => $canTlApprove,
             'userRole' => $user->role,
@@ -1524,8 +1526,12 @@ class LeaveRequestController extends Controller
                     ]);
                 }
 
+                $balanceWarning = $this->getPostApprovalBalanceWarning($leaveRequest);
+                $approvalMessage = 'Leave request fully approved by both Admin and HR.'.($balanceWarning ? ' '.$balanceWarning : '');
+
                 return redirect()->route('leave-requests.show', $leaveRequest)
-                    ->with('success', 'Leave request fully approved by both Admin and HR.');
+                    ->with('message', $approvalMessage)
+                    ->with('type', $balanceWarning ? 'warning' : 'success');
             } else {
                 // Partial approval - notify the other role
                 $requesterName = $leaveRequest->user->name;
@@ -2377,19 +2383,30 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Delete a leave request.
-     * Note: Deleting does NOT restore leave credits or rollback attendance.
-     * Users should cancel the request first if credits need to be restored.
+     * Delete a leave request (Admin/HR only).
      */
     public function destroy(LeaveRequest $leaveRequest)
     {
         $this->authorize('delete', $leaveRequest);
+
+        $leaveCreditService = $this->leaveCreditService;
 
         DB::beginTransaction();
         try {
             // Delete medical certificate file if exists
             if ($leaveRequest->medical_cert_path && Storage::disk('local')->exists($leaveRequest->medical_cert_path)) {
                 Storage::disk('local')->delete($leaveRequest->medical_cert_path);
+            }
+
+            // Restore credits if it was approved and credits were deducted
+            if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
+                $leaveCreditService->restoreCredits($leaveRequest);
+            }
+
+            // Rollback for approved leaves: un-excuse points first (before attendance cascade-delete)
+            if ($leaveRequest->status === 'approved') {
+                $this->rollbackExcusedAttendancePoints($leaveRequest);
+                $this->rollbackAttendanceForCancelledLeave($leaveRequest);
             }
 
             $leaveRequest->delete();
@@ -2672,6 +2689,35 @@ class LeaveRequestController extends Controller
                     ->orWhere('end_date', '>=', $date);
             })
             ->first();
+    }
+
+    /**
+     * Get a post-approval balance warning if other pending leave requests exist.
+     *
+     * Uses projected balance (accounting for future accruals) to determine
+     * if remaining credits are insufficient for other pending requests.
+     */
+    protected function getPostApprovalBalanceWarning(LeaveRequest $leaveRequest): ?string
+    {
+        if (! in_array($leaveRequest->leave_type, LeaveRequest::CREDITED_LEAVE_TYPES)) {
+            return null;
+        }
+
+        $year = Carbon::parse($leaveRequest->start_date)->year;
+        $pendingInfo = $this->leaveCreditService->getPendingLeaveInfo($leaveRequest->user_id, $year);
+
+        if ($pendingInfo['pending_count'] === 0) {
+            return null;
+        }
+
+        $balance = $this->leaveCreditService->getBalance($leaveRequest->user, $year);
+        $projectedBalance = $balance + $pendingInfo['future_accrual'];
+
+        if ($projectedBalance < $pendingInfo['pending_credits']) {
+            return "Note: {$leaveRequest->user->name} has {$pendingInfo['pending_count']} other pending leave request(s) totaling {$pendingInfo['pending_credits']} credit(s), but only {$balance} credit(s) remaining (projected: {$projectedBalance} with future accruals).";
+        }
+
+        return null;
     }
 
     /**
@@ -3772,8 +3818,22 @@ class LeaveRequestController extends Controller
 
         $users = $query->orderBy('first_name')->orderBy('last_name')->paginate(20)->withQueryString();
 
+        // Batch query: pending leave requests (VL/SL) grouped by user for this year
+        $pendingByUser = LeaveRequest::whereIn('user_id', $users->pluck('id'))
+            ->where('status', 'pending')
+            ->whereIn('leave_type', LeaveRequest::CREDITED_LEAVE_TYPES)
+            ->whereYear('start_date', $year)
+            ->selectRaw('user_id, COUNT(*) as pending_count, COALESCE(SUM(days_requested), 0) as pending_credits')
+            ->groupBy('user_id')
+            ->get()
+            ->keyBy('user_id')
+            ->map(fn ($row) => [
+                'pending_count' => (int) $row->pending_count,
+                'pending_credits' => (float) $row->pending_credits,
+            ]);
+
         // Get leave credits data for each user
-        $creditsData = $users->through(function ($user) use ($year) {
+        $creditsData = $users->through(function ($user) use ($year, $pendingByUser) {
             $summary = $this->leaveCreditService->getSummary($user, $year);
             // Get carryover FROM this year (what will be/was carried over to next year)
             $carryoverSummary = $this->leaveCreditService->getCarryoverFromYearSummary($user, $year);
@@ -3844,6 +3904,7 @@ class LeaveRequestController extends Controller
                 // Carryover received INTO this year (from previous year)
                 // Only show if user is regularized (for first regularization carryovers)
                 'carryover_received' => $showCarryoverReceived && $carryoverReceived ? [
+                    'id' => $carryoverReceived->id,
                     'credits' => (float) $carryoverReceived->carryover_credits,
                     'from_year' => $carryoverReceived->from_year,
                     'is_first_regularization' => (bool) $carryoverReceived->is_first_regularization,
@@ -3887,6 +3948,9 @@ class LeaveRequestController extends Controller
                         'months_accrued' => $summary['credits_by_month']->count(),
                     ] : null),
                 ],
+                // Pending VL/SL leave requests not yet deducted
+                'pending_count' => $pendingByUser[$user->id]['pending_count'] ?? 0,
+                'pending_credits' => (float) ($pendingByUser[$user->id]['pending_credits'] ?? 0),
             ];
         });
 
@@ -3918,6 +3982,7 @@ class LeaveRequestController extends Controller
                 'campaign_id' => $campaignFilter,
             ],
             'availableYears' => range(now()->year, 2024, -1),
+            'canEdit' => app(PermissionService::class)->userHasPermission(auth()->user(), 'leave_credits.edit'),
         ]);
     }
 
@@ -4057,6 +4122,7 @@ class LeaveRequestController extends Controller
             ],
             'carryoverSummary' => $showCarryoverForward ? $carryoverSummary : null,
             'carryoverReceived' => $showCarryoverReceived && $carryoverReceived ? [
+                'id' => $carryoverReceived->id,
                 'credits' => (float) $carryoverReceived->carryover_credits,
                 'credits_used' => $carryoverCredit ? (float) $carryoverCredit->credits_used : 0,
                 'credits_balance' => $carryoverCredit ? (float) $carryoverCredit->credits_balance : (float) $carryoverReceived->carryover_credits,
@@ -4072,7 +4138,131 @@ class LeaveRequestController extends Controller
             'leaveRequests' => $leaveRequests,
             'availableYears' => range(now()->year, 2024, -1),
             'canViewAll' => $canViewAll,
+            'canEdit' => $canViewAll && app(PermissionService::class)->userHasPermission(auth()->user(), 'leave_credits.edit'),
+            'pendingLeaveInfo' => $this->leaveCreditService->getPendingLeaveInfo($user->id, (int) $year),
+            'creditEditHistory' => $canViewAll ? $this->getCreditEditHistory($user->id, (int) $year) : [],
         ]);
+    }
+
+    /**
+     * Get credit edit history from activity logs for a specific user and year.
+     */
+    private function getCreditEditHistory(int $userId, int $year): array
+    {
+        return Activity::where('log_name', 'leave-credits')
+            ->whereIn('event', ['carryover_manually_adjusted', 'credit_manually_adjusted'])
+            ->where('properties->user_id', $userId)
+            ->where('properties->year', $year)
+            ->with('causer:id,first_name,last_name')
+            ->orderByDesc('created_at')
+            ->limit(50)
+            ->get()
+            ->map(function (Activity $activity) {
+                $props = $activity->properties;
+
+                return [
+                    'id' => $activity->id,
+                    'event' => $activity->event,
+                    'description' => $activity->description,
+                    'reason' => $props['reason'] ?? null,
+                    'editor_name' => $activity->causer
+                        ? trim($activity->causer->first_name.' '.$activity->causer->last_name)
+                        : (isset($props['editor_id']) ? 'User #'.$props['editor_id'] : 'System'),
+                    'old_value' => $activity->event === 'carryover_manually_adjusted'
+                        ? ($props['old_carryover'] ?? null)
+                        : ($props['old_earned'] ?? null),
+                    'new_value' => $activity->event === 'carryover_manually_adjusted'
+                        ? ($props['new_carryover'] ?? null)
+                        : ($props['new_earned'] ?? null),
+                    'month' => $props['month'] ?? null,
+                    'unabsorbed' => (float) ($props['unabsorbed'] ?? 0),
+                    'created_at' => $activity->created_at->format('Y-m-d H:i:s'),
+                ];
+            })
+            ->toArray();
+    }
+
+    /**
+     * Update carryover credits for a user.
+     */
+    public function creditsUpdateCarryover(UpdateLeaveCarryoverRequest $request, User $user)
+    {
+        $year = $request->input('year', now()->year);
+
+        $carryover = LeaveCreditCarryover::forUser($user->id)
+            ->toYear($year)
+            ->first();
+
+        if (! $carryover) {
+            return redirect()->back()->with('message', 'No carryover record found for this year.')->with('type', 'error');
+        }
+
+        try {
+            $result = DB::transaction(function () use ($carryover, $request) {
+                return $this->leaveCreditService->updateCarryoverCredits(
+                    $carryover,
+                    $request->input('carryover_credits'),
+                    $request->input('reason'),
+                    auth()->id()
+                );
+            });
+
+            $message = "Carryover credits updated from {$result['old_value']} to {$result['new_value']}.";
+            if ($result['unabsorbed'] > 0) {
+                $message .= " Warning: {$result['unabsorbed']} excess credits could not be redistributed.";
+            }
+
+            // Append pending request warning
+            $pendingInfo = $this->leaveCreditService->getPendingLeaveInfo($user->id, (int) $year);
+            if ($pendingInfo['pending_count'] > 0) {
+                $message .= " Note: {$user->name} has {$pendingInfo['pending_count']} pending leave request(s) totaling {$pendingInfo['pending_credits']} credit(s) not yet deducted.";
+            }
+
+            return redirect()->back()->with('message', $message)->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('Credits Update Carryover Error: '.$e->getMessage());
+
+            return redirect()->back()->with('message', 'Failed to update carryover credits.')->with('type', 'error');
+        }
+    }
+
+    /**
+     * Update monthly credit earned amount for a user.
+     */
+    public function creditsUpdateMonthly(UpdateLeaveCreditRequest $request, User $user, LeaveCredit $leaveCredit)
+    {
+        if ($leaveCredit->user_id !== $user->id) {
+            abort(403, 'Credit record does not belong to this user.');
+        }
+
+        try {
+            $result = DB::transaction(function () use ($leaveCredit, $request) {
+                return $this->leaveCreditService->updateMonthlyCredit(
+                    $leaveCredit,
+                    $request->input('credits_earned'),
+                    $request->input('reason'),
+                    auth()->id()
+                );
+            });
+
+            $message = "Monthly credit updated from {$result['old_earned']} to {$result['new_earned']}.";
+            if ($result['unabsorbed'] > 0) {
+                $message .= " Warning: {$result['unabsorbed']} excess credits could not be redistributed.";
+            }
+
+            // Append pending request warning
+            $year = $leaveCredit->year;
+            $pendingInfo = $this->leaveCreditService->getPendingLeaveInfo($user->id, $year);
+            if ($pendingInfo['pending_count'] > 0) {
+                $message .= " Note: {$user->name} has {$pendingInfo['pending_count']} pending leave request(s) totaling {$pendingInfo['pending_credits']} credit(s) not yet deducted.";
+            }
+
+            return redirect()->back()->with('message', $message)->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('Credits Update Monthly Error: '.$e->getMessage());
+
+            return redirect()->back()->with('message', 'Failed to update monthly credits.')->with('type', 'error');
+        }
     }
 
     /**

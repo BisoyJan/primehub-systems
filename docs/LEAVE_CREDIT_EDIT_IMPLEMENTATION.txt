@@ -1,0 +1,599 @@
+================================================================================
+ LEAVE CREDIT MANUAL EDIT - IMPLEMENTATION TRACKER
+================================================================================
+ Feature: Manual editing of carry-over and monthly leave credits
+ Roles: super_admin, admin, hr
+ UI: Both Index and Show pages
+ Conflict: Cascading adjustment (redistribute excess consumption)
+ Enhancement: Pending leave request awareness (Steps 13-18)
+================================================================================
+
+ STEP  | DESCRIPTION                        | STATUS
+-------|------------------------------------|-------------
+  1    | Add permission (leave_credits.edit) | DONE
+  2    | Add routes (PUT carryover + monthly)| DONE
+  3    | Create Form Request classes         | DONE
+  4    | Add service methods (LeaveCreditSvc)| DONE
+  5    | Add controller methods              | DONE
+  6    | Update controller props (canEdit)   | DONE
+  7    | Generate Wayfinder routes           | DONE
+  8    | Frontend: Index page edit dialog    | DONE
+  9    | Frontend: Show page edit buttons    | DONE
+ 10    | Activity log & audit trail          | DONE (via Steps 4-5)
+ 11    | Tests (unit + feature)              | DONE
+ 12    | Run Pint formatter                  | DONE
+-------|-------- PENDING AWARENESS ----------|-------------
+ 13    | Service: getPendingLeaveInfo()      | DONE
+ 14    | Controller: pass pending props      | DONE
+ 15    | Frontend: Show page pending warnings| DONE
+ 16    | Frontend: Index page pending warning| DONE
+ 17    | Approval-side balance warning       | DONE
+ 18    | Tests + Pint                        | DONE
+
+================================================================================
+ GLOBAL NOTES
+================================================================================
+- Cascading: When carryover reduced below consumed, excess redistributes to
+  monthly credit records (FIFO). If monthly can't absorb, negative balance is
+  allowed with admin warning.
+- Two endpoints: one for carryover, one for monthly credits.
+- Reason field required on all manual edits for audit trail.
+- Activity logged via Spatie LogsActivity + LeaveCreditService::logActivity().
+- Pending awareness: Soft block with override — show warning + require
+  confirmation checkbox when editing would make balance < pending credits.
+  Admin can still proceed after acknowledging the risk.
+
+================================================================================
+ STEP 1: ADD PERMISSION (leave_credits.edit)                          [DONE]
+================================================================================
+ File: config/permissions.php
+
+ Changes made:
+ 1. Added permission definition:
+    'leave_credits.edit' => 'Edit Leave Credits'
+    (after leave_credits.view_own in the permissions list)
+
+ 2. Added to 'admin' role permissions array:
+    'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit'
+
+ 3. Added to 'hr' role permissions array:
+    'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit'
+
+ 4. super_admin already has '*' (all permissions) — no change needed.
+
+ Roles with leave_credits.edit:
+   - super_admin (via wildcard *)
+   - admin (explicit)
+   - hr (explicit)
+
+================================================================================
+ STEP 2: ADD ROUTES                                                   [DONE]
+================================================================================
+ File: routes/web.php (inside the leave credits route group, ~L349-L354)
+
+ Routes added (before the {user} show route to avoid param conflicts):
+
+   PUT  /{user}/carryover
+        → LeaveRequestController@creditsUpdateCarryover
+        Name: leave-requests.credits.update-carryover
+        Middleware: permission:leave_credits.edit (+ group's view middleware)
+
+   PUT  /{user}/credits/{leaveCredit}
+        → LeaveRequestController@creditsUpdateMonthly
+        Name: leave-requests.credits.update-monthly
+        Middleware: permission:leave_credits.edit (+ group's view middleware)
+
+ Note: Routes won't appear in `route:list` until controller methods exist
+ (Step 5). Laravel validates method existence at boot time.
+
+================================================================================
+ STEP 3: CREATE FORM REQUEST CLASSES                                  [DONE]
+================================================================================
+ Files created:
+   app/Http/Requests/UpdateLeaveCarryoverRequest.php
+   app/Http/Requests/UpdateLeaveCreditRequest.php
+
+ UpdateLeaveCarryoverRequest:
+   - authorize(): checks leave_credits.edit permission
+   - Rules:
+     * carryover_credits: required|numeric|min:0|max:30
+     * year: required|integer|min:2024|max:current_year+1
+     * reason: required|string|max:500
+     * notes: nullable|string|max:500
+   - Custom error messages for all rules
+
+ UpdateLeaveCreditRequest:
+   - authorize(): checks leave_credits.edit permission
+   - Rules:
+     * credits_earned: required|numeric|min:0|max:20
+     * reason: required|string|max:500
+   - Custom error messages for all rules
+
+ Pattern: Follows existing conventions (array-based rules, custom messages(),
+ authorize checks permission via $this->user()->hasPermission()).
+
+================================================================================
+ STEP 4: ADD SERVICE METHODS (LeaveCreditService)                     [DONE]
+================================================================================
+ File: app/Services/LeaveCreditService.php
+
+ Methods added (4 total):
+
+ 1. updateCarryoverCredits(LeaveCreditCarryover, float, string, ?int): array
+    - Updates LeaveCreditCarryover record (carryover_credits, forfeited_credits, notes)
+    - Syncs LeaveCredit month=0 record (earned, used, balance)
+    - Cascading: if credits_used > newCredits, calls redistributeExcessConsumption()
+    - Creates month=0 record if needed (newCredits > 0 & none exists)
+    - Logs activity: 'carryover_manually_adjusted'
+    - Returns: [old_value, new_value, excess_redistributed, unabsorbed]
+
+ 2. redistributeExcessConsumption(int userId, int year, float excess): float
+    - Gets monthly LeaveCredit records (month > 0) ordered by month ASC (FIFO)
+    - Shifts excess from carryover to monthly records with available balance
+    - Returns unabsorbed amount (0 = all redistributed successfully)
+
+ 3. updateMonthlyCredit(LeaveCredit, float, string, ?int): array
+    - Updates credits_earned and recalculates credits_balance
+    - Cascading: if credits_used > newEarned, redistributes to OTHER months
+    - Logs activity: 'credit_manually_adjusted'
+    - Returns: [old_earned, new_earned, old_balance, new_balance,
+               excess_redistributed, unabsorbed]
+
+ 4. getCarryoverEditInfo(int userId, int year): array
+    - Returns edit dialog data: carryover_id, current/prev year credits,
+      credits consumed from carryover, forfeited, is_first_reg, can_edit
+
+ Activity log descriptions added:
+   - 'carryover_manually_adjusted' with old→new values, reason, cascading info
+   - 'credit_manually_adjusted' with old→new earned, year-month, reason
+
+================================================================================
+ STEP 5: ADD CONTROLLER METHODS                                       [DONE]
+================================================================================
+ File: app/Http/Controllers/LeaveRequestController.php
+
+ Imports added:
+   - App\Http\Requests\UpdateLeaveCarryoverRequest
+   - App\Http\Requests\UpdateLeaveCreditRequest
+
+ Methods added:
+
+ 1. creditsUpdateCarryover(UpdateLeaveCarryoverRequest $request, User $user)
+    - Finds LeaveCreditCarryover for user + year from request
+    - DB::transaction() wraps leaveCreditService->updateCarryoverCredits()
+    - Returns redirect()->back() with success/error flash
+    - Warning message appended if unabsorbed excess exists
+    - Logs error on failure via Log::error()
+
+ 2. creditsUpdateMonthly(UpdateLeaveCreditRequest $request, User $user,
+                         LeaveCredit $leaveCredit)
+    - Validates leaveCredit belongs to user (user_id check)
+    - DB::transaction() wraps leaveCreditService->updateMonthlyCredit()
+    - Returns redirect()->back() with success/error flash
+    - Warning message appended if unabsorbed excess exists
+    - Logs error on failure via Log::error()
+
+ Routes verified:
+   PUT  form-requests/leave-requests/credits/{user}/carryover
+        → leave-requests.credits.update-carryover
+   PUT  form-requests/leave-requests/credits/{user}/credits/{leaveCredit}
+        → leave-requests.credits.update-monthly
+
+================================================================================
+ STEP 6: UPDATE CONTROLLER PROPS                                      [DONE]
+================================================================================
+ File: app/Http/Controllers/LeaveRequestController.php
+
+ Changes to creditsIndex():
+   - Added 'canEdit' prop: checks leave_credits.edit via PermissionService
+   - Added 'id' to carryover_received data (LeaveCreditCarryover record ID)
+     for frontend edit form targeting
+
+ Changes to creditsShow():
+   - Added 'canEdit' prop: canViewAll && leave_credits.edit permission
+   - Added 'id' to carryoverReceived prop (LeaveCreditCarryover record ID)
+   - monthlyCredits already includes 'id' field (LeaveCredit PK)
+
+================================================================================
+ STEP 7: GENERATE WAYFINDER ROUTES                                    [DONE]
+================================================================================
+ Command: php artisan wayfinder:generate
+
+ Generated TypeScript route functions in:
+   resources/js/actions/App/Http/Controllers/LeaveRequestController.ts
+
+ New exports available:
+   - creditsUpdateCarryover({ user: number }): RouteDefinition<'put'>
+     URL: form-requests/leave-requests/credits/{user}/carryover
+   - creditsUpdateMonthly({ user: number, leaveCredit: number }): RouteDefinition<'put'>
+     URL: form-requests/leave-requests/credits/{user}/credits/{leaveCredit}
+
+ Import usage in frontend:
+   import { creditsUpdateCarryover, creditsUpdateMonthly }
+     from '@/actions/App/Http/Controllers/LeaveRequestController';
+
+================================================================================
+ STEP 8: FRONTEND — INDEX PAGE EDIT DIALOG                            [DONE]
+================================================================================
+ File: resources/js/pages/FormRequest/Leave/Credits/Index.tsx
+
+ Changes made:
+ 1. Updated imports:
+    - Added useForm from @inertiajs/react
+    - Added Pencil from lucide-react
+    - Added Input, Label, Textarea components
+    - Added creditsUpdateCarryover from Wayfinder actions
+
+ 2. Updated interfaces:
+    - Added 'id: number' to CarryoverReceivedData
+    - Added 'canEdit: boolean' to Props
+
+ 3. Updated function signature to include canEdit = false
+
+ 4. Added state variables and handlers:
+    - isEditCarryoverOpen, editingEmployee
+    - editCarryoverForm (useForm with carryover_credits, year, reason, notes)
+    - openEditCarryover() — sets form data and opens dialog
+    - submitEditCarryover() — PUTs to creditsUpdateCarryover Wayfinder route
+
+ 5. Desktop table Actions column:
+    - Wrapped existing Eye button + new Pencil button in flex container
+    - Pencil button visible only when canEdit && employee.carryover_received
+
+ 6. Mobile cards:
+    - Added "Edit Carryover" button below "View History" button
+    - Visible only when canEdit && employee.carryover_received
+
+ 7. Edit Carryover Dialog (before </AppLayout>):
+    - Shows current credits and from_year (read-only)
+    - Number input for new carryover credits (step 0.25, min 0, max 30)
+    - Required reason textarea
+    - Optional notes textarea
+    - Warning banner when reducing below current credits
+    - Loader spinner during form processing
+
+================================================================================
+ STEP 9: FRONTEND — SHOW PAGE EDIT BUTTONS                            [DONE]
+================================================================================
+ File: resources/js/pages/FormRequest/Leave/Credits/Show.tsx
+
+ Changes made:
+ 1. Updated imports:
+    - Added useState from react
+    - Added useForm from @inertiajs/react
+    - Added Dialog, DialogContent, DialogDescription, DialogFooter,
+      DialogHeader, DialogTitle from @/components/ui/dialog
+    - Added Input, Label, Textarea components
+    - Added Pencil, Loader2, AlertTriangle from lucide-react
+    - Added creditsUpdateCarryover, creditsUpdateMonthly from Wayfinder
+
+ 2. Updated interfaces:
+    - Added 'id: number' to CarryoverReceived
+    - Added 'canEdit: boolean' to Props
+
+ 3. Updated function signature to include canEdit = false
+
+ 4. Added state variables and handlers:
+    - Carryover: isEditCarryoverOpen, editCarryoverForm, openEditCarryover(),
+      submitEditCarryover()
+    - Monthly: isEditMonthlyOpen, editingCredit, editMonthlyForm,
+      openEditMonthly(), submitEditMonthly()
+
+ 5. Monthly Accruals table:
+    - Added Actions column header (visible when canEdit)
+    - Carryover row: Added Pencil edit button (visible when canEdit)
+    - Monthly rows: Added Pencil edit button per row (visible when canEdit)
+
+ 6. Edit Carryover Dialog (before </AppLayout>):
+    - Shows current credits and consumed (read-only)
+    - Number input for new carryover credits (step 0.25)
+    - Required reason textarea, optional notes textarea
+    - Warning banner when reducing below current credits
+    - Loader spinner during form processing
+
+ 7. Edit Monthly Credit Dialog (before </AppLayout>):
+    - Shows current earned/used/balance (read-only, 3-col grid)
+    - Number input for new credits earned (step 0.25)
+    - Required reason textarea
+    - Warning banner when setting below used amount
+    - Loader spinner during form processing
+
+================================================================================
+ STEP 10: ACTIVITY LOG & AUDIT TRAIL                                  [DONE]
+================================================================================
+ Already handled by:
+ - Spatie LogsActivity trait on LeaveCredit and LeaveCreditCarryover models
+   (auto-logs all dirty attribute changes)
+ - LeaveCreditService::logActivity() for custom activity entries
+ - Step 4 service methods include explicit logging calls
+
+ Activity log entries will capture:
+ - Event: 'carryover_manually_adjusted' or 'credit_manually_adjusted'
+ - Old values vs new values (via Spatie's logOnlyDirty)
+ - The user who made the change (auth user)
+ - The reason provided by the admin
+ - Whether cascading occurred and amounts redistributed
+
+ No additional code needed beyond what's in Steps 4-5.
+ This step is for verification only.
+
+================================================================================
+ STEP 11: TESTS (UNIT + FEATURE)                                          [DONE]
+================================================================================
+ Files:
+   tests/Unit/Services/LeaveCreditServiceTest.php (extend existing)
+   tests/Feature/LeaveCredits/UpdateLeaveCreditTest.php (new)
+
+ Unit tests (in LeaveCreditServiceTest.php):
+   #[Test] it_updates_carryover_credits_when_none_consumed
+   #[Test] it_updates_carryover_credits_with_cascading_when_excess_consumed
+   #[Test] it_handles_carryover_reduction_causing_negative_balance
+   #[Test] it_updates_monthly_credit_earned_amount
+   #[Test] it_updates_monthly_credit_with_cascading
+   #[Test] it_redistributes_excess_consumption_fifo
+   #[Test] it_returns_carryover_edit_info
+
+ Feature tests (new file):
+   #[Test] it_allows_admin_to_update_carryover
+   #[Test] it_allows_hr_to_update_carryover
+   #[Test] it_denies_agent_from_editing_credits
+   #[Test] it_validates_carryover_update_request
+   #[Test] it_allows_admin_to_update_monthly_credit
+   #[Test] it_validates_monthly_credit_update_request
+   #[Test] it_returns_canEdit_prop_on_credits_index
+   #[Test] it_returns_canEdit_prop_on_credits_show
+
+ Test patterns:
+   - #[Test] attribute (not test_ prefix)
+   - RefreshDatabase trait
+   - User::factory()->create(['role' => 'admin', 'is_approved' => true])
+   - LeaveCredit::factory()->create([...])
+   - Carbon::setTestNow() for time control
+   - assertDatabaseHas / assertDatabaseCount for DB verification
+   - assertInertia for prop checks
+
+ Run: php artisan test --compact --filter=LeaveCredit
+
+================================================================================
+ STEP 12: RUN PINT FORMATTER                                              [DONE]
+================================================================================
+ Command: vendor/bin/pint --dirty
+
+ Formats all changed PHP files to match project style.
+ Run AFTER all PHP changes are complete (steps 1-6 + 11).
+ Do not run --test, just run pint to auto-fix.
+
+================================================================================
+ STEP 13: SERVICE — getPendingLeaveInfo() METHOD                      [DONE]
+================================================================================
+ File: app/Services/LeaveCreditService.php
+
+ New method:
+   getPendingLeaveInfo(int $userId, int $year): array
+
+ Returns:
+   [
+     'pending_count'    => int,       // Number of pending VL/SL requests
+     'pending_credits'  => float,     // Total days_requested from those
+     'pending_requests' => array[],   // Summary: id, leave_type, start_date,
+                                      //   end_date, days_requested
+   ]
+
+ Query:
+   LeaveRequest::where('user_id', $userId)
+     ->where('status', 'pending')
+     ->whereIn('leave_type', LeaveRequest::CREDITED_LEAVE_TYPES)  // ['VL','SL']
+     ->whereYear('start_date', $year)
+     ->select('id','leave_type','start_date','end_date','days_requested')
+     ->get()
+
+ Bugfix applied:
+   Existing getPendingCredits(User $user, ?int $year) at ~L248 was ignoring
+   the $year parameter. Added: ->whereYear('start_date', $year) when $year
+   is not null.
+
+================================================================================
+ STEP 14: CONTROLLER — PASS PENDING DATA AS PROPS                    [DONE]
+================================================================================
+ File: app/Http/Controllers/LeaveRequestController.php
+
+ Changes to creditsShow() (~L3933):
+   - Call $this->leaveCreditService->getPendingLeaveInfo($user->id, $year)
+   - Add 'pendingLeaveInfo' prop to Inertia response:
+       'pendingLeaveInfo' => [
+           'pending_count'    => ...,
+           'pending_credits'  => ...,
+           'pending_requests' => [...],
+       ]
+
+ Changes to creditsIndex() (~L3689):
+   - For each employee in creditsData, add:
+       'pending_count'   => ...,
+       'pending_credits' => ...,
+   - Batch query: Get all pending VL/SL leave requests grouped by user_id
+     for the selected year, to avoid N+1
+
+ Changes to creditsUpdateCarryover():
+   - After DB::transaction, check pending via getPendingLeaveInfo()
+   - If pending_count > 0, append to flash message:
+     "Note: {name} has {N} pending leave request(s) totaling {X} credits
+      not yet deducted."
+
+ Changes to creditsUpdateMonthly():
+   - Same pattern: append pending info to flash message
+
+================================================================================
+ STEP 15: FRONTEND — SHOW PAGE PENDING WARNINGS                      [DONE]
+================================================================================
+ File: resources/js/pages/FormRequest/Leave/Credits/Show.tsx
+
+ TypeScript changes:
+   1. Add to Props interface:
+        pendingLeaveInfo: {
+          pending_count: number;
+          pending_credits: number;
+          pending_requests: Array<{
+            id: number;
+            leave_type: string;
+            start_date: string;
+            end_date: string;
+            days_requested: number;
+          }>;
+        };
+
+ Summary card (near balance display):
+   - When pendingLeaveInfo.pending_count > 0, show a badge:
+     "X pending" in blue/amber next to the Balance value
+   - Tooltip or inline text: "X credit(s) in pending leave requests"
+
+ Edit Carryover Dialog:
+   - Add blue info banner (BELOW existing amber cascading warning):
+     Icon: Info (lucide)
+     Title: "Pending Leave Requests"
+     Body: "This employee has {N} pending request(s) totaling {X} credit(s)
+            awaiting approval. If approved, the effective balance would be
+            reduced to {balance - pendingCredits}."
+     Shown when: pendingLeaveInfo.pending_count > 0
+
+   - Confirmation checkbox (soft block):
+     Shown when: new carryover value would make total balance < pending_credits
+     Text: "I understand this may cause insufficient balance for pending
+            leave requests"
+     Save button disabled until checkbox checked
+     State: const [pendingAcknowledged, setPendingAcknowledged] = useState(false)
+     Reset on dialog open/close
+
+ Edit Monthly Credit Dialog:
+   - Same blue info banner pattern
+   - Same confirmation checkbox pattern:
+     Shown when: new earned value makes this credit's balance negative
+                 AND pendingLeaveInfo.pending_count > 0
+     Save button disabled until acknowledged
+
+ Mobile views:
+   - Same warnings in mobile card layout (responsive)
+
+================================================================================
+ STEP 16: FRONTEND — INDEX PAGE PENDING WARNINGS                     [DONE]
+================================================================================
+ File: resources/js/pages/FormRequest/Leave/Credits/Index.tsx
+
+ TypeScript changes:
+   1. Add to CreditData interface:
+        pending_count: number;
+        pending_credits: number;
+
+ Desktop table:
+   - In Balance column: When pending_count > 0, show small badge/pill:
+     "{N} pending" in blue text, or an icon with tooltip
+   - Purpose: visual indicator that editing is higher-risk for this employee
+
+ Mobile cards:
+   - Same pending indicator near the balance value
+
+ Edit Carryover Dialog:
+   - Same blue info banner as Step 15:
+     "This employee has {N} pending request(s)..."
+   - Same confirmation checkbox (soft block) pattern:
+     When editingEmployee.balance - newCredits < pending_credits
+
+================================================================================
+ STEP 17: APPROVAL-SIDE BALANCE WARNING                               [DONE]
+================================================================================
+ File: app/Http/Controllers/LeaveRequestController.php
+
+ Changes to approve() method (~L1416):
+
+ Before credit deduction (after dual approval confirmed):
+   1. Get current total balance:
+      LeaveCredit::where('user_id', $userId)->where('year', $year)
+        ->sum('credits_balance')
+
+   2. Compare with credits needed:
+      $creditsNeeded = $leaveRequest->approved_days
+                       ?? $leaveRequest->days_requested
+
+   3. If balance < creditsNeeded:
+      - Still proceed with approval (admin/HR decision)
+      - Append warning to flash message:
+        "Warning: {name} only has {balance} credits available but this
+         request needs {needed} credits. Balance will go negative."
+      - Log the insufficient balance scenario for audit trail
+
+ Frontend (if approval dialog exists):
+   - Check resources/js/pages/FormRequest/Leave/ for approval UI
+   - If dialog-based: show amber warning banner when balance < needed
+   - If inline action: warning shows via flash message after approval
+
+ Note: This does NOT block approval. The admin/HR is informed and can
+ still approve. The flash message ensures they notice the deficit.
+
+================================================================================
+ STEP 18: TESTS + PINT                                                [DONE]
+================================================================================
+ Files:
+   tests/Unit/Services/LeaveCreditServiceTest.php
+   tests/Feature/LeaveCredits/UpdateLeaveCreditTest.php
+
+ Unit tests (LeaveCreditServiceTest.php):
+   #[Test] it_returns_pending_leave_info_for_user_with_pending_requests
+   #[Test] it_returns_empty_pending_leave_info_when_no_pending_requests
+   #[Test] it_excludes_non_credited_leave_types_from_pending_info
+   #[Test] it_filters_pending_leave_info_by_year
+   #[Test] it_get_pending_credits_filters_by_year_when_provided
+
+ Feature tests (UpdateLeaveCreditTest.php):
+   #[Test] credits_show_returns_pending_leave_info_prop
+   #[Test] credits_show_returns_empty_pending_when_no_pending_requests
+   #[Test] credits_index_returns_pending_count_per_employee
+   #[Test] carryover_update_flash_includes_pending_warning
+   #[Test] monthly_update_flash_includes_pending_warning
+   #[Test] approval_with_insufficient_balance_shows_warning
+
+ Run: php artisan test --compact --filter=LeaveCredit
+ Run: php artisan test --compact --filter="pending"
+ Run: vendor/bin/pint --dirty
+
+================================================================================
+ KEY DATA STRUCTURES
+================================================================================
+
+ leave_credits table (month=0 is carryover):
+   id | user_id | credits_earned | credits_used | credits_balance | year | month
+
+ leave_credit_carryovers table:
+   id | user_id | credits_from_previous_year | carryover_credits |
+   forfeited_credits | from_year | to_year | is_first_regularization |
+   cash_converted | processed_by | notes
+
+ leave_requests table (relevant fields):
+   id | user_id | leave_type | status | days_requested | credits_deducted |
+   credits_year | start_date | end_date | approved_days | has_partial_denial
+
+ Leave type constants (LeaveRequest model):
+   CREDITED_LEAVE_TYPES     = ['VL', 'SL']
+   NON_CREDITED_LEAVE_TYPES = ['BL', 'SPL', 'LOA', 'LDV', 'UPTO', 'ML']
+
+ Deduction order: FIFO (month 0 → 1 → 2 → ... → 12)
+ Restore order:   LIFO (month 12 → 11 → ... → 1 → 0)
+
+ Cascading adjustment example:
+   Carryover was 4.00, consumed 3.00 (month=0: earned=4, used=3, balance=1)
+   Admin sets carryover to 2.00
+   Excess = 3.00 - 2.00 = 1.00
+   Month=0 becomes: earned=2, used=2, balance=0
+   Redistribute 1.00 to monthly records (FIFO):
+     Month 1 (balance=0.50): used+=0.50, balance=0 → remaining excess=0.50
+     Month 2 (balance=1.25): used+=0.50, balance=0.75 → remaining excess=0
+   Result: all 1.00 absorbed, no negative balance
+
+ Pending awareness example:
+   Employee balance=5.00, pending VL=3 days
+   Admin reduces carryover, new balance=2.00
+   Soft block: Checkbox required — "I understand this may cause insufficient
+   balance for 1 pending leave request(s) totaling 3.00 credits"
+   Admin checks box → edit proceeds
+   Later: HR approves the VL → balance goes to -1.00
+   Flash: "Warning: Employee only has 2.00 credits but request needs 3.00"
+
+================================================================================

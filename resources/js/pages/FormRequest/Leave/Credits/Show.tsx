@@ -1,5 +1,5 @@
-import React from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import React, { useState } from 'react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -22,11 +22,23 @@ import {
 } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText, Banknote, AlertCircle, CheckCircle } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText, Banknote, AlertCircle, CheckCircle, Pencil, Loader2, AlertTriangle, Info, History, Clock } from 'lucide-react';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
-import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { index as creditsIndexRoute } from '@/routes/leave-requests/credits';
+import { show as leaveShowRoute } from '@/routes/leave-requests';
+import { creditsUpdateCarryover, creditsUpdateMonthly } from '@/actions/App/Http/Controllers/LeaveRequestController';
 import { format } from 'date-fns';
 
 interface MonthlyCredit {
@@ -65,6 +77,7 @@ interface CarryoverSummary {
 }
 
 interface CarryoverReceived {
+    id: number;
     credits: number;
     credits_used?: number;
     credits_balance?: number;
@@ -104,9 +117,34 @@ interface Props {
     leaveRequests: LeaveRequestHistory[];
     availableYears: number[];
     canViewAll: boolean;
+    canEdit: boolean;
+    pendingLeaveInfo: {
+        pending_count: number;
+        pending_credits: number;
+        future_accrual: number;
+        pending_requests: Array<{
+            id: number;
+            leave_type: string;
+            start_date: string;
+            end_date: string;
+            days_requested: number;
+        }>;
+    };
+    creditEditHistory: Array<{
+        id: number;
+        event: string;
+        description: string;
+        reason: string | null;
+        editor_name: string;
+        old_value: number | null;
+        new_value: number | null;
+        month: number | null;
+        unabsorbed: number;
+        created_at: string;
+    }>;
 }
 
-export default function Show({ user, year, summary, carryoverSummary, carryoverReceived, monthlyCredits, leaveRequests, availableYears, canViewAll }: Props) {
+export default function Show({ user, year, summary, carryoverSummary, carryoverReceived, monthlyCredits, leaveRequests, availableYears, canViewAll, canEdit = false, pendingLeaveInfo = { pending_count: 0, pending_credits: 0, future_accrual: 0, pending_requests: [] }, creditEditHistory = [] }: Props) {
     const getInitials = useInitials();
 
     const { title, breadcrumbs } = usePageMeta({
@@ -135,6 +173,68 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
 
     const formatLeaveType = (type: string) => {
         return type.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    };
+
+    // Edit carryover dialog state
+    const [isEditCarryoverOpen, setIsEditCarryoverOpen] = useState(false);
+    const [pendingAcknowledged, setPendingAcknowledged] = useState(false);
+    const editCarryoverForm = useForm({
+        carryover_credits: carryoverReceived?.credits ?? 0,
+        year: year,
+        reason: '',
+        notes: '',
+    });
+
+    const openEditCarryover = () => {
+        if (!carryoverReceived) return;
+        setPendingAcknowledged(false);
+        editCarryoverForm.setData({
+            carryover_credits: carryoverReceived.credits,
+            year: year,
+            reason: '',
+            notes: '',
+        });
+        setIsEditCarryoverOpen(true);
+    };
+
+    const submitEditCarryover = () => {
+        editCarryoverForm.put(creditsUpdateCarryover({ user: user.id }).url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsEditCarryoverOpen(false);
+                editCarryoverForm.reset();
+            },
+        });
+    };
+
+    // Edit monthly credit dialog state
+    const [isEditMonthlyOpen, setIsEditMonthlyOpen] = useState(false);
+    const [editingCredit, setEditingCredit] = useState<MonthlyCredit | null>(null);
+    const editMonthlyForm = useForm({
+        credits_earned: 0,
+        reason: '',
+    });
+
+    const openEditMonthly = (credit: MonthlyCredit) => {
+        setEditingCredit(credit);
+        setPendingAcknowledged(false);
+        editMonthlyForm.setData({
+            credits_earned: credit.credits_earned,
+            reason: '',
+        });
+        setIsEditMonthlyOpen(true);
+    };
+
+    const submitEditMonthly = () => {
+        if (!editingCredit) return;
+        editMonthlyForm.put(creditsUpdateMonthly({ user: user.id, leaveCredit: editingCredit.id }).url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsEditMonthlyOpen(false);
+                setEditingCredit(null);
+                editMonthlyForm.reset();
+            },
+        });
     };
 
     return (
@@ -355,6 +455,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                 <TableHead className="text-right">Earned</TableHead>
                                                 <TableHead className="text-right">Used</TableHead>
                                                 <TableHead className="text-right">Balance</TableHead>
+                                                {canEdit && <TableHead className="text-center w-12"></TableHead>}
                                             </TableRow>
                                         </TableHeader>
                                         <TableBody>
@@ -380,6 +481,13 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                     <TableCell className="text-right font-medium text-green-600">
                                                         {(carryoverReceived.credits_balance ?? carryoverReceived.credits).toFixed(2)}
                                                     </TableCell>
+                                                    {canEdit && (
+                                                        <TableCell className="text-center">
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit Carryover" onClick={openEditCarryover}>
+                                                                <Pencil className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    )}
                                                 </TableRow>
                                             )}
                                             {monthlyCredits.map((credit) => (
@@ -396,6 +504,13 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                     <TableCell className="text-right font-medium">
                                                         {credit.credits_balance.toFixed(2)}
                                                     </TableCell>
+                                                    {canEdit && (
+                                                        <TableCell className="text-center">
+                                                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit Monthly Credit" onClick={() => openEditMonthly(credit)}>
+                                                                <Pencil className="h-3.5 w-3.5" />
+                                                            </Button>
+                                                        </TableCell>
+                                                    )}
                                                 </TableRow>
                                             ))}
                                         </TableBody>
@@ -471,7 +586,348 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Credit Edit History */}
+                {canViewAll && creditEditHistory.length > 0 && (
+                    <Card>
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2">
+                                <History className="h-5 w-5" />
+                                Credit Edit History ({year})
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="space-y-3">
+                                {creditEditHistory.map((entry) => (
+                                    <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30">
+                                        <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${
+                                            entry.event === 'carryover_manually_adjusted'
+                                                ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400'
+                                                : 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
+                                        }`}>
+                                            <Pencil className="h-3.5 w-3.5" />
+                                        </div>
+                                        <div className="flex-1 min-w-0 space-y-1">
+                                            <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                                <Badge variant="outline" className="text-xs">
+                                                    {entry.event === 'carryover_manually_adjusted' ? 'Carryover' : `Month ${entry.month}`}
+                                                </Badge>
+                                                <span className="text-sm font-medium">
+                                                    {entry.old_value !== null && entry.new_value !== null
+                                                        ? <>{entry.old_value.toFixed(2)} → {entry.new_value.toFixed(2)}</>
+                                                        : 'Adjusted'}
+                                                </span>
+                                                {entry.unabsorbed > 0 && (
+                                                    <Badge variant="destructive" className="text-xs">
+                                                        {entry.unabsorbed.toFixed(2)} unabsorbed
+                                                    </Badge>
+                                                )}
+                                            </div>
+                                            {entry.reason && (
+                                                <p className="text-sm text-muted-foreground">
+                                                    <span className="font-medium">Reason:</span> {entry.reason}
+                                                </p>
+                                            )}
+                                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                                                <span className="flex items-center gap-1">
+                                                    <Pencil className="h-3 w-3" />
+                                                    {entry.editor_name}
+                                                </span>
+                                                <span className="flex items-center gap-1">
+                                                    <Clock className="h-3 w-3" />
+                                                    {format(new Date(entry.created_at), 'MMM d, yyyy h:mm a')}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
             </div>
+
+            {/* Edit Carryover Credits Dialog */}
+            <Dialog open={isEditCarryoverOpen} onOpenChange={(open) => {
+                if (!open) {
+                    setIsEditCarryoverOpen(false);
+                    editCarryoverForm.reset();
+                }
+            }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Carryover Credits</DialogTitle>
+                        <DialogDescription>
+                            Adjust carryover credits for <strong>{user.name}</strong> ({year})
+                        </DialogDescription>
+                    </DialogHeader>
+                    {carryoverReceived && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4 p-3 rounded-lg bg-muted/50 border text-sm">
+                                <div>
+                                    <p className="text-muted-foreground">Current Credits</p>
+                                    <p className="font-semibold text-lg">{carryoverReceived.credits.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Consumed</p>
+                                    <p className="font-semibold text-lg text-red-600">{(carryoverReceived.credits_used ?? 0).toFixed(2)}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="carryover_credits">New Carryover Credits</Label>
+                                <Input
+                                    id="carryover_credits"
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    max="30"
+                                    value={editCarryoverForm.data.carryover_credits}
+                                    onChange={(e) => editCarryoverForm.setData('carryover_credits', parseFloat(e.target.value) || 0)}
+                                />
+                                {editCarryoverForm.errors.carryover_credits && (
+                                    <p className="text-sm text-red-600">{editCarryoverForm.errors.carryover_credits}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="carryover_reason">Reason <span className="text-red-500">*</span></Label>
+                                <Textarea
+                                    id="carryover_reason"
+                                    placeholder="Explain why the carryover credits are being adjusted..."
+                                    value={editCarryoverForm.data.reason}
+                                    onChange={(e) => editCarryoverForm.setData('reason', e.target.value)}
+                                    rows={3}
+                                />
+                                {editCarryoverForm.errors.reason && (
+                                    <p className="text-sm text-red-600">{editCarryoverForm.errors.reason}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="carryover_notes">Notes (optional)</Label>
+                                <Textarea
+                                    id="carryover_notes"
+                                    placeholder="Any additional notes..."
+                                    value={editCarryoverForm.data.notes}
+                                    onChange={(e) => editCarryoverForm.setData('notes', e.target.value)}
+                                    rows={2}
+                                />
+                            </div>
+
+                            {editCarryoverForm.data.carryover_credits < carryoverReceived.credits && (
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <p>Reducing carryover credits may trigger cascading adjustments to monthly credit records if the consumed amount exceeds the new value.</p>
+                                </div>
+                            )}
+
+                            {pendingLeaveInfo.pending_count > 0 && (
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm dark:bg-blue-950 dark:border-blue-800 dark:text-blue-200">
+                                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <div className="space-y-2">
+                                        <p className="font-medium">Pending Leave Requests</p>
+                                        <p>
+                                            This employee has <strong>{pendingLeaveInfo.pending_count}</strong> pending leave request(s) totaling{' '}
+                                            <strong>{pendingLeaveInfo.pending_credits.toFixed(2)}</strong> credit(s) awaiting approval.
+                                            {pendingLeaveInfo.future_accrual > 0 && (
+                                                <> Projected future accrual of <strong>{pendingLeaveInfo.future_accrual.toFixed(2)}</strong> credit(s) before the latest leave date is factored in.</>
+                                            )}
+                                            {editCarryoverForm.data.carryover_credits < carryoverReceived.credits && (
+                                                <> If approved, the effective balance would be further reduced.</>
+                                            )}
+                                        </p>
+                                        <ul className="space-y-1 ml-1">
+                                            {pendingLeaveInfo.pending_requests.map((req) => (
+                                                <li key={req.id} className="flex items-center gap-1.5">
+                                                    <span className="text-blue-400">•</span>
+                                                    <Link
+                                                        href={leaveShowRoute(req.id).url}
+                                                        className="underline hover:text-blue-900 dark:hover:text-blue-100"
+                                                        target="_blank"
+                                                    >
+                                                        {req.leave_type} — {format(new Date(req.start_date), 'MMM d')} to {format(new Date(req.end_date), 'MMM d, yyyy')} ({req.days_requested} day{req.days_requested !== 1 ? 's' : ''})
+                                                    </Link>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <p className="text-xs text-blue-600 dark:text-blue-300 italic">
+                                            Tip: Consider denying, editing the requested dates, or asking the employee to cancel pending requests before reducing credits to avoid insufficient balance issues.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {pendingLeaveInfo.pending_count > 0 && (summary.balance - (carryoverReceived.credits - editCarryoverForm.data.carryover_credits) + pendingLeaveInfo.future_accrual) < pendingLeaveInfo.pending_credits && (
+                                <label className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm cursor-pointer dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={pendingAcknowledged}
+                                        onChange={(e) => setPendingAcknowledged(e.target.checked)}
+                                        className="mt-0.5 rounded border-amber-300"
+                                    />
+                                    <span>I understand this may cause insufficient balance for pending leave requests (including projected future accruals).</span>
+                                </label>
+                            )}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditCarryoverOpen(false)} disabled={editCarryoverForm.processing}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submitEditCarryover} disabled={
+                            editCarryoverForm.processing
+                            || !editCarryoverForm.data.reason
+                            || (carryoverReceived != null && pendingLeaveInfo.pending_count > 0 && (summary.balance - (carryoverReceived.credits - editCarryoverForm.data.carryover_credits) + pendingLeaveInfo.future_accrual) < pendingLeaveInfo.pending_credits && !pendingAcknowledged)
+                        }>
+                            {editCarryoverForm.processing ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                            ) : (
+                                'Save Changes'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Monthly Credit Dialog */}
+            <Dialog open={isEditMonthlyOpen} onOpenChange={(open) => {
+                if (!open) {
+                    setIsEditMonthlyOpen(false);
+                    setEditingCredit(null);
+                    editMonthlyForm.reset();
+                }
+            }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Monthly Credit</DialogTitle>
+                        <DialogDescription>
+                            {editingCredit && (
+                                <>Adjust <strong>{editingCredit.month_name}</strong> credits for <strong>{user.name}</strong></>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {editingCredit && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-3 gap-4 p-3 rounded-lg bg-muted/50 border text-sm">
+                                <div>
+                                    <p className="text-muted-foreground">Current Earned</p>
+                                    <p className="font-semibold text-lg">{editingCredit.credits_earned.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Used</p>
+                                    <p className="font-semibold text-lg text-red-600">{editingCredit.credits_used.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">Balance</p>
+                                    <p className="font-semibold text-lg">{editingCredit.credits_balance.toFixed(2)}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="credits_earned">New Credits Earned</Label>
+                                <Input
+                                    id="credits_earned"
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    max="20"
+                                    value={editMonthlyForm.data.credits_earned}
+                                    onChange={(e) => editMonthlyForm.setData('credits_earned', parseFloat(e.target.value) || 0)}
+                                />
+                                {editMonthlyForm.errors.credits_earned && (
+                                    <p className="text-sm text-red-600">{editMonthlyForm.errors.credits_earned}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="monthly_reason">Reason <span className="text-red-500">*</span></Label>
+                                <Textarea
+                                    id="monthly_reason"
+                                    placeholder="Explain why the monthly credit is being adjusted..."
+                                    value={editMonthlyForm.data.reason}
+                                    onChange={(e) => editMonthlyForm.setData('reason', e.target.value)}
+                                    rows={3}
+                                />
+                                {editMonthlyForm.errors.reason && (
+                                    <p className="text-sm text-red-600">{editMonthlyForm.errors.reason}</p>
+                                )}
+                            </div>
+
+                            {editMonthlyForm.data.credits_earned < editingCredit.credits_used && (
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <p>Setting earned credits below the used amount will result in a negative balance for this month. The excess consumption may cascade to other months.</p>
+                                </div>
+                            )}
+
+                            {pendingLeaveInfo.pending_count > 0 && (
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm dark:bg-blue-950 dark:border-blue-800 dark:text-blue-200">
+                                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <div className="space-y-2">
+                                        <p className="font-medium">Pending Leave Requests</p>
+                                        <p>
+                                            This employee has <strong>{pendingLeaveInfo.pending_count}</strong> pending leave request(s) totaling{' '}
+                                            <strong>{pendingLeaveInfo.pending_credits.toFixed(2)}</strong> credit(s) awaiting approval.
+                                            {pendingLeaveInfo.future_accrual > 0 && (
+                                                <> Projected future accrual of <strong>{pendingLeaveInfo.future_accrual.toFixed(2)}</strong> credit(s) before the latest leave date is factored in.</>
+                                            )}
+                                            {editMonthlyForm.data.credits_earned < editingCredit.credits_earned && (
+                                                <> If approved, the effective balance would be further reduced.</>
+                                            )}
+                                        </p>
+                                        <ul className="space-y-1 ml-1">
+                                            {pendingLeaveInfo.pending_requests.map((req) => (
+                                                <li key={req.id} className="flex items-center gap-1.5">
+                                                    <span className="text-blue-400">•</span>
+                                                    <Link
+                                                        href={leaveShowRoute(req.id).url}
+                                                        className="underline hover:text-blue-900 dark:hover:text-blue-100"
+                                                        target="_blank"
+                                                    >
+                                                        {req.leave_type} — {format(new Date(req.start_date), 'MMM d')} to {format(new Date(req.end_date), 'MMM d, yyyy')} ({req.days_requested} day{req.days_requested !== 1 ? 's' : ''})
+                                                    </Link>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                        <p className="text-xs text-blue-600 dark:text-blue-300 italic">
+                                            Tip: Consider denying, updating the requested dates, or asking the employee to cancel pending requests before reducing credits to avoid insufficient balance issues.
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {pendingLeaveInfo.pending_count > 0 && (summary.balance - (editingCredit.credits_earned - editMonthlyForm.data.credits_earned) + pendingLeaveInfo.future_accrual) < pendingLeaveInfo.pending_credits && (
+                                <label className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm cursor-pointer dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={pendingAcknowledged}
+                                        onChange={(e) => setPendingAcknowledged(e.target.checked)}
+                                        className="mt-0.5 rounded border-amber-300"
+                                    />
+                                    <span>I understand this may cause insufficient balance for pending leave requests (including projected future accruals).</span>
+                                </label>
+                            )}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditMonthlyOpen(false)} disabled={editMonthlyForm.processing}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submitEditMonthly} disabled={
+                            editMonthlyForm.processing
+                            || !editMonthlyForm.data.reason
+                            || (editingCredit !== null && pendingLeaveInfo.pending_count > 0 && (summary.balance - (editingCredit.credits_earned - editMonthlyForm.data.credits_earned) + pendingLeaveInfo.future_accrual) < pendingLeaveInfo.pending_credits && !pendingAcknowledged)
+                        }>
+                            {editMonthlyForm.processing ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                            ) : (
+                                'Save Changes'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
