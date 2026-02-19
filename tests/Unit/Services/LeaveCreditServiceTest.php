@@ -338,39 +338,40 @@ class LeaveCreditServiceTest extends TestCase
     #[Test]
     public function it_accounts_for_pending_credits_in_vl_validation(): void
     {
+        // Fix test date to avoid month-boundary edge cases with future accrual
+        Carbon::setTestNow(Carbon::parse('2026-02-20'));
+
         $user = User::factory()->create([
-            'role' => 'Agent',
-            'hired_date' => Carbon::now()->subYear(), // Eligible
+            'role' => 'Agent', // 1.25 monthly rate
+            'hired_date' => Carbon::parse('2025-01-01'), // Eligible
         ]);
 
-        // Give user 3 credits
+        // Give user 1.25 credits
         LeaveCredit::factory()->create([
             'user_id' => $user->id,
-            'year' => now()->year,
+            'year' => 2026,
             'month' => 1,
-            'credits_earned' => 3.0,
+            'credits_earned' => 1.25,
             'credits_used' => 0,
-            'credits_balance' => 3.0,
+            'credits_balance' => 1.25,
         ]);
 
-        // Create a pending VL request consuming 2 days
+        // Create a pending VL request consuming 1 day
         LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'leave_type' => 'VL',
             'status' => 'pending',
-            'days_requested' => 2,
-            'start_date' => Carbon::now()->addWeeks(4)->startOfWeek(),
-            'end_date' => Carbon::now()->addWeeks(4)->startOfWeek()->addDay(),
+            'days_requested' => 1,
+            'start_date' => Carbon::parse('2026-04-06'),
+            'end_date' => Carbon::parse('2026-04-06'),
         ]);
 
-        // Try to request 2 more days (but only 1 available after pending)
-        $startDate = Carbon::now()->addWeeks(5)->startOfWeek();
-        $endDate = $startDate->copy()->addDay();
-
+        // Request 2 days for March 16-17
+        // Projected: 1.25 + 1.25 (Feb accrual) = 2.50, minus 1 pending = 1.50 < 2 → should fail
         $result = $this->service->validateLeaveRequest($user, [
             'leave_type' => 'VL',
-            'start_date' => $startDate->format('Y-m-d'),
-            'end_date' => $endDate->format('Y-m-d'),
+            'start_date' => '2026-03-16',
+            'end_date' => '2026-03-17',
             'days_requested' => 2,
         ]);
 
@@ -774,5 +775,187 @@ class LeaveCreditServiceTest extends TestCase
         $this->assertFalse($result['partial_credit']);
         $this->assertEquals(0, $result['credits_to_deduct']);
         $this->assertEquals(2, $result['upto_days']);
+    }
+
+    // =====================================================================
+    // Future Credit Accrual in VL Validation Tests
+    // =====================================================================
+
+    #[Test]
+    public function it_allows_vl_when_future_accrual_makes_credits_sufficient(): void
+    {
+        // Simulate: today is Feb 20, 2026
+        Carbon::setTestNow(Carbon::parse('2026-02-20'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent', // 1.25 monthly rate
+            'hired_date' => Carbon::parse('2025-01-01'), // Eligible (>6 months)
+        ]);
+
+        // Give user 4.25 current credits (not enough for 5 days on its own)
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 4.25,
+            'credits_used' => 0,
+            'credits_balance' => 4.25,
+        ]);
+
+        // Request 5 working days of VL for March 16-20 (future month)
+        // Feb end-of-month accrual (+1.25) will happen before Mar 16
+        // Projected: 4.25 + 1.25 = 5.50 >= 5 days → should pass
+        $result = $this->service->validateLeaveRequest($user, [
+            'leave_type' => 'VL',
+            'start_date' => '2026-03-16',
+            'end_date' => '2026-03-20',
+            'days_requested' => 5,
+        ]);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEmpty($result['errors']);
+    }
+
+    #[Test]
+    public function it_blocks_vl_when_future_accrual_still_insufficient(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-02-20'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent', // 1.25 monthly rate
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        // Give user 2.0 credits
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 2.0,
+            'credits_used' => 0,
+            'credits_balance' => 2.0,
+        ]);
+
+        // Request 5 days for March 16-20
+        // Projected: 2.0 + 1.25 = 3.25 < 5 → should fail
+        $result = $this->service->validateLeaveRequest($user, [
+            'leave_type' => 'VL',
+            'start_date' => '2026-03-16',
+            'end_date' => '2026-03-20',
+            'days_requested' => 5,
+        ]);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsStringIgnoringCase('Insufficient leave credits', $result['errors'][0]);
+    }
+
+    #[Test]
+    public function it_does_not_add_future_accrual_for_current_month_leave(): void
+    {
+        // Set to Feb 1 so that Feb 23 is 3+ weeks ahead (passes 2-week notice)
+        Carbon::setTestNow(Carbon::parse('2026-02-01'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        // Give user 1.25 credits
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        // Request 2 days in current month (Feb 23-24)
+        // No future accrual for same month → 1.25 < 2 → should fail
+        $result = $this->service->validateLeaveRequest($user, [
+            'leave_type' => 'VL',
+            'start_date' => '2026-02-23',
+            'end_date' => '2026-02-24',
+            'days_requested' => 2,
+        ]);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsStringIgnoringCase('Insufficient leave credits', $result['errors'][0]);
+    }
+
+    #[Test]
+    public function it_includes_multiple_months_of_future_accrual(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-01-15'));
+
+        $user = User::factory()->create([
+            'role' => 'Super Admin', // 1.5 monthly rate
+            'hired_date' => Carbon::parse('2024-01-01'),
+        ]);
+
+        // Give user 2.0 credits
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 2.0,
+            'credits_used' => 0,
+            'credits_balance' => 2.0,
+        ]);
+
+        // Request 5 days for March 16-20 (2 months ahead: Jan + Feb accrual)
+        // Projected: 2.0 + (2 * 1.5) = 5.0 >= 5 → should pass
+        $result = $this->service->validateLeaveRequest($user, [
+            'leave_type' => 'VL',
+            'start_date' => '2026-03-16',
+            'end_date' => '2026-03-20',
+            'days_requested' => 5,
+        ]);
+
+        $this->assertTrue($result['valid']);
+        $this->assertEmpty($result['errors']);
+    }
+
+    #[Test]
+    public function it_accounts_for_pending_credits_with_future_accrual(): void
+    {
+        Carbon::setTestNow(Carbon::parse('2026-02-20'));
+
+        $user = User::factory()->create([
+            'role' => 'Agent', // 1.25 monthly rate
+            'hired_date' => Carbon::parse('2025-01-01'),
+        ]);
+
+        // Give user 4.25 credits
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 4.25,
+            'credits_used' => 0,
+            'credits_balance' => 4.25,
+        ]);
+
+        // Create a pending VL consuming 2 days
+        LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'status' => 'pending',
+            'days_requested' => 2,
+            'start_date' => Carbon::parse('2026-04-06'),
+            'end_date' => Carbon::parse('2026-04-07'),
+        ]);
+
+        // Request 5 days for March 16-20
+        // Projected: 4.25 + 1.25 = 5.50, minus 2 pending = 3.50 < 5 → should fail
+        $result = $this->service->validateLeaveRequest($user, [
+            'leave_type' => 'VL',
+            'start_date' => '2026-03-16',
+            'end_date' => '2026-03-20',
+            'days_requested' => 5,
+        ]);
+
+        $this->assertFalse($result['valid']);
+        $this->assertStringContainsStringIgnoringCase('Insufficient leave credits', $result['errors'][0]);
     }
 }

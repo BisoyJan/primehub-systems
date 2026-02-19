@@ -140,7 +140,6 @@ interface Props {
     isTeamLead?: boolean;
     isSuperAdmin?: boolean;
     canCancel: boolean;
-    canDelete?: boolean;
     hasUserApproved: boolean;
     canTlApprove?: boolean;
     userRole: string;
@@ -170,7 +169,6 @@ export default function Show({
     leaveRequest,
     isAdmin,
     canCancel,
-    canDelete = false,
     hasUserApproved,
     canTlApprove = false,
     isSuperAdmin = false,
@@ -588,7 +586,7 @@ export default function Show({
                                 </Button>
                             </Can>
                         )}
-                        {(can('leave.delete') || canDelete) && (
+                        {can('leave.delete') && (
                             <Button variant="destructive" size="sm" onClick={() => setShowDeleteDialog(true)}>
                                 <Trash2 className="mr-1 h-4 w-4" />
                                 <span className="hidden sm:inline">Delete</span>
@@ -698,8 +696,8 @@ export default function Show({
                             <p className="text-base">{leaveRequest.campaign_department}</p>
                         </div>
 
-                        {/* Earlier Conflicts Warning (First-Come-First-Serve for VL/UPTO) - Hidden for cancelled/approved leaves */}
-                        {Boolean(earlierConflicts && earlierConflicts.length > 0 && ['VL', 'UPTO'].includes(leaveRequest.leave_type) && leaveRequest.status !== 'cancelled' && leaveRequest.status !== 'approved') && (
+                        {/* Earlier Conflicts Warning (First-Come-First-Serve for VL/UPTO) - Hidden for cancelled leaves */}
+                        {Boolean(earlierConflicts && earlierConflicts.length > 0 && ['VL', 'UPTO'].includes(leaveRequest.leave_type) && leaveRequest.status !== 'cancelled') && (
                             <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
                                 <AlertTriangle className="h-4 w-4 text-orange-600" />
                                 <AlertDescription className="text-orange-800 dark:text-orange-200">
@@ -1658,15 +1656,6 @@ export default function Show({
                             Are you sure you want to permanently delete this leave request? This action cannot be undone and will remove all associated data.
                         </DialogDescription>
                     </DialogHeader>
-                    {leaveRequest.status === 'approved' && (
-                        <Alert className="border-amber-300 bg-amber-50 dark:border-amber-700 dark:bg-amber-950">
-                            <AlertTriangle className="h-4 w-4 text-amber-600" />
-                            <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                <p className="font-semibold">Leave credits will NOT be restored.</p>
-                                <p className="mt-1">Deleting does not restore deducted leave credits or rollback attendance records. If you need credits restored, cancel the leave request first, then delete it.</p>
-                            </AlertDescription>
-                        </Alert>
-                    )}
                     <DialogFooter>
                         <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>
                             Cancel

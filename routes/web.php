@@ -346,6 +346,15 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/carryovers/process', [LeaveRequestController::class, 'processYearEndCarryovers'])->name('carryovers.process');
             Route::get('/mismatch/scan', [LeaveRequestController::class, 'creditsYearMismatchScan'])->name('mismatch.scan');
             Route::post('/mismatch/fix', [LeaveRequestController::class, 'creditsYearMismatchFix'])->name('mismatch.fix');
+
+            // Manual credit editing routes (requires leave_credits.edit permission)
+            Route::put('/{user}/carryover', [LeaveRequestController::class, 'creditsUpdateCarryover'])
+                ->name('update-carryover')
+                ->middleware('permission:leave_credits.edit');
+            Route::put('/{user}/credits/{leaveCredit}', [LeaveRequestController::class, 'creditsUpdateMonthly'])
+                ->name('update-monthly')
+                ->middleware('permission:leave_credits.edit');
+
             Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');
         });
 

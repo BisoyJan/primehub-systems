@@ -472,10 +472,11 @@ export default function Edit({
         // BL does not consume credits (non-credited leave type)
         let newCreditError: string | null = null;
         if (data.leave_type === 'VL' && calculatedDays > 0) {
+            // Calculate projected credits inline to avoid stale state from concurrent useEffect
             const projectedCredits = data.start_date ? calculateFutureCredits(data.start_date) : 0;
             const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + (requiresCredits ? leaveRequest.days_requested : 0) + projectedCredits);
             if (availableBalance < calculatedDays) {
-                newCreditError = `Insufficient leave credits. Available: ${Math.floor(availableBalance)} day(s)${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} day(s). Please reduce your leave days to match your available credits.`;
+                newCreditError = `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} day(s)${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} day(s). Please reduce your leave days to match your available credits.`;
             }
         }
 

@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useMemo, useEffect } from 'react';
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, useForm } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -56,7 +56,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Separator } from '@/components/ui/separator';
-import { Download, Eye, Filter, ChevronsUpDown, Check, Banknote, Clock, ArrowRight, Settings, RefreshCw, Play, Loader2, TrendingUp, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
+import { Download, Eye, Filter, ChevronsUpDown, Check, Banknote, Clock, ArrowRight, Settings, RefreshCw, Play, Loader2, TrendingUp, AlertTriangle, ChevronDown, ChevronRight, Pencil, Info } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -65,6 +65,10 @@ import PaginationNav from '@/components/pagination-nav';
 import { index as leaveIndexRoute } from '@/routes/leave-requests';
 import { format } from 'date-fns';
 import { Progress } from '@/components/ui/progress';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { creditsUpdateCarryover } from '@/actions/App/Http/Controllers/LeaveRequestController';
 
 interface RegularizationStats {
     pending_count: number;
@@ -82,6 +86,7 @@ interface CarryoverData {
 }
 
 interface CarryoverReceivedData {
+    id: number;
     credits: number;
     from_year: number;
     is_first_regularization: boolean;
@@ -120,6 +125,8 @@ interface CreditData {
     carryover_received: CarryoverReceivedData | null;
     carryover_forward: CarryoverData | null;
     regularization: RegularizationData;
+    pending_count: number;
+    pending_credits: number;
 }
 
 interface PaginationLink {
@@ -164,6 +171,7 @@ interface Props {
         campaign_id: string;
     };
     availableYears: number[];
+    canEdit: boolean;
 }
 
 interface MismatchRequest {
@@ -193,7 +201,7 @@ interface MismatchScanResult {
     users: MismatchUser[];
 }
 
-export default function Index({ creditsData, allEmployees, campaigns = [], teamLeadCampaignId, filters, availableYears }: Props) {
+export default function Index({ creditsData, allEmployees, campaigns = [], teamLeadCampaignId, filters, availableYears, canEdit = false }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Leave Credits',
         breadcrumbs: [
@@ -241,6 +249,43 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
     const [isFixingMismatch, setIsFixingMismatch] = useState(false);
     const [confirmMismatchFix, setConfirmMismatchFix] = useState(false);
     const [expandedMismatchUsers, setExpandedMismatchUsers] = useState<Set<number>>(new Set());
+
+    // Edit carryover dialog state
+    const [isEditCarryoverOpen, setIsEditCarryoverOpen] = useState(false);
+    const [editingEmployee, setEditingEmployee] = useState<CreditData | null>(null);
+    const editCarryoverForm = useForm({
+        carryover_credits: 0,
+        year: new Date().getFullYear(),
+        reason: '',
+        notes: '',
+    });
+
+    const [pendingAcknowledged, setPendingAcknowledged] = useState(false);
+
+    const openEditCarryover = (employee: CreditData) => {
+        if (!employee.carryover_received) return;
+        setEditingEmployee(employee);
+        editCarryoverForm.setData({
+            carryover_credits: employee.carryover_received.credits,
+            year: parseInt(yearFilter),
+            reason: '',
+            notes: '',
+        });
+        setPendingAcknowledged(false);
+        setIsEditCarryoverOpen(true);
+    };
+
+    const submitEditCarryover = () => {
+        if (!editingEmployee) return;
+        editCarryoverForm.put(creditsUpdateCarryover({ user: editingEmployee.id }).url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setIsEditCarryoverOpen(false);
+                setEditingEmployee(null);
+                editCarryoverForm.reset();
+            },
+        });
+    };
 
     // Filter employees based on search query (from all employees list)
     const filteredEmployees = useMemo(() => {
@@ -983,11 +1028,23 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                                 )}
                                             </TableCell>
                                             <TableCell className="text-center">
-                                                <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
-                                                    <Button variant="outline" size="icon" title="View History">
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                </Link>
+                                                <div className="flex items-center justify-center gap-1">
+                                                    <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
+                                                        <Button variant="outline" size="icon" title="View History">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </Link>
+                                                    {canEdit && employee.carryover_received && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            title="Edit Carryover Credits"
+                                                            onClick={() => openEditCarryover(employee)}
+                                                        >
+                                                            <Pencil className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ))
@@ -1168,6 +1225,17 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                             View History
                                         </Button>
                                     </Link>
+                                    {canEdit && employee.carryover_received && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-full"
+                                            onClick={() => openEditCarryover(employee)}
+                                        >
+                                            <Pencil className="h-4 w-4 mr-2" />
+                                            Edit Carryover
+                                        </Button>
+                                    )}
                                 </div>
                             ))}
                             {creditsData.links && creditsData.links.length > 0 && (
@@ -1730,6 +1798,132 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+
+            {/* Edit Carryover Credits Dialog */}
+            <Dialog open={isEditCarryoverOpen} onOpenChange={(open) => {
+                if (!open) {
+                    setIsEditCarryoverOpen(false);
+                    setEditingEmployee(null);
+                    editCarryoverForm.reset();
+                }
+            }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                    <DialogHeader>
+                        <DialogTitle>Edit Carryover Credits</DialogTitle>
+                        <DialogDescription>
+                            {editingEmployee && (
+                                <>Adjust carryover credits for <strong>{editingEmployee.name}</strong> ({yearFilter})</>
+                            )}
+                        </DialogDescription>
+                    </DialogHeader>
+                    {editingEmployee?.carryover_received && (
+                        <div className="space-y-4">
+                            <div className="grid grid-cols-2 gap-4 p-3 rounded-lg bg-muted/50 border text-sm">
+                                <div>
+                                    <p className="text-muted-foreground">Current Credits</p>
+                                    <p className="font-semibold text-lg">{editingEmployee.carryover_received.credits.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-muted-foreground">From Year</p>
+                                    <p className="font-semibold text-lg">{editingEmployee.carryover_received.from_year}</p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="carryover_credits">New Carryover Credits</Label>
+                                <Input
+                                    id="carryover_credits"
+                                    type="number"
+                                    step="0.25"
+                                    min="0"
+                                    max="30"
+                                    value={editCarryoverForm.data.carryover_credits}
+                                    onChange={(e) => editCarryoverForm.setData('carryover_credits', parseFloat(e.target.value) || 0)}
+                                />
+                                {editCarryoverForm.errors.carryover_credits && (
+                                    <p className="text-sm text-red-600">{editCarryoverForm.errors.carryover_credits}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="edit_reason">Reason <span className="text-red-500">*</span></Label>
+                                <Textarea
+                                    id="edit_reason"
+                                    placeholder="Explain why the carryover credits are being adjusted..."
+                                    value={editCarryoverForm.data.reason}
+                                    onChange={(e) => editCarryoverForm.setData('reason', e.target.value)}
+                                    rows={3}
+                                />
+                                {editCarryoverForm.errors.reason && (
+                                    <p className="text-sm text-red-600">{editCarryoverForm.errors.reason}</p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="edit_notes">Notes (optional)</Label>
+                                <Textarea
+                                    id="edit_notes"
+                                    placeholder="Any additional notes..."
+                                    value={editCarryoverForm.data.notes}
+                                    onChange={(e) => editCarryoverForm.setData('notes', e.target.value)}
+                                    rows={2}
+                                />
+                            </div>
+
+                            {editCarryoverForm.data.carryover_credits < editingEmployee.carryover_received.credits && (
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                    <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <p>Reducing carryover credits may trigger cascading adjustments to monthly credit records if the consumed amount exceeds the new value.</p>
+                                </div>
+                            )}
+
+                            {editingEmployee.pending_count > 0 && (
+                                <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-200 text-blue-700 text-sm dark:bg-blue-950 dark:border-blue-800 dark:text-blue-200">
+                                    <Info className="h-4 w-4 mt-0.5 shrink-0" />
+                                    <div>
+                                        <p className="font-medium">Pending Leave Requests</p>
+                                        <p>
+                                            This employee has <strong>{editingEmployee.pending_count}</strong> pending leave request(s) totaling{' '}
+                                            <strong>{editingEmployee.pending_credits.toFixed(2)}</strong> credit(s) awaiting approval.
+                                            {editCarryoverForm.data.carryover_credits < editingEmployee.carryover_received.credits && (
+                                                <> If approved, the effective balance would be further reduced.</>
+                                            )}
+                                        </p>
+                                    </div>
+                                </div>
+                            )}
+
+                            {editingEmployee.pending_count > 0 && editingEmployee.balance - (editingEmployee.carryover_received.credits - editCarryoverForm.data.carryover_credits) < editingEmployee.pending_credits && (
+                                <label className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm cursor-pointer dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                    <input
+                                        type="checkbox"
+                                        checked={pendingAcknowledged}
+                                        onChange={(e) => setPendingAcknowledged(e.target.checked)}
+                                        className="mt-0.5 rounded border-amber-300"
+                                    />
+                                    <span>I understand this may cause insufficient balance for pending leave requests.</span>
+                                </label>
+                            )}
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsEditCarryoverOpen(false)} disabled={editCarryoverForm.processing}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submitEditCarryover} disabled={
+                            editCarryoverForm.processing
+                            || !editCarryoverForm.data.reason
+                            || (editingEmployee.carryover_received !== null && editingEmployee.pending_count > 0 && editingEmployee.balance - (editingEmployee.carryover_received.credits - editCarryoverForm.data.carryover_credits) < editingEmployee.pending_credits && !pendingAcknowledged)
+                        }>
+                            {editCarryoverForm.processing ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
+                            ) : (
+                                'Save Changes'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </AppLayout>
     );
 }
