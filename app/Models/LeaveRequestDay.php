@@ -1,0 +1,142 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
+
+class LeaveRequestDay extends Model
+{
+    use HasFactory, LogsActivity;
+
+    public function getActivitylogOptions(): LogOptions
+    {
+        return LogOptions::defaults()
+            ->logAll()
+            ->logOnlyDirty()
+            ->dontSubmitEmptyLogs();
+    }
+
+    /**
+     * Day status constants.
+     */
+    const STATUS_PENDING = 'pending';
+
+    const STATUS_SL_CREDITED = 'sl_credited';
+
+    const STATUS_NCNS = 'ncns';
+
+    const STATUS_ADVISED_ABSENCE = 'advised_absence';
+
+    /**
+     * Human-readable labels for day statuses.
+     */
+    const STATUS_LABELS = [
+        self::STATUS_PENDING => 'Pending',
+        self::STATUS_SL_CREDITED => 'SL Credited (Paid)',
+        self::STATUS_NCNS => 'NCNS',
+        self::STATUS_ADVISED_ABSENCE => 'Advised Absence (UPTO — Unpaid Time Off)',
+    ];
+
+    /**
+     * Statuses that are considered paid (deducted from credits).
+     */
+    const PAID_STATUSES = [self::STATUS_SL_CREDITED];
+
+    /**
+     * Statuses that are considered unpaid.
+     */
+    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE];
+
+    protected $fillable = [
+        'leave_request_id',
+        'date',
+        'day_status',
+        'notes',
+        'assigned_by',
+        'assigned_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'date' => 'date',
+            'assigned_at' => 'datetime',
+        ];
+    }
+
+    /**
+     * Get the leave request this day belongs to.
+     */
+    public function leaveRequest(): BelongsTo
+    {
+        return $this->belongsTo(LeaveRequest::class);
+    }
+
+    /**
+     * Get the user who assigned the status for this day.
+     */
+    public function assigner(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assigned_by');
+    }
+
+    /**
+     * Scope: only credited (paid) days.
+     */
+    public function scopeCredited($query)
+    {
+        return $query->where('day_status', self::STATUS_SL_CREDITED);
+    }
+
+    /**
+     * Scope: only NCNS days.
+     */
+    public function scopeNcns($query)
+    {
+        return $query->where('day_status', self::STATUS_NCNS);
+    }
+
+    /**
+     * Scope: only Advised Absence (UPTO) days.
+     */
+    public function scopeAdvisedAbsence($query)
+    {
+        return $query->where('day_status', self::STATUS_ADVISED_ABSENCE);
+    }
+
+    /**
+     * Scope: only assigned (non-pending) days.
+     */
+    public function scopeAssigned($query)
+    {
+        return $query->where('day_status', '!=', self::STATUS_PENDING);
+    }
+
+    /**
+     * Check if this day is paid (SL Credited).
+     */
+    public function isPaid(): bool
+    {
+        return in_array($this->day_status, self::PAID_STATUSES);
+    }
+
+    /**
+     * Check if this day is unpaid (NCNS or Advised Absence).
+     */
+    public function isUnpaid(): bool
+    {
+        return in_array($this->day_status, self::UNPAID_STATUSES);
+    }
+
+    /**
+     * Get the human-readable label for the current status.
+     */
+    public function getStatusLabel(): string
+    {
+        return self::STATUS_LABELS[$this->day_status] ?? 'Unknown';
+    }
+}

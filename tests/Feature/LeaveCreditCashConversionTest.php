@@ -276,6 +276,45 @@ class LeaveCreditCashConversionTest extends TestCase
     }
 
     #[Test]
+    public function balance_compensates_for_month0_used_when_converted(): void
+    {
+        // Cash-converted regular carryover
+        LeaveCreditCarryover::factory()->cashConverted()->create([
+            'user_id' => $this->employee->id,
+            'carryover_credits' => 4.00,
+            'from_year' => 2025,
+            'to_year' => 2026,
+            'is_first_regularization' => false,
+        ]);
+
+        // Month=0 LeaveCredit with 1.00 used (leave taken before conversion)
+        LeaveCredit::factory()->create([
+            'user_id' => $this->employee->id,
+            'year' => 2026,
+            'month' => 0,
+            'credits_earned' => 1.00,
+            'credits_used' => 1.00,
+            'credits_balance' => 0,
+        ]);
+
+        // Monthly credits
+        LeaveCredit::factory()->create([
+            'user_id' => $this->employee->id,
+            'year' => 2026,
+            'month' => 1,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        $balance = $this->service->getBalance($this->employee, 2026);
+
+        // Balance should be 1.25 (monthly only), NOT 0.25
+        // The month=0 used (1.00) shouldn't penalize the monthly balance
+        $this->assertEquals(1.25, $balance);
+    }
+
+    #[Test]
     public function bulk_cash_conversion_endpoint_works(): void
     {
         LeaveCreditCarryover::factory()->create([

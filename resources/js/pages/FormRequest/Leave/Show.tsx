@@ -24,7 +24,8 @@ import {
 import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, show as leaveShowRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, show as leaveShowRoute, updateDayStatuses as leaveUpdateDayStatusesRoute } from '@/routes/leave-requests';
+import DayStatusAssignment, { type DayStatus } from './Components/DayStatusAssignment';
 
 interface User {
     id: number;
@@ -90,9 +91,6 @@ interface LeaveRequest {
     approved_days?: number;
     sl_credits_applied?: boolean;
     sl_no_credit_reason?: string;
-    vl_credits_applied?: boolean;
-    vl_no_credit_reason?: string;
-    linked_request_id?: number;
     denied_dates?: DeniedDate[];
 }
 
@@ -119,19 +117,29 @@ interface ActiveAttendancePoint {
 interface CreditPreview {
     should_deduct: boolean;
     reason: string | null;
-    convert_to_upto: boolean;
-    partial_credit: boolean;
     credits_to_deduct?: number;
+    // SL-only fields (SL credit check still supports partial/UPTO conversion)
+    convert_to_upto?: boolean;
+    partial_credit?: boolean;
     upto_days?: number;
 }
 
-interface LinkedRequestSummary {
+interface LeaveRequestDayRecord {
     id: number;
-    leave_type: string;
-    start_date: string;
-    end_date: string;
-    days_requested: number;
-    status: string;
+    date: string;
+    day_status: string;
+    notes: string | null;
+    status_label: string;
+    is_paid: boolean;
+    assigned_by: string | null;
+    assigned_by_role: string | null;
+    assigned_at: string | null;
+}
+
+interface SuggestedDayStatus {
+    date: string;
+    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence';
+    notes: string | null;
 }
 
 interface Props {
@@ -150,8 +158,8 @@ interface Props {
     absenceWindowInfo?: AbsenceWindowInfo | null;
     activeAttendancePoints?: ActiveAttendancePoint[];
     creditPreview?: CreditPreview | null;
-    linkedRequest?: LinkedRequestSummary | null;
-    companionRequests?: LinkedRequestSummary[];
+    leaveRequestDays?: LeaveRequestDayRecord[] | null;
+    suggestedDayStatuses?: SuggestedDayStatus[] | null;
 }
 
 interface EarlierConflict {
@@ -179,8 +187,8 @@ export default function Show({
     absenceWindowInfo = null,
     activeAttendancePoints = [],
     creditPreview = null,
-    linkedRequest = null,
-    companionRequests = [],
+    leaveRequestDays = null,
+    suggestedDayStatuses = null,
 }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
@@ -207,10 +215,66 @@ export default function Show({
     const [showAdjustForWorkDialog, setShowAdjustForWorkDialog] = useState(false);
     const [selectedApprovedDates, setSelectedApprovedDates] = useState<string[]>([]);
     const [showAttendancePointsDialog, setShowAttendancePointsDialog] = useState(false);
+    const [showEditDayStatusesDialog, setShowEditDayStatusesDialog] = useState(false);
     const { can } = usePermission();
     const getInitials = useInitials();
 
-    const approveForm = useForm({ review_notes: '' });
+    // SL Per-Day Status Assignment state
+    const isSl = leaveRequest.leave_type === 'SL';
+
+    // Check if there are pre-stored day statuses from a previous approver (TL/Admin)
+    const hasPreStoredDayStatuses = isSl && leaveRequest.status === 'pending' && leaveRequestDays && leaveRequestDays.length > 0;
+    const preStoredAttribution = hasPreStoredDayStatuses && leaveRequestDays![0]?.assigned_by
+        ? `Pre-assigned by ${leaveRequestDays![0].assigned_by}${leaveRequestDays![0].assigned_by_role ? ` (${leaveRequestDays![0].assigned_by_role})` : ''}`
+        : null;
+
+    const [slDayStatuses, setSlDayStatuses] = useState<DayStatus[]>(() => {
+        // Priority 1: Pre-stored day statuses from previous approver (TL/Admin)
+        if (hasPreStoredDayStatuses && leaveRequestDays && leaveRequestDays.length > 0) {
+            return leaveRequestDays.map((d) => ({
+                date: d.date,
+                status: d.day_status as DayStatus['status'],
+                notes: d.notes || '',
+            }));
+        }
+        // Priority 2: Auto-suggested statuses based on credit availability
+        if (suggestedDayStatuses && suggestedDayStatuses.length > 0) {
+            return suggestedDayStatuses.map((s) => ({
+                date: s.date,
+                status: s.status,
+                notes: s.notes || '',
+            }));
+        }
+        // Fallback: build from workdays with 'pending' status
+        if (isSl) {
+            try {
+                const start = parseISO(leaveRequest.start_date);
+                const end = parseISO(leaveRequest.end_date);
+                return eachDayOfInterval({ start, end })
+                    .filter((d) => !isWeekend(d))
+                    .map((d) => ({
+                        date: format(d, 'yyyy-MM-dd'),
+                        status: 'pending' as const,
+                        notes: '',
+                    }));
+            } catch {
+                return [];
+            }
+        }
+        return [];
+    });
+    const [editDayStatuses, setEditDayStatuses] = useState<DayStatus[]>([]);
+    const [editDayStatusesProcessing, setEditDayStatusesProcessing] = useState(false);
+
+    // SL Per-Day Status for Partial Deny dialog
+    const [partialDenySlDayStatuses, setPartialDenySlDayStatuses] = useState<DayStatus[]>([]);
+    // SL Per-Day Status for Force Approve dialog
+    const [forceApproveSlDayStatuses, setForceApproveSlDayStatuses] = useState<DayStatus[]>([]);
+
+    const approveForm = useForm({
+        review_notes: '',
+        day_statuses: [] as Array<{ date: string; status: string; notes?: string }>,
+    });
     const denyForm = useForm({ review_notes: '' });
     const partialDenyForm = useForm({ denied_dates: [] as string[], denial_reason: '', review_notes: '' });
     const tlApproveForm = useForm({ review_notes: '' });
@@ -241,12 +305,64 @@ export default function Show({
         (!leaveRequest.requires_tl_approval || isTlApproved);
 
     const handleApprove = () => {
-        approveForm.post(leaveApproveRoute(leaveRequest.id).url, {
+        // For SL, include per-day statuses in the approval data
+        const submitData: {
+            review_notes: string;
+            day_statuses?: Array<{ date: string; status: string; notes?: string }>;
+        } = {
+            review_notes: approveForm.data.review_notes,
+        };
+
+        if (isSl && slDayStatuses.length > 0) {
+            submitData.day_statuses = slDayStatuses.map((d) => ({
+                date: d.date,
+                status: d.status,
+                notes: d.notes || undefined,
+            }));
+        }
+
+        router.post(leaveApproveRoute(leaveRequest.id).url, submitData, {
             onSuccess: () => {
                 setShowApproveDialog(false);
                 toast.success('Leave request approved successfully');
             },
+            onError: (errors) => {
+                if (errors.error) toast.error(errors.error);
+            },
         });
+    };
+
+    // Handle editing day statuses for approved SL requests
+    const handleOpenEditDayStatuses = () => {
+        if (leaveRequestDays && leaveRequestDays.length > 0) {
+            setEditDayStatuses(
+                leaveRequestDays.map((d) => ({
+                    date: d.date,
+                    status: d.day_status as DayStatus['status'],
+                    notes: d.notes || '',
+                })),
+            );
+        }
+        setShowEditDayStatusesDialog(true);
+    };
+
+    const handleSaveEditDayStatuses = () => {
+        setEditDayStatusesProcessing(true);
+        router.put(
+            leaveUpdateDayStatusesRoute(leaveRequest.id).url,
+            { day_statuses: editDayStatuses.map((d) => ({ date: d.date, status: d.status, notes: d.notes || undefined })) },
+            {
+                onSuccess: () => {
+                    setShowEditDayStatusesDialog(false);
+                    setEditDayStatusesProcessing(false);
+                    toast.success('Per-day statuses updated successfully');
+                },
+                onError: (errors) => {
+                    setEditDayStatusesProcessing(false);
+                    toast.error(errors.error || 'Failed to update day statuses');
+                },
+            },
+        );
     };
 
     const handleDeny = () => {
@@ -276,23 +392,13 @@ export default function Show({
         });
     };
 
-    // Handle force approve date selection toggle
-    const toggleForceApproveDate = (dateStr: string) => {
-        setForceApproveSelectedDates(prev => {
-            if (prev.includes(dateStr)) {
-                return prev.filter(d => d !== dateStr);
-            } else {
-                return [...prev, dateStr];
-            }
-        });
-    };
-
     const handleForceApprove = () => {
         // Build the data to submit
         const submitData: {
             review_notes: string;
             denied_dates: string[];
             denial_reason: string;
+            day_statuses?: Array<{ date: string; status: string; notes?: string }>;
         } = {
             review_notes: forceApproveForm.data.review_notes,
             denied_dates: [],
@@ -306,11 +412,26 @@ export default function Show({
                 .filter(dateStr => !forceApproveSelectedDates.includes(dateStr));
         }
 
+        // Include SL per-day statuses
+        if (isSl) {
+            const dayStatuses = forceApproveSlDayStatuses.length > 0
+                ? forceApproveSlDayStatuses
+                : forceApproveAllSlDayStatuses;
+            if (dayStatuses.length > 0) {
+                submitData.day_statuses = dayStatuses.map(d => ({
+                    date: d.date,
+                    status: d.status,
+                    notes: d.notes || undefined,
+                }));
+            }
+        }
+
         router.post(`/form-requests/leave-requests/${leaveRequest.id}/force-approve`, submitData, {
             onSuccess: () => {
                 setShowForceApproveDialog(false);
                 setForceApprovePartialMode(false);
                 setForceApproveSelectedDates([]);
+                setForceApproveSlDayStatuses([]);
                 forceApproveForm.reset();
                 toast.success(forceApprovePartialMode && forceApproveSelectedDates.length > 0
                     ? 'Leave request force approved with partial denial'
@@ -380,6 +501,76 @@ export default function Show({
         }
     }, [leaveRequest.start_date, leaveRequest.end_date]);
 
+    // Full original date range working days — used in Partial Deny dialog when a prior partial denial exists
+    // so the next approver can see and re-select previously denied dates
+    const originalWorkDays = useMemo(() => {
+        if (leaveRequest.has_partial_denial && leaveRequest.original_start_date && leaveRequest.original_end_date) {
+            try {
+                const start = parseISO(leaveRequest.original_start_date);
+                const end = parseISO(leaveRequest.original_end_date);
+                return eachDayOfInterval({ start, end }).filter(date => !isWeekend(date));
+            } catch {
+                return workDays;
+            }
+        }
+        return workDays;
+    }, [leaveRequest.has_partial_denial, leaveRequest.original_start_date, leaveRequest.original_end_date, workDays]);
+
+    // Set of previously denied date strings for quick lookup
+    const previouslyDeniedDateSet = useMemo(() => {
+        if (!leaveRequest.has_partial_denial || !leaveRequest.denied_dates) return new Set<string>();
+        return new Set(leaveRequest.denied_dates.map(dd => {
+            try { return format(parseISO(dd.denied_date), 'yyyy-MM-dd'); } catch { return ''; }
+        }).filter(Boolean));
+    }, [leaveRequest.has_partial_denial, leaveRequest.denied_dates]);
+
+    // Helper: build SL day statuses for a set of approved dates, preserving existing selections + pre-stored records
+    const buildSlDayStatusesForDates = (approvedDateStrs: string[], existingStatuses: DayStatus[]): DayStatus[] => {
+        const existingMap = new Map(existingStatuses.map(d => [d.date, d]));
+        // Also check pre-stored records from previous approver as fallback
+        const preStoredMap = new Map(
+            (leaveRequestDays ?? []).map(d => [d.date, { date: d.date, status: d.day_status as DayStatus['status'], notes: d.notes || '' }])
+        );
+        return approvedDateStrs
+            .sort()
+            .map(dateStr => existingMap.get(dateStr) ?? preStoredMap.get(dateStr) ?? { date: dateStr, status: 'pending' as const, notes: '' });
+    };
+
+    // Update partial deny SL day statuses when approved dates change
+    const handleToggleApprovedDateWithSlUpdate = (dateStr: string) => {
+        setSelectedApprovedDates(prev => {
+            const next = prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr];
+            if (isSl) {
+                setPartialDenySlDayStatuses(current => buildSlDayStatusesForDates(next, current));
+            }
+            return next;
+        });
+    };
+
+    // Update force approve SL day statuses when selected dates change
+    const handleToggleForceApproveDateWithSlUpdate = (dateStr: string) => {
+        setForceApproveSelectedDates(prev => {
+            const next = prev.includes(dateStr) ? prev.filter(d => d !== dateStr) : [...prev, dateStr];
+            if (isSl && forceApprovePartialMode) {
+                setForceApproveSlDayStatuses(current => buildSlDayStatusesForDates(next, current));
+            }
+            return next;
+        });
+    };
+
+    // Build force approve SL day statuses for full approval (all work days)
+    // Uses pre-stored records from previous approver if available
+    const forceApproveAllSlDayStatuses = useMemo(() => {
+        if (!isSl) return [];
+        const preStoredMap = new Map(
+            (leaveRequestDays ?? []).map(d => [d.date, { date: d.date, status: d.day_status as DayStatus['status'], notes: d.notes || '' }])
+        );
+        return workDays.map(d => {
+            const dateStr = format(d, 'yyyy-MM-dd');
+            return preStoredMap.get(dateStr) ?? { date: dateStr, status: 'pending' as const, notes: '' };
+        });
+    }, [isSl, workDays, leaveRequestDays]);
+
     // Get list of dates in leave period for the adjust dialog
     const getLeaveDates = () => {
         try {
@@ -391,16 +582,11 @@ export default function Show({
         }
     };
 
-    // Handle partial approval - toggle date selection
-    const toggleApprovedDate = (dateStr: string) => {
-        setSelectedApprovedDates(prev => {
-            if (prev.includes(dateStr)) {
-                return prev.filter(d => d !== dateStr);
-            } else {
-                return [...prev, dateStr];
-            }
-        });
-    };
+    // Handle partial approval - toggle date selection (delegates to SL-aware handler)
+    const toggleApprovedDate = handleToggleApprovedDateWithSlUpdate;
+
+    // Handle force approve date selection toggle (delegates to SL-aware handler)
+    const toggleForceApproveDate = handleToggleForceApproveDateWithSlUpdate;
 
     // Handle partial approval submission
     const handlePartialDeny = () => {
@@ -409,22 +595,42 @@ export default function Show({
             return;
         }
 
-        if (selectedApprovedDates.length === workDays.length) {
+        if (selectedApprovedDates.length === originalWorkDays.length) {
             toast.error('You cannot approve all dates. Use full approve instead.');
             return;
         }
 
-        // Calculate denied dates (dates NOT selected for approval)
-        const deniedDates = workDays
+        // Calculate denied dates (dates NOT selected for approval) from full original range
+        const deniedDates = originalWorkDays
             .map(date => format(date, 'yyyy-MM-dd'))
             .filter(dateStr => !selectedApprovedDates.includes(dateStr));
 
-        partialDenyForm.setData('denied_dates', deniedDates);
-        partialDenyForm.post(leavePartialDenyRoute(leaveRequest.id).url, {
+        const submitData: {
+            denied_dates: string[];
+            denial_reason: string;
+            review_notes: string;
+            day_statuses?: Array<{ date: string; status: string; notes?: string }>;
+        } = {
+            denied_dates: deniedDates,
+            denial_reason: partialDenyForm.data.denial_reason,
+            review_notes: partialDenyForm.data.review_notes,
+        };
+
+        // Include SL per-day statuses for approved dates only
+        if (isSl && partialDenySlDayStatuses.length > 0) {
+            submitData.day_statuses = partialDenySlDayStatuses.map(d => ({
+                date: d.date,
+                status: d.status,
+                notes: d.notes || undefined,
+            }));
+        }
+
+        router.post(leavePartialDenyRoute(leaveRequest.id).url, submitData, {
             onSuccess: () => {
                 setShowPartialDenyDialog(false);
                 setSelectedApprovedDates([]);
                 partialDenyForm.reset();
+                setPartialDenySlDayStatuses([]);
                 toast.success('Leave request partially approved');
             },
             onError: (errors) => {
@@ -840,77 +1046,47 @@ export default function Show({
                             </Alert>
                         )}
 
-                        {/* VL No Credit Reason - Show when VL has partial or no credits applied */}
-                        {leaveRequest.leave_type === 'VL' && leaveRequest.vl_credits_applied === false && leaveRequest.vl_no_credit_reason && (
-                            <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                                <Info className="h-4 w-4 text-blue-600" />
-                                <AlertDescription className="text-blue-800 dark:text-blue-200">
-                                    <strong>VL Credits Not Deducted:</strong> {leaveRequest.vl_no_credit_reason}
-                                </AlertDescription>
-                            </Alert>
+                        {/* SL Per-Day Status (Pre-stored from previous approver — for pending SL requests) */}
+                        {hasPreStoredDayStatuses && (
+                            <div className="space-y-2">
+                                <p className="text-sm font-medium text-muted-foreground">Per-Day Status (Pre-assigned)</p>
+                                {preStoredAttribution && (
+                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                        <Info className="h-4 w-4 text-blue-600" />
+                                        <AlertDescription className="text-blue-800 dark:text-blue-200">
+                                            {preStoredAttribution}. These can be reviewed and edited during approval.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                <DayStatusAssignment
+                                    dayStatuses={[]}
+                                    onChange={() => { }}
+                                    readOnly
+                                    existingRecords={leaveRequestDays}
+                                />
+                            </div>
                         )}
 
-                        {/* VL with partial credits - reason displayed */}
-                        {leaveRequest.leave_type === 'VL' && leaveRequest.vl_credits_applied === true && leaveRequest.vl_no_credit_reason && (
-                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <strong>Partial VL Credits:</strong> {leaveRequest.vl_no_credit_reason}
-                                </AlertDescription>
-                            </Alert>
+                        {/* SL Per-Day Status Breakdown (for approved SL requests) */}
+                        {isSl && leaveRequestDays && leaveRequestDays.length > 0 && leaveRequest.status === 'approved' && (
+                            <div className="space-y-2">
+                                <div className="flex items-center justify-between">
+                                    <p className="text-sm font-medium text-muted-foreground">Per-Day Status Breakdown</p>
+                                    {isAdmin && canEditApproved && (
+                                        <Button variant="outline" size="sm" onClick={handleOpenEditDayStatuses} className="h-7 text-xs">
+                                            <Edit className="h-3 w-3 mr-1" />
+                                            Edit Day Statuses
+                                        </Button>
+                                    )}
+                                </div>
+                                <DayStatusAssignment
+                                    dayStatuses={[]}
+                                    onChange={() => { }}
+                                    readOnly
+                                    existingRecords={leaveRequestDays}
+                                />
+                            </div>
                         )}
-
-                        {/* VL Converted to UPTO - Show when UPTO was converted from VL due to insufficient credits */}
-                        {leaveRequest.leave_type === 'UPTO' && leaveRequest.vl_no_credit_reason && leaveRequest.vl_no_credit_reason.includes('Converted to UPTO') && (
-                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                    <strong>Originally filed as Vacation Leave (VL):</strong> {leaveRequest.vl_no_credit_reason}
-                                </AlertDescription>
-                            </Alert>
-                        )}
-
-                        {/* Linked Parent Request - Show on UPTO companion requests */}
-                        {linkedRequest && (
-                            <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
-                                <Info className="h-4 w-4 text-purple-600" />
-                                <AlertDescription className="text-purple-800 dark:text-purple-200">
-                                    <strong>Linked Request:</strong> This UPTO was auto-created from{' '}
-                                    <Link
-                                        href={leaveShowRoute(linkedRequest.id).url}
-                                        className="underline font-semibold hover:text-purple-600"
-                                    >
-                                        {linkedRequest.leave_type} Request #{linkedRequest.id}
-                                    </Link>
-                                    {' '}({linkedRequest.days_requested} day(s), {format(parseISO(linkedRequest.start_date), 'MMM d, yyyy')} – {format(parseISO(linkedRequest.end_date), 'MMM d, yyyy')})
-                                </AlertDescription>
-                            </Alert>
-                        )}
-
-                        {/* Companion UPTO Requests - Show on parent VL/SL requests */}
-                        {companionRequests && companionRequests.length > 0 && (
-                            <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
-                                <Info className="h-4 w-4 text-purple-600" />
-                                <AlertDescription className="text-purple-800 dark:text-purple-200">
-                                    <strong>Linked UPTO Request{companionRequests.length > 1 ? 's' : ''}:</strong>{' '}
-                                    {companionRequests.map((companion, idx) => (
-                                        <span key={companion.id}>
-                                            {idx > 0 && ', '}
-                                            <Link
-                                                href={leaveShowRoute(companion.id).url}
-                                                className="underline font-semibold hover:text-purple-600"
-                                            >
-                                                UPTO #{companion.id}
-                                            </Link>
-                                            {' '}({companion.days_requested} day(s))
-                                        </span>
-                                    ))}
-                                    {' '}— auto-created for excess days with insufficient credits.
-                                </AlertDescription>
-                            </Alert>
-                        )}
-
-
 
                         {/* Attendance Points at Request - Highlighted if >= 6, hidden for ML */}
                         {leaveRequest.leave_type !== 'ML' && (
@@ -1261,7 +1437,7 @@ export default function Show({
 
             {/* Approve Dialog */}
             <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-                <DialogContent>
+                <DialogContent className={isSl ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : undefined}>
                     <DialogHeader>
                         <DialogTitle>Approve Leave Request</DialogTitle>
                         <DialogDescription>
@@ -1277,38 +1453,98 @@ export default function Show({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
-                        {/* Credit Split Preview for VL/SL */}
-                        {creditPreview && (leaveRequest.leave_type === 'VL' || leaveRequest.leave_type === 'SL') && (
+                        {/* Partial denial info banner */}
+                        {leaveRequest.has_partial_denial && leaveRequest.denied_dates && leaveRequest.denied_dates.length > 0 && (
+                            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                <AlertDescription className="text-orange-800 dark:text-orange-200 text-sm">
+                                    <p className="font-medium">This request was partially denied — {leaveRequest.denied_dates.length} date(s) were denied:</p>
+                                    <div className="mt-1 space-y-0.5">
+                                        {leaveRequest.denied_dates.map((dd) => (
+                                            <div key={dd.id} className="text-xs flex items-center gap-1.5">
+                                                <Badge variant="destructive" className="text-[10px] px-1 py-0">Denied</Badge>
+                                                <span>{format(parseISO(dd.denied_date), 'EEEE, MMM d, yyyy')}</span>
+                                            </div>
+                                        ))}
+                                    </div>
+                                    {leaveRequest.denied_dates[0]?.denier && (
+                                        <p className="text-xs mt-1.5 text-muted-foreground">
+                                            Denied by: {leaveRequest.denied_dates[0].denier.name}
+                                        </p>
+                                    )}
+                                    <p className="text-xs mt-1 text-muted-foreground">
+                                        Approving now covers only the {leaveRequest.approved_days} remaining approved day(s).
+                                    </p>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+                        {/* Credit Preview for VL */}
+                        {creditPreview && leaveRequest.leave_type === 'VL' && (
                             <>
-                                {creditPreview.convert_to_upto && (
+                                {!creditPreview.should_deduct && (
                                     <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                         <AlertTriangle className="h-4 w-4 text-red-600" />
                                         <AlertDescription className="text-red-800 dark:text-red-200">
-                                            <strong>No {leaveRequest.leave_type} credits available.</strong> This request will be converted to UPTO (Unpaid Time Off) upon approval.
+                                            <strong>Insufficient VL credits.</strong> This request cannot be approved as VL.
                                             {creditPreview.reason && <span className="block mt-1 text-sm">{creditPreview.reason}</span>}
                                         </AlertDescription>
                                     </Alert>
                                 )}
-                                {creditPreview.partial_credit && (
-                                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                        <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                            <strong>Partial {leaveRequest.leave_type} credits available.</strong>{' '}
-                                            {creditPreview.credits_to_deduct} day(s) will use {leaveRequest.leave_type} credits, and{' '}
-                                            {creditPreview.upto_days} day(s) will be filed as a linked UPTO request.
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-                                {!creditPreview.convert_to_upto && !creditPreview.partial_credit && creditPreview.should_deduct && (
+                                {creditPreview.should_deduct && (
                                     <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
                                         <CheckCircle className="h-4 w-4 text-green-600" />
                                         <AlertDescription className="text-green-800 dark:text-green-200">
-                                            Full {leaveRequest.leave_type} credits available. {creditPreview.credits_to_deduct} day(s) will be deducted.
+                                            Full VL credits available. {creditPreview.credits_to_deduct} day(s) will be deducted.
                                         </AlertDescription>
                                     </Alert>
                                 )}
                             </>
                         )}
+
+                        {/* SL Per-Day Status Assignment */}
+                        {isSl && slDayStatuses.length > 0 && (
+                            <div className="space-y-3">
+                                <div>
+                                    <Label className="text-sm font-medium">Assign Per-Day Status</Label>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                        Set the status for each day of this sick leave. Only &quot;SL Credited&quot; days use leave credits.
+                                        {creditPreview && (
+                                            <span className="font-medium">
+                                                {' '}Available SL credits: {creditPreview.credits_to_deduct ?? 0} day(s).
+                                            </span>
+                                        )}
+                                    </p>
+                                </div>
+                                {preStoredAttribution && (
+                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                        <Info className="h-4 w-4 text-blue-600" />
+                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
+                                            {preStoredAttribution}. You can review and edit before approving.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                <DayStatusAssignment
+                                    dayStatuses={slDayStatuses}
+                                    onChange={setSlDayStatuses}
+                                    creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) } : null}
+                                />
+                            </div>
+                        )}
+
+                        {/* Credit Split Preview for SL (non per-day fallback) */}
+                        {creditPreview && isSl && slDayStatuses.length === 0 && (
+                            <>
+                                {creditPreview.convert_to_upto && (
+                                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                                        <AlertDescription className="text-red-800 dark:text-red-200">
+                                            <strong>No SL credits available.</strong> All days will be marked as Advised Absence (UPTO — Unpaid Time Off).
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                            </>
+                        )}
+
                         <div>
                             <label className="text-sm font-medium">
                                 Review Notes <span className="text-red-500">*</span>
@@ -1328,7 +1564,7 @@ export default function Show({
                         <Button variant="outline" onClick={() => setShowApproveDialog(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleApprove} disabled={approveForm.processing}>
+                        <Button onClick={handleApprove} disabled={approveForm.processing || !approveForm.data.review_notes.trim() || (leaveRequest.leave_type === 'VL' && creditPreview !== null && creditPreview !== undefined && !creditPreview.should_deduct)}>
                             Approve
                         </Button>
                     </DialogFooter>
@@ -1376,12 +1612,23 @@ export default function Show({
             {/* Partial Deny Dialog */}
             <Dialog open={showPartialDenyDialog} onOpenChange={(open) => {
                 setShowPartialDenyDialog(open);
+                if (open && leaveRequest.has_partial_denial && previouslyDeniedDateSet.size > 0) {
+                    // Pre-fill: check all original work days EXCEPT previously denied ones
+                    const preApproved = originalWorkDays
+                        .map(d => format(d, 'yyyy-MM-dd'))
+                        .filter(dateStr => !previouslyDeniedDateSet.has(dateStr));
+                    setSelectedApprovedDates(preApproved);
+                    if (isSl) {
+                        setPartialDenySlDayStatuses(buildSlDayStatusesForDates(preApproved, []));
+                    }
+                }
                 if (!open) {
                     setSelectedApprovedDates([]);
                     partialDenyForm.reset();
+                    setPartialDenySlDayStatuses([]);
                 }
             }}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className={isSl ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : 'max-w-lg'}>
                     <DialogHeader>
                         <DialogTitle>Partial Approval - Select Dates to Approve</DialogTitle>
                         <DialogDescription>
@@ -1389,21 +1636,37 @@ export default function Show({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="space-y-4">
+                        {/* Prior partial denial info banner */}
+                        {leaveRequest.has_partial_denial && leaveRequest.denied_dates && leaveRequest.denied_dates.length > 0 && (
+                            <Alert className="border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
+                                <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                <AlertDescription className="text-orange-800 dark:text-orange-200 text-sm">
+                                    <p className="font-medium">A previous approver partially denied {previouslyDeniedDateSet.size} date(s).</p>
+                                    <p className="text-xs mt-1">
+                                        Previously denied dates are shown below. You may re-select them to override the prior decision.
+                                        {leaveRequest.denied_dates[0]?.denier && (
+                                            <span> Prior denial by: <strong>{leaveRequest.denied_dates[0].denier.name}</strong>.</span>
+                                        )}
+                                    </p>
+                                </AlertDescription>
+                            </Alert>
+                        )}
                         <div>
                             <Label className="text-sm font-medium mb-2 block">
-                                Leave Period: {format(parseISO(leaveRequest.start_date), 'MMM d, yyyy')} - {format(parseISO(leaveRequest.end_date), 'MMM d, yyyy')}
+                                Leave Period: {format(parseISO(leaveRequest.original_start_date ?? leaveRequest.start_date), 'MMM d, yyyy')} - {format(parseISO(leaveRequest.original_end_date ?? leaveRequest.end_date), 'MMM d, yyyy')}
                             </Label>
                             <p className="text-sm text-muted-foreground mb-3">
-                                Total working days: {workDays.length} | Selected to approve: {selectedApprovedDates.length}
+                                Total working days: {originalWorkDays.length} | Selected to approve: {selectedApprovedDates.length}
                             </p>
                             <div className="border rounded-md p-3 max-h-64 overflow-y-auto space-y-2">
-                                {workDays.map((date) => {
+                                {originalWorkDays.map((date) => {
                                     const dateStr = format(date, 'yyyy-MM-dd');
                                     const isSelected = selectedApprovedDates.includes(dateStr);
+                                    const wasPreviouslyDenied = previouslyDeniedDateSet.has(dateStr);
                                     return (
                                         <div
                                             key={dateStr}
-                                            className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 text-green-900' : 'hover:bg-muted'
+                                            className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 text-green-900' : wasPreviouslyDenied ? 'bg-orange-50/50 border border-orange-200 dark:bg-orange-950/30 dark:border-orange-800' : 'hover:bg-muted'
                                                 }`}
                                             onClick={() => toggleApprovedDate(dateStr)}
                                         >
@@ -1411,8 +1674,11 @@ export default function Show({
                                                 checked={isSelected}
                                                 onCheckedChange={() => toggleApprovedDate(dateStr)}
                                             />
-                                            <div className="flex-1">
+                                            <div className="flex-1 flex items-center gap-2">
                                                 <span className="font-medium">{format(date, 'EEEE, MMM d, yyyy')}</span>
+                                                {wasPreviouslyDenied && !isSelected && (
+                                                    <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:text-orange-300">Previously denied</Badge>
+                                                )}
                                             </div>
                                             {isSelected && (
                                                 <Badge className="text-xs bg-green-600 text-white">Will be approved</Badge>
@@ -1445,13 +1711,39 @@ export default function Show({
                                 rows={2}
                             />
                         </div>
-                        {selectedApprovedDates.length > 0 && selectedApprovedDates.length < workDays.length && (
+                        {selectedApprovedDates.length > 0 && selectedApprovedDates.length < originalWorkDays.length && (
                             <Alert className="bg-green-50 border-green-200">
                                 <Check className="h-4 w-4 text-green-600" />
                                 <AlertDescription className="text-green-800">
-                                    <p>{selectedApprovedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - selectedApprovedDates.length} day(s) will be <strong>denied</strong>.</p>
+                                    <p>{selectedApprovedDates.length} day(s) will be <strong>approved</strong>, {originalWorkDays.length - selectedApprovedDates.length} day(s) will be <strong>denied</strong>.</p>
                                 </AlertDescription>
                             </Alert>
+                        )}
+
+                        {/* SL Per-Day Status Assignment for approved dates */}
+                        {isSl && selectedApprovedDates.length > 0 && partialDenySlDayStatuses.length > 0 && (
+                            <div className="space-y-2">
+                                <Label className="text-sm font-medium">Assign Per-Day Status for Approved Dates</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Set the status for each approved day. Only &quot;SL Credited&quot; days use leave credits.
+                                    {creditPreview && (
+                                        <span className="font-medium"> Available SL credits: {creditPreview.credits_to_deduct ?? 0} day(s).</span>
+                                    )}
+                                </p>
+                                {preStoredAttribution && (
+                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                        <Info className="h-4 w-4 text-blue-600" />
+                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
+                                            {preStoredAttribution}. You can review and edit before approving.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                <DayStatusAssignment
+                                    dayStatuses={partialDenySlDayStatuses}
+                                    onChange={setPartialDenySlDayStatuses}
+                                    creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) } : null}
+                                />
+                            </div>
                         )}
                     </div>
                     <DialogFooter>
@@ -1459,6 +1751,7 @@ export default function Show({
                             setShowPartialDenyDialog(false);
                             setSelectedApprovedDates([]);
                             partialDenyForm.reset();
+                            setPartialDenySlDayStatuses([]);
                         }}>
                             Cancel
                         </Button>
@@ -1466,7 +1759,7 @@ export default function Show({
                             variant="default"
                             className="bg-orange-600 hover:bg-orange-700"
                             onClick={handlePartialDeny}
-                            disabled={partialDenyForm.processing || selectedApprovedDates.length === 0 || selectedApprovedDates.length === workDays.length}
+                            disabled={partialDenyForm.processing || selectedApprovedDates.length === 0 || selectedApprovedDates.length === originalWorkDays.length}
                         >
                             Partial Approve ({selectedApprovedDates.length} days)
                         </Button>
@@ -1608,7 +1901,7 @@ export default function Show({
                             <AlertTriangle className="h-4 w-4 text-amber-600" />
                             <AlertDescription className="text-amber-800 dark:text-amber-200">
                                 <ul className="list-disc list-inside text-sm space-y-1">
-                                    <li>Leave credits ({leaveRequest.days_requested} days) will be restored</li>
+                                    <li>Leave credits will be restored</li>
                                     <li>Attendance records for leave dates will be deleted</li>
                                     <li>The employee will be notified of this cancellation</li>
                                 </ul>
@@ -1673,10 +1966,11 @@ export default function Show({
                 if (!open) {
                     setForceApprovePartialMode(false);
                     setForceApproveSelectedDates([]);
+                    setForceApproveSlDayStatuses([]);
                     forceApproveForm.reset();
                 }
             }}>
-                <DialogContent className="max-w-lg">
+                <DialogContent className={isSl ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : 'max-w-lg'}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-purple-600" />
@@ -1692,27 +1986,19 @@ export default function Show({
                             This will override any pending approvals from Team Lead, Admin, or HR.
                         </AlertDescription>
                     </Alert>
-                    {/* Credit Split Preview for VL/SL in Force Approve */}
+                    {/* Credit Preview for VL/SL in Force Approve */}
                     {creditPreview && (leaveRequest.leave_type === 'VL' || leaveRequest.leave_type === 'SL') && (
                         <>
-                            {creditPreview.convert_to_upto && (
+                            {!creditPreview.should_deduct && leaveRequest.leave_type === 'VL' && (
                                 <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
                                     <AlertTriangle className="h-4 w-4 text-red-600" />
                                     <AlertDescription className="text-red-800 dark:text-red-200">
-                                        <strong>No {leaveRequest.leave_type} credits available.</strong> Will be converted to UPTO upon approval.
+                                        <strong>Insufficient VL credits.</strong> This request cannot be approved as VL.
                                         {creditPreview.reason && <span className="block mt-1 text-sm">{creditPreview.reason}</span>}
                                     </AlertDescription>
                                 </Alert>
                             )}
-                            {creditPreview.partial_credit && (
-                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                        <strong>Partial credits:</strong> {creditPreview.credits_to_deduct} day(s) as {leaveRequest.leave_type}, {creditPreview.upto_days} day(s) as linked UPTO.
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-                            {!creditPreview.convert_to_upto && !creditPreview.partial_credit && creditPreview.should_deduct && (
+                            {creditPreview.should_deduct && (
                                 <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
                                     <CheckCircle className="h-4 w-4 text-green-600" />
                                     <AlertDescription className="text-green-800 dark:text-green-200">
@@ -1796,6 +2082,36 @@ export default function Show({
                             </div>
                         )}
 
+                        {/* SL Per-Day Status Assignment */}
+                        {isSl && (
+                            <div className="space-y-2">
+                                <Label className="text-sm font-medium">Assign Per-Day Status</Label>
+                                <p className="text-xs text-muted-foreground">
+                                    Set the status for each day of this sick leave. Only &quot;SL Credited&quot; days use leave credits.
+                                    {creditPreview && (
+                                        <span className="font-medium"> Available SL credits: {creditPreview.credits_to_deduct ?? 0} day(s).</span>
+                                    )}
+                                </p>
+                                {preStoredAttribution && (
+                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                        <Info className="h-4 w-4 text-blue-600" />
+                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
+                                            {preStoredAttribution}. You can review and edit before approving.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                <DayStatusAssignment
+                                    dayStatuses={forceApprovePartialMode && forceApproveSlDayStatuses.length > 0
+                                        ? forceApproveSlDayStatuses
+                                        : forceApproveSlDayStatuses.length > 0
+                                            ? forceApproveSlDayStatuses
+                                            : forceApproveAllSlDayStatuses}
+                                    onChange={setForceApproveSlDayStatuses}
+                                    creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) } : null}
+                                />
+                            </div>
+                        )}
+
                         <div>
                             <label className="text-sm font-medium">
                                 Review Notes <span className="text-red-500">*</span>
@@ -1826,6 +2142,7 @@ export default function Show({
                             setShowForceApproveDialog(false);
                             setForceApprovePartialMode(false);
                             setForceApproveSelectedDates([]);
+                            setForceApproveSlDayStatuses([]);
                             forceApproveForm.reset();
                         }}>
                             Cancel
@@ -1836,7 +2153,8 @@ export default function Show({
                             disabled={
                                 forceApproveForm.processing ||
                                 (forceApprovePartialMode && forceApproveSelectedDates.length === 0) ||
-                                (forceApprovePartialMode && forceApproveSelectedDates.length === workDays.length)
+                                (forceApprovePartialMode && forceApproveSelectedDates.length === workDays.length) ||
+                                (leaveRequest.leave_type === 'VL' && creditPreview !== null && creditPreview !== undefined && !creditPreview.should_deduct)
                             }
                         >
                             <Shield className="mr-1 h-4 w-4" />
@@ -2160,6 +2478,44 @@ export default function Show({
                     <DialogFooter>
                         <Button onClick={() => setShowAttendancePointsDialog(false)}>
                             Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Edit Day Statuses Dialog (post-approval editing for SL) */}
+            <Dialog open={showEditDayStatusesDialog} onOpenChange={(open) => {
+                setShowEditDayStatusesDialog(open);
+                if (!open) {
+                    setEditDayStatuses([]);
+                    setEditDayStatusesProcessing(false);
+                }
+            }}>
+                <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>Edit Per-Day Statuses</DialogTitle>
+                        <DialogDescription>
+                            Update the day-by-day status assignment for this approved SL request. Changes will recalculate credits and attendance records.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4">
+                        {editDayStatuses.length > 0 && (
+                            <DayStatusAssignment
+                                dayStatuses={editDayStatuses}
+                                onChange={setEditDayStatuses}
+                                creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) + (leaveRequest.credits_deducted ?? 0) } : null}
+                            />
+                        )}
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setShowEditDayStatusesDialog(false)}>
+                            Cancel
+                        </Button>
+                        <Button
+                            onClick={handleSaveEditDayStatuses}
+                            disabled={editDayStatusesProcessing || editDayStatuses.some((d) => d.status === 'pending')}
+                        >
+                            {editDayStatusesProcessing ? 'Saving...' : 'Save Changes'}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

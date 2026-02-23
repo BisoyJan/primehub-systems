@@ -725,7 +725,7 @@ class LeaveRequestControllerTest extends TestCase
     }
 
     // =====================================================================
-    // Phase 5: VL/SL → UPTO Split at Approval Tests
+    // Phase 5: VL Credit Check & SL Per-Day Status at Approval Tests
     // =====================================================================
 
     #[Test]
@@ -780,14 +780,6 @@ class LeaveRequestControllerTest extends TestCase
         $this->assertEquals('approved', $leaveRequest->status);
         $this->assertEquals('VL', $leaveRequest->leave_type);
         $this->assertEquals(2, (float) $leaveRequest->credits_deducted);
-        $this->assertTrue((bool) $leaveRequest->vl_credits_applied);
-        $this->assertNull($leaveRequest->vl_no_credit_reason);
-
-        // No linked UPTO companion should be created
-        $this->assertDatabaseMissing('leave_requests', [
-            'linked_request_id' => $leaveRequest->id,
-            'leave_type' => 'UPTO',
-        ]);
 
         // Credits should be deducted in leave_credits table
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
@@ -795,10 +787,9 @@ class LeaveRequestControllerTest extends TestCase
     }
 
     #[Test]
-    public function it_creates_linked_upto_when_vl_approved_with_partial_credits()
+    public function it_does_not_approve_vl_when_credits_insufficient()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
-        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
         $agent = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
@@ -817,9 +808,9 @@ class LeaveRequestControllerTest extends TestCase
             'accrued_at' => now(),
         ]);
 
-        // Create 4-day VL request (Mon-Thu future)
-        $startDate = now()->addWeeks(3)->startOfWeek(); // Monday
-        $endDate = $startDate->copy()->addDays(3); // Thursday
+        // Create 4-day VL request
+        $startDate = now()->addWeeks(3)->startOfWeek();
+        $endDate = $startDate->copy()->addDays(3);
 
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
@@ -830,57 +821,26 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval
-        $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Admin approves partial VL test.',
-        ]);
-        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'HR approves partial VL test.',
-        ]);
+        // View show page — credit preview should indicate insufficient credits
+        $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
-        $leaveRequest->refresh();
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('FormRequest/Leave/Show')
+                ->has('creditPreview')
+                ->where('creditPreview.should_deduct', false)
+                ->where('creditPreview.credits_to_deduct', 0)
+            );
 
-        // VL stays as VL with partial credit info
-        $this->assertEquals('approved', $leaveRequest->status);
-        $this->assertEquals('VL', $leaveRequest->leave_type);
-        $this->assertEquals(2, (float) $leaveRequest->credits_deducted);
-        $this->assertTrue((bool) $leaveRequest->vl_credits_applied);
-        $this->assertNotNull($leaveRequest->vl_no_credit_reason);
-        $this->assertStringContainsString('Partial VL credits', $leaveRequest->vl_no_credit_reason);
-
-        // Parent dates should be narrowed to the credited VL days (first 2 days)
-        $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->start_date->format('Y-m-d'));
-        $this->assertEquals($startDate->copy()->addDay()->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
-
-        // A linked UPTO companion should be created for 2 excess days
-        $companion = LeaveRequest::where('linked_request_id', $leaveRequest->id)
-            ->where('leave_type', 'UPTO')
-            ->first();
-
-        $this->assertNotNull($companion, 'Linked UPTO companion should exist');
-        $this->assertEquals($agent->id, $companion->user_id);
-        $this->assertEquals(2, (float) $companion->days_requested);
-        $this->assertEquals('approved', $companion->status);
-        $this->assertEquals(0, (float) $companion->credits_deducted);
-
-        // UPTO companion dates should cover the excess days (last 2 days)
-        $this->assertEquals($startDate->copy()->addDays(2)->format('Y-m-d'), $companion->start_date->format('Y-m-d'));
-        $this->assertEquals($endDate->format('Y-m-d'), $companion->end_date->format('Y-m-d'));
-
-        // Companion should have approval info copied from parent
-        $this->assertEquals($admin->id, $companion->admin_approved_by);
-        $this->assertEquals($hr->id, $companion->hr_approved_by);
-
-        // Credits should be deducted for the VL portion only
+        // Credits should NOT have been deducted
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
-        $this->assertEquals(2, (float) $credit->credits_used);
+        $this->assertEquals(0, (float) $credit->credits_used);
     }
 
     #[Test]
-    public function it_converts_vl_to_upto_when_approved_with_zero_credits()
+    public function it_blocks_vl_approval_when_zero_credits()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
-        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
         $agent = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
@@ -899,7 +859,6 @@ class LeaveRequestControllerTest extends TestCase
             'accrued_at' => now(),
         ]);
 
-        // Create 2-day VL request
         $startDate = now()->addWeeks(3)->startOfWeek();
         $endDate = $startDate->copy()->addDay();
 
@@ -912,32 +871,19 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval
-        $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Admin approves zero credit VL.',
-        ]);
-        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'HR approves zero credit VL.',
-        ]);
+        // Show page should indicate blocked
+        $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
-        $leaveRequest->refresh();
-
-        // VL should be converted to UPTO entirely
-        $this->assertEquals('approved', $leaveRequest->status);
-        $this->assertEquals('UPTO', $leaveRequest->leave_type);
-        $this->assertEquals(0, (float) $leaveRequest->credits_deducted);
-        $this->assertFalse((bool) $leaveRequest->vl_credits_applied);
-        $this->assertNotNull($leaveRequest->vl_no_credit_reason);
-        $this->assertStringContainsString('No VL credits available', $leaveRequest->vl_no_credit_reason);
-
-        // No linked companion (entire VL was converted, not split)
-        $this->assertDatabaseMissing('leave_requests', [
-            'linked_request_id' => $leaveRequest->id,
-        ]);
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('FormRequest/Leave/Show')
+                ->has('creditPreview')
+                ->where('creditPreview.should_deduct', false)
+            );
     }
 
     #[Test]
-    public function it_creates_linked_upto_when_sl_approved_with_partial_credits()
+    public function it_assigns_per_day_statuses_when_sl_approved_with_partial_credits()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
@@ -973,7 +919,7 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval
+        // Dual approval (no explicit day_statuses → auto-assignment)
         $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'Admin approves partial SL test.',
         ]);
@@ -983,111 +929,23 @@ class LeaveRequestControllerTest extends TestCase
 
         $leaveRequest->refresh();
 
-        // SL stays as SL with partial credit info
+        // SL stays as SL with per-day statuses (no narrowing, no companion UPTO)
         $this->assertEquals('approved', $leaveRequest->status);
         $this->assertEquals('SL', $leaveRequest->leave_type);
         $this->assertEquals(1, (float) $leaveRequest->credits_deducted);
 
-        // Parent dates should be narrowed to the credited SL day (first day only)
+        // Parent dates should NOT be narrowed — SL keeps original dates
         $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->start_date->format('Y-m-d'));
-        $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
+        $this->assertEquals($endDate->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
 
-        // Linked UPTO companion for 2 excess days
-        $companion = LeaveRequest::where('linked_request_id', $leaveRequest->id)
-            ->where('leave_type', 'UPTO')
-            ->first();
+        // Per-day status records should exist: 1 sl_credited, 2 advised_absence
+        $dayRecords = \App\Models\LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+            ->orderBy('date')
+            ->get();
 
-        $this->assertNotNull($companion, 'Linked UPTO companion for SL should exist');
-        $this->assertEquals($agent->id, $companion->user_id);
-        $this->assertEquals(2, (float) $companion->days_requested);
-        $this->assertEquals('approved', $companion->status);
-        $this->assertEquals($leaveRequest->id, $companion->linked_request_id);
-
-        // UPTO companion dates should cover the excess days
-        $this->assertEquals($startDate->copy()->addDay()->format('Y-m-d'), $companion->start_date->format('Y-m-d'));
-        $this->assertEquals($endDate->format('Y-m-d'), $companion->end_date->format('Y-m-d'));
-    }
-
-    #[Test]
-    public function it_validates_linked_upto_request_fields_are_correct()
-    {
-        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
-        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
-        $agent = User::factory()->create([
-            'role' => 'Agent',
-            'is_approved' => true,
-            'hired_date' => now()->subYear(),
-            'email' => 'agent-linked-fields@example.com',
-        ]);
-
-        LeaveCredit::create([
-            'user_id' => $agent->id,
-            'year' => now()->year,
-            'month' => now()->month,
-            'credits_earned' => 1,
-            'credits_used' => 0,
-            'credits_balance' => 1,
-            'accrued_at' => now(),
-        ]);
-
-        // 3-day VL → 1 day VL + 2 days UPTO
-        $startDate = now()->addWeeks(3)->startOfWeek();
-        $endDate = $startDate->copy()->addDays(2);
-
-        $leaveRequest = LeaveRequest::factory()->create([
-            'user_id' => $agent->id,
-            'leave_type' => 'VL',
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-            'days_requested' => 3,
-            'status' => 'pending',
-        ]);
-
-        // Dual approval
-        $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Admin approves linked fields test.',
-        ]);
-        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'HR approves linked fields test.',
-        ]);
-
-        $leaveRequest->refresh();
-
-        $companion = LeaveRequest::where('linked_request_id', $leaveRequest->id)->first();
-        $this->assertNotNull($companion);
-
-        // Verify companion UPTO fields
-        $this->assertEquals('UPTO', $companion->leave_type);
-        $this->assertEquals('approved', $companion->status);
-        $this->assertEquals($agent->id, $companion->user_id);
-        $this->assertEquals(0, (float) $companion->credits_deducted);
-        $this->assertEquals($leaveRequest->id, $companion->linked_request_id);
-
-        // Approval info should be copied from parent
-        $this->assertEquals($admin->id, $companion->admin_approved_by);
-        $this->assertNotNull($companion->admin_approved_at);
-        $this->assertEquals($hr->id, $companion->hr_approved_by);
-        $this->assertNotNull($companion->hr_approved_at);
-        $this->assertNotNull($companion->reviewed_by);
-        $this->assertNotNull($companion->reviewed_at);
-
-        // Reason should reference parent
-        $this->assertStringContainsString("Request #{$leaveRequest->id}", $companion->reason);
-
-        // UPTO dates should be the excess dates (days 2 and 3)
-        $this->assertEquals(2, (float) $companion->days_requested);
-
-        // Parent dates should be narrowed to just day 1
-        $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->start_date->format('Y-m-d'));
-        $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
-
-        // Companion dates should cover days 2 and 3
-        $this->assertEquals($startDate->copy()->addDay()->format('Y-m-d'), $companion->start_date->format('Y-m-d'));
-        $this->assertEquals($startDate->copy()->addDays(2)->format('Y-m-d'), $companion->end_date->format('Y-m-d'));
-
-        // Verify model relationships work
-        $this->assertEquals($leaveRequest->id, $companion->linkedRequest->id);
-        $this->assertTrue($leaveRequest->companionRequests->contains('id', $companion->id));
+        $this->assertCount(3, $dayRecords);
+        $this->assertEquals(1, $dayRecords->where('day_status', 'sl_credited')->count());
+        $this->assertEquals(2, $dayRecords->where('day_status', 'advised_absence')->count());
     }
 
     #[Test]
@@ -1129,71 +987,13 @@ class LeaveRequestControllerTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('FormRequest/Leave/Show')
                 ->has('creditPreview')
-                ->where('creditPreview.partial_credit', true)
-                ->where('creditPreview.credits_to_deduct', 2)
-                ->where('creditPreview.upto_days', 2)
-                ->has('linkedRequest', null)
-                ->has('companionRequests')
+                ->where('creditPreview.should_deduct', false)
+                ->where('creditPreview.credits_to_deduct', 0)
             );
     }
 
     #[Test]
-    public function it_includes_companion_requests_in_show_page_after_approval()
-    {
-        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
-        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
-        $agent = User::factory()->create([
-            'role' => 'Agent',
-            'is_approved' => true,
-            'hired_date' => now()->subYear(),
-            'email' => 'agent-show-companion@example.com',
-        ]);
-
-        LeaveCredit::create([
-            'user_id' => $agent->id,
-            'year' => now()->year,
-            'month' => now()->month,
-            'credits_earned' => 1,
-            'credits_used' => 0,
-            'credits_balance' => 1,
-            'accrued_at' => now(),
-        ]);
-
-        $startDate = now()->addWeeks(3)->startOfWeek();
-        $endDate = $startDate->copy()->addDays(2);
-
-        $leaveRequest = LeaveRequest::factory()->create([
-            'user_id' => $agent->id,
-            'leave_type' => 'VL',
-            'start_date' => $startDate,
-            'end_date' => $endDate,
-            'days_requested' => 3,
-            'status' => 'pending',
-        ]);
-
-        // Approve to trigger companion creation
-        $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Admin approves companion show test.',
-        ]);
-        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'HR approves companion show test.',
-        ]);
-
-        // View the approved parent VL — should show companion requests
-        $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
-
-        $response->assertStatus(200)
-            ->assertInertia(fn ($page) => $page
-                ->component('FormRequest/Leave/Show')
-                ->has('companionRequests', 1)
-                ->where('companionRequests.0.leave_type', 'UPTO')
-                ->where('companionRequests.0.days_requested', '2.00')
-                ->where('companionRequests.0.status', 'approved')
-            );
-    }
-
-    #[Test]
-    public function it_converts_vl_to_upto_when_agent_not_eligible()
+    public function it_blocks_vl_approval_when_agent_not_eligible()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
@@ -1205,7 +1005,7 @@ class LeaveRequestControllerTest extends TestCase
             'email' => 'agent-vl-ineligible@example.com',
         ]);
 
-        // Even with credits, ineligibility should convert to UPTO
+        // Even with credits, ineligibility should block VL approval
         LeaveCredit::create([
             'user_id' => $agent->id,
             'year' => now()->year,
@@ -1228,22 +1028,16 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval
-        $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Admin approves ineligible VL.',
-        ]);
-        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'HR approves ineligible VL.',
-        ]);
+        // Show page should indicate VL credits blocked for ineligible agent
+        $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
-        $leaveRequest->refresh();
-
-        // Should be converted to UPTO due to ineligibility
-        $this->assertEquals('UPTO', $leaveRequest->leave_type);
-        $this->assertEquals('approved', $leaveRequest->status);
-        $this->assertFalse((bool) $leaveRequest->vl_credits_applied);
-        $this->assertStringContainsString('Not eligible', $leaveRequest->vl_no_credit_reason);
-        $this->assertEquals(0, (float) $leaveRequest->credits_deducted);
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('FormRequest/Leave/Show')
+                ->has('creditPreview')
+                ->where('creditPreview.should_deduct', false)
+                ->where('creditPreview.credits_to_deduct', 0)
+            );
 
         // No credits should be deducted
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
@@ -1255,10 +1049,9 @@ class LeaveRequestControllerTest extends TestCase
     // =====================================================================
 
     #[Test]
-    public function it_floors_fractional_vl_credits_to_whole_number_on_approval()
+    public function it_blocks_vl_approval_when_fractional_credits_insufficient()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
-        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
         $agent = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
@@ -1266,7 +1059,7 @@ class LeaveRequestControllerTest extends TestCase
             'email' => 'agent-vl-frac@example.com',
         ]);
 
-        // Give agent 2.75 credits — should floor to 2 whole days
+        // Give agent 2.75 credits — floor to 2 whole days, but requesting 5
         LeaveCredit::create([
             'user_id' => $agent->id,
             'year' => now()->year,
@@ -1290,44 +1083,27 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval
-        $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Admin approves fractional VL.',
-        ]);
-        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'HR approves fractional VL.',
-        ]);
+        // Show page should indicate insufficient credits (floor(2.75)=2 < 5)
+        $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
-        $leaveRequest->refresh();
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('FormRequest/Leave/Show')
+                ->has('creditPreview')
+                ->where('creditPreview.should_deduct', false)
+                ->where('creditPreview.credits_to_deduct', 0)
+            );
 
-        // Should deduct 2 whole credits (not 2.75)
-        $this->assertEquals('approved', $leaveRequest->status);
-        $this->assertEquals('VL', $leaveRequest->leave_type);
-        $this->assertEquals(2, (float) $leaveRequest->credits_deducted);
-
-        // Parent dates narrowed to first 2 days (Mon-Tue)
-        $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->start_date->format('Y-m-d'));
-        $this->assertEquals($startDate->copy()->addDay()->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
-
-        // UPTO companion for 3 excess days (Wed-Fri)
-        $companion = LeaveRequest::where('linked_request_id', $leaveRequest->id)->first();
-        $this->assertNotNull($companion);
-        $this->assertEquals('UPTO', $companion->leave_type);
-        $this->assertEquals(3, (float) $companion->days_requested);
-        $this->assertEquals($startDate->copy()->addDays(2)->format('Y-m-d'), $companion->start_date->format('Y-m-d'));
-        $this->assertEquals($endDate->format('Y-m-d'), $companion->end_date->format('Y-m-d'));
-
-        // Only 2 credits used (not 2.75), 0.75 stays in balance
+        // Credits untouched
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
-        $this->assertEquals(2, (float) $credit->credits_used);
-        $this->assertEquals(0.75, (float) $credit->credits_balance);
+        $this->assertEquals(0, (float) $credit->credits_used);
+        $this->assertEquals(2.75, (float) $credit->credits_balance);
     }
 
     #[Test]
-    public function it_converts_vl_to_upto_when_only_fractional_credits_remain()
+    public function it_blocks_vl_when_only_fractional_credits_remain()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
-        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
         $agent = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
@@ -1335,7 +1111,7 @@ class LeaveRequestControllerTest extends TestCase
             'email' => 'agent-vl-frac-zero@example.com',
         ]);
 
-        // Give agent 0.75 credits — floor(0.75) = 0, should convert to UPTO
+        // Give agent 0.75 credits — floor(0.75) = 0, should block VL approval
         LeaveCredit::create([
             'user_id' => $agent->id,
             'year' => now()->year,
@@ -1358,26 +1134,16 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval
-        $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'Admin approves frac-zero VL.',
-        ]);
-        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
-            'review_notes' => 'HR approves frac-zero VL.',
-        ]);
+        // Show page should indicate insufficient credits
+        $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
-        $leaveRequest->refresh();
-
-        // Should convert entirely to UPTO (floor(0.75) = 0 whole credits)
-        $this->assertEquals('UPTO', $leaveRequest->leave_type);
-        $this->assertEquals('approved', $leaveRequest->status);
-        $this->assertEquals(0, (float) $leaveRequest->credits_deducted);
-        $this->assertFalse((bool) $leaveRequest->vl_credits_applied);
-
-        // No companion created (full conversion, not split)
-        $this->assertDatabaseMissing('leave_requests', [
-            'linked_request_id' => $leaveRequest->id,
-        ]);
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('FormRequest/Leave/Show')
+                ->has('creditPreview')
+                ->where('creditPreview.should_deduct', false)
+                ->where('creditPreview.credits_to_deduct', 0)
+            );
 
         // Credits untouched
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
@@ -1422,7 +1188,7 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval
+        // Dual approval (no explicit day_statuses → auto-assignment)
         $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'Admin approves fractional SL.',
         ]);
@@ -1437,15 +1203,18 @@ class LeaveRequestControllerTest extends TestCase
         $this->assertEquals('SL', $leaveRequest->leave_type);
         $this->assertEquals(1, (float) $leaveRequest->credits_deducted);
 
-        // Parent dates narrowed to first day only (Mon)
+        // SL keeps original dates (no narrowing with per-day statuses)
         $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->start_date->format('Y-m-d'));
-        $this->assertEquals($startDate->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
+        $this->assertEquals($endDate->format('Y-m-d'), $leaveRequest->end_date->format('Y-m-d'));
 
-        // UPTO companion for 2 excess days (Tue-Wed)
-        $companion = LeaveRequest::where('linked_request_id', $leaveRequest->id)->first();
-        $this->assertNotNull($companion);
-        $this->assertEquals('UPTO', $companion->leave_type);
-        $this->assertEquals(2, (float) $companion->days_requested);
+        // Per-day status records: 1 sl_credited, 2 advised_absence
+        $dayRecords = \App\Models\LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+            ->orderBy('date')
+            ->get();
+
+        $this->assertCount(3, $dayRecords);
+        $this->assertEquals(1, $dayRecords->where('day_status', 'sl_credited')->count());
+        $this->assertEquals(2, $dayRecords->where('day_status', 'advised_absence')->count());
 
         // 0.25 stays in balance
         $credit = LeaveCredit::where('user_id', $agent->id)->first();

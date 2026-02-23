@@ -516,14 +516,11 @@ class LeaveCreditServiceTest extends TestCase
 
         $this->assertTrue($result['should_deduct']);
         $this->assertNull($result['reason']);
-        $this->assertFalse($result['convert_to_upto']);
-        $this->assertFalse($result['partial_credit']);
         $this->assertEquals(3, $result['credits_to_deduct']);
-        $this->assertEquals(0, $result['upto_days']);
     }
 
     #[Test]
-    public function it_returns_partial_credits_when_vl_balance_insufficient(): void
+    public function it_blocks_approval_when_vl_balance_insufficient(): void
     {
         $user = User::factory()->create([
             'role' => 'Agent',
@@ -550,16 +547,13 @@ class LeaveCreditServiceTest extends TestCase
 
         $result = $this->service->checkVlCreditDeduction($user, $leaveRequest);
 
-        $this->assertTrue($result['should_deduct']);
-        $this->assertTrue($result['partial_credit']);
-        $this->assertFalse($result['convert_to_upto']);
-        $this->assertEquals(2, $result['credits_to_deduct']);
-        $this->assertEquals(3, $result['upto_days']);
-        $this->assertStringContainsString('Partial VL credits', $result['reason']);
+        $this->assertFalse($result['should_deduct']);
+        $this->assertStringContainsString('Insufficient VL credits', $result['reason']);
+        $this->assertEquals(0, $result['credits_to_deduct']);
     }
 
     #[Test]
-    public function it_returns_convert_to_upto_when_vl_balance_zero(): void
+    public function it_blocks_approval_when_vl_balance_zero(): void
     {
         $user = User::factory()->create([
             'role' => 'Agent',
@@ -587,15 +581,12 @@ class LeaveCreditServiceTest extends TestCase
         $result = $this->service->checkVlCreditDeduction($user, $leaveRequest);
 
         $this->assertFalse($result['should_deduct']);
-        $this->assertTrue($result['convert_to_upto']);
-        $this->assertFalse($result['partial_credit']);
         $this->assertEquals(0, $result['credits_to_deduct']);
-        $this->assertEquals(2, $result['upto_days']);
-        $this->assertStringContainsString('No VL credits available', $result['reason']);
+        $this->assertStringContainsString('Insufficient VL credits', $result['reason']);
     }
 
     #[Test]
-    public function it_returns_convert_to_upto_when_vl_user_not_eligible(): void
+    public function it_blocks_approval_when_vl_user_not_eligible(): void
     {
         $user = User::factory()->create([
             'role' => 'Agent',
@@ -623,8 +614,6 @@ class LeaveCreditServiceTest extends TestCase
         $result = $this->service->checkVlCreditDeduction($user, $leaveRequest);
 
         $this->assertFalse($result['should_deduct']);
-        $this->assertTrue($result['convert_to_upto']);
-        $this->assertFalse($result['partial_credit']);
         $this->assertEquals(0, $result['credits_to_deduct']);
         $this->assertStringContainsString('Not eligible', $result['reason']);
     }
@@ -634,14 +623,14 @@ class LeaveCreditServiceTest extends TestCase
     // =====================================================================
 
     #[Test]
-    public function it_floors_fractional_vl_balance_to_whole_number(): void
+    public function it_blocks_vl_when_fractional_balance_insufficient(): void
     {
         $user = User::factory()->create([
             'role' => 'Agent',
             'hired_date' => Carbon::now()->subYear(),
         ]);
 
-        // Balance of 2.75 — floor(2.75) = 2
+        // Balance of 2.75 — floor(2.75) = 2, requesting 5 -> insufficient
         LeaveCredit::factory()->create([
             'user_id' => $user->id,
             'year' => now()->year,
@@ -662,21 +651,20 @@ class LeaveCreditServiceTest extends TestCase
 
         $result = $this->service->checkVlCreditDeduction($user, $leaveRequest);
 
-        $this->assertTrue($result['should_deduct']);
-        $this->assertTrue($result['partial_credit']);
-        $this->assertEquals(2, $result['credits_to_deduct']); // Floored from 2.75
-        $this->assertEquals(3, $result['upto_days']); // 5 - 2 = 3
+        $this->assertFalse($result['should_deduct']);
+        $this->assertEquals(0, $result['credits_to_deduct']);
+        $this->assertStringContainsString('Insufficient VL credits', $result['reason']);
     }
 
     #[Test]
-    public function it_converts_vl_to_upto_when_only_fractional_balance(): void
+    public function it_blocks_vl_when_only_fractional_balance(): void
     {
         $user = User::factory()->create([
             'role' => 'Agent',
             'hired_date' => Carbon::now()->subYear(),
         ]);
 
-        // Balance of 0.75 — floor(0.75) = 0, should convert to UPTO
+        // Balance of 0.75 — floor(0.75) = 0, should block
         LeaveCredit::factory()->create([
             'user_id' => $user->id,
             'year' => now()->year,
@@ -698,10 +686,8 @@ class LeaveCreditServiceTest extends TestCase
         $result = $this->service->checkVlCreditDeduction($user, $leaveRequest);
 
         $this->assertFalse($result['should_deduct']);
-        $this->assertTrue($result['convert_to_upto']);
-        $this->assertFalse($result['partial_credit']);
         $this->assertEquals(0, $result['credits_to_deduct']);
-        $this->assertEquals(2, $result['upto_days']);
+        $this->assertStringContainsString('Insufficient VL credits', $result['reason']);
     }
 
     #[Test]
