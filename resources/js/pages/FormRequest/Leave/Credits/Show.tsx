@@ -33,12 +33,12 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText, Banknote, AlertCircle, CheckCircle, Pencil, Loader2, AlertTriangle, Info, History, Clock } from 'lucide-react';
+import { ArrowLeft, Calendar, TrendingUp, TrendingDown, CreditCard, FileText, Banknote, AlertCircle, CheckCircle, Pencil, Loader2, AlertTriangle, Info, History, Clock, Undo2 } from 'lucide-react';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { index as creditsIndexRoute } from '@/routes/leave-requests/credits';
 import { show as leaveShowRoute } from '@/routes/leave-requests';
-import { creditsUpdateCarryover, creditsUpdateMonthly } from '@/actions/App/Http/Controllers/LeaveRequestController';
+import { creditsUpdateCarryover, creditsUpdateMonthly, creditsRevertEdit } from '@/actions/App/Http/Controllers/LeaveRequestController';
 import { format } from 'date-fns';
 
 interface MonthlyCredit {
@@ -142,6 +142,8 @@ interface Props {
         new_value: number | null;
         month: number | null;
         unabsorbed: number;
+        is_revert: boolean;
+        is_reverted: boolean;
         created_at: string;
     }>;
 }
@@ -235,6 +237,28 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                 setIsEditMonthlyOpen(false);
                 setEditingCredit(null);
                 editMonthlyForm.reset();
+            },
+        });
+    };
+
+    // Revert credit edit dialog state
+    const [revertEntry, setRevertEntry] = useState<Props['creditEditHistory'][0] | null>(null);
+    const revertForm = useForm({
+        reason: '',
+    });
+
+    const openRevertDialog = (entry: Props['creditEditHistory'][0]) => {
+        revertForm.reset();
+        setRevertEntry(entry);
+    };
+
+    const submitRevert = () => {
+        if (!revertEntry) return;
+        revertForm.post(creditsRevertEdit({ user: user.id, activity: revertEntry.id }).url, {
+            preserveScroll: true,
+            onSuccess: () => {
+                setRevertEntry(null);
+                revertForm.reset();
             },
         });
     };
@@ -621,20 +645,32 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                         </CardHeader>
                         <CardContent>
                             <div className="space-y-3">
-                                {creditEditHistory.map((entry) => (
-                                    <div key={entry.id} className="flex items-start gap-3 p-3 rounded-lg border bg-muted/30">
-                                        <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${entry.event === 'carryover_manually_adjusted'
+                                {creditEditHistory.map((entry, index) => (
+                                    <div key={entry.id} className={`flex items-start gap-3 p-3 rounded-lg border ${entry.is_reverted ? 'bg-muted/10 opacity-60' : 'bg-muted/30'}`}>
+                                        <div className={`mt-0.5 rounded-full p-1.5 shrink-0 ${entry.is_revert
+                                            ? 'bg-amber-100 text-amber-600 dark:bg-amber-900/40 dark:text-amber-400'
+                                            : entry.event === 'carryover_manually_adjusted'
                                                 ? 'bg-green-100 text-green-600 dark:bg-green-900/40 dark:text-green-400'
                                                 : 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400'
                                             }`}>
-                                            <Pencil className="h-3.5 w-3.5" />
+                                            {entry.is_revert ? <Undo2 className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
                                         </div>
                                         <div className="flex-1 min-w-0 space-y-1">
                                             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                                                 <Badge variant="outline" className="text-xs">
                                                     {entry.event === 'carryover_manually_adjusted' ? 'Carryover' : `Month ${entry.month}`}
                                                 </Badge>
-                                                <span className="text-sm font-medium">
+                                                {entry.is_revert && (
+                                                    <Badge className="text-xs bg-amber-100 text-amber-700 border-amber-300 dark:bg-amber-900/40 dark:text-amber-400 dark:border-amber-700">
+                                                        Revert
+                                                    </Badge>
+                                                )}
+                                                {entry.is_reverted && (
+                                                    <Badge className="text-xs bg-gray-100 text-gray-500 border-gray-300 dark:bg-gray-800 dark:text-gray-400 dark:border-gray-600">
+                                                        Reverted
+                                                    </Badge>
+                                                )}
+                                                <span className={`text-sm font-medium ${entry.is_reverted ? 'line-through text-muted-foreground' : ''}`}>
                                                     {entry.old_value !== null && entry.new_value !== null
                                                         ? <>{entry.old_value.toFixed(2)} → {entry.new_value.toFixed(2)}</>
                                                         : 'Adjusted'}
@@ -661,6 +697,17 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                                 </span>
                                             </div>
                                         </div>
+                                        {index === 0 && canEdit && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="shrink-0 text-xs gap-1"
+                                                onClick={() => openRevertDialog(entry)}
+                                            >
+                                                <Undo2 className="h-3.5 w-3.5" />
+                                                {entry.is_revert ? 'Undo Revert' : 'Revert'}
+                                            </Button>
+                                        )}
                                     </div>
                                 ))}
                             </div>
@@ -806,6 +853,86 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                                 <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</>
                             ) : (
                                 'Save Changes'
+                            )}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
+            {/* Revert Credit Edit Dialog */}
+            <Dialog open={revertEntry !== null} onOpenChange={(open) => {
+                if (!open) {
+                    setRevertEntry(null);
+                    revertForm.reset();
+                }
+            }}>
+                <DialogContent className="max-w-[90vw] sm:max-w-md max-h-[90vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle>{revertEntry?.is_revert ? 'Undo Revert' : 'Revert Credit Edit'}</DialogTitle>
+                        <DialogDescription>
+                            {revertEntry?.is_revert
+                                ? <>Undo the last revert and restore the original edit for <strong>{user.name}</strong></>
+                                : <>Restore the previous value for <strong>{user.name}</strong></>
+                            }
+                        </DialogDescription>
+                    </DialogHeader>
+                    {revertEntry && (
+                        <div className="space-y-4">
+                            <div className="p-3 rounded-lg bg-muted/50 border text-sm space-y-2">
+                                <div className="flex items-center gap-2">
+                                    <Badge variant="outline" className="text-xs">
+                                        {revertEntry.event === 'carryover_manually_adjusted' ? 'Carryover' : `Month ${revertEntry.month}`}
+                                    </Badge>
+                                    <span className="text-xs text-muted-foreground">
+                                        {format(new Date(revertEntry.created_at), 'MMM d, yyyy h:mm a')}
+                                    </span>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <p className="text-muted-foreground">Current Value</p>
+                                        <p className="font-semibold text-lg">{revertEntry.new_value?.toFixed(2) ?? '—'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-muted-foreground">Will Restore To</p>
+                                        <p className="font-semibold text-lg text-green-600 dark:text-green-400">{revertEntry.old_value?.toFixed(2) ?? '—'}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 text-sm dark:bg-amber-950 dark:border-amber-800 dark:text-amber-200">
+                                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                                <p>
+                                    {revertEntry?.is_revert
+                                        ? 'This will undo the revert by deleting it and restoring the original edit entry. Cascading adjustments may occur.'
+                                        : 'This will create a new edit that restores the previous value. Cascading adjustments may occur if the restored value affects credit balances.'
+                                    }
+                                </p>
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label htmlFor="revert_reason">Reason (optional)</Label>
+                                <Textarea
+                                    id="revert_reason"
+                                    placeholder="Optionally explain why you are reverting this edit..."
+                                    value={revertForm.data.reason}
+                                    onChange={(e) => revertForm.setData('reason', e.target.value)}
+                                    rows={3}
+                                />
+                                {revertForm.errors.reason && (
+                                    <p className="text-sm text-red-600">{revertForm.errors.reason}</p>
+                                )}
+                            </div>
+                        </div>
+                    )}
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setRevertEntry(null)} disabled={revertForm.processing}>
+                            Cancel
+                        </Button>
+                        <Button onClick={submitRevert} disabled={revertForm.processing}>
+                            {revertForm.processing ? (
+                                <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Reverting...</>
+                            ) : (
+                                <><Undo2 className="h-4 w-4 mr-2" /> {revertEntry?.is_revert ? 'Undo Revert' : 'Revert Edit'}</>
                             )}
                         </Button>
                     </DialogFooter>

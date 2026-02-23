@@ -76,10 +76,6 @@ class LeaveRequest extends Model
         'approved_days',
         'sl_credits_applied',
         'sl_no_credit_reason',
-        // Linked request fields (VL→UPTO split creates a companion UPTO request)
-        'linked_request_id',
-        'vl_credits_applied',
-        'vl_no_credit_reason',
     ];
 
     protected function casts(): array
@@ -115,8 +111,6 @@ class LeaveRequest extends Model
             'has_partial_denial' => 'boolean',
             'approved_days' => 'decimal:2',
             'sl_credits_applied' => 'boolean',
-            // Linked request (VL→UPTO split)
-            'vl_credits_applied' => 'boolean',
         ];
     }
 
@@ -228,19 +222,43 @@ class LeaveRequest extends Model
     }
 
     /**
-     * Get the linked/companion leave request (e.g., UPTO created from VL split).
+     * Get per-day status records for this leave request (SL per-day tracking).
      */
-    public function linkedRequest(): BelongsTo
+    public function days(): HasMany
     {
-        return $this->belongsTo(LeaveRequest::class, 'linked_request_id');
+        return $this->hasMany(LeaveRequestDay::class);
     }
 
     /**
-     * Get companion requests that were created from this request (e.g., UPTO requests linked to this VL).
+     * Check if this leave request has per-day status tracking.
      */
-    public function companionRequests(): HasMany
+    public function hasPerDayStatuses(): bool
     {
-        return $this->hasMany(LeaveRequest::class, 'linked_request_id');
+        return $this->days()->where('day_status', '!=', LeaveRequestDay::STATUS_PENDING)->exists();
+    }
+
+    /**
+     * Get count of SL Credited (paid) days.
+     */
+    public function getCreditedDaysCount(): int
+    {
+        return $this->days()->credited()->count();
+    }
+
+    /**
+     * Get count of NCNS days.
+     */
+    public function getNcnsDaysCount(): int
+    {
+        return $this->days()->ncns()->count();
+    }
+
+    /**
+     * Get count of Advised Absence (UPTO) days.
+     */
+    public function getAdvisedAbsenceDaysCount(): int
+    {
+        return $this->days()->advisedAbsence()->count();
     }
 
     /**

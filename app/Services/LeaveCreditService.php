@@ -108,13 +108,39 @@ class LeaveCreditService
     {
         $year = $year ?? now()->year;
 
-        // Get monthly credits balance
+        // Get monthly credits balance (getTotalEarned excludes month=0, getTotalUsed includes month=0)
         $monthlyBalance = LeaveCredit::getTotalBalance($user->id, $year);
 
         // Add carryover received INTO this year (from previous year)
         $carryoverReceived = $this->getCarryoverCreditsForBalance($user, $year);
 
-        return $monthlyBalance + $carryoverReceived;
+        // When a carryover is cash-converted, getCarryoverCreditsForBalance returns 0,
+        // but getTotalUsed still includes the month=0 credits_used (leave taken before conversion).
+        // We compensate by adding back that usage so it doesn't penalize the monthly balance.
+        $convertedCarryoverUsedAdjustment = $this->getCashConvertedCarryoverUsed($user->id, $year);
+
+        return $monthlyBalance + $carryoverReceived + $convertedCarryoverUsedAdjustment;
+    }
+
+    /**
+     * Get the month=0 credits_used for cash-converted carryovers.
+     * Used to compensate the balance calculation when carryover is converted.
+     */
+    protected function getCashConvertedCarryoverUsed(int $userId, int $year): float
+    {
+        $hasConverted = LeaveCreditCarryover::forUser($userId)
+            ->toYear($year)
+            ->where('cash_converted', true)
+            ->exists();
+
+        if (! $hasConverted) {
+            return 0;
+        }
+
+        return (float) (LeaveCredit::forUser($userId)
+            ->forYear($year)
+            ->where('month', 0)
+            ->value('credits_used') ?? 0);
     }
 
     /**
@@ -142,6 +168,11 @@ class LeaveCreditService
         $carryoverReceived = 0;
 
         foreach ($carryovers as $carryover) {
+            // Skip cash-converted carryovers — they are no longer available for leave
+            if ($carryover->cash_converted) {
+                continue;
+            }
+
             // If user was hired in the year the carryover is FROM, they need to be regularized first
             if ($hireYear && $carryover->from_year === $hireYear) {
                 // First regularization transfer - only include if NOW regularized
@@ -153,8 +184,8 @@ class LeaveCreditService
                 if ($carryover->is_first_regularization) {
                     // First regularization transfers don't expire
                     $carryoverReceived += $carryover->carryover_credits;
-                } elseif (! $isPastMarch && ! $carryover->cash_converted) {
-                    // Regular carryover - only include if before end of March AND not yet converted
+                } elseif (! $isPastMarch) {
+                    // Regular carryover - only include if before end of March
                     $carryoverReceived += $carryover->carryover_credits;
                 }
             }
@@ -244,7 +275,7 @@ class LeaveCreditService
      * Get total days from pending leave requests that require credits.
      * When a year is provided, only counts requests starting in that year.
      */
-    public function getPendingCredits(User $user, ?int $year = null): float
+    public function getPendingCredits(User $user, ?int $year = null, ?int $excludeRequestId = null): float
     {
         $query = LeaveRequest::where('user_id', $user->id)
             ->where('status', 'pending')
@@ -252,6 +283,10 @@ class LeaveCreditService
 
         if ($year !== null) {
             $query->whereYear('start_date', $year);
+        }
+
+        if ($excludeRequestId !== null) {
+            $query->where('id', '!=', $excludeRequestId);
         }
 
         return $query->sum('days_requested');
@@ -1113,6 +1148,10 @@ class LeaveCreditService
         $year = Carbon::parse($leaveRequest->start_date)->year;
         $balance = $this->getBalance($user, $year);
 
+        // Subtract credits reserved by other pending VL/SL requests to prevent double-spending
+        $pendingCredits = $this->getPendingCredits($user, $year, $leaveRequest->id);
+        $balance = max(0, $balance - $pendingCredits);
+
         // Use approved_days when there's a partial denial, otherwise use days_requested
         $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
             ? (float) $leaveRequest->approved_days
@@ -1174,15 +1213,14 @@ class LeaveCreditService
 
     /**
      * Check if VL credits should be deducted at approval time and return detailed info.
-     * Supports partial credit usage - if user has some credits but not enough,
-     * use available credits for covered days and create a linked UPTO request for the rest.
+     * If credits are insufficient, approval is blocked (should_deduct: false).
      *
-     * @return array{should_deduct: bool, reason: string|null, convert_to_upto: bool, partial_credit: bool, credits_to_deduct: float, upto_days: float}
+     * @return array{should_deduct: bool, reason: string|null, credits_to_deduct: int}
      */
     public function checkVlCreditDeduction(User $user, LeaveRequest $leaveRequest): array
     {
         if ($leaveRequest->leave_type !== 'VL') {
-            return ['should_deduct' => true, 'reason' => null, 'convert_to_upto' => false, 'partial_credit' => false];
+            return ['should_deduct' => true, 'reason' => null, 'credits_to_deduct' => 0];
         }
 
         // Must be eligible (6+ months) - check eligibility based on leave start date
@@ -1193,12 +1231,7 @@ class LeaveCreditService
             return [
                 'should_deduct' => false,
                 'reason' => "Not eligible for VL credits (less than 6 months of employment, hired: {$hireDate})",
-                'convert_to_upto' => true,
-                'partial_credit' => false,
                 'credits_to_deduct' => 0,
-                'upto_days' => ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
-                    ? (float) $leaveRequest->approved_days
-                    : (float) $leaveRequest->days_requested,
             ];
         }
 
@@ -1206,62 +1239,32 @@ class LeaveCreditService
         $year = $startDate->year;
         $balance = $this->getBalance($user, $year);
 
+        // Subtract credits reserved by other pending VL/SL requests to prevent double-spending
+        $pendingCredits = $this->getPendingCredits($user, $year, $leaveRequest->id);
+        $balance = max(0, $balance - $pendingCredits);
+
         // Use approved_days when there's a partial denial, otherwise use days_requested
         $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
             ? (float) $leaveRequest->approved_days
             : (float) $leaveRequest->days_requested;
 
-        if ($balance <= 0) {
-            // No credits at all - convert entire request to UPTO
-            return [
-                'should_deduct' => false,
-                'reason' => 'No VL credits available (balance: 0 days) - Converted to UPTO',
-                'convert_to_upto' => true,
-                'partial_credit' => false,
-                'credits_to_deduct' => 0,
-                'upto_days' => $daysRequested,
-            ];
-        }
-
-        if ($balance < $daysRequested) {
-            // Floor to whole number: only deduct full days (1 credit = 1 day)
-            $wholeCredits = (int) floor($balance);
-
-            if ($wholeCredits <= 0) {
-                // Fractional balance only (e.g. 0.75) - treat as zero, convert to UPTO
-                return [
-                    'should_deduct' => false,
-                    'reason' => "No whole VL credits available (balance: {$balance} days) - Converted to UPTO",
-                    'convert_to_upto' => true,
-                    'partial_credit' => false,
-                    'credits_to_deduct' => 0,
-                    'upto_days' => $daysRequested,
-                ];
-            }
-
-            $uptoDays = $daysRequested - $wholeCredits;
-
-            return [
-                'should_deduct' => true,
-                'reason' => "Partial VL credits used (balance: {$balance} days, requested: {$daysRequested} days) - {$wholeCredits} day(s) as VL, {$uptoDays} day(s) as UPTO",
-                'convert_to_upto' => false,
-                'partial_credit' => true,
-                'credits_to_deduct' => $wholeCredits,
-                'upto_days' => $uptoDays,
-            ];
-        }
-
-        // Full credits available - floor to whole number
+        // Floor to whole number: only deduct full days (1 credit = 1 day)
         $wholeCredits = (int) floor($balance);
 
-        // If requesting exactly the floored balance or less, deduct only whole days requested
+        if ($wholeCredits < $daysRequested) {
+            // Insufficient credits - block approval
+            return [
+                'should_deduct' => false,
+                'reason' => "Insufficient VL credits (balance: {$balance} day(s), requested: {$daysRequested} day(s))",
+                'credits_to_deduct' => 0,
+            ];
+        }
+
+        // Full credits available
         return [
             'should_deduct' => true,
             'reason' => null,
-            'convert_to_upto' => false,
-            'partial_credit' => false,
             'credits_to_deduct' => (int) $daysRequested,
-            'upto_days' => 0,
         ];
     }
 
