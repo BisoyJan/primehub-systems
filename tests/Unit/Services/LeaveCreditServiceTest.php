@@ -764,6 +764,138 @@ class LeaveCreditServiceTest extends TestCase
     }
 
     // =====================================================================
+    // Pending Credits Subtraction in Credit Check Tests
+    // =====================================================================
+
+    #[Test]
+    public function it_subtracts_pending_vl_credits_from_sl_credit_check(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::now()->subYear(),
+        ]);
+
+        // Balance of 1.25 — normally floor(1.25) = 1 SL credit available
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => now()->year,
+            'month' => 1,
+            'credits_earned' => 1.25,
+            'credits_used' => 0,
+            'credits_balance' => 1.25,
+        ]);
+
+        // Pending VL request consuming 1 day — effective balance: 1.25 - 1 = 0.25, floor = 0
+        $startDate = Carbon::now()->addWeeks(2)->startOfWeek();
+        LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'days_requested' => 1,
+            'status' => 'pending',
+            'start_date' => $startDate,
+            'end_date' => $startDate,
+        ]);
+
+        // SL request for 3 days — should see 0 credits available (not 1)
+        $slStart = Carbon::now()->addWeeks(3)->startOfWeek();
+        $slRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'SL',
+            'days_requested' => 3,
+            'medical_cert_submitted' => true,
+            'start_date' => $slStart,
+            'end_date' => $slStart->copy()->addDays(2),
+        ]);
+
+        $result = $this->service->checkSlCreditDeduction($user, $slRequest);
+
+        $this->assertFalse($result['should_deduct']);
+        $this->assertTrue($result['convert_to_upto']);
+        $this->assertEquals(0, $result['credits_to_deduct']);
+    }
+
+    #[Test]
+    public function it_subtracts_pending_sl_credits_from_vl_credit_check(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::now()->subYear(),
+        ]);
+
+        // Balance of 3 — normally enough for 2 VL days
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => now()->year,
+            'month' => 1,
+            'credits_earned' => 3,
+            'credits_used' => 0,
+            'credits_balance' => 3,
+        ]);
+
+        // Pending SL request consuming 2 days — effective balance: 3 - 2 = 1
+        $startDate = Carbon::now()->addWeeks(2)->startOfWeek();
+        LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'SL',
+            'days_requested' => 2,
+            'status' => 'pending',
+            'start_date' => $startDate,
+            'end_date' => $startDate->copy()->addDay(),
+        ]);
+
+        // VL request for 2 days — effective balance 1 < 2, should block
+        $vlStart = Carbon::now()->addWeeks(3)->startOfWeek();
+        $vlRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'days_requested' => 2,
+            'start_date' => $vlStart,
+            'end_date' => $vlStart->copy()->addDay(),
+        ]);
+
+        $result = $this->service->checkVlCreditDeduction($user, $vlRequest);
+
+        $this->assertFalse($result['should_deduct']);
+        $this->assertStringContainsString('Insufficient VL credits', $result['reason']);
+        $this->assertEquals(0, $result['credits_to_deduct']);
+    }
+
+    #[Test]
+    public function it_excludes_current_request_from_pending_credits_calculation(): void
+    {
+        $user = User::factory()->create([
+            'role' => 'Agent',
+            'hired_date' => Carbon::now()->subYear(),
+        ]);
+
+        // Balance of 2
+        LeaveCredit::factory()->create([
+            'user_id' => $user->id,
+            'year' => now()->year,
+            'month' => 1,
+            'credits_earned' => 2,
+            'credits_used' => 0,
+            'credits_balance' => 2,
+        ]);
+
+        // The VL request itself IS pending (2 days) — should NOT count against itself
+        $startDate = Carbon::now()->addWeeks(3)->startOfWeek();
+        $vlRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'leave_type' => 'VL',
+            'days_requested' => 2,
+            'status' => 'pending',
+            'start_date' => $startDate,
+            'end_date' => $startDate->copy()->addDay(),
+        ]);
+
+        $result = $this->service->checkVlCreditDeduction($user, $vlRequest);
+
+        $this->assertTrue($result['should_deduct']);
+        $this->assertEquals(2, $result['credits_to_deduct']);
+    }
+
+    // =====================================================================
     // Future Credit Accrual in VL Validation Tests
     // =====================================================================
 

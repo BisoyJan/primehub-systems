@@ -275,7 +275,7 @@ class LeaveCreditService
      * Get total days from pending leave requests that require credits.
      * When a year is provided, only counts requests starting in that year.
      */
-    public function getPendingCredits(User $user, ?int $year = null): float
+    public function getPendingCredits(User $user, ?int $year = null, ?int $excludeRequestId = null): float
     {
         $query = LeaveRequest::where('user_id', $user->id)
             ->where('status', 'pending')
@@ -283,6 +283,10 @@ class LeaveCreditService
 
         if ($year !== null) {
             $query->whereYear('start_date', $year);
+        }
+
+        if ($excludeRequestId !== null) {
+            $query->where('id', '!=', $excludeRequestId);
         }
 
         return $query->sum('days_requested');
@@ -1144,6 +1148,10 @@ class LeaveCreditService
         $year = Carbon::parse($leaveRequest->start_date)->year;
         $balance = $this->getBalance($user, $year);
 
+        // Subtract credits reserved by other pending VL/SL requests to prevent double-spending
+        $pendingCredits = $this->getPendingCredits($user, $year, $leaveRequest->id);
+        $balance = max(0, $balance - $pendingCredits);
+
         // Use approved_days when there's a partial denial, otherwise use days_requested
         $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
             ? (float) $leaveRequest->approved_days
@@ -1230,6 +1238,10 @@ class LeaveCreditService
         // Check credits balance
         $year = $startDate->year;
         $balance = $this->getBalance($user, $year);
+
+        // Subtract credits reserved by other pending VL/SL requests to prevent double-spending
+        $pendingCredits = $this->getPendingCredits($user, $year, $leaveRequest->id);
+        $balance = max(0, $balance - $pendingCredits);
 
         // Use approved_days when there's a partial denial, otherwise use days_requested
         $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
