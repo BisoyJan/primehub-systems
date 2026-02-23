@@ -4098,15 +4098,23 @@ class LeaveRequestController extends Controller
      */
     private function getCreditEditHistory(int $userId, int $year): array
     {
-        return Activity::where('log_name', 'leave-credits')
+        $activities = Activity::where('log_name', 'leave-credits')
             ->whereIn('event', ['carryover_manually_adjusted', 'credit_manually_adjusted'])
             ->where('properties->user_id', $userId)
             ->where('properties->year', $year)
             ->with('causer:id,first_name,last_name')
-            ->orderByDesc('created_at')
+            ->orderByDesc('id')
             ->limit(50)
-            ->get()
-            ->map(function (Activity $activity) {
+            ->get();
+
+        // Collect IDs of activities that have been reverted
+        $revertedIds = $activities
+            ->filter(fn (Activity $a) => ! empty($a->properties['reverted_activity_id']))
+            ->pluck('properties.reverted_activity_id')
+            ->toArray();
+
+        return $activities
+            ->map(function (Activity $activity) use ($revertedIds) {
                 $props = $activity->properties;
 
                 return [
@@ -4125,6 +4133,8 @@ class LeaveRequestController extends Controller
                         : ($props['new_earned'] ?? null),
                     'month' => $props['month'] ?? null,
                     'unabsorbed' => (float) ($props['unabsorbed'] ?? 0),
+                    'is_revert' => ! empty($props['is_revert']),
+                    'is_reverted' => in_array($activity->id, $revertedIds),
                     'created_at' => $activity->created_at->format('Y-m-d H:i:s'),
                 ];
             })
@@ -4211,6 +4221,194 @@ class LeaveRequestController extends Controller
             Log::error('Credits Update Monthly Error: '.$e->getMessage());
 
             return redirect()->back()->with('message', 'Failed to update monthly credits.')->with('type', 'error');
+        }
+    }
+
+    /**
+     * Revert the most recent credit edit for a user.
+     *
+     * Supports cascade reverts: if the latest entry is itself a revert,
+     * undoing it will delete the revert entry and restore the previous state,
+     * revealing the original edit as the new latest entry.
+     */
+    public function creditsRevertEdit(Request $request, User $user, Activity $activity): \Illuminate\Http\RedirectResponse
+    {
+        $request->validate([
+            'reason' => 'nullable|string|max:500',
+        ]);
+
+        $props = $activity->properties;
+
+        // Validate the activity belongs to this user
+        if ((int) ($props['user_id'] ?? 0) !== $user->id) {
+            return redirect()->back()->with('message', 'This edit does not belong to the specified user.')->with('type', 'error');
+        }
+
+        // Validate event type
+        if (! in_array($activity->event, ['carryover_manually_adjusted', 'credit_manually_adjusted'])) {
+            return redirect()->back()->with('message', 'This activity log entry is not a credit edit.')->with('type', 'error');
+        }
+
+        $year = (int) ($props['year'] ?? now()->year);
+
+        // Ensure this is the most recent edit for this user+year
+        $latestActivity = Activity::where('log_name', 'leave-credits')
+            ->whereIn('event', ['carryover_manually_adjusted', 'credit_manually_adjusted'])
+            ->where('properties->user_id', $user->id)
+            ->where('properties->year', $year)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $latestActivity || $latestActivity->id !== $activity->id) {
+            return redirect()->back()->with('message', 'Only the most recent credit edit can be reverted.')->with('type', 'error');
+        }
+
+        $isUndoingRevert = ! empty($props['is_revert']);
+
+        $revertedAt = $activity->created_at->format('M d, Y h:i A');
+        $userReason = $request->input('reason');
+        $reason = $isUndoingRevert
+            ? "Undid revert from {$revertedAt}"
+            : "Reverted edit from {$revertedAt}";
+        if ($userReason) {
+            $reason .= " — {$userReason}";
+        }
+
+        try {
+            if ($activity->event === 'carryover_manually_adjusted') {
+                $oldValue = (float) ($props['old_carryover'] ?? 0);
+
+                $carryover = LeaveCreditCarryover::forUser($user->id)
+                    ->toYear($year)
+                    ->first();
+
+                if (! $carryover) {
+                    return redirect()->back()->with('message', 'No carryover record found for this year.')->with('type', 'error');
+                }
+
+                $result = DB::transaction(function () use ($carryover, $oldValue, $reason, $activity, $isUndoingRevert) {
+                    $result = $this->leaveCreditService->updateCarryoverCredits(
+                        $carryover,
+                        $oldValue,
+                        $reason,
+                        auth()->id()
+                    );
+
+                    if ($isUndoingRevert) {
+                        // Cascade: delete the revert entry and the new activity entry
+                        $newActivity = Activity::where('log_name', 'leave-credits')
+                            ->where('event', 'carryover_manually_adjusted')
+                            ->where('properties->user_id', $carryover->user_id)
+                            ->orderByDesc('id')
+                            ->first();
+
+                        if ($newActivity) {
+                            $newActivity->delete();
+                        }
+
+                        // Clear is_reverted on the original entry
+                        $originalId = $activity->properties['reverted_activity_id'] ?? null;
+                        if ($originalId) {
+                            $original = Activity::find($originalId);
+                            if ($original) {
+                                // No changes needed — is_reverted is computed dynamically in getCreditEditHistory
+                            }
+                        }
+
+                        $activity->delete();
+                    } else {
+                        // Normal revert: mark the new activity as a revert
+                        $revertActivity = Activity::where('log_name', 'leave-credits')
+                            ->where('event', 'carryover_manually_adjusted')
+                            ->where('properties->user_id', $carryover->user_id)
+                            ->orderByDesc('id')
+                            ->first();
+
+                        if ($revertActivity) {
+                            $revertActivity->properties = $revertActivity->properties->merge([
+                                'is_revert' => true,
+                                'reverted_activity_id' => $activity->id,
+                            ]);
+                            $revertActivity->save();
+                        }
+                    }
+
+                    return $result;
+                });
+
+                $message = $isUndoingRevert
+                    ? "Revert undone. Carryover credits restored from {$result['old_value']} to {$result['new_value']}."
+                    : "Carryover credits reverted from {$result['old_value']} to {$result['new_value']}.";
+                if ($result['unabsorbed'] > 0) {
+                    $message .= " Warning: {$result['unabsorbed']} excess credits could not be redistributed.";
+                }
+            } else {
+                $oldValue = (float) ($props['old_earned'] ?? 0);
+                $month = (int) ($props['month'] ?? 0);
+
+                $leaveCredit = LeaveCredit::where('user_id', $user->id)
+                    ->where('year', $year)
+                    ->where('month', $month)
+                    ->first();
+
+                if (! $leaveCredit) {
+                    return redirect()->back()->with('message', 'No monthly credit record found for this period.')->with('type', 'error');
+                }
+
+                $result = DB::transaction(function () use ($leaveCredit, $oldValue, $reason, $activity, $isUndoingRevert) {
+                    $result = $this->leaveCreditService->updateMonthlyCredit(
+                        $leaveCredit,
+                        $oldValue,
+                        $reason,
+                        auth()->id()
+                    );
+
+                    if ($isUndoingRevert) {
+                        // Cascade: delete the revert entry and the new activity entry
+                        $newActivity = Activity::where('log_name', 'leave-credits')
+                            ->where('event', 'credit_manually_adjusted')
+                            ->where('properties->user_id', $leaveCredit->user_id)
+                            ->orderByDesc('id')
+                            ->first();
+
+                        if ($newActivity) {
+                            $newActivity->delete();
+                        }
+
+                        $activity->delete();
+                    } else {
+                        // Normal revert: mark the new activity as a revert
+                        $revertActivity = Activity::where('log_name', 'leave-credits')
+                            ->where('event', 'credit_manually_adjusted')
+                            ->where('properties->user_id', $leaveCredit->user_id)
+                            ->orderByDesc('id')
+                            ->first();
+
+                        if ($revertActivity) {
+                            $revertActivity->properties = $revertActivity->properties->merge([
+                                'is_revert' => true,
+                                'reverted_activity_id' => $activity->id,
+                            ]);
+                            $revertActivity->save();
+                        }
+                    }
+
+                    return $result;
+                });
+
+                $message = $isUndoingRevert
+                    ? "Revert undone. Monthly credit (Month {$month}) restored from {$result['old_earned']} to {$result['new_earned']}."
+                    : "Monthly credit (Month {$month}) reverted from {$result['old_earned']} to {$result['new_earned']}.";
+                if ($result['unabsorbed'] > 0) {
+                    $message .= " Warning: {$result['unabsorbed']} excess credits could not be redistributed.";
+                }
+            }
+
+            return redirect()->back()->with('message', $message)->with('type', 'success');
+        } catch (\Exception $e) {
+            Log::error('Credits Revert Edit Error: '.$e->getMessage());
+
+            return redirect()->back()->with('message', 'Failed to revert credit edit.')->with('type', 'error');
         }
     }
 

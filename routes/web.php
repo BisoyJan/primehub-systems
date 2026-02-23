@@ -355,6 +355,9 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::put('/{user}/credits/{leaveCredit}', [LeaveRequestController::class, 'creditsUpdateMonthly'])
                 ->name('update-monthly')
                 ->middleware('permission:leave_credits.edit');
+            Route::post('/{user}/revert/{activity}', [LeaveRequestController::class, 'creditsRevertEdit'])
+                ->name('revert-edit')
+                ->middleware('permission:leave_credits.edit');
             Route::post('/{user}/cash-conversion', [LeaveRequestController::class, 'convertUserCarryover'])
                 ->name('cash-conversion')
                 ->middleware('permission:leave_credits.edit');
