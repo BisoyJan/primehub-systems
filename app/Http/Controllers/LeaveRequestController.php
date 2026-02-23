@@ -315,7 +315,7 @@ class LeaveRequestController extends Controller
 
         // For admins/team leads creating leave for employees, check if employee_id is provided
         $targetUser = $user;
-        if ($canFileForOthers && $request->filled('employee_id')) {
+        if ($canFileForOthers && $request->filled('employee_id') && (int) $request->employee_id !== $user->id) {
             $targetUser = User::findOrFail($request->employee_id);
 
             // Team Leads can only file for agents in their campaign
@@ -395,10 +395,18 @@ class LeaveRequestController extends Controller
                     ];
                 });
         } elseif ($isTeamLead) {
-            // Team Leads can only file for agents in their campaign
+            // Team Leads can file for themselves + agents in their campaign
             $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+
+            // Always include the Team Lead themselves first
+            $selfEntry = collect([[
+                'id' => $user->id,
+                'name' => $user->name,
+                'email' => $user->email,
+            ]]);
+
             if ($teamLeadCampaignId) {
-                $employees = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
+                $agents = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
                     ->where('role', 'Agent')
                     ->where('is_approved', true)
                     ->whereHas('activeSchedule', function ($query) use ($teamLeadCampaignId) {
@@ -414,6 +422,10 @@ class LeaveRequestController extends Controller
                             'email' => $emp->email,
                         ];
                     });
+
+                $employees = $selfEntry->merge($agents);
+            } else {
+                $employees = $selfEntry;
             }
         }
 
@@ -466,7 +478,7 @@ class LeaveRequestController extends Controller
 
         // For admins/team leads, allow creating leave for other employees
         $targetUser = $user;
-        if (in_array($user->role, ['Super Admin', 'Admin', 'Team Lead']) && $request->filled('employee_id')) {
+        if (in_array($user->role, ['Super Admin', 'Admin', 'Team Lead']) && $request->filled('employee_id') && (int) $request->employee_id !== $user->id) {
             $targetUser = User::findOrFail($request->employee_id);
 
             // Team Leads can only file for agents in their campaign

@@ -111,8 +111,9 @@ class TeamLeadLeaveFilingTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('FormRequest/Leave/Create')
                 ->where('canFileForOthers', true)
-                ->has('employees', 1) // Only the agent in same campaign
-                ->where('employees.0.id', $this->agent->id)
+                ->has('employees', 2) // TL themselves + the agent in same campaign
+                ->where('employees.0.id', $this->teamLead->id)
+                ->where('employees.1.id', $this->agent->id)
             );
     }
 
@@ -274,6 +275,100 @@ class TeamLeadLeaveFilingTest extends TestCase
         $this->assertDatabaseMissing('leave_requests', [
             'user_id' => $this->agent->id,
             'short_notice_override' => true,
+        ]);
+    }
+
+    #[Test]
+    public function team_lead_can_load_create_form_for_themselves(): void
+    {
+        // When TL visits the create page with their own employee_id, it should not 403
+        $response = $this->actingAs($this->teamLead)->get(
+            route('leave-requests.create', ['employee_id' => $this->teamLead->id])
+        );
+
+        $response->assertStatus(200)
+            ->assertInertia(fn ($page) => $page
+                ->component('FormRequest/Leave/Create')
+                ->where('selectedEmployeeId', $this->teamLead->id)
+            );
+    }
+
+    #[Test]
+    public function team_lead_can_store_leave_for_themselves(): void
+    {
+        // Give TL sufficient leave credits
+        LeaveCredit::create([
+            'user_id' => $this->teamLead->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'vacation_leave_balance' => 10,
+            'sick_leave_balance' => 10,
+            'credits_earned' => 10,
+            'credits_used' => 0,
+            'credits_balance' => 10,
+            'accrued_at' => now(),
+        ]);
+
+        $startDate = now()->addWeeks(3)->startOfWeek();
+        $endDate = $startDate->copy()->addDay();
+
+        // Submitting with employee_id set to the TL's own ID (as the frontend does)
+        $response = $this->actingAs($this->teamLead)->post(route('leave-requests.store'), [
+            'employee_id' => $this->teamLead->id,
+            'leave_type' => 'VL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+            'reason' => 'Team lead filing leave for themselves',
+            'campaign_department' => $this->campaign->name,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionMissing('errors');
+
+        $this->assertDatabaseHas('leave_requests', [
+            'user_id' => $this->teamLead->id,
+            'leave_type' => 'VL',
+            'reason' => 'Team lead filing leave for themselves',
+            'status' => 'pending',
+        ]);
+    }
+
+    #[Test]
+    public function team_lead_can_store_leave_for_themselves_without_employee_id(): void
+    {
+        // Give TL sufficient leave credits
+        LeaveCredit::create([
+            'user_id' => $this->teamLead->id,
+            'year' => now()->year,
+            'month' => now()->month,
+            'vacation_leave_balance' => 10,
+            'sick_leave_balance' => 10,
+            'credits_earned' => 10,
+            'credits_used' => 0,
+            'credits_balance' => 10,
+            'accrued_at' => now(),
+        ]);
+
+        $startDate = now()->addWeeks(3)->startOfWeek();
+        $endDate = $startDate->copy()->addDay();
+
+        // Submitting without employee_id should also work
+        $response = $this->actingAs($this->teamLead)->post(route('leave-requests.store'), [
+            'leave_type' => 'VL',
+            'start_date' => $startDate->format('Y-m-d'),
+            'end_date' => $endDate->format('Y-m-d'),
+            'reason' => 'Team lead self leave without employee_id',
+            'campaign_department' => $this->campaign->name,
+        ]);
+
+        $response->assertRedirect();
+        $response->assertSessionMissing('errors');
+
+        $this->assertDatabaseHas('leave_requests', [
+            'user_id' => $this->teamLead->id,
+            'leave_type' => 'VL',
+            'reason' => 'Team lead self leave without employee_id',
+            'status' => 'pending',
         ]);
     }
 
