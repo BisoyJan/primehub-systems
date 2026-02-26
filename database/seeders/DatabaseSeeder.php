@@ -2,11 +2,8 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\Hash;
 use App\Models\Site;
-use App\Models\Campaign;
+use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
 {
@@ -23,7 +20,6 @@ class DatabaseSeeder extends Seeder
             Site::firstOrCreate(['name' => $name]);
         }
 
-
         // Call all seeders - each now uses factories for generating data
         $this->call([
             AccountSeeder::class,       // Creates 4 test accounts + 10 random users via factory
@@ -37,6 +33,7 @@ class DatabaseSeeder extends Seeder
             StationSeeder::class,       // Creates 30 site-based stations + 20 random via factory
             PcMaintenanceSeeder::class, // Creates 10 sample PC maintenance records
             EmployeeScheduleSeeder::class, // Creates sample employee schedules
+            CoachingStatusSettingSeeder::class, // Creates default coaching status thresholds
         ]);
     }
 }

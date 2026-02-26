@@ -225,6 +225,30 @@ class User extends Authenticatable
     }
 
     /**
+     * Get coaching sessions where this user is the agent.
+     */
+    public function coachingSessionsAsAgent()
+    {
+        return $this->hasMany(CoachingSession::class, 'agent_id');
+    }
+
+    /**
+     * Get coaching sessions where this user is the team lead.
+     */
+    public function coachingSessionsAsTeamLead()
+    {
+        return $this->hasMany(CoachingSession::class, 'team_lead_id');
+    }
+
+    /**
+     * Get coaching sessions reviewed by this user (compliance).
+     */
+    public function coachingReviews()
+    {
+        return $this->hasMany(CoachingSession::class, 'compliance_reviewer_id');
+    }
+
+    /**
      * Get the notifications for the user.
      */
     public function notifications()
