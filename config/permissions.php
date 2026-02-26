@@ -168,6 +168,18 @@ return [
 
         // Activity Logs
         'activity_logs.view' => 'View Activity Logs',
+
+        // Coaching Logs
+        'coaching.view_own' => 'View Own Coaching Logs',
+        'coaching.view_team' => 'View Team Coaching Logs',
+        'coaching.view_all' => 'View All Coaching Logs',
+        'coaching.create' => 'Create Coaching Sessions',
+        'coaching.edit' => 'Edit Coaching Sessions',
+        'coaching.delete' => 'Delete Coaching Sessions',
+        'coaching.acknowledge' => 'Acknowledge Coaching Sessions',
+        'coaching.review' => 'Review/Verify Coaching Sessions',
+        'coaching.export' => 'Export Coaching Logs',
+        'coaching.settings' => 'Manage Coaching Settings',
     ],
 
     /*
@@ -198,6 +210,7 @@ return [
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
             'form_requests.retention',
             'notifications.send', 'notifications.send_all',
+            'coaching.view_all', 'coaching.create', 'coaching.edit', 'coaching.delete', 'coaching.review', 'coaching.export', 'coaching.settings',
             'settings.view', 'settings.account', 'settings.password',
         ],
 
@@ -211,6 +224,7 @@ return [
             'leave_credits.view_all', 'leave_credits.view_own',
             'it_concerns.view', 'it_concerns.create',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update',
+            'coaching.view_team', 'coaching.create', 'coaching.edit',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],
@@ -223,6 +237,7 @@ return [
             'leave_credits.view_own',
             'it_concerns.create',
             'medication_requests.view', 'medication_requests.create',
+            'coaching.view_own', 'coaching.acknowledge',
             'settings.account',
         ],
 
@@ -236,6 +251,7 @@ return [
             'leave.view', 'leave.create', 'leave.edit', 'leave.approve', 'leave.deny', 'leave.cancel', 'leave.delete', 'leave.view_all',
             'leave_credits.view_all', 'leave_credits.view_own', 'leave_credits.edit',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update', 'medication_requests.delete',
+            'coaching.view_all', 'coaching.review', 'coaching.export',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],

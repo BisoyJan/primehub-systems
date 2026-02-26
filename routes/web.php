@@ -11,6 +11,8 @@ use App\Http\Controllers\BiometricExportController;
 use App\Http\Controllers\BiometricRecordController;
 use App\Http\Controllers\BiometricReprocessingController;
 use App\Http\Controllers\BiometricRetentionPolicyController;
+use App\Http\Controllers\CoachingDashboardController;
+use App\Http\Controllers\CoachingSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\EmployeeScheduleController;
@@ -439,6 +441,47 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             Route::post('/{policy}/toggle', [FormRequestRetentionPolicyController::class, 'toggle'])->name('toggle');
             Route::get('/{policy}/preview', [FormRequestRetentionPolicyController::class, 'preview'])->name('preview');
         });
+
+    // Coaching
+    Route::prefix('coaching')->name('coaching.')->group(function () {
+        // Dashboard (routes to correct view by role)
+        Route::get('/dashboard', [CoachingDashboardController::class, 'index'])
+            ->middleware('permission:coaching.view_own,coaching.view_team,coaching.view_all')
+            ->name('dashboard');
+
+        // Coaching Settings (admin only)
+        Route::get('/settings', [CoachingDashboardController::class, 'settings'])
+            ->middleware('permission:coaching.settings')
+            ->name('settings');
+        Route::put('/settings', [CoachingDashboardController::class, 'updateSettings'])
+            ->middleware('permission:coaching.settings')
+            ->name('settings.update');
+
+        // Session CRUD
+        Route::resource('sessions', CoachingSessionController::class)
+            ->middleware('permission:coaching.view_own,coaching.view_team,coaching.view_all,coaching.create,coaching.edit,coaching.delete');
+
+        // Agent acknowledge
+        Route::patch('/sessions/{session}/acknowledge', [CoachingSessionController::class, 'acknowledge'])
+            ->middleware('permission:coaching.acknowledge')
+            ->name('sessions.acknowledge');
+
+        // Compliance review
+        Route::patch('/sessions/{session}/review', [CoachingSessionController::class, 'review'])
+            ->middleware('permission:coaching.review')
+            ->name('sessions.review');
+
+        // Export
+        Route::post('/export/start', [CoachingDashboardController::class, 'startExport'])
+            ->middleware('permission:coaching.export')
+            ->name('export.start');
+        Route::get('/export/progress/{jobId}', [CoachingDashboardController::class, 'exportProgress'])
+            ->middleware('permission:coaching.export')
+            ->name('export.progress');
+        Route::get('/export/download/{jobId}', [CoachingDashboardController::class, 'downloadExport'])
+            ->middleware('permission:coaching.export')
+            ->name('export.download');
+    });
 
     // Notifications
     Route::prefix('notifications')->name('notifications.')->group(function () {

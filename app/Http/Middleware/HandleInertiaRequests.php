@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\CoachingSession;
 use App\Services\PermissionService;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Http\Request;
@@ -67,6 +68,9 @@ class HandleInertiaRequests extends Middleware
                 'type' => fn () => $request->session()->get('type'),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            'coachingPendingAck' => fn () => $user
+                ? CoachingSession::where('agent_id', $user->id)->where('ack_status', 'Pending')->count()
+                : 0,
         ];
     }
 }
