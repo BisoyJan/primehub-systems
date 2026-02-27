@@ -1023,10 +1023,10 @@ class LeaveCreditService
             }
         }
 
-        // Check 2-week advance notice for VL and BL only (SL is unpredictable)
+        // Check 2-week advance notice for VL only (SL/BL are unpredictable)
         // Skip this check if short notice override is enabled
         // Use filed_at (the original request creation date) if provided, otherwise use now()
-        if (in_array($leaveType, ['VL', 'BL']) && ! $shortNoticeOverride) {
+        if ($leaveType === 'VL' && ! $shortNoticeOverride) {
             $filedAt = isset($data['filed_at']) ? Carbon::parse($data['filed_at']) : now();
             $twoWeeksFromFiled = $filedAt->copy()->addWeeks(2)->startOfDay();
             if ($startDate->startOfDay()->lt($twoWeeksFromFiled)) {
@@ -1086,8 +1086,8 @@ class LeaveCreditService
      */
     public function requiresShortNoticeOverride(string $leaveType, Carbon $startDate): bool
     {
-        // Only VL and BL require 2-week notice
-        if (! in_array($leaveType, ['VL', 'BL'])) {
+        // Only VL requires 2-week notice (BL is unpredictable like SL)
+        if ($leaveType !== 'VL') {
             return false;
         }
 

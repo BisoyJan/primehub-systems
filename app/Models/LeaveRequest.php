@@ -274,8 +274,8 @@ class LeaveRequest extends Model
      */
     public function requiresAttendancePointsCheck(): bool
     {
-        // VL and BL (which is treated as VL) require ≤6 points
-        return in_array($this->leave_type, ['VL', 'BL']);
+        // Only VL requires ≤6 attendance points (BL is unpredictable like SL)
+        return $this->leave_type === 'VL';
     }
 
     /**
@@ -283,8 +283,8 @@ class LeaveRequest extends Model
      */
     public function requiresTwoWeekNotice(): bool
     {
-        // Only VL and BL require 2-week notice (SL is unpredictable)
-        return in_array($this->leave_type, ['VL', 'BL']);
+        // Only VL requires 2-week notice (SL/BL are unpredictable)
+        return $this->leave_type === 'VL';
     }
 
     /**
@@ -292,8 +292,8 @@ class LeaveRequest extends Model
      */
     public function requiresThirtyDayAbsenceCheck(): bool
     {
-        // Only VL and BL require no absence in last 30 days
-        return in_array($this->leave_type, ['VL', 'BL']);
+        // Only VL requires no absence in last 30 days (BL is unpredictable like SL)
+        return $this->leave_type === 'VL';
     }
 
     /**

@@ -169,10 +169,11 @@ class LeaveRequestTest extends TestCase
     #[Test]
     public function it_creates_bereavement_leave_request()
     {
+        // BL should NOT require 2-week advance notice (bereavement is unpredictable)
         $data = [
             'leave_type' => 'BL',
-            'start_date' => Carbon::now()->addWeeks(3)->format('Y-m-d'),
-            'end_date' => Carbon::now()->addWeeks(3)->addDays(2)->format('Y-m-d'),
+            'start_date' => Carbon::now()->addDays(2)->format('Y-m-d'),
+            'end_date' => Carbon::now()->addDays(4)->format('Y-m-d'),
             'reason' => 'Attending funeral of immediate family member',
             'campaign_department' => 'Tech',
         ];
@@ -186,6 +187,31 @@ class LeaveRequestTest extends TestCase
         $this->assertDatabaseHas('leave_requests', [
             'user_id' => $this->employee->id,
             'leave_type' => 'BL',
+        ]);
+    }
+
+    #[Test]
+    public function it_allows_bereavement_leave_without_advance_notice()
+    {
+        // BL (Bereavement Leave) is unpredictable like SL and should not
+        // require 2-week advance notice, attendance points check, or 30-day absence check
+        $data = [
+            'leave_type' => 'BL',
+            'start_date' => Carbon::now()->addDay()->format('Y-m-d'),
+            'end_date' => Carbon::now()->addDays(3)->format('Y-m-d'),
+            'reason' => 'Death in the family',
+            'campaign_department' => 'Tech',
+        ];
+
+        $response = $this->actingAs($this->employee)
+            ->post(route('leave-requests.store'), $data);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('leave_requests', [
+            'user_id' => $this->employee->id,
+            'leave_type' => 'BL',
+            'reason' => 'Death in the family',
         ]);
     }
 
