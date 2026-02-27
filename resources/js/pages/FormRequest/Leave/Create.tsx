@@ -401,9 +401,10 @@ export default function Create({
             }
         }
 
-        // Check 2-week notice (only for VL, not SL/BL/ML as they are unpredictable)
+        //NOTE: SL is intentionally excluded from the eligibility warning since users can still submit and it will be handled at approval time with potential UPTO conversion. BL is included in the eligibility warning since it's a non-credited leave type and eligibility is a hard requirement.
+        // Check 2-week notice (only for VL,UPTO not SL/BL/ML as they are unpredictable)
         // Track separately for override capability
-        if (data.start_date && data.leave_type === 'VL') {
+        if (data.start_date && ['VL', 'UPTO'].includes(data.leave_type)) {
             const start = parseISO(data.start_date);
             start.setHours(0, 0, 0, 0);
             const twoWeeks = new Date(twoWeeksFromNow);
