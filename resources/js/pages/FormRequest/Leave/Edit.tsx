@@ -410,9 +410,9 @@ export default function Edit({
         const warnings: string[] = [];
         let shortNotice: string | null = null;
 
-        // Check eligibility (skip for SL - allow without credits)
+        // Check eligibility (skip for SL/BL - BL doesn't consume credits, SL handles at approval)
         // Check if user will be eligible BY the selected start date (not current date)
-        if (!creditsSummary.is_eligible && ['VL', 'BL'].includes(data.leave_type)) {
+        if (!creditsSummary.is_eligible && data.leave_type === 'VL') {
             const eligibilityDateStr = creditsSummary.eligibility_date
                 ? format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')
                 : 'N/A';
@@ -436,9 +436,10 @@ export default function Edit({
             }
         }
 
-        // Check 2-week notice (only for VL and BL, not SL/ML as they are special leave types)
+        //NOTE: SL is intentionally excluded from the eligibility warning since users can still submit and it will be handled at approval time with potential UPTO conversion. BL is included in the eligibility warning since it's a non-credited leave type and eligibility is a hard requirement.
+        // Check 2-week notice (only for VL, not SL/BL/ML as they are unpredictable)
         // Track separately for override capability
-        if (data.start_date && ['VL', 'BL'].includes(data.leave_type)) {
+        if (data.start_date && ['VL', 'UPTO'].includes(data.leave_type)) {
             const start = new Date(data.start_date);
             start.setHours(0, 0, 0, 0);
             const twoWeeks = new Date(twoWeeksFromNow);
@@ -453,15 +454,15 @@ export default function Edit({
             }
         }
 
-        // Check attendance points for VL/BL (not ML - maternity leave is exempt)
-        if (['VL', 'BL'].includes(data.leave_type) && attendancePoints > 6) {
+        // Check attendance points for VL only (BL/SL/ML are exempt)
+        if (data.leave_type === 'VL' && attendancePoints > 6) {
             warnings.push(
                 `You have ${attendancePoints} attendance points (must be ≤6 for Vacation Leave).`
             );
         }
 
-        // Check recent absence for VL/BL (not ML)
-        if (['VL', 'BL'].includes(data.leave_type) && hasRecentAbsence && nextEligibleLeaveDate) {
+        // Check recent absence for VL only (BL/SL/ML are exempt)
+        if (data.leave_type === 'VL' && hasRecentAbsence && nextEligibleLeaveDate) {
             warnings.push(
                 `You had an absence in the last 30 days. Next eligible date: ${format(parseISO(nextEligibleLeaveDate), 'MMMM d, yyyy')}`
             );

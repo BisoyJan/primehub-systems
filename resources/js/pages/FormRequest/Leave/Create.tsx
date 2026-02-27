@@ -375,9 +375,9 @@ export default function Create({
         const warnings: string[] = [];
         let shortNotice: string | null = null;
 
-        // Check eligibility (skip warning for SL - allow submission without credits)
+        // Check eligibility (skip for SL/BL - BL doesn't consume credits, SL handles at approval)
         // Check if user will be eligible BY the selected start date (not current date)
-        if (!creditsSummary.is_eligible && ['VL', 'BL'].includes(data.leave_type)) {
+        if (!creditsSummary.is_eligible && data.leave_type === 'VL') {
             const eligibilityDateStr = creditsSummary.eligibility_date
                 ? format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')
                 : 'N/A';
