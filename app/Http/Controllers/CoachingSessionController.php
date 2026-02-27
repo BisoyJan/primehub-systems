@@ -104,6 +104,31 @@ class CoachingSessionController extends Controller
         // Get campaigns for filter dropdown
         $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
 
+        // Get all agents for the search combobox (for admin/TL)
+        $allAgents = collect();
+        if ($isAdmin) {
+            $allAgents = User::where('role', 'Agent')
+                ->where('is_approved', true)
+                ->with('activeSchedule.campaign:id,name')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'middle_name', 'last_name']);
+        } elseif ($isTeamLead && $teamLeadCampaignId) {
+            $agentIds = EmployeeSchedule::where('campaign_id', $teamLeadCampaignId)
+                ->where('is_active', true)
+                ->whereHas('user', function ($q) {
+                    $q->where('role', 'Agent')->where('is_approved', true);
+                })
+                ->pluck('user_id')
+                ->unique();
+
+            $allAgents = User::whereIn('id', $agentIds)
+                ->with('activeSchedule.campaign:id,name')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'middle_name', 'last_name']);
+        }
+
         // Agent coaching summary (for agent view)
         $agentSummary = null;
         if ($isAgent) {
@@ -114,6 +139,7 @@ class CoachingSessionController extends Controller
             'sessions' => $sessions,
             'agentSummary' => $agentSummary,
             'campaigns' => $campaigns,
+            'allAgents' => $allAgents,
             'filters' => $request->only([
                 'search', 'ack_status', 'compliance_status', 'purpose',
                 'campaign_id', 'date_from', 'date_to',

@@ -96,13 +96,15 @@ export default function CoachingSessionsShow() {
 
     // Acknowledge form
     const ackForm = useForm({ ack_comment: '' });
-    const handleAcknowledge = () => {
+    const handleAcknowledge = (e: React.MouseEvent) => {
+        e.preventDefault();
         ackForm.patch(sessionsAcknowledge(session.id).url);
     };
 
     // Review form
     const reviewForm = useForm({ compliance_status: '' as string, compliance_notes: '' });
-    const handleReview = () => {
+    const handleReview = (e: React.MouseEvent) => {
+        e.preventDefault();
         reviewForm.patch(sessionsReview(session.id).url);
     };
 

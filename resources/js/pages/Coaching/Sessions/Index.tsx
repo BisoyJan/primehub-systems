@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 
@@ -13,6 +13,19 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
+    Popover,
+    PopoverContent,
+    PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+    Command,
+    CommandEmpty,
+    CommandGroup,
+    CommandInput,
+    CommandItem,
+    CommandList,
+} from '@/components/ui/command';
+import {
     Table,
     TableBody,
     TableCell,
@@ -21,7 +34,7 @@ import {
     TableRow,
 } from '@/components/ui/table';
 import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
-import { Search, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
 
 import { usePageMeta, useFlashMessage, usePageLoading, usePermission } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -48,6 +61,7 @@ import type {
     CoachingSummary,
     CoachingPurposeLabels,
     Campaign,
+    User,
 } from '@/types';
 
 interface PaginatedSessions {
@@ -72,6 +86,7 @@ interface Props extends InertiaPageProps {
     sessions: PaginatedSessions;
     agentSummary: CoachingSummary | null;
     campaigns: Campaign[];
+    allAgents: User[];
     filters: Filters;
     isAdmin: boolean;
     isTeamLead: boolean;
@@ -91,6 +106,7 @@ export default function CoachingSessionsIndex() {
         sessions,
         agentSummary,
         campaigns,
+        allAgents,
         filters: initialFilters,
         isAdmin,
         isTeamLead,
@@ -106,6 +122,8 @@ export default function CoachingSessionsIndex() {
     const { can } = usePermission();
 
     const [search, setSearch] = useState(initialFilters.search || '');
+    const [agentSearchOpen, setAgentSearchOpen] = useState(false);
+    const [agentSearchQuery, setAgentSearchQuery] = useState('');
     const [ackStatus, setAckStatus] = useState(initialFilters.ack_status || '');
     const [complianceStatus, setComplianceStatus] = useState(initialFilters.compliance_status || '');
     const [purpose, setPurpose] = useState(initialFilters.purpose || '');
@@ -114,6 +132,23 @@ export default function CoachingSessionsIndex() {
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
 
     const deleteForm = useForm({});
+
+    const getAgentCampaign = (agent: User): string | null => {
+        const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { name?: string } } | null;
+        return schedule?.campaign?.name ?? null;
+    };
+
+    const filteredAgents = useMemo(() => {
+        if (!agentSearchQuery) return allAgents.slice(0, 50);
+        const q = agentSearchQuery.toLowerCase();
+        return allAgents
+            .filter((a) => {
+                const name = `${a.first_name} ${a.last_name}`.toLowerCase();
+                const campaign = getAgentCampaign(a)?.toLowerCase() ?? '';
+                return name.includes(q) || campaign.includes(q);
+            })
+            .slice(0, 50);
+    }, [allAgents, agentSearchQuery]);
 
     const handleFilter = () => {
         router.get(
@@ -193,16 +228,77 @@ export default function CoachingSessionsIndex() {
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        <div className="relative">
-                            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                            <Input
-                                placeholder="Search agent or TL..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                                onKeyDown={(e) => e.key === 'Enter' && handleFilter()}
-                                className="pl-8"
-                            />
-                        </div>
+                        {!isAgent && (
+                            <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={agentSearchOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {search || 'All Agents'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search agent..."
+                                            value={agentSearchQuery}
+                                            onValueChange={setAgentSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No agent found.</CommandEmpty>
+                                            <CommandGroup>
+                                                <CommandItem
+                                                    value="all"
+                                                    onSelect={() => {
+                                                        setSearch('');
+                                                        setAgentSearchOpen(false);
+                                                        setAgentSearchQuery('');
+                                                    }}
+                                                    className="cursor-pointer"
+                                                >
+                                                    <Check
+                                                        className={`mr-2 h-4 w-4 ${!search ? 'opacity-100' : 'opacity-0'}`}
+                                                    />
+                                                    All Agents
+                                                </CommandItem>
+                                                {filteredAgents.map((agent) => {
+                                                    const name = `${agent.first_name} ${agent.last_name}`;
+                                                    const campaign = getAgentCampaign(agent);
+                                                    return (
+                                                        <CommandItem
+                                                            key={agent.id}
+                                                            value={String(agent.id)}
+                                                            onSelect={() => {
+                                                                setSearch(name);
+                                                                setAgentSearchOpen(false);
+                                                                setAgentSearchQuery('');
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 ${search === name ? 'opacity-100' : 'opacity-0'}`}
+                                                            />
+                                                            <div className="flex flex-col">
+                                                                <span>{name}</span>
+                                                                {campaign && (
+                                                                    <span className="text-xs text-muted-foreground">{campaign}</span>
+                                                                )}
+                                                            </div>
+                                                        </CommandItem>
+                                                    );
+                                                })}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                        )}
                         <Select value={ackStatus} onValueChange={setAckStatus}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Ack Status" />

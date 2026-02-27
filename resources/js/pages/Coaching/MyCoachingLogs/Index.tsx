@@ -56,7 +56,8 @@ export default function MyCoachingLogsIndex() {
 
     const ackForm = useForm({ ack_comment: '' });
 
-    const handleAcknowledge = (sessionId: number) => {
+    const handleAcknowledge = (sessionId: number, e?: React.MouseEvent) => {
+        e?.preventDefault();
         ackForm.patch(sessionsAcknowledge(sessionId).url, {
             onSuccess: () => ackForm.reset(),
         });
@@ -199,7 +200,7 @@ export default function MyCoachingLogsIndex() {
                                                                     <AlertDialogFooter>
                                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                                         <AlertDialogAction
-                                                                            onClick={() => handleAcknowledge(session.id)}
+                                                                            onClick={(e) => handleAcknowledge(session.id, e)}
                                                                             disabled={ackForm.processing}
                                                                             className="bg-green-600 hover:bg-green-700"
                                                                         >
@@ -272,7 +273,7 @@ export default function MyCoachingLogsIndex() {
                                                     <AlertDialogFooter>
                                                         <AlertDialogCancel>Cancel</AlertDialogCancel>
                                                         <AlertDialogAction
-                                                            onClick={() => handleAcknowledge(session.id)}
+                                                            onClick={(e) => handleAcknowledge(session.id, e)}
                                                             disabled={ackForm.processing}
                                                             className="bg-green-600 hover:bg-green-700"
                                                         >

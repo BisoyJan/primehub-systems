@@ -152,7 +152,8 @@ export default function CoachingAdminIndex() {
         router.get(coachingDashboard().url);
     };
 
-    const handleReview = (sessionId: number) => {
+    const handleReview = (sessionId: number, e?: React.MouseEvent) => {
+        e?.preventDefault();
         reviewForm.patch(sessionsReview(sessionId).url, {
             onSuccess: () => reviewForm.reset(),
         });
@@ -234,20 +235,18 @@ export default function CoachingAdminIndex() {
                         <button
                             key={key}
                             onClick={() => setActiveTab(key)}
-                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
-                                activeTab === key
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${activeTab === key
                                     ? 'bg-background text-foreground shadow-sm'
                                     : 'text-muted-foreground hover:text-foreground'
-                            }`}
+                                }`}
                         >
                             <Icon className="h-3.5 w-3.5" />
                             <span className="hidden sm:inline">{label}</span>
                             {(count ?? 0) > 0 && (
-                                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                                    activeTab === key
+                                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${activeTab === key
                                         ? 'bg-primary/10 text-primary'
                                         : 'bg-muted text-muted-foreground'
-                                }`}>
+                                    }`}>
                                     {count}
                                 </span>
                             )}
@@ -617,7 +616,7 @@ function ReviewDialog({
 }: {
     sessionId: number;
     reviewForm: ReturnType<typeof useForm<{ compliance_status: string; compliance_notes: string }>>;
-    onReview: (sessionId: number) => void;
+    onReview: (sessionId: number, e?: React.MouseEvent) => void;
     mobile?: boolean;
 }) {
     return (
@@ -681,7 +680,7 @@ function ReviewDialog({
                 <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                        onClick={() => onReview(sessionId)}
+                        onClick={(e) => onReview(sessionId, e)}
                         disabled={reviewForm.processing || !reviewForm.data.compliance_status}
                         className="bg-blue-600 hover:bg-blue-700"
                     >
