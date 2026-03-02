@@ -161,18 +161,28 @@ class CoachingSessionController extends Controller
         $user = auth()->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
 
-        // Get agents the current user can coach
         $agents = collect();
+        $teamLeads = collect();
+
         if ($isAdmin) {
-            // Admins can coach any agent
+            // Admins: fetch all agents (frontend filters by selected TL's campaign)
             $agents = User::where('role', 'Agent')
                 ->where('is_approved', true)
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(['id', 'first_name', 'middle_name', 'last_name']);
+
+            // Fetch team leads who have an active campaign schedule
+            $teamLeads = User::where('role', 'Team Lead')
+                ->where('is_approved', true)
+                ->whereHas('activeSchedule', fn ($q) => $q->whereNotNull('campaign_id'))
+                ->with('activeSchedule.campaign:id,name')
+                ->orderBy('first_name')
+                ->orderBy('last_name')
+                ->get(['id', 'first_name', 'middle_name', 'last_name']);
         } else {
-            // Team Lead: agents in their campaign
+            // Team Lead: agents in their campaign only
             $campaignId = $user->activeSchedule?->campaign_id;
             if ($campaignId) {
                 $agentIds = EmployeeSchedule::where('campaign_id', $campaignId)
@@ -200,7 +210,9 @@ class CoachingSessionController extends Controller
 
         return Inertia::render('Coaching/Sessions/Create', [
             'agents' => $agents,
+            'teamLeads' => $teamLeads,
             'campaigns' => $campaigns,
+            'isAdmin' => $isAdmin,
             'selectedAgentId' => $selectedAgentId ? (int) $selectedAgentId : null,
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'severityFlags' => CoachingSession::SEVERITY_FLAGS,
@@ -217,7 +229,15 @@ class CoachingSessionController extends Controller
         try {
             $session = DB::transaction(function () use ($request) {
                 $validated = $request->validated();
-                $validated['team_lead_id'] = auth()->id();
+
+                $user = auth()->user();
+                $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+
+                // Admin selects the team lead; TL is always themselves
+                $validated['team_lead_id'] = $isAdmin
+                    ? $validated['team_lead_id']
+                    : $user->id;
+
                 $validated['ack_status'] = 'Pending';
                 $validated['compliance_status'] = 'Awaiting_Agent_Ack';
 

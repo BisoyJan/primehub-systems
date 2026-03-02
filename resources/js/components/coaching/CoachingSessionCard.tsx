@@ -24,7 +24,7 @@ export function CoachingSessionCard({
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-sm text-muted-foreground">
                         <Calendar className="h-3.5 w-3.5" />
-                        <span>{new Date(session.session_date).toLocaleDateString()}</span>
+                        <span>{new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
                     </div>
                     {showAgent && session.agent && (
                         <div className="flex items-center gap-2">

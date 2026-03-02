@@ -403,7 +403,7 @@ export default function CoachingSessionsIndex() {
                                     sessions.data.map((session) => (
                                         <TableRow key={session.id}>
                                             <TableCell className="whitespace-nowrap">
-                                                {new Date(session.session_date).toLocaleDateString()}
+                                                {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                                             </TableCell>
                                             {!isAgent && (
                                                 <TableCell className="font-medium">

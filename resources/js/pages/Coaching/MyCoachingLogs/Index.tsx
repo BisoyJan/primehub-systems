@@ -7,16 +7,14 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import {
     Table,
     TableBody,
@@ -56,8 +54,7 @@ export default function MyCoachingLogsIndex() {
 
     const ackForm = useForm({ ack_comment: '' });
 
-    const handleAcknowledge = (sessionId: number, e?: React.MouseEvent) => {
-        e?.preventDefault();
+    const handleAcknowledge = (sessionId: number) => {
         ackForm.patch(sessionsAcknowledge(sessionId).url, {
             onSuccess: () => ackForm.reset(),
         });
@@ -173,20 +170,20 @@ export default function MyCoachingLogsIndex() {
                                                             </Button>
                                                         </Link>
                                                         {session.ack_status === 'Pending' && (
-                                                            <AlertDialog>
-                                                                <AlertDialogTrigger asChild>
+                                                            <Dialog>
+                                                                <DialogTrigger asChild>
                                                                     <Button variant="ghost" size="icon" className="text-green-600 hover:text-green-700" title="Acknowledge">
                                                                         <CheckCircle2 className="h-4 w-4" />
                                                                     </Button>
-                                                                </AlertDialogTrigger>
-                                                                <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
-                                                                    <AlertDialogHeader>
-                                                                        <AlertDialogTitle>Acknowledge Session</AlertDialogTitle>
-                                                                        <AlertDialogDescription>
+                                                                </DialogTrigger>
+                                                                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                                                                    <DialogHeader>
+                                                                        <DialogTitle>Acknowledge Session</DialogTitle>
+                                                                        <DialogDescription>
                                                                             Confirm you have reviewed this coaching session from {formatName(session.team_lead)} on{' '}
                                                                             {new Date(session.session_date).toLocaleDateString()}.
-                                                                        </AlertDialogDescription>
-                                                                    </AlertDialogHeader>
+                                                                        </DialogDescription>
+                                                                    </DialogHeader>
                                                                     <div className="space-y-3 py-2">
                                                                         <Label htmlFor={`ack-comment-${session.id}`}>Comment (optional)</Label>
                                                                         <Textarea
@@ -197,18 +194,17 @@ export default function MyCoachingLogsIndex() {
                                                                             rows={3}
                                                                         />
                                                                     </div>
-                                                                    <AlertDialogFooter>
-                                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                                        <AlertDialogAction
-                                                                            onClick={(e) => handleAcknowledge(session.id, e)}
+                                                                    <DialogFooter>
+                                                                        <Button
+                                                                            onClick={() => handleAcknowledge(session.id)}
                                                                             disabled={ackForm.processing}
                                                                             className="bg-green-600 hover:bg-green-700"
                                                                         >
                                                                             {ackForm.processing ? 'Submitting...' : 'Acknowledge'}
-                                                                        </AlertDialogAction>
-                                                                    </AlertDialogFooter>
-                                                                </AlertDialogContent>
-                                                            </AlertDialog>
+                                                                        </Button>
+                                                                    </DialogFooter>
+                                                                </DialogContent>
+                                                            </Dialog>
                                                         )}
                                                     </div>
                                                 </TableCell>
@@ -247,19 +243,19 @@ export default function MyCoachingLogsIndex() {
                                             </Button>
                                         </Link>
                                         {session.ack_status === 'Pending' && (
-                                            <AlertDialog>
-                                                <AlertDialogTrigger asChild>
+                                            <Dialog>
+                                                <DialogTrigger asChild>
                                                     <Button size="sm" className="flex-1 bg-green-600 hover:bg-green-700 text-white">
                                                         <CheckCircle2 className="mr-1.5 h-3.5 w-3.5" /> Acknowledge
                                                     </Button>
-                                                </AlertDialogTrigger>
-                                                <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
-                                                    <AlertDialogHeader>
-                                                        <AlertDialogTitle>Acknowledge Session</AlertDialogTitle>
-                                                        <AlertDialogDescription>
+                                                </DialogTrigger>
+                                                <DialogContent className="max-w-[90vw] sm:max-w-md">
+                                                    <DialogHeader>
+                                                        <DialogTitle>Acknowledge Session</DialogTitle>
+                                                        <DialogDescription>
                                                             Confirm you have reviewed this coaching session.
-                                                        </AlertDialogDescription>
-                                                    </AlertDialogHeader>
+                                                        </DialogDescription>
+                                                    </DialogHeader>
                                                     <div className="space-y-3 py-2">
                                                         <Label htmlFor={`ack-mobile-${session.id}`}>Comment (optional)</Label>
                                                         <Textarea
@@ -270,18 +266,17 @@ export default function MyCoachingLogsIndex() {
                                                             rows={3}
                                                         />
                                                     </div>
-                                                    <AlertDialogFooter>
-                                                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                                        <AlertDialogAction
-                                                            onClick={(e) => handleAcknowledge(session.id, e)}
+                                                    <DialogFooter>
+                                                        <Button
+                                                            onClick={() => handleAcknowledge(session.id)}
                                                             disabled={ackForm.processing}
                                                             className="bg-green-600 hover:bg-green-700"
                                                         >
                                                             {ackForm.processing ? 'Submitting...' : 'Acknowledge'}
-                                                        </AlertDialogAction>
-                                                    </AlertDialogFooter>
-                                                </AlertDialogContent>
-                                            </AlertDialog>
+                                                        </Button>
+                                                    </DialogFooter>
+                                                </DialogContent>
+                                            </Dialog>
                                         )}
                                     </div>
                                 </div>

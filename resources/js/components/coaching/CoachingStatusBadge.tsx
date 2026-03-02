@@ -82,15 +82,20 @@ export function ComplianceStatusBadge({ status, className }: { status: string; c
 }
 
 export function SeverityBadge({ flag, className }: { flag: string; className?: string }) {
-    if (flag !== 'Critical') return null;
+    const styles: Record<string, string> = {
+        Critical: 'bg-red-600 text-white',
+        Normal: 'bg-muted text-muted-foreground',
+    };
+
     return (
         <span
             className={cn(
-                'inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full bg-red-600 text-white',
+                'inline-flex items-center px-2 py-0.5 text-xs font-semibold rounded-full',
+                styles[flag] ?? 'bg-muted text-muted-foreground',
                 className,
             )}
         >
-            Critical
+            {flag}
         </span>
     );
 }

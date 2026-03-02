@@ -25,16 +25,14 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import {
     Table,
     TableBody,
@@ -152,8 +150,7 @@ export default function CoachingAdminIndex() {
         router.get(coachingDashboard().url);
     };
 
-    const handleReview = (sessionId: number, e?: React.MouseEvent) => {
-        e?.preventDefault();
+    const handleReview = (sessionId: number) => {
         reviewForm.patch(sessionsReview(sessionId).url, {
             onSuccess: () => reviewForm.reset(),
         });
@@ -236,16 +233,16 @@ export default function CoachingAdminIndex() {
                             key={key}
                             onClick={() => setActiveTab(key)}
                             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${activeTab === key
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
                                 }`}
                         >
                             <Icon className="h-3.5 w-3.5" />
                             <span className="hidden sm:inline">{label}</span>
                             {(count ?? 0) > 0 && (
                                 <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${activeTab === key
-                                        ? 'bg-primary/10 text-primary'
-                                        : 'bg-muted text-muted-foreground'
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'bg-muted text-muted-foreground'
                                     }`}>
                                     {count}
                                 </span>
@@ -616,12 +613,12 @@ function ReviewDialog({
 }: {
     sessionId: number;
     reviewForm: ReturnType<typeof useForm<{ compliance_status: string; compliance_notes: string }>>;
-    onReview: (sessionId: number, e?: React.MouseEvent) => void;
+    onReview: (sessionId: number) => void;
     mobile?: boolean;
 }) {
     return (
-        <AlertDialog>
-            <AlertDialogTrigger asChild>
+        <Dialog>
+            <DialogTrigger asChild>
                 {mobile ? (
                     <Button size="sm" className="flex-1 bg-blue-600 hover:bg-blue-700 text-white">
                         <ShieldCheck className="mr-1.5 h-3.5 w-3.5" /> Review
@@ -631,14 +628,14 @@ function ReviewDialog({
                         <ShieldCheck className="h-4 w-4" />
                     </Button>
                 )}
-            </AlertDialogTrigger>
-            <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
-                <AlertDialogHeader>
-                    <AlertDialogTitle>Review Coaching Session</AlertDialogTitle>
-                    <AlertDialogDescription>
+            </DialogTrigger>
+            <DialogContent className="max-w-[90vw] sm:max-w-md">
+                <DialogHeader>
+                    <DialogTitle>Review Coaching Session</DialogTitle>
+                    <DialogDescription>
                         Verify or reject this coaching session for compliance.
-                    </AlertDialogDescription>
-                </AlertDialogHeader>
+                    </DialogDescription>
+                </DialogHeader>
                 <div className="space-y-3 py-2">
                     <div>
                         <Label htmlFor={`review-status-${sessionId}`}>Decision</Label>
@@ -677,17 +674,16 @@ function ReviewDialog({
                         />
                     </div>
                 </div>
-                <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                        onClick={(e) => onReview(sessionId, e)}
+                <DialogFooter>
+                    <Button
+                        onClick={() => onReview(sessionId)}
                         disabled={reviewForm.processing || !reviewForm.data.compliance_status}
                         className="bg-blue-600 hover:bg-blue-700"
                     >
                         {reviewForm.processing ? 'Submitting...' : 'Submit Review'}
-                    </AlertDialogAction>
-                </AlertDialogFooter>
-            </AlertDialogContent>
-        </AlertDialog>
+                    </Button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
     );
 }

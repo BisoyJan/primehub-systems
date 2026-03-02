@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { ArrowLeft, Pencil, CheckCircle2, ShieldCheck, ShieldX } from 'lucide-react';
@@ -14,16 +15,14 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogFooter,
+    DialogHeader,
+    DialogTitle,
+    DialogTrigger,
+} from '@/components/ui/dialog';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
@@ -94,17 +93,19 @@ export default function CoachingSessionsShow() {
     useFlashMessage();
     const isLoading = usePageLoading();
 
+    // Dialog open states
+    const [ackDialogOpen, setAckDialogOpen] = useState(false);
+    const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+
     // Acknowledge form
     const ackForm = useForm({ ack_comment: '' });
-    const handleAcknowledge = (e: React.MouseEvent) => {
-        e.preventDefault();
+    const handleAcknowledge = () => {
         ackForm.patch(sessionsAcknowledge(session.id).url);
     };
 
     // Review form
     const reviewForm = useForm({ compliance_status: '' as string, compliance_notes: '' });
-    const handleReview = (e: React.MouseEvent) => {
-        e.preventDefault();
+    const handleReview = () => {
         reviewForm.patch(sessionsReview(session.id).url);
     };
 
@@ -115,12 +116,25 @@ export default function CoachingSessionsShow() {
 
     const formatDate = (date: string | null) => {
         if (!date) return 'N/A';
-        return new Date(date).toLocaleDateString();
+        return new Date(date).toLocaleDateString('en-US', {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+        });
     };
 
     const formatDateTime = (date: string | null) => {
         if (!date) return 'N/A';
-        return new Date(date).toLocaleString();
+        return new Date(date).toLocaleString('en-US', {
+            weekday: 'short',
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+            hour: 'numeric',
+            minute: '2-digit',
+            hour12: true,
+        });
     };
 
     return (
@@ -262,21 +276,21 @@ export default function CoachingSessionsShow() {
                 <div className="flex flex-col gap-3 sm:flex-row">
                     {/* Acknowledge Dialog */}
                     {canAcknowledge && (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                        <Dialog open={ackDialogOpen} onOpenChange={setAckDialogOpen}>
+                            <DialogTrigger asChild>
                                 <Button className="flex-1 bg-green-600 hover:bg-green-700 text-white sm:flex-none">
                                     <CheckCircle2 className="mr-2 h-4 w-4" />
                                     Acknowledge Session
                                 </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Acknowledge Coaching Session</AlertDialogTitle>
-                                    <AlertDialogDescription>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-[90vw] sm:max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Acknowledge Coaching Session</DialogTitle>
+                                    <DialogDescription>
                                         By acknowledging, you confirm you have reviewed this coaching session. You may
                                         optionally add a comment.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
+                                    </DialogDescription>
+                                </DialogHeader>
                                 <div className="space-y-3 py-2">
                                     <Label htmlFor="ack_comment">Comment (optional)</Label>
                                     <Textarea
@@ -290,36 +304,38 @@ export default function CoachingSessionsShow() {
                                         <p className="text-sm text-red-600">{ackForm.errors.ack_comment}</p>
                                     )}
                                 </div>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setAckDialogOpen(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button
                                         onClick={handleAcknowledge}
                                         disabled={ackForm.processing}
                                         className="bg-green-600 hover:bg-green-700"
                                     >
                                         {ackForm.processing ? 'Submitting...' : 'Acknowledge'}
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     )}
 
                     {/* Review Dialog */}
                     {canReview && (
-                        <AlertDialog>
-                            <AlertDialogTrigger asChild>
+                        <Dialog open={reviewDialogOpen} onOpenChange={setReviewDialogOpen}>
+                            <DialogTrigger asChild>
                                 <Button className="flex-1 bg-blue-600 hover:bg-blue-700 text-white sm:flex-none">
                                     <ShieldCheck className="mr-2 h-4 w-4" />
                                     Review Session
                                 </Button>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent className="max-w-[90vw] sm:max-w-md">
-                                <AlertDialogHeader>
-                                    <AlertDialogTitle>Review Coaching Session</AlertDialogTitle>
-                                    <AlertDialogDescription>
+                            </DialogTrigger>
+                            <DialogContent className="max-w-[90vw] sm:max-w-md">
+                                <DialogHeader>
+                                    <DialogTitle>Review Coaching Session</DialogTitle>
+                                    <DialogDescription>
                                         Verify or reject this coaching session for compliance.
-                                    </AlertDialogDescription>
-                                </AlertDialogHeader>
+                                    </DialogDescription>
+                                </DialogHeader>
                                 <div className="space-y-3 py-2">
                                     <div>
                                         <Label htmlFor="compliance_status">Decision</Label>
@@ -361,18 +377,20 @@ export default function CoachingSessionsShow() {
                                         )}
                                     </div>
                                 </div>
-                                <AlertDialogFooter>
-                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                    <AlertDialogAction
+                                <DialogFooter>
+                                    <Button variant="outline" onClick={() => setReviewDialogOpen(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button
                                         onClick={handleReview}
                                         disabled={reviewForm.processing || !reviewForm.data.compliance_status}
                                         className="bg-blue-600 hover:bg-blue-700"
                                     >
                                         {reviewForm.processing ? 'Submitting...' : 'Submit Review'}
-                                    </AlertDialogAction>
-                                </AlertDialogFooter>
-                            </AlertDialogContent>
-                        </AlertDialog>
+                                    </Button>
+                                </DialogFooter>
+                            </DialogContent>
+                        </Dialog>
                     )}
                 </div>
 

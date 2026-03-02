@@ -22,7 +22,6 @@ class AcknowledgeCoachingSessionRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'acknowledged' => ['required', 'accepted'],
             'ack_comment' => ['nullable', 'string', 'max:2000'],
         ];
     }
@@ -33,8 +32,6 @@ class AcknowledgeCoachingSessionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'acknowledged.required' => 'You must check the acknowledgement box.',
-            'acknowledged.accepted' => 'You must acknowledge the coaching session and action plan.',
             'ack_comment.max' => 'Comment cannot exceed 2000 characters.',
         ];
     }

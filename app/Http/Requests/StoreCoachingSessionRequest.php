@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\CoachingSession;
+use App\Models\EmployeeSchedule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -23,7 +24,13 @@ class StoreCoachingSessionRequest extends FormRequest
      */
     public function rules(): array
     {
+        $user = $this->user();
+        $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+
         return [
+            'team_lead_id' => $isAdmin
+                ? ['required', 'exists:users,id']
+                : ['nullable'],
             'agent_id' => ['required', 'exists:users,id'],
             'session_date' => ['required', 'date', 'before_or_equal:today'],
             // Agent Profile
@@ -69,6 +76,8 @@ class StoreCoachingSessionRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'team_lead_id.required' => 'Please select a team lead.',
+            'team_lead_id.exists' => 'The selected team lead does not exist.',
             'agent_id.required' => 'Please select an agent.',
             'agent_id.exists' => 'The selected agent does not exist.',
             'session_date.required' => 'Session date is required.',
@@ -82,6 +91,51 @@ class StoreCoachingSessionRequest extends FormRequest
             'focus_other_notes.required_if' => 'Please specify the other focus area.',
             'root_cause_others_notes.required_if' => 'Please specify the other root cause.',
             'follow_up_date.after_or_equal' => 'Follow-up date must be today or later.',
+        ];
+    }
+
+    /**
+     * Configure the validator instance — ensure agent belongs to the same campaign as the team lead.
+     */
+    public function after(): array
+    {
+        return [
+            function (\Illuminate\Validation\Validator $validator) {
+                $agentId = $this->input('agent_id');
+                if (! $agentId) {
+                    return;
+                }
+
+                $user = $this->user();
+                $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+                $teamLeadId = $isAdmin ? $this->input('team_lead_id') : $user->id;
+
+                if (! $teamLeadId) {
+                    return;
+                }
+
+                // Get team lead's active campaign
+                $tlSchedule = EmployeeSchedule::where('user_id', $teamLeadId)
+                    ->where('is_active', true)
+                    ->first();
+
+                if (! $tlSchedule?->campaign_id) {
+                    return;
+                }
+
+                // Check if agent has an active schedule in the same campaign
+                $agentInCampaign = EmployeeSchedule::where('user_id', $agentId)
+                    ->where('campaign_id', $tlSchedule->campaign_id)
+                    ->where('is_active', true)
+                    ->exists();
+
+                if (! $agentInCampaign) {
+                    $validator->errors()->add(
+                        'agent_id',
+                        'The selected agent does not belong to the same campaign as the team lead.',
+                    );
+                }
+            },
         ];
     }
 }

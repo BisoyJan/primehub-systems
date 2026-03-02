@@ -20,14 +20,16 @@ import type { CoachingPurposeLabels, User, Campaign } from '@/types';
 
 interface Props extends InertiaPageProps {
     agents: User[];
+    teamLeads: User[];
     campaigns: Campaign[];
+    isAdmin: boolean;
     selectedAgentId: number | null;
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
 }
 
 export default function CoachingSessionsCreate() {
-    const { agents, selectedAgentId, purposes, severityFlags } = usePage<Props>().props;
+    const { agents, teamLeads, isAdmin, selectedAgentId, purposes, severityFlags } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Coaching Session',
@@ -40,6 +42,7 @@ export default function CoachingSessionsCreate() {
     const isPageLoading = usePageLoading();
 
     const { data, setData, post, errors, processing } = useForm({
+        team_lead_id: '' as number | '',
         agent_id: selectedAgentId ?? ('' as number | ''),
         session_date: new Date().toISOString().split('T')[0],
         // Agent Profile
@@ -108,6 +111,8 @@ export default function CoachingSessionsCreate() {
                         setData={setData}
                         errors={errors}
                         agents={agents}
+                        teamLeads={teamLeads}
+                        isAdmin={isAdmin}
                         purposes={purposes}
                         severityFlags={severityFlags}
                         showAgentSelect={true}

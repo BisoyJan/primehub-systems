@@ -161,6 +161,25 @@ class CoachingSessionControllerTest extends TestCase
                 ->component('Coaching/Sessions/Create')
                 ->has('agents')
                 ->has('purposes')
+                ->where('isAdmin', false)
+                ->has('teamLeads', 0)
+            );
+    }
+
+    #[Test]
+    public function admin_can_view_create_form_with_team_leads(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        $response = $this->actingAs($admin)->get(route('coaching.sessions.create'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Create')
+                ->has('agents')
+                ->has('teamLeads')
+                ->where('isAdmin', true)
             );
     }
 
@@ -233,6 +252,64 @@ class CoachingSessionControllerTest extends TestCase
             ->post(route('coaching.sessions.store'), $data);
 
         $response->assertSessionHasErrors('session_date');
+    }
+
+    #[Test]
+    public function admin_can_create_session_with_team_lead_id(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        $data = $this->validSessionData($team['agent']->id);
+        $data['team_lead_id'] = $team['teamLead']->id;
+
+        $response = $this->actingAs($admin)
+            ->post(route('coaching.sessions.store'), $data);
+
+        $response->assertRedirect(route('coaching.sessions.index'));
+
+        $this->assertDatabaseHas('coaching_sessions', [
+            'agent_id' => $team['agent']->id,
+            'team_lead_id' => $team['teamLead']->id,
+            'ack_status' => 'Pending',
+        ]);
+    }
+
+    #[Test]
+    public function admin_store_requires_team_lead_id(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        $data = $this->validSessionData($team['agent']->id);
+        // Do not include team_lead_id
+
+        $response = $this->actingAs($admin)
+            ->post(route('coaching.sessions.store'), $data);
+
+        $response->assertSessionHasErrors('team_lead_id');
+    }
+
+    #[Test]
+    public function store_rejects_agent_not_in_team_lead_campaign(): void
+    {
+        $team = $this->createTeamWithCampaign();
+
+        // Create agent in a different campaign
+        $otherCampaign = Campaign::factory()->create();
+        $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $otherAgent->id,
+            'campaign_id' => $otherCampaign->id,
+            'is_active' => true,
+        ]);
+
+        $data = $this->validSessionData($otherAgent->id);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->post(route('coaching.sessions.store'), $data);
+
+        $response->assertSessionHasErrors('agent_id');
     }
 
     // ─── Show Tests ─────────────────────────────────────────────────
@@ -395,7 +472,6 @@ class CoachingSessionControllerTest extends TestCase
 
         $response = $this->actingAs($team['agent'])
             ->patch(route('coaching.sessions.acknowledge', $session), [
-                'acknowledged' => true,
                 'ack_comment' => 'I understand the action plan.',
             ]);
 
@@ -419,9 +495,7 @@ class CoachingSessionControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($team['agent'])
-            ->patch(route('coaching.sessions.acknowledge', $session), [
-                'acknowledged' => true,
-            ]);
+            ->patch(route('coaching.sessions.acknowledge', $session));
 
         $response->assertStatus(403);
     }
@@ -437,9 +511,7 @@ class CoachingSessionControllerTest extends TestCase
         ]);
 
         $response = $this->actingAs($team['teamLead'])
-            ->patch(route('coaching.sessions.acknowledge', $session), [
-                'acknowledged' => true,
-            ]);
+            ->patch(route('coaching.sessions.acknowledge', $session));
 
         $response->assertStatus(403);
     }

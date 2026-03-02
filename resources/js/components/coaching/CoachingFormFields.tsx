@@ -33,6 +33,8 @@ interface CoachingFormFieldsProps {
     setData: (key: string, value: unknown) => void;
     errors: Record<string, string>;
     agents?: User[];
+    teamLeads?: User[];
+    isAdmin?: boolean;
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
     showAgentSelect?: boolean;
@@ -44,6 +46,8 @@ export function CoachingFormFields({
     setData,
     errors,
     agents = [],
+    teamLeads = [],
+    isAdmin = false,
     purposes,
     severityFlags,
     showAgentSelect = true,
@@ -51,28 +55,59 @@ export function CoachingFormFields({
 }: CoachingFormFieldsProps) {
     const [agentSearchOpen, setAgentSearchOpen] = useState(false);
     const [agentSearchQuery, setAgentSearchQuery] = useState('');
+    const [tlSearchOpen, setTlSearchOpen] = useState(false);
+    const [tlSearchQuery, setTlSearchQuery] = useState('');
+
+    const selectedTeamLead = useMemo(() => {
+        const id = Number(data.team_lead_id);
+        return teamLeads.find((tl) => tl.id === id) ?? null;
+    }, [data.team_lead_id, teamLeads]);
+
+    const getAgentCampaign = (agent: User): { id: number; name: string } | null => {
+        const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { id?: number; name?: string } } | null;
+        if (!schedule?.campaign?.id || !schedule?.campaign?.name) return null;
+        return { id: schedule.campaign.id, name: schedule.campaign.name };
+    };
+
+    const selectedTlCampaignId = useMemo(() => {
+        if (!isAdmin || !selectedTeamLead) return null;
+        return getAgentCampaign(selectedTeamLead)?.id ?? null;
+    }, [isAdmin, selectedTeamLead]);
 
     const selectedAgent = useMemo(() => {
         const id = Number(data.agent_id || selectedAgentId);
         return agents.find((a) => a.id === id) ?? null;
     }, [data.agent_id, selectedAgentId, agents]);
 
-    const getAgentCampaign = (agent: User): string | null => {
-        const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { name?: string } } | null;
-        return schedule?.campaign?.name ?? null;
-    };
+    // For admin: filter agents to the selected TL's campaign; for TL: show all (already pre-filtered by backend)
+    const campaignFilteredAgents = useMemo(() => {
+        if (!isAdmin || !selectedTlCampaignId) return isAdmin ? [] : agents;
+        return agents.filter((a) => getAgentCampaign(a)?.id === selectedTlCampaignId);
+    }, [agents, isAdmin, selectedTlCampaignId]);
 
     const filteredAgents = useMemo(() => {
-        if (!agentSearchQuery) return agents.slice(0, 50);
+        if (!agentSearchQuery) return campaignFilteredAgents.slice(0, 50);
         const q = agentSearchQuery.toLowerCase();
-        return agents
+        return campaignFilteredAgents
             .filter((a) => {
                 const name = `${a.first_name} ${a.last_name}`.toLowerCase();
-                const campaign = getAgentCampaign(a)?.toLowerCase() ?? '';
+                const campaign = getAgentCampaign(a)?.name?.toLowerCase() ?? '';
                 return name.includes(q) || campaign.includes(q);
             })
             .slice(0, 50);
-    }, [agents, agentSearchQuery]);
+    }, [campaignFilteredAgents, agentSearchQuery]);
+
+    const filteredTeamLeads = useMemo(() => {
+        if (!tlSearchQuery) return teamLeads.slice(0, 50);
+        const q = tlSearchQuery.toLowerCase();
+        return teamLeads
+            .filter((tl) => {
+                const name = `${tl.first_name} ${tl.last_name}`.toLowerCase();
+                const campaign = getAgentCampaign(tl)?.name?.toLowerCase() ?? '';
+                return name.includes(q) || campaign.includes(q);
+            })
+            .slice(0, 50);
+    }, [teamLeads, tlSearchQuery]);
 
     const handleCheckbox = (field: string, checked: boolean | 'indeterminate') => {
         setData(field, checked === true);
@@ -86,6 +121,69 @@ export function CoachingFormFields({
                     Session Details
                 </h3>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                    {/* Team Lead selector (Admin only) */}
+                    {showAgentSelect && isAdmin && (
+                        <div>
+                            <Label htmlFor="team_lead_id">Team Lead <span className="text-red-500">*</span></Label>
+                            <Popover open={tlSearchOpen} onOpenChange={setTlSearchOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={tlSearchOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedTeamLead
+                                                ? `${selectedTeamLead.first_name} ${selectedTeamLead.last_name}${getAgentCampaign(selectedTeamLead) ? ` — ${getAgentCampaign(selectedTeamLead)!.name}` : ''}`
+                                                : 'Select a team lead'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search team lead..."
+                                            value={tlSearchQuery}
+                                            onValueChange={setTlSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No team lead found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {filteredTeamLeads.map((tl) => (
+                                                    <CommandItem
+                                                        key={tl.id}
+                                                        value={String(tl.id)}
+                                                        onSelect={() => {
+                                                            setData('team_lead_id', tl.id);
+                                                            // Reset agent when TL changes
+                                                            setData('agent_id', '');
+                                                            setTlSearchOpen(false);
+                                                            setTlSearchQuery('');
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedTeamLead?.id === tl.id ? 'opacity-100' : 'opacity-0'
+                                                                }`}
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span>{tl.first_name} {tl.last_name}</span>
+                                                            {getAgentCampaign(tl) && (
+                                                                <span className="text-xs text-muted-foreground">{getAgentCampaign(tl)!.name}</span>
+                                                            )}
+                                                        </div>
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            {errors.team_lead_id && <p className="text-red-600 text-sm mt-1">{errors.team_lead_id}</p>}
+                        </div>
+                    )}
                     {showAgentSelect && (
                         <div>
                             <Label htmlFor="agent_id">Agent <span className="text-red-500">*</span></Label>
@@ -96,11 +194,14 @@ export function CoachingFormFields({
                                         role="combobox"
                                         aria-expanded={agentSearchOpen}
                                         className="w-full justify-between font-normal"
+                                        disabled={isAdmin && !selectedTeamLead}
                                     >
                                         <span className="truncate">
-                                            {selectedAgent
-                                                ? `${selectedAgent.first_name} ${selectedAgent.last_name}${getAgentCampaign(selectedAgent) ? ` — ${getAgentCampaign(selectedAgent)}` : ''}`
-                                                : 'Select an agent'}
+                                            {isAdmin && !selectedTeamLead
+                                                ? 'Select a team lead first'
+                                                : selectedAgent
+                                                    ? `${selectedAgent.first_name} ${selectedAgent.last_name}${getAgentCampaign(selectedAgent) ? ` — ${getAgentCampaign(selectedAgent)!.name}` : ''}`
+                                                    : 'Select an agent'}
                                         </span>
                                         <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                                     </Button>
@@ -127,14 +228,13 @@ export function CoachingFormFields({
                                                         className="cursor-pointer"
                                                     >
                                                         <Check
-                                                            className={`mr-2 h-4 w-4 ${
-                                                                selectedAgent?.id === agent.id ? 'opacity-100' : 'opacity-0'
-                                                            }`}
+                                                            className={`mr-2 h-4 w-4 ${selectedAgent?.id === agent.id ? 'opacity-100' : 'opacity-0'
+                                                                }`}
                                                         />
                                                         <div className="flex flex-col">
                                                             <span>{agent.first_name} {agent.last_name}</span>
                                                             {getAgentCampaign(agent) && (
-                                                                <span className="text-xs text-muted-foreground">{getAgentCampaign(agent)}</span>
+                                                                <span className="text-xs text-muted-foreground">{getAgentCampaign(agent)!.name}</span>
                                                             )}
                                                         </div>
                                                     </CommandItem>
