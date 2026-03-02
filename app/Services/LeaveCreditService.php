@@ -209,62 +209,69 @@ class LeaveCreditService
     public function getProjectedBalance(User $user, Carbon $targetDate, ?int $year = null): array
     {
         $year = $year ?? now()->year;
-        $currentBalance = $this->getBalance($user, $year);
-
-        // If target date is in the past or current month before month end, no projection needed
         $today = now();
         $currentMonthEnd = $today->copy()->endOfMonth();
 
-        // If target date is within current month and before month end, no future accrual
+        // If target date is within current month, no projection needed — use total balance
         if ($targetDate->lte($currentMonthEnd)) {
+            $balance = $this->getBalance($user, $year);
+
             return [
-                'current' => $currentBalance,
-                'projected' => $currentBalance,
+                'current' => $balance,
+                'projected' => $balance,
                 'months_until' => 0,
                 'future_accrual' => 0,
             ];
         }
 
-        // Count months that will accrue before the target date
-        // Start from current month (credits accrue at end of month)
+        // For future-month leaves, only count credits from months that have accrued
+        // by the target date. Credits accrue at month-end, so month M is available
+        // only if end-of-month M < targetDate.
+        //
+        // This prevents over-counting when ensureFutureCreditsExist has pre-created
+        // records for later months (e.g., May/Jun records inflating an April balance).
+        $allCredits = LeaveCredit::forUser($user->id)
+            ->forYear($year)
+            ->get()
+            ->keyBy('month');
+
         $monthlyRate = $this->getMonthlyRate($user);
-        $checkMonth = $today->month;
-        $checkYear = $today->year;
-
+        $accruedBalance = 0;
         $monthsUntil = 0;
+        $futureAccrual = 0;
 
-        while (true) {
-            // Get the end of this month
-            $monthEnd = Carbon::create($checkYear, $checkMonth, 1)->endOfMonth();
-
-            // Only count if:
-            // 1. Month end is before target date (credits will be available)
-            // 2. Month is in the same credit year
-            if ($monthEnd->lt($targetDate) && $checkYear == $year) {
-                $monthsUntil++;
-            }
-
-            // Move to next month
-            $checkMonth++;
-            if ($checkMonth > 12) {
-                $checkMonth = 1;
-                $checkYear++;
-            }
-
-            // Stop if we've passed the credit year or reached the target month
-            if ($checkYear > $year) {
-                break;
-            }
-            if ($checkYear == $targetDate->year && $checkMonth > $targetDate->month) {
-                break;
+        // Carryover (month 0) — available until March 31 of the credit year
+        if (isset($allCredits[0])) {
+            $carryoverExpiration = Carbon::create($year, 3, 31)->endOfDay();
+            if ($targetDate->lte($carryoverExpiration)) {
+                $accruedBalance += $allCredits[0]->credits_balance;
             }
         }
 
-        $futureAccrual = $monthsUntil * $monthlyRate;
-        $projectedBalance = $currentBalance + $futureAccrual;
+        // Monthly credits (1-12)
+        for ($m = 1; $m <= 12; $m++) {
+            $monthEnd = Carbon::create($year, $m, 1)->endOfMonth();
+
+            if ($monthEnd->gte($targetDate)) {
+                break; // This month and beyond haven't accrued by the target date
+            }
+
+            if (isset($allCredits[$m])) {
+                // Credit record exists — use its actual balance (may be depleted by prior approvals)
+                $accruedBalance += $allCredits[$m]->credits_balance;
+            } elseif ($monthEnd->gt($today)) {
+                // No record yet, but this month will accrue before the target date
+                // and is still in the future — project the accrual
+                $monthsUntil++;
+                $futureAccrual += $monthlyRate;
+            }
+            // If monthEnd <= today and no record, the month passed without earning — skip
+        }
+
+        $projectedBalance = $accruedBalance + $futureAccrual;
 
         return [
-            'current' => $currentBalance,
+            'current' => $accruedBalance,
             'projected' => $projectedBalance,
             'months_until' => $monthsUntil,
             'future_accrual' => $futureAccrual,
@@ -525,6 +532,92 @@ class LeaveCreditService
         }
 
         return $accrued;
+    }
+
+    /**
+     * Pre-create future credit records for months between now and a target date.
+     * Used when approving VL requests for future months — ensures deductCredits
+     * can deduct from records that will eventually accrue normally.
+     *
+     * The monthly accrual job (accrueMonthly) already checks for existing records
+     * using firstOrCreate-style logic, so pre-created records won't cause duplicates.
+     *
+     * @param  Carbon  $targetDate  The date up to which credits should exist
+     * @return int Number of credit records pre-created
+     */
+    public function ensureFutureCreditsExist(User $user, Carbon $targetDate): int
+    {
+        if (! $user->hired_date) {
+            return 0;
+        }
+
+        $year = $targetDate->year;
+        $rate = $this->getMonthlyRate($user);
+
+        if ($rate <= 0) {
+            return 0;
+        }
+
+        $today = now();
+        $created = 0;
+
+        // Start from current month, iterate until the month of the target date
+        $checkDate = $today->copy()->startOfMonth();
+        $targetMonth = $targetDate->copy()->startOfMonth();
+
+        while ($checkDate->lte($targetMonth)) {
+            $checkYear = $checkDate->year;
+            $checkMonth = $checkDate->month;
+
+            // Only create for the target credit year
+            if ($checkYear !== $year) {
+                $checkDate->addMonth();
+
+                continue;
+            }
+
+            // Skip the hire month (no credits earned in the month of hire)
+            $hireDate = $this->getHireDate($user);
+            if ($hireDate && $checkYear == $hireDate->year && $checkMonth == $hireDate->month) {
+                $checkDate->addMonth();
+
+                continue;
+            }
+
+            // Check if record already exists
+            $existing = LeaveCredit::forUser($user->id)
+                ->forMonth($checkYear, $checkMonth)
+                ->first();
+
+            if (! $existing) {
+                // Pre-create the credit record for this future month
+                $monthEnd = Carbon::create($checkYear, $checkMonth, 1)->endOfMonth();
+
+                LeaveCredit::create([
+                    'user_id' => $user->id,
+                    'credits_earned' => $rate,
+                    'credits_used' => 0,
+                    'credits_balance' => $rate,
+                    'year' => $checkYear,
+                    'month' => $checkMonth,
+                    'accrued_at' => $monthEnd,
+                ]);
+
+                $created++;
+            }
+
+            $checkDate->addMonth();
+        }
+
+        if ($created > 0) {
+            \Log::info('Pre-created future credit records for VL approval', [
+                'user_id' => $user->id,
+                'target_date' => $targetDate->format('Y-m-d'),
+                'records_created' => $created,
+            ]);
+        }
+
+        return $created;
     }
 
     /**
@@ -1055,11 +1148,11 @@ class LeaveCreditService
         // Reviewers can see the absence info on the Show page to make approval decisions
         // The rule is NOT enforced as a blocking validation anymore
 
-        // Enforce credit balance validation for VL only
-        // VL requires sufficient credits at submission time
-        // SL handles insufficient credits at approval time (SL→UPTO conversion)
+        // VL credit check is now informational only (no longer blocks submission)
+        // Insufficient VL credits are handled at approval time via per-day UPTO conversion
+        // SL also handles insufficient credits at approval time (SL→UPTO conversion)
         // BL does not consume credits (non-credited leave type)
-        // Uses projected balance to include future credit accrual before the leave start date
+        $insufficientVlCredits = false;
         if ($leaveType === 'VL') {
             $daysRequested = $data['days_requested'] ?? $this->calculateDays($startDate, $endDate);
             $projected = $this->getProjectedBalance($user, $startDate, $year);
@@ -1067,16 +1160,14 @@ class LeaveCreditService
             $availableBalance = max(0, $projected['projected'] - $pendingCredits);
 
             if ($availableBalance < $daysRequested) {
-                $futureNote = $projected['future_accrual'] > 0
-                    ? " (includes {$projected['future_accrual']} future credits)"
-                    : '';
-                $errors[] = "Insufficient leave credits. Available: {$availableBalance} day(s){$futureNote}, Requested: {$daysRequested} day(s). Please reduce your leave days to match your available credits.";
+                $insufficientVlCredits = true;
             }
         }
 
         return [
             'valid' => empty($errors),
             'errors' => $errors,
+            'insufficient_vl_credits' => $insufficientVlCredits,
         ];
     }
 
@@ -1145,12 +1236,11 @@ class LeaveCreditService
         }
 
         // Check credits balance
+        // First-approved-gets-priority: no pending credit reservation.
+        // The first request to be approved uses whatever credits are available,
+        // and subsequent approvals see what remains after deduction.
         $year = Carbon::parse($leaveRequest->start_date)->year;
         $balance = $this->getBalance($user, $year);
-
-        // Subtract credits reserved by other pending VL/SL requests to prevent double-spending
-        $pendingCredits = $this->getPendingCredits($user, $year, $leaveRequest->id);
-        $balance = max(0, $balance - $pendingCredits);
 
         // Use approved_days when there's a partial denial, otherwise use days_requested
         $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
@@ -1213,14 +1303,15 @@ class LeaveCreditService
 
     /**
      * Check if VL credits should be deducted at approval time and return detailed info.
-     * If credits are insufficient, approval is blocked (should_deduct: false).
+     * Now supports partial credit usage — if user has some credits but not enough,
+     * use available credits for some days and mark remaining days as UPTO.
      *
-     * @return array{should_deduct: bool, reason: string|null, credits_to_deduct: int}
+     * @return array{should_deduct: bool, reason: string|null, convert_to_upto: bool, partial_credit: bool, credits_to_deduct: int, upto_days: float}
      */
     public function checkVlCreditDeduction(User $user, LeaveRequest $leaveRequest): array
     {
         if ($leaveRequest->leave_type !== 'VL') {
-            return ['should_deduct' => true, 'reason' => null, 'credits_to_deduct' => 0];
+            return ['should_deduct' => true, 'reason' => null, 'convert_to_upto' => false, 'partial_credit' => false, 'credits_to_deduct' => 0, 'upto_days' => 0];
         }
 
         // Must be eligible (6+ months) - check eligibility based on leave start date
@@ -1228,20 +1319,30 @@ class LeaveCreditService
         if (! $this->isEligible($user, $startDate)) {
             $hireDate = $user->hired_date ? Carbon::parse($user->hired_date)->format('M d, Y') : 'unknown';
 
+            // Use approved_days when there's a partial denial, otherwise use days_requested
+            $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
+                ? (float) $leaveRequest->approved_days
+                : (float) $leaveRequest->days_requested;
+
             return [
                 'should_deduct' => false,
                 'reason' => "Not eligible for VL credits (less than 6 months of employment, hired: {$hireDate})",
+                'convert_to_upto' => true,
+                'partial_credit' => false,
                 'credits_to_deduct' => 0,
+                'upto_days' => $daysRequested,
             ];
         }
 
-        // Check credits balance
+        // Check credits balance — always use actual accrued balance only.
+        // Future projected credits are NOT counted; approval is only allowed
+        // when the agent has actually accrued enough credits.
         $year = $startDate->year;
         $balance = $this->getBalance($user, $year);
 
-        // Subtract credits reserved by other pending VL/SL requests to prevent double-spending
-        $pendingCredits = $this->getPendingCredits($user, $year, $leaveRequest->id);
-        $balance = max(0, $balance - $pendingCredits);
+        // First-approved-gets-priority: no pending credit reservation.
+        // The first request to be approved uses whatever credits are available,
+        // and subsequent approvals see what remains after deduction.
 
         // Use approved_days when there's a partial denial, otherwise use days_requested
         $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
@@ -1251,12 +1352,29 @@ class LeaveCreditService
         // Floor to whole number: only deduct full days (1 credit = 1 day)
         $wholeCredits = (int) floor($balance);
 
-        if ($wholeCredits < $daysRequested) {
-            // Insufficient credits - block approval
+        if ($wholeCredits <= 0) {
+            // No whole credits at all - convert entire request to UPTO
             return [
                 'should_deduct' => false,
-                'reason' => "Insufficient VL credits (balance: {$balance} day(s), requested: {$daysRequested} day(s))",
+                'reason' => "No VL credits available (balance: {$balance} day(s)) — All days will be UPTO (Unpaid Time Off)",
+                'convert_to_upto' => true,
+                'partial_credit' => false,
                 'credits_to_deduct' => 0,
+                'upto_days' => $daysRequested,
+            ];
+        }
+
+        if ($wholeCredits < $daysRequested) {
+            // Partial credits — some days VL credited, rest as UPTO
+            $uptoDays = $daysRequested - $wholeCredits;
+
+            return [
+                'should_deduct' => true,
+                'reason' => "Partial VL credits used (balance: {$balance} days, requested: {$daysRequested} days) — {$wholeCredits} day(s) as VL Credited, {$uptoDays} day(s) as UPTO",
+                'convert_to_upto' => false,
+                'partial_credit' => true,
+                'credits_to_deduct' => $wholeCredits,
+                'upto_days' => $uptoDays,
             ];
         }
 
@@ -1264,7 +1382,10 @@ class LeaveCreditService
         return [
             'should_deduct' => true,
             'reason' => null,
+            'convert_to_upto' => false,
+            'partial_credit' => false,
             'credits_to_deduct' => (int) $daysRequested,
+            'upto_days' => 0,
         ];
     }
 

@@ -197,36 +197,24 @@ class LeaveRequestDayStatusTest extends TestCase
     }
 
     // ===================================================================
-    // Test: Auto-assignment when no day_statuses provided
+    // Test: Approval requires day_statuses for SL (credit enforcement)
     // ===================================================================
 
     #[Test]
-    public function it_auto_assigns_day_statuses_when_none_provided(): void
+    public function it_rejects_sl_approval_when_no_day_statuses_provided(): void
     {
         $this->giveSlCredits(2);
 
         $leaveRequest = $this->createSlRequest('2026-07-06', '2026-07-08', 3);
 
-        // Approve without specifying day_statuses
-        $this->dualApproveWithDayStatuses($leaveRequest);
+        // Approve without specifying day_statuses — should be rejected
+        $response = $this->actingAs($this->admin)->post(route('leave-requests.approve', $leaveRequest), [
+            'review_notes' => 'Admin approved without day statuses.',
+        ]);
 
+        $response->assertSessionHasErrors('error');
         $leaveRequest->refresh();
-
-        $this->assertEquals('approved', $leaveRequest->status);
-
-        // Should have auto-generated day records
-        $days = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
-            ->orderBy('date')
-            ->get();
-
-        $this->assertCount(3, $days);
-
-        // With 2 credits and 3 days, first 2 should be sl_credited, last should be advised_absence
-        $creditedDays = $days->where('day_status', 'sl_credited')->count();
-        $advisedDays = $days->where('day_status', 'advised_absence')->count();
-
-        $this->assertEquals(2, $creditedDays);
-        $this->assertEquals(1, $advisedDays);
+        $this->assertEquals('pending', $leaveRequest->status);
     }
 
     // ===================================================================
@@ -309,11 +297,11 @@ class LeaveRequestDayStatusTest extends TestCase
     }
 
     #[Test]
-    public function it_rejects_day_status_update_for_non_sl_requests(): void
+    public function it_rejects_day_status_update_for_non_sl_vl_requests(): void
     {
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $this->agent->id,
-            'leave_type' => 'VL',
+            'leave_type' => 'BL',
             'start_date' => '2026-07-06',
             'end_date' => '2026-07-08',
             'days_requested' => 3,
@@ -577,14 +565,14 @@ class LeaveRequestDayStatusTest extends TestCase
     }
 
     #[Test]
-    public function it_auto_assigns_day_statuses_when_force_approve_has_none(): void
+    public function it_rejects_force_approve_when_no_day_statuses_provided_for_sl(): void
     {
         $superAdmin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
         $this->giveSlCredits(2);
 
         $leaveRequest = $this->createSlRequest('2026-07-06', '2026-07-08', 3);
 
-        // Force approve without day_statuses → auto-assign
+        // Force approve without day_statuses → should be rejected
         $response = $this->actingAs($superAdmin)->post(
             route('leave-requests.force-approve', $leaveRequest),
             [
@@ -592,20 +580,9 @@ class LeaveRequestDayStatusTest extends TestCase
             ]
         );
 
-        $response->assertRedirect();
-
+        $response->assertSessionHasErrors('error');
         $leaveRequest->refresh();
-        $this->assertEquals('approved', $leaveRequest->status);
-
-        // Auto-assigned day records should exist
-        $days = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->get();
-        $this->assertCount(3, $days);
-
-        // With 2 credits and 3 days, auto-assign gives 2 sl_credited + 1 advised_absence
-        $credited = $days->where('day_status', 'sl_credited')->count();
-        $advised = $days->where('day_status', 'advised_absence')->count();
-        $this->assertEquals(2, $credited);
-        $this->assertEquals(1, $advised);
+        $this->assertEquals('pending', $leaveRequest->status);
     }
 
     // ===================================================================

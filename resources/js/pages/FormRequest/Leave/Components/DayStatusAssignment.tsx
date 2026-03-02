@@ -1,15 +1,15 @@
-import React, { useMemo, useState as useLocalState } from 'react';
+import React, { useEffect, useMemo, useState as useLocalState } from 'react';
 import { format, parseISO } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { CheckCircle, XCircle, AlertTriangle, Info, MessageSquarePlus, ChevronDown, ChevronUp } from 'lucide-react';
+import { CheckCircle, XCircle, AlertTriangle, Info, MessageSquarePlus, ChevronUp } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export interface DayStatus {
     date: string;
-    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence';
+    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto';
     notes?: string;
 }
 
@@ -32,9 +32,13 @@ interface Props {
     creditPreviewInfo?: {
         availableCredits: number;
     } | null;
+    statusOptions?: StatusOption[];
+    creditLabel?: string;
+    /** Called when credit validation state changes. `true` = invalid (cannot submit). */
+    onCreditValidation?: (isInvalid: boolean) => void;
 }
 
-const STATUS_OPTIONS = [
+const SL_STATUS_OPTIONS = [
     {
         value: 'sl_credited',
         label: 'SL Credited',
@@ -67,12 +71,41 @@ const STATUS_OPTIONS = [
     },
 ] as const;
 
-function getStatusOption(value: string) {
-    return STATUS_OPTIONS.find((opt) => opt.value === value);
+export type StatusOption = (typeof SL_STATUS_OPTIONS)[number] | (typeof VL_STATUS_OPTIONS)[number];
+
+/** VL-specific status options: VL Credited (paid) or UPTO (unpaid). */
+const VL_STATUS_OPTIONS = [
+    {
+        value: 'vl_credited',
+        label: 'VL Credited',
+        shortLabel: 'VL Credited',
+        description: 'Paid — uses VL credit',
+        color: 'bg-green-100 text-green-800 border-green-200 dark:bg-green-900/30 dark:text-green-300 dark:border-green-800',
+        dotColor: 'bg-green-500',
+        tag: 'Paid',
+        tagColor: 'text-green-600 dark:text-green-400',
+    },
+    {
+        value: 'upto',
+        label: 'UPTO (Unpaid Time Off)',
+        shortLabel: 'UPTO',
+        description: 'Unpaid Time Off — insufficient VL credits (no violation)',
+        color: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-300 dark:border-amber-800',
+        dotColor: 'bg-amber-500',
+        tag: 'Unpaid',
+        tagColor: 'text-amber-600 dark:text-amber-400',
+    },
+] as const;
+
+function getStatusOption(value: string, options: readonly StatusOption[] = SL_STATUS_OPTIONS) {
+    return options.find((opt) => opt.value === value) ?? ALL_STATUS_OPTIONS.find((opt) => opt.value === value);
 }
 
-function StatusBadge({ status }: { status: string }) {
-    const opt = getStatusOption(status);
+/** All possible status options (for ReadOnlyView lookups). */
+const ALL_STATUS_OPTIONS = [...SL_STATUS_OPTIONS, ...VL_STATUS_OPTIONS];
+
+function StatusBadge({ status, options }: { status: string; options?: readonly StatusOption[] }) {
+    const opt = getStatusOption(status, options as StatusOption[]);
     if (!opt) return <Badge variant="outline">Pending</Badge>;
 
     return (
@@ -83,7 +116,10 @@ function StatusBadge({ status }: { status: string }) {
     );
 }
 
-export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = false, existingRecords = null, creditPreviewInfo = null }: Props) {
+export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = false, existingRecords = null, creditPreviewInfo = null, statusOptions, creditLabel = 'SL', onCreditValidation }: Props) {
+    const activeOptions = statusOptions ?? (SL_STATUS_OPTIONS as unknown as StatusOption[]);
+    const paidStatuses = activeOptions.filter((o) => o.tag === 'Paid').map((o) => o.value);
+
     const [expandedNotes, setExpandedNotes] = useLocalState<Set<number>>(() => {
         // Auto-expand rows that already have notes
         const initial = new Set<number>();
@@ -106,14 +142,22 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
     };
 
     const summary = useMemo(() => {
-        const credited = dayStatuses.filter((d) => d.status === 'sl_credited').length;
+        const credited = dayStatuses.filter((d) => (paidStatuses as string[]).includes(d.status)).length;
         const ncns = dayStatuses.filter((d) => d.status === 'ncns').length;
-        const advised = dayStatuses.filter((d) => d.status === 'advised_absence').length;
+        const advised = dayStatuses.filter((d) => d.status === 'advised_absence' || d.status === 'upto').length;
         const pending = dayStatuses.filter((d) => d.status === 'pending').length;
         return { credited, ncns, advised, pending, total: dayStatuses.length };
-    }, [dayStatuses]);
+    }, [dayStatuses, paidStatuses]);
 
     const creditExceeded = creditPreviewInfo && summary.credited > creditPreviewInfo.availableCredits;
+
+    // Notify parent when credit validation state changes (exceeded or pending days remain)
+    useEffect(() => {
+        if (onCreditValidation) {
+            const isInvalid = !!(creditExceeded || summary.pending > 0);
+            onCreditValidation(isInvalid);
+        }
+    }, [creditExceeded, summary.pending, onCreditValidation]);
 
     const handleStatusChange = (index: number, newStatus: DayStatus['status']) => {
         const updated = [...dayStatuses];
@@ -143,7 +187,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                 <span className="text-xs font-medium text-muted-foreground">Summary:</span>
                 {summary.credited > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
-                        <CheckCircle className="h-3 w-3" /> {summary.credited} SL Credited
+                        <CheckCircle className="h-3 w-3" /> {summary.credited} {creditLabel} Credited
                     </span>
                 )}
                 {summary.ncns > 0 && (
@@ -153,7 +197,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                 )}
                 {summary.advised > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                        <AlertTriangle className="h-3 w-3" /> {summary.advised} Advised Absence
+                        <AlertTriangle className="h-3 w-3" /> {summary.advised} {creditLabel === 'VL' ? 'UPTO' : 'Advised Absence'}
                     </span>
                 )}
                 {summary.pending > 0 && (
@@ -168,8 +212,20 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                 <Alert className="border-red-200 bg-red-50 py-2 dark:border-red-800 dark:bg-red-950">
                     <AlertTriangle className="h-4 w-4 text-red-600" />
                     <AlertDescription className="text-red-800 dark:text-red-200 text-xs">
-                        <strong>Credit limit exceeded.</strong> {summary.credited} SL Credited assigned, but only{' '}
+                        <strong>Credit limit exceeded.</strong> {summary.credited} {creditLabel} Credited assigned, but only{' '}
                         {creditPreviewInfo.availableCredits} credit(s) available.
+                        {' '}Reduce {creditLabel} Credited days to {creditPreviewInfo.availableCredits} or fewer, or set excess days to{' '}
+                        {creditLabel === 'SL' ? 'Advised Absence / NCNS' : 'UPTO'} to proceed.
+                    </AlertDescription>
+                </Alert>
+            )}
+
+            {/* Pending Days Warning */}
+            {summary.pending > 0 && !readOnly && (
+                <Alert className="border-amber-200 bg-amber-50 py-2 dark:border-amber-800 dark:bg-amber-950">
+                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                    <AlertDescription className="text-amber-800 dark:text-amber-200 text-xs">
+                        <strong>{summary.pending} day(s) still pending.</strong> Assign a status to all days before approving.
                     </AlertDescription>
                 </Alert>
             )}
@@ -178,7 +234,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
             {!readOnly && dayStatuses.length > 1 && (
                 <div className="flex flex-wrap items-center gap-1.5">
                     <span className="text-[11px] text-muted-foreground">Quick assign all:</span>
-                    {STATUS_OPTIONS.map((opt) => (
+                    {activeOptions.map((opt) => (
                         <button
                             key={opt.value}
                             type="button"
@@ -197,7 +253,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
             {/* Day-by-Day Assignment — Compact Table-like Layout */}
             <div className="rounded-lg border divide-y overflow-hidden">
                 {dayStatuses.map((day, index) => {
-                    const statusOpt = getStatusOption(day.status);
+                    const statusOpt = getStatusOption(day.status, activeOptions);
                     const hasNotes = day.notes && day.notes.trim().length > 0;
                     const isNoteExpanded = expandedNotes.has(index);
 
@@ -206,9 +262,9 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                             key={day.date}
                             className={cn(
                                 'transition-colors',
-                                day.status === 'sl_credited' && 'bg-green-50/40 dark:bg-green-950/10',
+                                (day.status === 'sl_credited' || day.status === 'vl_credited') && 'bg-green-50/40 dark:bg-green-950/10',
                                 day.status === 'ncns' && 'bg-red-50/40 dark:bg-red-950/10',
-                                day.status === 'advised_absence' && 'bg-amber-50/40 dark:bg-amber-950/10',
+                                (day.status === 'advised_absence' || day.status === 'upto') && 'bg-amber-50/40 dark:bg-amber-950/10',
                                 day.status === 'pending' && 'bg-background',
                             )}
                         >
@@ -240,7 +296,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
-                                            {STATUS_OPTIONS.map((opt) => (
+                                            {activeOptions.map((opt) => (
                                                 <SelectItem key={opt.value} value={opt.value}>
                                                     <div className="flex items-center gap-2">
                                                         <span className={cn('h-2 w-2 rounded-full shrink-0', opt.dotColor)} />
@@ -299,15 +355,11 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
 
             {/* Legend */}
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-muted-foreground px-1">
-                <span className="inline-flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-green-500" /> SL Credited = Paid (uses credit)
-                </span>
-                <span className="inline-flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-red-500" /> NCNS = Unpaid + attendance point
-                </span>
-                <span className="inline-flex items-center gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-amber-500" /> Advised Absence = UPTO (Unpaid)
-                </span>
+                {activeOptions.map((opt) => (
+                    <span key={opt.value} className="inline-flex items-center gap-1">
+                        <span className={cn('h-1.5 w-1.5 rounded-full', opt.dotColor)} /> {opt.label} = {opt.description}
+                    </span>
+                ))}
             </div>
         </div>
     );
@@ -315,10 +367,12 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
 
 function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
     const summary = useMemo(() => {
-        const credited = records.filter((r) => r.day_status === 'sl_credited').length;
+        const credited = records.filter((r) => r.day_status === 'sl_credited' || r.day_status === 'vl_credited').length;
         const ncns = records.filter((r) => r.day_status === 'ncns').length;
-        const advised = records.filter((r) => r.day_status === 'advised_absence').length;
-        return { credited, ncns, advised, total: records.length };
+        const advised = records.filter((r) => r.day_status === 'advised_absence' || r.day_status === 'upto').length;
+        // Determine label from records
+        const hasVl = records.some((r) => r.day_status === 'vl_credited' || r.day_status === 'upto');
+        return { credited, ncns, advised, total: records.length, creditLabel: hasVl ? 'VL' : 'SL' };
     }, [records]);
 
     return (
@@ -328,7 +382,7 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                 <span className="text-xs font-medium text-muted-foreground">Day Statuses:</span>
                 {summary.credited > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
-                        <CheckCircle className="h-3 w-3" /> {summary.credited} SL Credited
+                        <CheckCircle className="h-3 w-3" /> {summary.credited} {summary.creditLabel} Credited
                     </span>
                 )}
                 {summary.ncns > 0 && (
@@ -338,7 +392,7 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                 )}
                 {summary.advised > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
-                        <AlertTriangle className="h-3 w-3" /> {summary.advised} Advised Absence
+                        <AlertTriangle className="h-3 w-3" /> {summary.advised} {summary.creditLabel === 'VL' ? 'UPTO' : 'Advised Absence'}
                     </span>
                 )}
             </div>
@@ -353,9 +407,9 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                             key={record.id}
                             className={cn(
                                 'transition-colors',
-                                record.day_status === 'sl_credited' && 'bg-green-50/40 dark:bg-green-950/10',
+                                (record.day_status === 'sl_credited' || record.day_status === 'vl_credited') && 'bg-green-50/40 dark:bg-green-950/10',
                                 record.day_status === 'ncns' && 'bg-red-50/40 dark:bg-red-950/10',
-                                record.day_status === 'advised_absence' && 'bg-amber-50/40 dark:bg-amber-950/10',
+                                (record.day_status === 'advised_absence' || record.day_status === 'upto') && 'bg-amber-50/40 dark:bg-amber-950/10',
                             )}
                         >
                             <div className="flex items-center gap-2 px-3 py-2">
@@ -406,4 +460,5 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
     );
 }
 
-export { StatusBadge, STATUS_OPTIONS };
+export { StatusBadge, SL_STATUS_OPTIONS, VL_STATUS_OPTIONS, ALL_STATUS_OPTIONS };
+export { SL_STATUS_OPTIONS as STATUS_OPTIONS };

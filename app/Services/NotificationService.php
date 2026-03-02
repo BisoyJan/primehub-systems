@@ -483,6 +483,50 @@ class NotificationService
     }
 
     /**
+     * Notify the employee that their VL request was submitted with insufficient credits.
+     * Informational only — the request is still pending, but some days may become UPTO.
+     */
+    public function notifyLeaveRequestInsufficientVlCredits(int $userId, float $daysRequested, int $requestId): Notification
+    {
+        return $this->create(
+            $userId,
+            'leave_request',
+            'VL Request — Insufficient Credits',
+            "Your VL request for {$daysRequested} day(s) was submitted. Note: You have insufficient VL credits. Some days may be converted to UPTO (Unpaid Time Off) upon approval.",
+            [
+                'status' => 'pending',
+                'type' => 'VL',
+                'days_requested' => $daysRequested,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId),
+            ]
+        );
+    }
+
+    /**
+     * Notify the employee that their leave request was approved with UPTO conversion.
+     * Some days used credits, while remaining days were converted to UPTO (unpaid).
+     */
+    public function notifyLeaveRequestApprovedWithUptoConversion(int $userId, string $leaveType, int $creditedDays, int $uptoDays, int $totalDays, int $requestId): Notification
+    {
+        return $this->create(
+            $userId,
+            'leave_request',
+            'Leave Approved — Partial UPTO Conversion',
+            "Your {$leaveType} request was approved. {$creditedDays} of {$totalDays} day(s) used {$leaveType} credits; {$uptoDays} day(s) were converted to UPTO (Unpaid Time Off).",
+            [
+                'status' => 'approved',
+                'type' => $leaveType,
+                'credited_days' => $creditedDays,
+                'upto_days' => $uptoDays,
+                'total_days' => $totalDays,
+                'request_id' => $requestId,
+                'link' => route('leave-requests.show', $requestId),
+            ]
+        );
+    }
+
+    /**
      * Notify Team Lead about a new leave request from their campaign agent.
      */
     public function notifyTeamLeadAboutNewLeaveRequest(int $teamLeadId, string $agentName, string $leaveType, string $startDate, string $endDate, int $requestId): Notification

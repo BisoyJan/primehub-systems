@@ -285,23 +285,42 @@ class LeaveRequestTest extends TestCase
     #[Test]
     public function admin_approves_leave_request_and_deducts_credits()
     {
+        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        $startDate = now()->addDays(7)->format('Y-m-d');
+        $midDate = now()->addDays(8)->format('Y-m-d');
+        $endDate = now()->addDays(9)->format('Y-m-d');
+
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $this->employee->id,
             'leave_type' => 'VL',
+            'start_date' => $startDate,
+            'end_date' => $endDate,
             'days_requested' => 3.0,
             'status' => 'pending',
         ]);
 
+        $dayStatuses = [
+            ['date' => $startDate, 'status' => 'vl_credited'],
+            ['date' => $midDate, 'status' => 'advised_absence'],
+            ['date' => $endDate, 'status' => 'advised_absence'],
+        ];
+
+        // Admin approves first with day statuses
         $response = $this->actingAs($this->admin)
             ->post(route('leave-requests.approve', $leaveRequest), [
                 'review_notes' => 'Approved for year-end break',
+                'day_statuses' => $dayStatuses,
             ]);
 
         $response->assertRedirect();
 
+        // HR approves second (completes dual approval)
+        $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
+            'review_notes' => 'HR approves leave request.',
+        ]);
+
         $leaveRequest->refresh();
         $this->assertEquals('approved', $leaveRequest->status);
-        $this->assertEquals($this->admin->id, $leaveRequest->reviewed_by);
         $this->assertNotNull($leaveRequest->reviewed_at);
     }
 
@@ -492,6 +511,7 @@ class LeaveRequestTest extends TestCase
     #[Test]
     public function non_credited_leave_types_do_not_deduct_credits()
     {
+        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
         $initialBalance = $this->employee->leaveCredits()->sum('credits_balance');
 
         $leaveRequest = LeaveRequest::factory()->create([
@@ -501,9 +521,16 @@ class LeaveRequestTest extends TestCase
             'status' => 'pending',
         ]);
 
-        $response = $this->actingAs($this->admin)
+        // Admin approves first
+        $this->actingAs($this->admin)
             ->post(route('leave-requests.approve', $leaveRequest), [
-                'review_notes' => 'Approved',
+                'review_notes' => 'Approved SPL request.',
+            ]);
+
+        // HR completes dual approval
+        $this->actingAs($hr)
+            ->post(route('leave-requests.approve', $leaveRequest), [
+                'review_notes' => 'HR approves SPL.',
             ]);
 
         $leaveRequest->refresh();

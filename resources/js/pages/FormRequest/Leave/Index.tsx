@@ -36,7 +36,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ZoomIn, ZoomOut, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -191,8 +191,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
     };
 
     // Zoom controls
-    const handleZoomIn = () => setMedicalCertZoom(prev => Math.min(prev + 25, 300));
-    const handleZoomOut = () => setMedicalCertZoom(prev => Math.max(prev - 25, 50));
+    const handleZoomChange = (value: number) => setMedicalCertZoom(Math.min(300, Math.max(25, value)));
     const handleZoomReset = () => setMedicalCertZoom(100);
 
     // Filter employees based on search query (from all employees list)
@@ -1132,51 +1131,85 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex flex-col gap-4">
-                        {/* Zoom Controls */}
-                        <div className="flex items-center justify-center gap-2 pb-2 border-b">
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleZoomOut}
-                                disabled={medicalCertZoom <= 50}
-                            >
-                                <ZoomOut className="h-4 w-4" />
-                            </Button>
-                            <span className="text-sm font-medium min-w-[60px] text-center">{medicalCertZoom}%</span>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleZoomIn}
-                                disabled={medicalCertZoom >= 300}
-                            >
-                                <ZoomIn className="h-4 w-4" />
-                            </Button>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={handleZoomReset}
-                            >
-                                <RotateCcw className="h-4 w-4" />
-                            </Button>
-                        </div>
-                        {/* Image Container */}
-                        <div className="flex justify-center items-start p-4 bg-muted/30 rounded-lg overflow-auto max-h-[60vh]">
-                            {selectedMedicalCertLeaveId && (
-                                <img
-                                    src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
-                                    alt={(() => {
-                                        const leaveType = leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId)?.leave_type;
-                                        if (leaveType === 'SL') return 'Medical Certificate';
-                                        if (leaveType === 'BL') return 'Death Certificate';
-                                        return 'Supporting Document';
-                                    })()}
-                                    className="max-w-full object-contain rounded-lg shadow-lg transition-transform duration-200"
-                                    style={{ width: `${medicalCertZoom}%`, height: 'auto' }}
-                                />
-                            )}
-                        </div>
+                        {(() => {
+                            const selectedRequest = selectedMedicalCertLeaveId && leaveRequests.data.find(r => r.id === selectedMedicalCertLeaveId);
+                            const isPdf = selectedRequest && selectedRequest.medical_cert_path?.toLowerCase().endsWith('.pdf');
+                            const docLabel = (() => {
+                                const leaveType = selectedRequest ? selectedRequest.leave_type : '';
+                                if (leaveType === 'SL') return 'Medical Certificate';
+                                if (leaveType === 'BL') return 'Death Certificate';
+                                return 'Supporting Document';
+                            })();
+
+                            if (isPdf) {
+                                return (
+                                    <div className="overflow-hidden rounded-lg border">
+                                        <iframe
+                                            src={leaveMedicalCertRoute(selectedMedicalCertLeaveId!).url}
+                                            title={docLabel}
+                                            className="w-full h-[60vh]"
+                                        />
+                                    </div>
+                                );
+                            }
+
+                            return (
+                                <>
+                                    {/* Zoom Slider */}
+                                    <div className="flex items-center gap-3 pb-2 border-b px-2">
+                                        <ZoomOut className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <input
+                                            type="range"
+                                            min={25}
+                                            max={300}
+                                            step={5}
+                                            value={medicalCertZoom}
+                                            onChange={(e) => handleZoomChange(Number(e.target.value))}
+                                            className="w-full h-2 accent-primary cursor-pointer"
+                                            title="Zoom level"
+                                        />
+                                        <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
+                                        <span className="text-sm font-medium min-w-[50px] text-center tabular-nums">{medicalCertZoom}%</span>
+                                        <Button
+                                            size="sm"
+                                            variant="ghost"
+                                            onClick={handleZoomReset}
+                                            className="h-7 px-2"
+                                            title="Reset zoom"
+                                        >
+                                            <RotateCcw className="h-3.5 w-3.5" />
+                                        </Button>
+                                    </div>
+                                    {/* Image Container */}
+                                    <div className="overflow-auto max-h-[60vh] rounded-lg bg-muted/30">
+                                        <div className="min-w-full min-h-full flex justify-center items-start p-4">
+                                            {selectedMedicalCertLeaveId && (
+                                                <img
+                                                    src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
+                                                    alt={docLabel}
+                                                    className="object-contain rounded-lg shadow-lg transition-transform duration-200 origin-top"
+                                                    style={{ transform: `scale(${medicalCertZoom / 100})` }}
+                                                />
+                                            )}
+                                        </div>
+                                    </div>
+                                </>
+                            );
+                        })()}
                     </div>
                     <DialogFooter>
+                        {selectedMedicalCertLeaveId && (
+                            <a
+                                href={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                            >
+                                <Button variant="outline">
+                                    <ExternalLink className="h-4 w-4 mr-2" />
+                                    Open in New Tab
+                                </Button>
+                            </a>
+                        )}
                         <Button variant="outline" onClick={() => setShowMedicalCertDialog(false)}>
                             Close
                         </Button>

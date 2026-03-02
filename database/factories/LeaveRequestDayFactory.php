@@ -57,13 +57,26 @@ class LeaveRequestDayFactory extends Factory
     }
 
     /**
-     * Day is Advised Absence / UPTO (unpaid).
+     * Day is Advised Absence / UPTO (unpaid, SL context).
      */
     public function advisedAbsence(?User $assigner = null): static
     {
         return $this->state(fn (array $attributes) => [
             'day_status' => LeaveRequestDay::STATUS_ADVISED_ABSENCE,
             'notes' => 'Agent informed but no credits remaining (UPTO)',
+            'assigned_by' => $assigner?->id ?? User::factory(),
+            'assigned_at' => now(),
+        ]);
+    }
+
+    /**
+     * Day is UPTO — Unpaid Time Off (VL context, no violation).
+     */
+    public function upto(?User $assigner = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'day_status' => LeaveRequestDay::STATUS_UPTO,
+            'notes' => 'UPTO — Unpaid Time Off (no violation)',
             'assigned_by' => $assigner?->id ?? User::factory(),
             'assigned_at' => now(),
         ]);

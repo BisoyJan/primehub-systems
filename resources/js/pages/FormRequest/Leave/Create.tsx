@@ -19,7 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, Users, Info, Lightbulb, ArrowRight } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, FileText, Eye, Users, Info, Lightbulb, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
@@ -135,6 +135,7 @@ export default function Create({
     const [searchQuery, setSearchQuery] = useState<string>('');
     const [isEmployeePopoverOpen, setIsEmployeePopoverOpen] = useState(false);
     const [medicalCertPreview, setMedicalCertPreview] = useState<string | null>(null);
+    const [isPdfFile, setIsPdfFile] = useState<boolean>(false);
     const [campaignConflicts, setCampaignConflicts] = useState<CampaignConflict[]>([]);
     const [suggestedDates, setSuggestedDates] = useState<DateSuggestion[]>([]);
     const [absenceWindowInfo, setAbsenceWindowInfo] = useState<string | null>(null);
@@ -142,6 +143,7 @@ export default function Create({
     const [calculatedDays, setCalculatedDays] = useState<number>(0);
     const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
     const [creditError, setCreditError] = useState<string | null>(null);
+    const [vlCreditWarning, setVlCreditWarning] = useState<string | null>(null);
     const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
@@ -432,16 +434,17 @@ export default function Create({
             );
         }
 
-        // Check leave credits balance for VL only (blocks submission)
+        // Check leave credits balance for VL (informational warning only — does not block submission)
         // SL handles insufficient credits at approval time (SL→UPTO conversion)
         // BL does not consume credits (non-credited leave type)
         let newCreditError: string | null = null;
+        let newVlCreditWarning: string | null = null;
         if (data.leave_type === 'VL' && calculatedDays > 0) {
             // Calculate projected credits inline to avoid stale state from concurrent useEffect
             const projectedCredits = data.start_date ? calculateFutureCredits(data.start_date) : 0;
             const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + projectedCredits);
             if (availableBalance < calculatedDays) {
-                newCreditError = `Insufficient leave credits. Available: ${availableBalance.toFixed(2)} day(s)${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} day(s). Please reduce your leave days to match your available credits.`;
+                newVlCreditWarning = `Insufficient VL credits. Available: ${availableBalance.toFixed(2)} day(s)${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} day(s). Some days may be converted to UPTO (Unpaid Time Off) upon approval.`;
             }
         }
 
@@ -473,6 +476,7 @@ export default function Create({
 
         setValidationWarnings(warnings);
         setCreditError(newCreditError);
+        setVlCreditWarning(newVlCreditWarning);
         setShortNoticeWarning(shortNotice);
     }, [
         data.leave_type,
@@ -743,25 +747,38 @@ export default function Create({
             setData('medical_cert_file', file);
             setData('medical_cert_submitted', true);
 
-            // Create preview for images only
+            // Revoke previous object URL if any
+            if (isPdfFile && medicalCertPreview) {
+                URL.revokeObjectURL(medicalCertPreview);
+            }
+
+            // Create preview
             if (file.type.startsWith('image/')) {
+                setIsPdfFile(false);
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     setMedicalCertPreview(reader.result as string);
                 };
                 reader.readAsDataURL(file);
             } else {
-                // For PDFs, just set a placeholder
-                setMedicalCertPreview('pdf');
+                // For PDFs, create an object URL for embedded preview
+                setIsPdfFile(true);
+                const objectUrl = URL.createObjectURL(file);
+                setMedicalCertPreview(objectUrl);
             }
         }
     };
 
     // Clear medical certificate
     const clearMedicalCert = () => {
+        // Revoke object URL if it was a PDF
+        if (isPdfFile && medicalCertPreview) {
+            URL.revokeObjectURL(medicalCertPreview);
+        }
         setData('medical_cert_file', null);
         setData('medical_cert_submitted', false);
         setMedicalCertPreview(null);
+        setIsPdfFile(false);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -1057,13 +1074,24 @@ export default function Create({
                     </Card>
                 )}
 
-                {/* Credit Error - Blocks Submission */}
+                {/* Credit Error - Blocks Submission (non-VL credits) */}
                 {creditError && (
                     <Alert className="mb-6 border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
                         <AlertCircle className="h-4 w-4" />
                         <AlertTitle className="text-red-800 dark:text-red-200">Insufficient Leave Credits</AlertTitle>
                         <AlertDescription className="text-red-700 dark:text-red-300">
                             <p>{creditError}</p>
+                        </AlertDescription>
+                    </Alert>
+                )}
+
+                {/* VL Credit Warning - Informational, does not block submission */}
+                {vlCreditWarning && (
+                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                        <AlertTitle className="text-amber-800 dark:text-amber-200">Insufficient VL Credits</AlertTitle>
+                        <AlertDescription className="text-amber-700 dark:text-amber-300">
+                            <p>{vlCreditWarning}</p>
                         </AlertDescription>
                     </Alert>
                 )}
@@ -1544,7 +1572,7 @@ export default function Create({
                                                     Remove
                                                 </Button>
                                             </div>
-                                            {medicalCertPreview && medicalCertPreview !== 'pdf' ? (
+                                            {medicalCertPreview && !isPdfFile ? (
                                                 <div className="relative aspect-video max-h-48 overflow-hidden rounded-md bg-muted">
                                                     <img
                                                         src={medicalCertPreview}
@@ -1552,11 +1580,27 @@ export default function Create({
                                                         className="object-contain w-full h-full"
                                                     />
                                                 </div>
-                                            ) : (
-                                                <div className="flex items-center justify-center p-6 bg-muted rounded-md">
-                                                    <FileImage className="h-12 w-12 text-muted-foreground" />
+                                            ) : medicalCertPreview && isPdfFile ? (
+                                                <div className="space-y-2">
+                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-[200px]">
+                                                        <iframe
+                                                            src={medicalCertPreview}
+                                                            title="PDF preview"
+                                                            className="w-full h-full"
+                                                        />
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => window.open(medicalCertPreview!, '_blank')}
+                                                        className="w-full"
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-1" />
+                                                        View Full Document
+                                                    </Button>
                                                 </div>
-                                            )}
+                                            ) : null}
                                             {data.medical_cert_file && (
                                                 <p className="text-xs text-muted-foreground">
                                                     {data.medical_cert_file.name} ({(data.medical_cert_file.size / 1024 / 1024).toFixed(2)} MB)
@@ -1639,7 +1683,7 @@ export default function Create({
 
                             {/* Submit Button */}
                             <div className="flex gap-4">
-                                <Button type="submit" disabled={processing || !!weekendError.start || !!weekendError.end || !!creditError}>
+                                <Button type="submit" disabled={processing || !!weekendError.start || !!weekendError.end}>
                                     {processing ? 'Submitting...' : 'Submit Leave Request'}
                                 </Button>
                                 <Button

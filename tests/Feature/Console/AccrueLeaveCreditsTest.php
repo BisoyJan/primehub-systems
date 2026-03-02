@@ -30,16 +30,20 @@ class AccrueLeaveCreditsTest extends TestCase
         $year = $lastMonth->year;
         $month = $lastMonth->month;
 
-        // Create users with hire dates before last month
+        // Create active, approved users with hire dates before last month
         $user1 = User::factory()->create([
             'hired_date' => Carbon::now()->subMonths(6),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
         $user2 = User::factory()->create([
             'hired_date' => Carbon::now()->subYear(),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
         // Create user without hire date (should be skipped)
-        User::factory()->create(['hired_date' => null]);
+        User::factory()->create(['hired_date' => null, 'is_approved' => true, 'is_active' => true]);
 
         $this->artisan('leave:accrue-credits', [
             '--year' => $year,
@@ -67,14 +71,16 @@ class AccrueLeaveCreditsTest extends TestCase
     {
         $user = User::factory()->create([
             'hired_date' => Carbon::parse('2024-01-15'),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
         $this->artisan('leave:accrue-credits', [
             '--year' => 2024,
             '--month' => 6,
         ])
-        ->expectsOutput('Accruing leave credits for 2024-6...')
-        ->assertExitCode(0);
+            ->expectsOutput('Accruing leave credits for 2024-6...')
+            ->assertExitCode(0);
 
         $this->assertDatabaseHas('leave_credits', [
             'user_id' => $user->id,
@@ -86,7 +92,7 @@ class AccrueLeaveCreditsTest extends TestCase
     #[Test]
     public function it_skips_users_without_hire_dates(): void
     {
-        User::factory()->count(3)->create(['hired_date' => null]);
+        User::factory()->count(3)->create(['hired_date' => null, 'is_approved' => true, 'is_active' => true]);
 
         $this->artisan('leave:accrue-credits')
             ->assertExitCode(0);
@@ -99,6 +105,8 @@ class AccrueLeaveCreditsTest extends TestCase
     {
         $user = User::factory()->create([
             'hired_date' => Carbon::now()->subMonths(3),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
         // Create existing credit for current month
@@ -120,13 +128,17 @@ class AccrueLeaveCreditsTest extends TestCase
     {
         $user1 = User::factory()->create([
             'hired_date' => Carbon::now()->subMonths(6),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
         $user2 = User::factory()->create([
             'hired_date' => Carbon::now()->subYear(),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
         // Create user without hire date
-        User::factory()->create(['hired_date' => null]);
+        User::factory()->create(['hired_date' => null, 'is_approved' => true, 'is_active' => true]);
 
         $this->artisan('leave:accrue-credits')
             ->expectsOutput('Summary:')
@@ -136,13 +148,69 @@ class AccrueLeaveCreditsTest extends TestCase
     #[Test]
     public function it_returns_failure_code_when_errors_occur(): void
     {
-        // Create a user with invalid hire date (future date)
         $user = User::factory()->create([
-            'hired_date' => Carbon::now()->addMonths(3),
+            'hired_date' => Carbon::now()->subMonths(6),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
+        // Mock the service to throw an exception for this user
+        $mockService = $this->partialMock(LeaveCreditService::class, function ($mock) {
+            $mock->shouldReceive('accrueMonthly')
+                ->andThrow(new \RuntimeException('Database connection failed'));
+        });
+
         $this->artisan('leave:accrue-credits')
-            ->assertExitCode(0); // Service should handle gracefully
+            ->assertExitCode(1); // FAILURE exit code when errors occur
+    }
+
+    #[Test]
+    public function it_skips_inactive_users(): void
+    {
+        $lastMonth = now()->subMonth();
+        $year = $lastMonth->year;
+        $month = $lastMonth->month;
+
+        // Active + approved user should get credits
+        $activeUser = User::factory()->create([
+            'hired_date' => Carbon::now()->subYear(),
+            'is_approved' => true,
+            'is_active' => true,
+        ]);
+
+        // Inactive user should be skipped
+        $inactiveUser = User::factory()->create([
+            'hired_date' => Carbon::now()->subYear(),
+            'is_approved' => true,
+            'is_active' => false,
+        ]);
+
+        // Unapproved user should be skipped
+        $unapprovedUser = User::factory()->create([
+            'hired_date' => Carbon::now()->subYear(),
+            'is_approved' => false,
+            'is_active' => true,
+        ]);
+
+        $this->artisan('leave:accrue-credits', [
+            '--year' => $year,
+            '--month' => $month,
+        ])->assertExitCode(0);
+
+        // Only the active, approved user should have credits
+        $this->assertDatabaseHas('leave_credits', [
+            'user_id' => $activeUser->id,
+            'year' => $year,
+            'month' => $month,
+        ]);
+
+        $this->assertDatabaseMissing('leave_credits', [
+            'user_id' => $inactiveUser->id,
+        ]);
+
+        $this->assertDatabaseMissing('leave_credits', [
+            'user_id' => $unapprovedUser->id,
+        ]);
     }
 
     #[Test]
@@ -152,6 +220,8 @@ class AccrueLeaveCreditsTest extends TestCase
             'first_name' => 'John',
             'last_name' => 'Doe',
             'hired_date' => Carbon::now()->subMonths(6),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
         $this->artisan('leave:accrue-credits')
@@ -169,11 +239,15 @@ class AccrueLeaveCreditsTest extends TestCase
         // User hired more than 6 months ago
         $seniorUser = User::factory()->create([
             'hired_date' => Carbon::now()->subYear(),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
         // User hired less than 6 months ago
         $juniorUser = User::factory()->create([
             'hired_date' => Carbon::now()->subMonths(3),
+            'is_approved' => true,
+            'is_active' => true,
         ]);
 
         $this->artisan('leave:accrue-credits', [

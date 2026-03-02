@@ -218,11 +218,14 @@ class LeaveRequestControllerTest extends TestCase
             'role' => 'Agent',
             'is_approved' => true,
             'email' => 'employee@example.com',
+            'hired_date' => now()->subYear(),
         ]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'pending',
             'leave_type' => 'VL',
+            'start_date' => now()->addDays(7)->format('Y-m-d'),
+            'end_date' => now()->addDays(7)->format('Y-m-d'),
             'days_requested' => 1,
         ]);
 
@@ -238,9 +241,14 @@ class LeaveRequestControllerTest extends TestCase
             'accrued_at' => now(),
         ]);
 
+        $dayStatuses = [
+            ['date' => now()->addDays(7)->format('Y-m-d'), 'status' => 'vl_credited'],
+        ];
+
         // Admin approves first (partial approval - still needs HR)
         $response = $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'Approved by Admin for this request.',
+            'day_statuses' => $dayStatuses,
         ]);
 
         $response->assertRedirect();
@@ -637,7 +645,7 @@ class LeaveRequestControllerTest extends TestCase
     }
 
     #[Test]
-    public function it_blocks_vl_submission_when_credits_insufficient()
+    public function it_allows_vl_submission_when_credits_insufficient_with_warning()
     {
         $user = User::factory()->create([
             'role' => 'Agent',
@@ -657,7 +665,7 @@ class LeaveRequestControllerTest extends TestCase
             'accrued_at' => now(),
         ]);
 
-        // Request 5 working days (Mon-Fri) — exceeds 1.25 credits
+        // Request 5 working days (Mon-Fri) — exceeds 1.25 credits but allowed
         $startDate = now()->addWeeks(3)->startOfWeek();
         $endDate = $startDate->copy()->addDays(4);
 
@@ -670,9 +678,9 @@ class LeaveRequestControllerTest extends TestCase
         ]);
 
         $response->assertRedirect();
-        $response->assertSessionHasErrors('validation');
 
-        $this->assertDatabaseMissing('leave_requests', [
+        // VL submission is now allowed with insufficient credits (UPTO conversion at approval)
+        $this->assertDatabaseHas('leave_requests', [
             'user_id' => $user->id,
             'leave_type' => 'VL',
             'status' => 'pending',
@@ -764,14 +772,21 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Admin approves
+        // Admin approves with day_statuses (all vl_credited since full credits available)
+        $dayStatuses = [
+            ['date' => $startDate->format('Y-m-d'), 'status' => 'vl_credited'],
+            ['date' => $endDate->format('Y-m-d'), 'status' => 'vl_credited'],
+        ];
+
         $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'Approved by Admin - full credits test.',
+            'day_statuses' => $dayStatuses,
         ]);
 
-        // HR approves (triggers final approval + credit handling)
+        // HR approves with day_statuses (triggers final approval + credit handling)
         $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'Approved by HR - full credits test.',
+            'day_statuses' => $dayStatuses,
         ]);
 
         $leaveRequest->refresh();
@@ -787,7 +802,7 @@ class LeaveRequestControllerTest extends TestCase
     }
 
     #[Test]
-    public function it_does_not_approve_vl_when_credits_insufficient()
+    public function it_shows_partial_credit_preview_when_vl_credits_insufficient()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $agent = User::factory()->create([
@@ -821,24 +836,26 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // View show page — credit preview should indicate insufficient credits
+        // View show page — credit preview should indicate partial credit (2 VL + 2 UPTO)
         $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
         $response->assertStatus(200)
             ->assertInertia(fn ($page) => $page
                 ->component('FormRequest/Leave/Show')
                 ->has('creditPreview')
-                ->where('creditPreview.should_deduct', false)
-                ->where('creditPreview.credits_to_deduct', 0)
+                ->where('creditPreview.should_deduct', true)
+                ->where('creditPreview.partial_credit', true)
+                ->where('creditPreview.credits_to_deduct', 2)
+                ->where('creditPreview.upto_days', 2)
             );
 
-        // Credits should NOT have been deducted
+        // Credits should NOT have been deducted yet
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
         $this->assertEquals(0, (float) $credit->credits_used);
     }
 
     #[Test]
-    public function it_blocks_vl_approval_when_zero_credits()
+    public function it_shows_upto_conversion_preview_when_vl_zero_credits()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $agent = User::factory()->create([
@@ -871,7 +888,7 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Show page should indicate blocked
+        // Show page should indicate all UPTO conversion
         $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
         $response->assertStatus(200)
@@ -879,6 +896,8 @@ class LeaveRequestControllerTest extends TestCase
                 ->component('FormRequest/Leave/Show')
                 ->has('creditPreview')
                 ->where('creditPreview.should_deduct', false)
+                ->where('creditPreview.convert_to_upto', true)
+                ->where('creditPreview.upto_days', 2)
             );
     }
 
@@ -919,9 +938,20 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval (no explicit day_statuses → auto-assignment)
+        // Dual approval (with explicit day_statuses — required for SL)
+        $startDateStr = $startDate->format('Y-m-d');
+        $endDateStr = $endDate->format('Y-m-d');
+        $midDateStr = $startDate->copy()->addDay()->format('Y-m-d');
+
+        $dayStatuses = [
+            ['date' => $startDateStr, 'status' => 'sl_credited'],
+            ['date' => $midDateStr, 'status' => 'advised_absence'],
+            ['date' => $endDateStr, 'status' => 'advised_absence'],
+        ];
+
         $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'Admin approves partial SL test.',
+            'day_statuses' => $dayStatuses,
         ]);
         $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'HR approves partial SL test.',
@@ -987,13 +1017,15 @@ class LeaveRequestControllerTest extends TestCase
             ->assertInertia(fn ($page) => $page
                 ->component('FormRequest/Leave/Show')
                 ->has('creditPreview')
-                ->where('creditPreview.should_deduct', false)
-                ->where('creditPreview.credits_to_deduct', 0)
+                ->where('creditPreview.partial_credit', true)
+                ->where('creditPreview.credits_to_deduct', 2)
+                ->where('creditPreview.upto_days', 2)
+                ->has('suggestedDayStatuses')
             );
     }
 
     #[Test]
-    public function it_blocks_vl_approval_when_agent_not_eligible()
+    public function it_shows_upto_conversion_preview_when_agent_not_eligible()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
@@ -1005,7 +1037,7 @@ class LeaveRequestControllerTest extends TestCase
             'email' => 'agent-vl-ineligible@example.com',
         ]);
 
-        // Even with credits, ineligibility should block VL approval
+        // Even with credits, ineligibility means all days convert to UPTO
         LeaveCredit::create([
             'user_id' => $agent->id,
             'year' => now()->year,
@@ -1028,7 +1060,7 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Show page should indicate VL credits blocked for ineligible agent
+        // Show page should indicate all days convert to UPTO for ineligible agent
         $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
         $response->assertStatus(200)
@@ -1036,10 +1068,12 @@ class LeaveRequestControllerTest extends TestCase
                 ->component('FormRequest/Leave/Show')
                 ->has('creditPreview')
                 ->where('creditPreview.should_deduct', false)
-                ->where('creditPreview.credits_to_deduct', 0)
+                ->where('creditPreview.convert_to_upto', true)
+                ->where('creditPreview.upto_days', 2)
+                ->has('suggestedDayStatuses')
             );
 
-        // No credits should be deducted
+        // No credits should be deducted yet (just preview)
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
         $this->assertEquals(0, (float) $credit->credits_used);
     }
@@ -1049,7 +1083,7 @@ class LeaveRequestControllerTest extends TestCase
     // =====================================================================
 
     #[Test]
-    public function it_blocks_vl_approval_when_fractional_credits_insufficient()
+    public function it_shows_partial_credit_preview_when_fractional_credits_insufficient()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $agent = User::factory()->create([
@@ -1059,7 +1093,7 @@ class LeaveRequestControllerTest extends TestCase
             'email' => 'agent-vl-frac@example.com',
         ]);
 
-        // Give agent 2.75 credits — floor to 2 whole days, but requesting 5
+        // Give agent 2.75 credits — floor to 2 whole days, requesting 5 → partial credit
         LeaveCredit::create([
             'user_id' => $agent->id,
             'year' => now()->year,
@@ -1083,25 +1117,28 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Show page should indicate insufficient credits (floor(2.75)=2 < 5)
+        // Show page should indicate partial credit (floor(2.75)=2 credited, 3 UPTO)
         $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
         $response->assertStatus(200)
             ->assertInertia(fn ($page) => $page
                 ->component('FormRequest/Leave/Show')
                 ->has('creditPreview')
-                ->where('creditPreview.should_deduct', false)
-                ->where('creditPreview.credits_to_deduct', 0)
+                ->where('creditPreview.should_deduct', true)
+                ->where('creditPreview.partial_credit', true)
+                ->where('creditPreview.credits_to_deduct', 2)
+                ->where('creditPreview.upto_days', 3)
+                ->has('suggestedDayStatuses')
             );
 
-        // Credits untouched
+        // Credits untouched (just preview)
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
         $this->assertEquals(0, (float) $credit->credits_used);
         $this->assertEquals(2.75, (float) $credit->credits_balance);
     }
 
     #[Test]
-    public function it_blocks_vl_when_only_fractional_credits_remain()
+    public function it_shows_upto_conversion_when_only_fractional_credits_remain()
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $agent = User::factory()->create([
@@ -1111,7 +1148,7 @@ class LeaveRequestControllerTest extends TestCase
             'email' => 'agent-vl-frac-zero@example.com',
         ]);
 
-        // Give agent 0.75 credits — floor(0.75) = 0, should block VL approval
+        // Give agent 0.75 credits — floor(0.75) = 0, all days convert to UPTO
         LeaveCredit::create([
             'user_id' => $agent->id,
             'year' => now()->year,
@@ -1134,7 +1171,7 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Show page should indicate insufficient credits
+        // Show page should indicate all days convert to UPTO
         $response = $this->actingAs($admin)->get(route('leave-requests.show', $leaveRequest));
 
         $response->assertStatus(200)
@@ -1142,10 +1179,12 @@ class LeaveRequestControllerTest extends TestCase
                 ->component('FormRequest/Leave/Show')
                 ->has('creditPreview')
                 ->where('creditPreview.should_deduct', false)
-                ->where('creditPreview.credits_to_deduct', 0)
+                ->where('creditPreview.convert_to_upto', true)
+                ->where('creditPreview.upto_days', 2)
+                ->has('suggestedDayStatuses')
             );
 
-        // Credits untouched
+        // Credits untouched (just preview)
         $credit = LeaveCredit::where('user_id', $agent->id)->first();
         $this->assertEquals(0, (float) $credit->credits_used);
         $this->assertEquals(0.75, (float) $credit->credits_balance);
@@ -1188,9 +1227,16 @@ class LeaveRequestControllerTest extends TestCase
             'status' => 'pending',
         ]);
 
-        // Dual approval (no explicit day_statuses → auto-assignment)
+        // Dual approval (with explicit day_statuses — required for SL)
+        $dayStatuses = [
+            ['date' => $startDate->format('Y-m-d'), 'status' => 'sl_credited'],
+            ['date' => $startDate->copy()->addDay()->format('Y-m-d'), 'status' => 'advised_absence'],
+            ['date' => $endDate->format('Y-m-d'), 'status' => 'advised_absence'],
+        ];
+
         $this->actingAs($admin)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'Admin approves fractional SL.',
+            'day_statuses' => $dayStatuses,
         ]);
         $this->actingAs($hr)->post(route('leave-requests.approve', $leaveRequest), [
             'review_notes' => 'HR approves fractional SL.',
