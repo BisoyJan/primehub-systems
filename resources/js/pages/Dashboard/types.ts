@@ -8,15 +8,16 @@ export type TabType =
     | 'it-concerns'
     | 'presence-insights'
     | 'stock-overview'
-    | 'personal';
+    | 'personal'
+    | 'coaching';
 
 export const ROLE_TABS: Record<UserRole, TabType[]> = {
-    'Super Admin': ['attendance', 'presence-insights', 'infrastructure', 'it-concerns', 'stock-overview'],
-    'Admin': ['attendance', 'presence-insights', 'infrastructure'],
-    'HR': ['attendance', 'presence-insights'],
+    'Super Admin': ['attendance', 'presence-insights', 'coaching', 'infrastructure', 'it-concerns', 'stock-overview'],
+    'Admin': ['attendance', 'presence-insights', 'coaching', 'infrastructure'],
+    'HR': ['attendance', 'presence-insights', 'coaching'],
     'IT': ['infrastructure', 'it-concerns', 'stock-overview', 'attendance'],
-    'Team Lead': ['attendance', 'presence-insights'],
-    'Agent': ['personal', 'attendance', 'presence-insights'],
+    'Team Lead': ['attendance', 'presence-insights', 'coaching'],
+    'Agent': ['personal', 'attendance', 'presence-insights', 'coaching'],
     'Utility': ['personal', 'attendance'],
 };
 
@@ -27,19 +28,20 @@ export const TAB_CONFIG: Record<TabType, { label: string; iconName: string }> = 
     'presence-insights': { label: 'Presence Insights', iconName: 'UserCheck' },
     'stock-overview': { label: 'Stock Overview', iconName: 'Package' },
     'personal': { label: 'My Dashboard', iconName: 'User' },
+    'coaching': { label: 'Coaching', iconName: 'ClipboardCheck' },
 };
 
 // ─── Widget Types ────────────────────────────────────────────────────────────
 
-export type WidgetType = 'notifications' | 'user-accounts' | 'recent-activity' | 'biometric-anomalies' | 'pending-leave-approvals';
+export type WidgetType = 'notifications' | 'user-accounts' | 'recent-activity' | 'biometric-anomalies' | 'pending-leave-approvals' | 'coaching-follow-ups';
 
 export const ROLE_WIDGETS: Record<UserRole, WidgetType[]> = {
-    'Super Admin': ['notifications', 'pending-leave-approvals', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
-    'Admin': ['notifications', 'pending-leave-approvals', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
-    'HR': ['notifications', 'pending-leave-approvals', 'biometric-anomalies'],
+    'Super Admin': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
+    'Admin': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups', 'user-accounts', 'recent-activity', 'biometric-anomalies'],
+    'HR': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups', 'biometric-anomalies'],
     'IT': ['notifications'],
-    'Team Lead': ['notifications', 'pending-leave-approvals'],
-    'Agent': ['notifications'],
+    'Team Lead': ['notifications', 'pending-leave-approvals', 'coaching-follow-ups'],
+    'Agent': ['notifications', 'coaching-follow-ups'],
     'Utility': ['notifications'],
 };
 
@@ -165,6 +167,40 @@ export interface PendingLeaveApproval {
 export interface PendingLeaveApprovals {
     count: number;
     requests: PendingLeaveApproval[];
+}
+
+// ─── Coaching Widget Types ───────────────────────────────────────────────────
+
+export interface CoachingSummary {
+    status_counts: Record<string, number>;
+    total_agents: number;
+    pending_acks: number;
+    pending_reviews: number;
+    sessions_this_month: number;
+}
+
+export interface CoachingFollowUp {
+    id: number;
+    agent_name: string;
+    team_lead_name: string;
+    follow_up_date: string;
+    purpose_label: string;
+    session_date: string;
+}
+
+export interface NotCoachedAgent {
+    id: number;
+    name: string;
+    campaign: string;
+    coaching_status: string;
+    status_color: string;
+    last_coached_date: string | null;
+}
+
+export interface CoachingFollowUps {
+    follow_ups: CoachingFollowUp[];
+    not_coached_this_week: NotCoachedAgent[];
+    not_coached_count: number;
 }
 
 // ─── Phase 4: Enhanced Analytics Types ───────────────────────────────────────
@@ -465,4 +501,10 @@ export interface DashboardProps {
 
     /** Pending leave requests needing approval (TL/Admin/HR widget) */
     pendingLeaveApprovals?: PendingLeaveApprovals;
+
+    /** Coaching summary for dashboard widget (TL/Admin/HR) */
+    coachingSummary?: CoachingSummary;
+
+    /** Coaching follow-ups and agents not coached this week (TL/Admin/HR) */
+    coachingFollowUps?: CoachingFollowUps;
 }

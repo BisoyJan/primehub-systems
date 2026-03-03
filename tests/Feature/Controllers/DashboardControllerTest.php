@@ -6,6 +6,7 @@ namespace Tests\Feature\Controllers;
 
 use App\Models\EmployeeSchedule;
 use App\Models\User;
+use Database\Seeders\CoachingStatusSettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Cache;
 use PHPUnit\Framework\Attributes\Test;
@@ -341,5 +342,90 @@ class DashboardControllerTest extends TestCase
                     ->has('notificationSummary')
                 );
         }
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Coaching Widget Props
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[Test]
+    public function super_admin_receives_coaching_widget_data(): void
+    {
+        $this->seed(CoachingStatusSettingSeeder::class);
+
+        $this->actingAs($this->createUserForRole('Super Admin'))
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('dashboard')
+                ->has('coachingSummary')
+                ->has('coachingSummary.status_counts')
+                ->has('coachingSummary.total_agents')
+                ->has('coachingSummary.pending_acks')
+                ->has('coachingSummary.pending_reviews')
+                ->has('coachingSummary.sessions_this_month')
+                ->has('coachingFollowUps')
+                ->has('coachingFollowUps.follow_ups')
+                ->has('coachingFollowUps.not_coached_this_week')
+                ->has('coachingFollowUps.not_coached_count')
+            );
+    }
+
+    #[Test]
+    public function team_lead_receives_coaching_widget_data(): void
+    {
+        $this->seed(CoachingStatusSettingSeeder::class);
+
+        $this->actingAs($this->createUserForRole('Team Lead'))
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('dashboard')
+                ->has('coachingSummary')
+                ->has('coachingFollowUps')
+            );
+    }
+
+    #[Test]
+    public function hr_receives_coaching_widget_data(): void
+    {
+        $this->seed(CoachingStatusSettingSeeder::class);
+
+        $this->actingAs($this->createUserForRole('HR'))
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('dashboard')
+                ->has('coachingSummary')
+                ->has('coachingFollowUps')
+            );
+    }
+
+    #[Test]
+    public function agent_receives_personal_coaching_widget_data(): void
+    {
+        $this->seed(CoachingStatusSettingSeeder::class);
+
+        $this->actingAs($this->createUserForRole('Agent'))
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('dashboard')
+                ->has('coachingSummary')
+                ->has('coachingFollowUps')
+            );
+    }
+
+    #[Test]
+    public function it_role_does_not_receive_coaching_widget_data(): void
+    {
+        $this->actingAs($this->createUserForRole('IT'))
+            ->get(route('dashboard'))
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('dashboard')
+                ->missing('coachingSummary')
+                ->missing('coachingFollowUps')
+            );
     }
 }

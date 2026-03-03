@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Head, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Building2, Users, ClipboardList, UserCheck, Package, User } from 'lucide-react';
+import { Calendar, Building2, Users, ClipboardList, UserCheck, Package, User, ClipboardCheck } from 'lucide-react';
 import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import type { SharedData, UserRole } from '@/types';
 import type { BreadcrumbItem } from '@/types';
@@ -15,12 +15,14 @@ const PresenceInsightsTab = lazy(() => import('./Dashboard/tabs/PresenceInsights
 const AttendanceTab = lazy(() => import('./Dashboard/tabs/AttendanceTab').then(m => ({ default: m.AttendanceTab })));
 const StockOverviewTab = lazy(() => import('./Dashboard/tabs/StockOverviewTab').then(m => ({ default: m.StockOverviewTab })));
 const PersonalDashboardTab = lazy(() => import('./Dashboard/tabs/PersonalDashboardTab').then(m => ({ default: m.PersonalDashboardTab })));
+const CoachingTab = lazy(() => import('./Dashboard/tabs/CoachingTab').then(m => ({ default: m.CoachingTab })));
 // Widgets are small and always visible — no lazy loading needed
 import { NotificationSummaryWidget } from './Dashboard/widgets/NotificationSummaryWidget';
 import { UserAccountStatsWidget } from './Dashboard/widgets/UserAccountStatsWidget';
 import { RecentActivityWidget } from './Dashboard/widgets/RecentActivityWidget';
 import { BiometricAnomalyWidget } from './Dashboard/widgets/BiometricAnomalyWidget';
 import { PendingLeaveApprovalsWidget } from './Dashboard/widgets/PendingLeaveApprovalsWidget';
+import { CoachingFollowUpsWidget } from './Dashboard/widgets/CoachingFollowUpsWidget';
 import type { DashboardProps, TabType } from './Dashboard/types';
 import { ROLE_TABS, TAB_CONFIG, ROLE_WIDGETS } from './Dashboard/types';
 
@@ -39,6 +41,7 @@ const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string }>> = 
     'presence-insights': UserCheck,
     'stock-overview': Package,
     'personal': User,
+    'coaching': ClipboardCheck,
 };
 
 // Skeleton fallback for lazy-loaded tabs
@@ -94,6 +97,8 @@ export default function Dashboard({
     campaignPresence,
     pointsByCampaign,
     pendingLeaveApprovals,
+    coachingSummary,
+    coachingFollowUps,
 }: DashboardProps) {
     // Get user role from shared data
     const { auth } = usePage<SharedData>().props;
@@ -285,6 +290,19 @@ export default function Dashboard({
                                     </Suspense>
                                 </TabsContent>
                             )}
+
+                            {/* Coaching Tab */}
+                            {availableTabs.includes('coaching') && (
+                                <TabsContent value="coaching" className="space-y-6">
+                                    <Suspense fallback={<TabSkeleton />}>
+                                        <CoachingTab
+                                            coachingSummary={coachingSummary}
+                                            coachingFollowUps={coachingFollowUps}
+                                            isAgent={userRole === 'Agent'}
+                                        />
+                                    </Suspense>
+                                </TabsContent>
+                            )}
                         </Tabs>
                     </div>
 
@@ -301,6 +319,9 @@ export default function Dashboard({
                             )}
                             {availableWidgets.includes('pending-leave-approvals') && (
                                 <PendingLeaveApprovalsWidget pendingLeaveApprovals={pendingLeaveApprovals} />
+                            )}
+                            {availableWidgets.includes('coaching-follow-ups') && (
+                                <CoachingFollowUpsWidget coachingFollowUps={coachingFollowUps} />
                             )}
                             {availableWidgets.includes('user-accounts') && (
                                 <UserAccountStatsWidget userAccountStats={userAccountStats} />

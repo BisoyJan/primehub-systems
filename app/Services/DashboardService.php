@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\Campaign;
+use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
 use App\Models\LeaveRequest;
@@ -31,6 +32,10 @@ class DashboardService
      * - getPointsByCampaign()
      */
     private ?Collection $activeAttendancePoints = null;
+
+    public function __construct(
+        protected CoachingDashboardService $coachingDashboardService,
+    ) {}
 
     /**
      * Get active (non-excused, non-expired) attendance points with user relation.
@@ -272,6 +277,12 @@ class DashboardService
         // Pending leave approvals — Team Lead, Admin, HR, Super Admin
         if (in_array($role, ['Super Admin', 'Admin', 'HR', 'Team Lead'])) {
             $data['pendingLeaveApprovals'] = $this->getPendingLeaveApprovals($user);
+        }
+
+        // Coaching widgets — Super Admin, Admin, HR, Team Lead, Agent
+        if (in_array($role, ['Super Admin', 'Admin', 'HR', 'Team Lead', 'Agent'])) {
+            $data['coachingSummary'] = $this->getCoachingSummary($user);
+            $data['coachingFollowUps'] = $this->getCoachingFollowUps($user);
         }
 
         return $data;
@@ -1315,6 +1326,205 @@ class DashboardService
                     'created_at' => $leave->created_at->toISOString(),
                 ];
             })->toArray(),
+        ];
+    }
+
+    /**
+     * Get coaching summary data for dashboard widget.
+     *
+     * @return array{status_counts: array<string, int>, total_agents: int, pending_acks: int, pending_reviews: int, sessions_this_month: int}
+     */
+    public function getCoachingSummary(User $user): array
+    {
+        $role = $user->role;
+        $statusCounts = [
+            'Coaching Done' => 0,
+            'Needs Coaching' => 0,
+            'Badly Needs Coaching' => 0,
+            'Please Coach ASAP' => 0,
+            'No Record' => 0,
+        ];
+        $totalAgents = 0;
+
+        // Agent: personal coaching summary only
+        if ($role === 'Agent') {
+            $status = $this->coachingDashboardService->getCoachingStatus($user->id);
+            $statusCounts[$status] = 1;
+            $totalAgents = 1;
+
+            return [
+                'status_counts' => $statusCounts,
+                'total_agents' => $totalAgents,
+                'pending_acks' => CoachingSession::where('agent_id', $user->id)
+                    ->where('ack_status', 'Pending')->count(),
+                'pending_reviews' => CoachingSession::where('agent_id', $user->id)
+                    ->where('compliance_status', 'For_Review')->count(),
+                'sessions_this_month' => CoachingSession::where('agent_id', $user->id)
+                    ->whereMonth('session_date', Carbon::now()->month)
+                    ->whereYear('session_date', Carbon::now()->year)
+                    ->count(),
+            ];
+        }
+
+        if ($role === 'Team Lead') {
+            $dashboardData = $this->coachingDashboardService->getTeamLeadDashboardData($user);
+            $statusCounts = $dashboardData['status_counts'];
+            $totalAgents = $dashboardData['total_agents'];
+        } else {
+            // Admin, HR, Super Admin — org-wide
+            $dashboardData = $this->coachingDashboardService->getComplianceDashboardData();
+            $statusCounts = $dashboardData['status_counts'];
+            $totalAgents = $dashboardData['total_agents'];
+        }
+
+        $pendingAcks = CoachingSession::where('ack_status', 'Pending')->count();
+        $pendingReviews = CoachingSession::where('compliance_status', 'For_Review')->count();
+        $sessionsThisMonth = CoachingSession::whereMonth('session_date', Carbon::now()->month)
+            ->whereYear('session_date', Carbon::now()->year)
+            ->count();
+
+        // Scope pending counts for Team Lead
+        if ($role === 'Team Lead') {
+            $pendingAcks = CoachingSession::where('team_lead_id', $user->id)
+                ->where('ack_status', 'Pending')
+                ->count();
+            $pendingReviews = CoachingSession::where('team_lead_id', $user->id)
+                ->where('compliance_status', 'For_Review')
+                ->count();
+            $sessionsThisMonth = CoachingSession::where('team_lead_id', $user->id)
+                ->whereMonth('session_date', Carbon::now()->month)
+                ->whereYear('session_date', Carbon::now()->year)
+                ->count();
+        }
+
+        return [
+            'status_counts' => $statusCounts,
+            'total_agents' => $totalAgents,
+            'pending_acks' => $pendingAcks,
+            'pending_reviews' => $pendingReviews,
+            'sessions_this_month' => $sessionsThisMonth,
+        ];
+    }
+
+    /**
+     * Get upcoming coaching follow-ups and agents not coached this week.
+     *
+     * @return array{follow_ups: array, not_coached_this_week: array}
+     */
+    public function getCoachingFollowUps(User $user): array
+    {
+        $role = $user->role;
+        $today = Carbon::today();
+        $sevenDaysFromNow = Carbon::today()->addDays(7);
+        $weekStart = Carbon::now()->startOfWeek(Carbon::MONDAY);
+        $weekEnd = Carbon::now()->endOfWeek(Carbon::SUNDAY);
+
+        // ─── Agent: personal follow-ups only ────────────────────────
+        if ($role === 'Agent') {
+            $followUps = CoachingSession::with(['agent:id,first_name,last_name', 'teamLead:id,first_name,last_name'])
+                ->where('agent_id', $user->id)
+                ->whereNotNull('follow_up_date')
+                ->whereBetween('follow_up_date', [$today, $sevenDaysFromNow])
+                ->orderBy('follow_up_date')
+                ->limit(10)
+                ->get()
+                ->map(function (CoachingSession $session) {
+                    return [
+                        'id' => $session->id,
+                        'agent_name' => ($session->agent?->last_name ?? '').', '.($session->agent?->first_name ?? ''),
+                        'team_lead_name' => ($session->teamLead?->last_name ?? '').', '.($session->teamLead?->first_name ?? ''),
+                        'follow_up_date' => $session->follow_up_date->format('Y-m-d'),
+                        'purpose_label' => CoachingSession::PURPOSE_LABELS[$session->purpose] ?? $session->purpose,
+                        'session_date' => $session->session_date->format('Y-m-d'),
+                    ];
+                })->toArray();
+
+            return [
+                'follow_ups' => $followUps,
+                'not_coached_this_week' => [],
+                'not_coached_count' => 0,
+            ];
+        }
+
+        // ─── Upcoming follow-ups ────────────────────────────────────
+        $followUpQuery = CoachingSession::with(['agent:id,first_name,last_name', 'teamLead:id,first_name,last_name'])
+            ->whereNotNull('follow_up_date')
+            ->whereBetween('follow_up_date', [$today, $sevenDaysFromNow])
+            ->orderBy('follow_up_date');
+
+        if ($role === 'Team Lead') {
+            $followUpQuery->where('team_lead_id', $user->id);
+        }
+
+        $followUps = $followUpQuery->limit(10)->get()->map(function (CoachingSession $session) {
+            return [
+                'id' => $session->id,
+                'agent_name' => ($session->agent?->last_name ?? '').', '.($session->agent?->first_name ?? ''),
+                'team_lead_name' => ($session->teamLead?->last_name ?? '').', '.($session->teamLead?->first_name ?? ''),
+                'follow_up_date' => $session->follow_up_date->format('Y-m-d'),
+                'purpose_label' => CoachingSession::PURPOSE_LABELS[$session->purpose] ?? $session->purpose,
+                'session_date' => $session->session_date->format('Y-m-d'),
+            ];
+        })->toArray();
+
+        // ─── Agents not coached this week ───────────────────────────
+        $agentIds = collect();
+
+        if ($role === 'Team Lead') {
+            $campaignId = $user->activeSchedule?->campaign_id;
+            if ($campaignId) {
+                $agentIds = EmployeeSchedule::where('campaign_id', $campaignId)
+                    ->where('is_active', true)
+                    ->whereHas('user', function ($q) {
+                        $q->where('role', 'Agent')
+                            ->where('is_active', true)
+                            ->where('is_approved', true);
+                    })
+                    ->pluck('user_id')
+                    ->unique();
+            }
+        } else {
+            // Admin, HR, Super Admin — all active agents
+            $agentIds = User::where('role', 'Agent')
+                ->where('is_active', true)
+                ->where('is_approved', true)
+                ->pluck('id');
+        }
+
+        // Agent IDs who HAVE been coached this week
+        $coachedThisWeek = CoachingSession::whereBetween('session_date', [$weekStart, $weekEnd])
+            ->whereIn('agent_id', $agentIds)
+            ->pluck('agent_id')
+            ->unique();
+
+        // Agents NOT coached this week
+        $notCoachedIds = $agentIds->diff($coachedThisWeek);
+
+        $notCoachedThisWeek = User::whereIn('id', $notCoachedIds)
+            ->with('activeSchedule.campaign:id,name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(15)
+            ->get()
+            ->map(function (User $agent) {
+                $status = $this->coachingDashboardService->getCoachingStatus($agent->id);
+
+                return [
+                    'id' => $agent->id,
+                    'name' => ($agent->last_name ?? '').', '.($agent->first_name ?? ''),
+                    'campaign' => $agent->activeSchedule?->campaign?->name ?? 'N/A',
+                    'coaching_status' => $status,
+                    'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
+                    'last_coached_date' => CoachingSession::where('agent_id', $agent->id)
+                        ->orderByDesc('session_date')
+                        ->value('session_date')?->format('Y-m-d'),
+                ];
+            })->toArray();
+
+        return [
+            'follow_ups' => $followUps,
+            'not_coached_this_week' => $notCoachedThisWeek,
+            'not_coached_count' => $notCoachedIds->count(),
         ];
     }
 }

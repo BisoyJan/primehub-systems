@@ -7,6 +7,7 @@ namespace Tests\Unit\Services;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\Campaign;
+use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
 use App\Models\LeaveCredit;
@@ -31,7 +32,7 @@ class DashboardServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new DashboardService;
+        $this->service = app(DashboardService::class);
     }
 
     #[Test]
@@ -158,7 +159,9 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_gets_all_dashboard_stats(): void
     {
-        $result = $this->service->getAllStats('Super Admin');
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         $this->assertArrayHasKey('totalStations', $result);
         $this->assertArrayHasKey('noPcs', $result);
@@ -230,7 +233,9 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_handles_empty_data_gracefully(): void
     {
-        $result = $this->service->getAllStats('Super Admin');
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         $this->assertEquals(0, $result['totalStations']['total']);
         $this->assertEquals(0, $result['noPcs']['total']);
@@ -240,7 +245,9 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_restricted_data_for_agent_role(): void
     {
-        $result = $this->service->getAllStats('Agent');
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         // Agent should NOT get infrastructure, IT concerns, stock, or admin widgets
         $this->assertArrayNotHasKey('totalStations', $result);
@@ -250,14 +257,17 @@ class DashboardServiceTest extends TestCase
         $this->assertArrayNotHasKey('recentActivityLogs', $result);
         $this->assertArrayNotHasKey('biometricAnomalies', $result);
 
-        // Agent SHOULD get presence insights
+        // Agent SHOULD get presence insights and coaching data
         $this->assertArrayHasKey('presenceInsights', $result);
+        $this->assertArrayHasKey('coachingSummary', $result);
+        $this->assertArrayHasKey('coachingFollowUps', $result);
     }
 
     #[Test]
     public function it_returns_it_focused_data_for_it_role(): void
     {
-        $result = $this->service->getAllStats('IT');
+        $user = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         // IT should get infrastructure, IT concerns, and stock
         $this->assertArrayHasKey('totalStations', $result);
@@ -449,7 +459,9 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_includes_phase4_data_for_super_admin(): void
     {
-        $result = $this->service->getAllStats('Super Admin');
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         $this->assertArrayHasKey('pointsEscalation', $result);
         $this->assertArrayHasKey('ncnsTrend', $result);
@@ -461,7 +473,9 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_excludes_phase4_campaign_data_for_hr_role(): void
     {
-        $result = $this->service->getAllStats('HR');
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $user = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         // HR gets escalation, NCNS trend, leave utilization — but NOT campaign data
         $this->assertArrayHasKey('pointsEscalation', $result);
@@ -507,12 +521,13 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_gets_user_account_stats(): void
     {
+        $admin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true, 'is_active' => true]);
         User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
         User::factory()->create(['role' => 'Agent', 'is_approved' => false, 'is_active' => true]);
         User::factory()->create(['role' => 'HR', 'is_approved' => true, 'is_active' => true]);
         User::factory()->create(['role' => 'Agent', 'is_active' => false, 'hired_date' => now()->subYear()]);
 
-        $result = $this->service->getUserAccountStats();
+        $result = $this->service->getUserAccountStats($admin);
 
         $this->assertArrayHasKey('total', $result);
         $this->assertArrayHasKey('by_role', $result);
@@ -701,7 +716,8 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_utility_role_restricted_data(): void
     {
-        $result = $this->service->getAllStats('Utility');
+        $user = User::factory()->create(['role' => 'Utility', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         // Utility should NOT get infrastructure, IT concerns, or any admin data
         $this->assertArrayNotHasKey('totalStations', $result);
@@ -717,23 +733,31 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_team_lead_data(): void
     {
-        $result = $this->service->getAllStats('Team Lead');
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $user = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         // Team Lead should get presence insights
         $this->assertArrayHasKey('presenceInsights', $result);
 
-        // Team Lead should NOT get infra, IT, stock, admin widgets
+        // Team Lead should NOT get infra, IT, stock
         $this->assertArrayNotHasKey('totalStations', $result);
         $this->assertArrayNotHasKey('itConcernStats', $result);
         $this->assertArrayNotHasKey('stockSummary', $result);
-        $this->assertArrayNotHasKey('userAccountStats', $result);
         $this->assertArrayNotHasKey('recentActivityLogs', $result);
+
+        // Team Lead SHOULD get userAccountStats and coaching data
+        $this->assertArrayHasKey('userAccountStats', $result);
+        $this->assertArrayHasKey('coachingSummary', $result);
+        $this->assertArrayHasKey('coachingFollowUps', $result);
     }
 
     #[Test]
     public function it_does_not_include_deprecated_ssd_hdd_in_all_stats(): void
     {
-        $result = $this->service->getAllStats('Super Admin');
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
+        $result = $this->service->getAllStats($user);
 
         $this->assertArrayNotHasKey('ssdPcs', $result);
         $this->assertArrayNotHasKey('hddPcs', $result);
@@ -901,5 +925,266 @@ class DashboardServiceTest extends TestCase
         $result = $this->service->getPendingLeaveApprovals($admin);
 
         $this->assertEquals(0, $result['count']);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Coaching Summary Widget
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[Test]
+    public function it_returns_coaching_summary_for_admin(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => User::factory()->create(['role' => 'Team Lead'])->id,
+            'session_date' => now(),
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        $result = $this->service->getCoachingSummary($admin);
+
+        $this->assertArrayHasKey('status_counts', $result);
+        $this->assertArrayHasKey('total_agents', $result);
+        $this->assertArrayHasKey('pending_acks', $result);
+        $this->assertArrayHasKey('pending_reviews', $result);
+        $this->assertArrayHasKey('sessions_this_month', $result);
+        $this->assertGreaterThanOrEqual(1, $result['pending_acks']);
+        $this->assertGreaterThanOrEqual(1, $result['sessions_this_month']);
+    }
+
+    #[Test]
+    public function it_returns_coaching_summary_scoped_to_team_lead(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $campaign = Campaign::factory()->create();
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $tl->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agent->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+
+        // Session by this TL
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now(),
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        // Session by a different TL — should not count in TL's pending
+        $otherTl = User::factory()->create(['role' => 'Team Lead']);
+        CoachingSession::factory()->create([
+            'agent_id' => User::factory()->create(['role' => 'Agent'])->id,
+            'team_lead_id' => $otherTl->id,
+            'session_date' => now(),
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        $result = $this->service->getCoachingSummary($tl);
+
+        $this->assertEquals(1, $result['pending_acks']);
+        $this->assertEquals(1, $result['sessions_this_month']);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Coaching Follow-ups Widget
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[Test]
+    public function it_returns_upcoming_follow_ups_within_7_days(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+
+        // Follow-up in 3 days — should appear
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now()->subDays(10),
+            'follow_up_date' => now()->addDays(3),
+        ]);
+
+        // Follow-up in 10 days — should NOT appear
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now()->subDays(20),
+            'follow_up_date' => now()->addDays(10),
+        ]);
+
+        $result = $this->service->getCoachingFollowUps($admin);
+
+        $this->assertCount(1, $result['follow_ups']);
+        $this->assertEquals($agent->id, CoachingSession::where('follow_up_date', now()->addDays(3)->format('Y-m-d'))->first()->agent_id);
+    }
+
+    #[Test]
+    public function it_identifies_agents_not_coached_this_week(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        // Agent coached this week — should NOT appear
+        $coachedAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+        CoachingSession::factory()->create([
+            'agent_id' => $coachedAgent->id,
+            'team_lead_id' => User::factory()->create(['role' => 'Team Lead'])->id,
+            'session_date' => now(),
+        ]);
+
+        // Agent NOT coached this week — should appear
+        $uncoachedAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+
+        $result = $this->service->getCoachingFollowUps($admin);
+
+        $notCoachedIds = collect($result['not_coached_this_week'])->pluck('id')->toArray();
+        $this->assertContains($uncoachedAgent->id, $notCoachedIds);
+        $this->assertNotContains($coachedAgent->id, $notCoachedIds);
+    }
+
+    #[Test]
+    public function it_excludes_inactive_agents_from_not_coached_list(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        // Inactive agent — should NOT appear
+        User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => false]);
+
+        // Active uncoached agent — should appear
+        $activeAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+
+        $result = $this->service->getCoachingFollowUps($admin);
+
+        $notCoachedIds = collect($result['not_coached_this_week'])->pluck('id')->toArray();
+        $this->assertContains($activeAgent->id, $notCoachedIds);
+    }
+
+    #[Test]
+    public function team_lead_follow_ups_are_scoped_to_own_sessions(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $campaign = Campaign::factory()->create();
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $tl->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+
+        // Follow-up by this TL — should appear
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now()->subDays(5),
+            'follow_up_date' => now()->addDays(2),
+        ]);
+
+        // Follow-up by another TL — should NOT appear
+        $otherTl = User::factory()->create(['role' => 'Team Lead']);
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $otherTl->id,
+            'session_date' => now()->subDays(3),
+            'follow_up_date' => now()->addDays(1),
+        ]);
+
+        $result = $this->service->getCoachingFollowUps($tl);
+
+        $this->assertCount(1, $result['follow_ups']);
+    }
+
+    // ────────────────────────────────────────────────────────────────────────
+    // Agent Personal Coaching Widgets
+    // ────────────────────────────────────────────────────────────────────────
+
+    #[Test]
+    public function it_returns_personal_coaching_summary_for_agent(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now(),
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        // Another agent's session should NOT count
+        $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        CoachingSession::factory()->create([
+            'agent_id' => $otherAgent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now(),
+            'ack_status' => 'Pending',
+        ]);
+
+        $result = $this->service->getCoachingSummary($agent);
+
+        $this->assertArrayHasKey('status_counts', $result);
+        $this->assertEquals(1, $result['total_agents']);
+        $this->assertEquals(1, $result['pending_acks']);
+        $this->assertEquals(1, $result['sessions_this_month']);
+    }
+
+    #[Test]
+    public function agent_follow_ups_are_scoped_to_own_sessions(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+        $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        // Follow-up for this agent
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now()->subDays(5),
+            'follow_up_date' => now()->addDays(3),
+        ]);
+
+        // Follow-up for another agent — should NOT appear
+        CoachingSession::factory()->create([
+            'agent_id' => $otherAgent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now()->subDays(3),
+            'follow_up_date' => now()->addDays(2),
+        ]);
+
+        $result = $this->service->getCoachingFollowUps($agent);
+
+        $this->assertCount(1, $result['follow_ups']);
+        $this->assertEmpty($result['not_coached_this_week']);
+        $this->assertEquals(0, $result['not_coached_count']);
     }
 }

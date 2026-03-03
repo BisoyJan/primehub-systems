@@ -109,6 +109,15 @@ export function CoachingFormFields({
             .slice(0, 50);
     }, [teamLeads, tlSearchQuery]);
 
+    // Follow-up date must be next week or later (next Monday onwards)
+    const nextMonday = useMemo(() => {
+        const d = new Date();
+        const day = d.getDay(); // 0=Sun, 1=Mon, ..., 6=Sat
+        const daysUntilNextMon = day === 0 ? 1 : 8 - day;
+        d.setDate(d.getDate() + daysUntilNextMon);
+        return d.toISOString().split('T')[0];
+    }, []);
+
     const handleCheckbox = (field: string, checked: boolean | 'indeterminate') => {
         setData(field, checked === true);
     };
@@ -442,8 +451,8 @@ export function CoachingFormFields({
                             value={String(data.follow_up_date || '')}
                             onChange={(val) => setData('follow_up_date', val)}
                             placeholder="Select follow-up date"
-                            minDate={String(data.session_date || '')}
-                            defaultMonth={String(data.session_date || '')}
+                            minDate={nextMonday}
+                            defaultMonth={nextMonday}
                         />
                         {errors.follow_up_date && <p className="text-red-600 text-sm mt-1">{errors.follow_up_date}</p>}
                     </div>

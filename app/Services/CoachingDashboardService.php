@@ -151,7 +151,9 @@ class CoachingDashboardService
         $agentIds = EmployeeSchedule::where('campaign_id', $campaignId)
             ->where('is_active', true)
             ->whereHas('user', function ($q) {
-                $q->where('role', 'Agent')->whereNull('deleted_at');
+                $q->where('role', 'Agent')
+                    ->where('is_active', true)
+                    ->whereNull('deleted_at');
             })
             ->pluck('user_id')
             ->unique()
@@ -168,6 +170,7 @@ class CoachingDashboardService
     public function getComplianceDashboardData(?array $filters = null): array
     {
         $query = User::where('role', 'Agent')
+            ->where('is_active', true)
             ->whereNull('deleted_at');
 
         if (isset($filters['campaign_id'])) {
@@ -288,7 +291,7 @@ class CoachingDashboardService
 
         // Get at-risk agents (No Record / Please Coach ASAP)
         $atRiskAgents = collect();
-        $allAgents = User::where('role', 'Agent')->whereNull('deleted_at')->pluck('id');
+        $allAgents = User::where('role', 'Agent')->where('is_active', true)->whereNull('deleted_at')->pluck('id');
         foreach ($allAgents as $agentId) {
             $status = $this->getCoachingStatus($agentId);
             if (in_array($status, [self::STATUS_NO_RECORD, self::STATUS_PLEASE_COACH_ASAP])) {

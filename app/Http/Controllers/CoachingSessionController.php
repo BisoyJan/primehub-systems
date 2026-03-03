@@ -109,6 +109,7 @@ class CoachingSessionController extends Controller
         if ($isAdmin) {
             $allAgents = User::where('role', 'Agent')
                 ->where('is_approved', true)
+                ->where('is_active', true)
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -117,7 +118,9 @@ class CoachingSessionController extends Controller
             $agentIds = EmployeeSchedule::where('campaign_id', $teamLeadCampaignId)
                 ->where('is_active', true)
                 ->whereHas('user', function ($q) {
-                    $q->where('role', 'Agent')->where('is_approved', true);
+                    $q->where('role', 'Agent')
+                        ->where('is_approved', true)
+                        ->where('is_active', true);
                 })
                 ->pluck('user_id')
                 ->unique();
@@ -168,6 +171,7 @@ class CoachingSessionController extends Controller
             // Admins: fetch all agents (frontend filters by selected TL's campaign)
             $agents = User::where('role', 'Agent')
                 ->where('is_approved', true)
+                ->where('is_active', true)
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
@@ -176,6 +180,7 @@ class CoachingSessionController extends Controller
             // Fetch team leads who have an active campaign schedule
             $teamLeads = User::where('role', 'Team Lead')
                 ->where('is_approved', true)
+                ->where('is_active', true)
                 ->whereHas('activeSchedule', fn ($q) => $q->whereNotNull('campaign_id'))
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
@@ -189,7 +194,8 @@ class CoachingSessionController extends Controller
                     ->where('is_active', true)
                     ->whereHas('user', function ($q) {
                         $q->where('role', 'Agent')
-                            ->where('is_approved', true);
+                            ->where('is_approved', true)
+                            ->where('is_active', true);
                     })
                     ->pluck('user_id')
                     ->unique();

@@ -127,6 +127,7 @@ class CoachingDashboardController extends Controller
         $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
         $teamLeads = User::where('role', 'Team Lead')
             ->where('is_approved', true)
+            ->where('is_active', true)
             ->orderBy('first_name')
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'middle_name', 'last_name']);

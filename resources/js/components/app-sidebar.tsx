@@ -37,7 +37,7 @@ interface NavItemConfig {
     title: string;
     href: string | { url: string } | (() => string);
     icon: LucideIcon;
-    permission?: string;
+    permission?: string | string[];
     badge?: number;
 }
 
@@ -173,14 +173,14 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     title: 'Dashboard',
                     href: coachingDashboard.url(),
                     icon: ClipboardCheck,
-                    permission: 'coaching.view_own',
+                    permission: ['coaching.view_own', 'coaching.view_team', 'coaching.view_all'],
                     badge: coachingPendingAck,
                 },
                 {
                     title: 'Sessions',
                     href: coachingSessionsIndex.url(),
                     icon: FileText,
-                    permission: 'coaching.view_own',
+                    permission: ['coaching.view_own', 'coaching.view_team', 'coaching.view_all'],
                 },
             ],
         },
@@ -256,7 +256,7 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
 const MAX_OPEN_GROUPS = 1;
 
 export function AppSidebar() {
-    const { can } = usePermission();
+    const { can, canAny } = usePermission();
     const { auth, coachingPendingAck } = usePage<SharedData>().props;
     const { state } = useSidebar();
 
@@ -289,7 +289,10 @@ export function AppSidebar() {
             .filter(item => {
                 // If no permission specified, show the item (e.g., Dashboard)
                 if (!item.permission) return true;
-                // Check if user has the required permission
+                // Check if user has any of the required permissions (array) or a single permission
+                if (Array.isArray(item.permission)) {
+                    return canAny(item.permission);
+                }
                 return can(item.permission);
             })
             .map(item => {
