@@ -48,6 +48,9 @@ class CoachingDashboardService
 
     /**
      * Get the coaching status for a specific agent.
+     *
+     * Threshold-based logic using configurable day ranges.
+     * No Critical severity override — severity is tracked separately on sessions.
      */
     public function getCoachingStatus(int $agentId): string
     {
@@ -55,16 +58,6 @@ class CoachingDashboardService
         $lastSession = CoachingSession::where('agent_id', $agentId)
             ->orderByDesc('session_date')
             ->first();
-
-        // Check for critical severity flag on any recent open session
-        $hasCritical = CoachingSession::where('agent_id', $agentId)
-            ->where('severity_flag', 'Critical')
-            ->where('compliance_status', '!=', 'Verified')
-            ->exists();
-
-        if ($hasCritical) {
-            return self::STATUS_PLEASE_COACH_ASAP;
-        }
 
         if (! $lastSession) {
             return self::STATUS_NO_RECORD;

@@ -1355,6 +1355,8 @@ class DashboardService
             return [
                 'status_counts' => $statusCounts,
                 'total_agents' => $totalAgents,
+                'coaching_status' => $status,
+                'total_sessions' => CoachingSession::where('agent_id', $user->id)->count(),
                 'pending_acks' => CoachingSession::where('agent_id', $user->id)
                     ->where('ack_status', 'Pending')->count(),
                 'pending_reviews' => CoachingSession::where('agent_id', $user->id)

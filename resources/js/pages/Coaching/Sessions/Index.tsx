@@ -210,7 +210,7 @@ export default function CoachingSessionsIndex() {
                             </div>
                             <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
                                 <span>
-                                    Last: <strong>{agentSummary.last_coached_date ?? 'N/A'}</strong>
+                                    Last: <strong>{agentSummary.last_coached_date ? new Date(agentSummary.last_coached_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</strong>
                                 </span>
                                 <span>
                                     Sessions: <strong>{agentSummary.total_sessions}</strong>

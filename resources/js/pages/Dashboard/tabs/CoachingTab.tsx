@@ -4,8 +4,6 @@ import { Link } from '@inertiajs/react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { Pie, PieChart, Cell, Label } from 'recharts';
 import {
     ClipboardCheck,
     Clock,
@@ -81,19 +79,196 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
 
     const { status_counts, total_agents, pending_acks, pending_reviews, sessions_this_month } = coachingSummary;
 
+    // Agent-specific: derive their current status from status_counts
+    const agentStatus = isAgent
+        ? (coachingSummary.coaching_status ?? Object.entries(status_counts).find(([, count]) => count > 0)?.[0] ?? 'No Record')
+        : null;
+    const agentTotalSessions = coachingSummary.total_sessions ?? 0;
+
     const urgentCount = (status_counts['Please Coach ASAP'] ?? 0) + (status_counts['Badly Needs Coaching'] ?? 0);
     const healthyCount = status_counts['Coaching Done'] ?? 0;
     const healthyPercentage = total_agents > 0 ? Math.round((healthyCount / total_agents) * 100) : 0;
 
-    // Chart data for pie chart
-    const pieData = Object.entries(status_counts)
-        .filter(([, count]) => count > 0)
-        .map(([status, count]) => ({
-            name: STATUS_CONFIG[status]?.label ?? status,
-            value: count,
-            fill: STATUS_CONFIG[status]?.fill ?? 'hsl(220, 10%, 60%)',
-        }));
+    // ─── Agent Layout ────────────────────────────────────────────────────────
+    if (isAgent && agentStatus) {
+        const statusConfig = STATUS_CONFIG[agentStatus];
+        const badgeClass = STATUS_BADGE_STYLES[agentStatus] ?? STATUS_BADGE_STYLES['No Record'];
 
+        return (
+            <div className="space-y-6">
+                {/* Status Banner */}
+                <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                >
+                    <Card>
+                        <CardContent className="flex flex-col items-center gap-4 py-8 sm:flex-row sm:justify-between">
+                            <div className="flex flex-col items-center gap-2 sm:flex-row sm:gap-4">
+                                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+                                    {agentStatus === 'Coaching Done' ? (
+                                        <UserCheck className="h-7 w-7 text-green-600" />
+                                    ) : agentStatus === 'Please Coach ASAP' ? (
+                                        <ShieldAlert className="h-7 w-7 text-red-600" />
+                                    ) : (
+                                        <ClipboardCheck className="h-7 w-7 text-muted-foreground" />
+                                    )}
+                                </div>
+                                <div className="text-center sm:text-left">
+                                    <p className="text-sm text-muted-foreground">My Coaching Status</p>
+                                    <Badge variant="outline" className={`${badgeClass} mt-1 text-sm px-3 py-1`}>
+                                        {statusConfig?.label ?? agentStatus}
+                                    </Badge>
+                                </div>
+                            </div>
+                            <div className="flex gap-6 text-center">
+                                <div>
+                                    <p className="text-2xl font-bold">{agentTotalSessions}</p>
+                                    <p className="text-xs text-muted-foreground">Total Sessions</p>
+                                </div>
+                                <div className="border-l pl-6">
+                                    <p className="text-2xl font-bold">{sessions_this_month}</p>
+                                    <p className="text-xs text-muted-foreground">This Month</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+
+                {/* Stat Cards */}
+                <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
+                    <StatCard
+                        title="Sessions This Month"
+                        value={sessions_this_month}
+                        icon={TrendingUp}
+                        description={agentTotalSessions > 0 ? `${agentTotalSessions} total all time` : undefined}
+                        onClick={() => { }}
+                        variant="default"
+                        delay={0}
+                    />
+                    <StatCard
+                        title="Pending Acks"
+                        value={pending_acks}
+                        icon={Clock}
+                        description={pending_acks > 0 ? 'Action needed' : 'All acknowledged'}
+                        onClick={() => { }}
+                        variant={pending_acks > 0 ? 'warning' : 'success'}
+                        delay={0.05}
+                    />
+                    <StatCard
+                        title="Pending Reviews"
+                        value={pending_reviews}
+                        icon={FileCheck}
+                        description={pending_reviews > 0 ? 'Under review' : 'All reviewed'}
+                        onClick={() => { }}
+                        variant={pending_reviews > 0 ? 'warning' : 'success'}
+                        delay={0.1}
+                    />
+                </div>
+
+                {/* Follow-ups & Quick Links */}
+                <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
+                    {/* Upcoming Follow-ups */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.2 }}
+                    >
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                    <Clock className="h-5 w-5" />
+                                    Upcoming Follow-ups
+                                </CardTitle>
+                                <CardDescription>Your scheduled follow-up sessions this week</CardDescription>
+                            </CardHeader>
+                            <CardContent>
+                                {coachingFollowUps && coachingFollowUps.follow_ups.length > 0 ? (
+                                    <div className="space-y-2">
+                                        {coachingFollowUps.follow_ups.map((fu) => (
+                                            <Link
+                                                key={fu.id}
+                                                href={`/coaching/sessions/${fu.id}`}
+                                                className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                                            >
+                                                <div className="min-w-0">
+                                                    <p className="text-sm font-medium truncate">{fu.purpose_label}</p>
+                                                    <p className="text-xs text-muted-foreground">
+                                                        with {fu.team_lead_name}
+                                                    </p>
+                                                </div>
+                                                <Badge variant="outline" className="text-xs shrink-0">
+                                                    {new Date(fu.follow_up_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                                </Badge>
+                                            </Link>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-muted-foreground text-center py-6">
+                                        No upcoming follow-ups this week.
+                                    </p>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+
+                    {/* Quick Actions */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.4, delay: 0.25 }}
+                        className="space-y-4"
+                    >
+                        {/* Pending Acks Alert */}
+                        {pending_acks > 0 && (
+                            <Card className="border-yellow-500/30">
+                                <CardContent className="flex items-center gap-3 py-4">
+                                    <Clock className="h-5 w-5 text-yellow-600 shrink-0" />
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm font-medium">
+                                            You have {pending_acks} pending acknowledgement{pending_acks > 1 ? 's' : ''}
+                                        </p>
+                                        <p className="text-xs text-muted-foreground">Please review and acknowledge your coaching sessions</p>
+                                    </div>
+                                    <Button variant="outline" size="sm" asChild>
+                                        <Link href="/coaching/sessions">View</Link>
+                                    </Button>
+                                </CardContent>
+                            </Card>
+                        )}
+
+                        {/* Quick Links */}
+                        <Card>
+                            <CardHeader>
+                                <CardTitle className="flex items-center gap-2 text-base">
+                                    <ExternalLink className="h-5 w-5" />
+                                    Quick Links
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                                <Button variant="outline" asChild className="w-full justify-start">
+                                    <Link href="/coaching/dashboard" className="flex items-center gap-2">
+                                        <ClipboardCheck className="h-4 w-4" />
+                                        Coaching Dashboard
+                                        <ExternalLink className="h-3 w-3 ml-auto" />
+                                    </Link>
+                                </Button>
+                                <Button variant="outline" asChild className="w-full justify-start">
+                                    <Link href="/coaching/sessions" className="flex items-center gap-2">
+                                        <FileCheck className="h-4 w-4" />
+                                        My Sessions
+                                        <ExternalLink className="h-3 w-3 ml-auto" />
+                                    </Link>
+                                </Button>
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                </div>
+            </div>
+        );
+    }
+
+    // ─── Non-Agent Layout (Team Lead / Admin / HR / Super Admin) ─────────────
     return (
         <div className="space-y-6">
             {/* Status Stat Cards */}
@@ -106,7 +281,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                         icon={getStatIcon(status)}
                         description={
                             total_agents > 0
-                                ? `${Math.round((count / total_agents) * 100)}% of ${isAgent ? 'sessions' : 'agents'}`
+                                ? `${Math.round((count / total_agents) * 100)}% of agents`
                                 : undefined
                         }
                         onClick={() => { }}
@@ -118,98 +293,65 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
 
             {/* Main Content Grid */}
             <div className="grid gap-6 grid-cols-1 lg:grid-cols-2">
-                {/* Coaching Status Chart */}
+                {/* Not Coached This Week */}
                 <motion.div
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.4, delay: 0.25 }}
                 >
-                    <Card>
+                    <Card className="h-full">
                         <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <TrendingUp className="h-5 w-5" />
-                                {isAgent ? 'My Coaching Status' : 'Coaching Status Distribution'}
+                            <CardTitle className="flex items-center justify-between">
+                                <span className="flex items-center gap-2">
+                                    <ShieldAlert className="h-5 w-5 text-amber-600" />
+                                    Not Coached This Week
+                                </span>
+                                {coachingFollowUps && coachingFollowUps.not_coached_count > 0 && (
+                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs">
+                                        {coachingFollowUps.not_coached_count} agents
+                                    </Badge>
+                                )}
                             </CardTitle>
                             <CardDescription>
-                                {isAgent
-                                    ? 'Your current coaching standing'
-                                    : `${total_agents} total agents tracked`
-                                }
+                                Agents who haven't been coached this week
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            {pieData.length > 0 ? (
-                                <ChartContainer config={chartConfig} className="mx-auto aspect-square max-h-[280px]">
-                                    <PieChart>
-                                        <ChartTooltip
-                                            cursor={false}
-                                            content={<ChartTooltipContent hideLabel />}
-                                        />
-                                        <Pie
-                                            data={pieData}
-                                            dataKey="value"
-                                            nameKey="name"
-                                            innerRadius={60}
-                                            strokeWidth={5}
-                                        >
-                                            {pieData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.fill} />
-                                            ))}
-                                            <Label
-                                                content={({ viewBox }) => {
-                                                    if (viewBox && 'cx' in viewBox && 'cy' in viewBox) {
-                                                        return (
-                                                            <text
-                                                                x={viewBox.cx}
-                                                                y={viewBox.cy}
-                                                                textAnchor="middle"
-                                                                dominantBaseline="middle"
-                                                            >
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={viewBox.cy}
-                                                                    className="fill-foreground text-3xl font-bold"
-                                                                >
-                                                                    {healthyPercentage}%
-                                                                </tspan>
-                                                                <tspan
-                                                                    x={viewBox.cx}
-                                                                    y={(viewBox.cy || 0) + 24}
-                                                                    className="fill-muted-foreground text-sm"
-                                                                >
-                                                                    {isAgent ? 'Status' : 'Healthy'}
-                                                                </tspan>
-                                                            </text>
-                                                        );
-                                                    }
-                                                }}
-                                            />
-                                        </Pie>
-                                    </PieChart>
-                                </ChartContainer>
+                            {coachingFollowUps && coachingFollowUps.not_coached_count > 0 ? (
+                                <>
+                                    <div className="max-h-[320px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
+                                        {coachingFollowUps.not_coached_this_week.map((agent) => {
+                                            const badgeClass = STATUS_BADGE_STYLES[agent.coaching_status] ?? STATUS_BADGE_STYLES['No Record'];
+                                            return (
+                                                <Link
+                                                    key={agent.id}
+                                                    href={`/coaching/sessions/create?agent_id=${agent.id}`}
+                                                    className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                                                >
+                                                    <div className="min-w-0">
+                                                        <p className="text-sm font-medium truncate">{agent.name}</p>
+                                                        <p className="text-xs text-muted-foreground">{agent.campaign}</p>
+                                                    </div>
+                                                    <Badge variant="outline" className={`${badgeClass} text-[10px] px-1.5 shrink-0`}>
+                                                        {STATUS_CONFIG[agent.coaching_status]?.label ?? agent.coaching_status}
+                                                    </Badge>
+                                                </Link>
+                                            );
+                                        })}
+                                    </div>
+                                    {coachingFollowUps.not_coached_count > coachingFollowUps.not_coached_this_week.length && (
+                                        <p className="text-xs text-muted-foreground text-center mt-3">
+                                            +{coachingFollowUps.not_coached_count - coachingFollowUps.not_coached_this_week.length} more agents
+                                        </p>
+                                    )}
+                                </>
                             ) : (
-                                <div className="flex items-center justify-center py-12 text-muted-foreground">
-                                    No coaching sessions recorded yet.
+                                <div className="flex flex-col items-center justify-center py-12 text-center">
+                                    <UserCheck className="h-10 w-10 text-green-500 mb-3" />
+                                    <p className="text-sm font-medium text-green-700 dark:text-green-400">All agents coached this week!</p>
+                                    <p className="text-xs text-muted-foreground mt-1">Great job keeping the team on track.</p>
                                 </div>
                             )}
-
-                            {/* Legend */}
-                            <div className="mt-4 flex flex-wrap justify-center gap-3">
-                                {Object.entries(status_counts).map(([status, count]) => {
-                                    const cfg = STATUS_CONFIG[status];
-                                    if (!cfg) return null;
-                                    return (
-                                        <div key={status} className="flex items-center gap-1.5 text-xs">
-                                            <span
-                                                className="h-2.5 w-2.5 rounded-full shrink-0"
-                                                style={{ backgroundColor: cfg.fill }}
-                                            />
-                                            <span className="text-muted-foreground">{cfg.label}</span>
-                                            <span className="font-medium">{count}</span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
                         </CardContent>
                     </Card>
                 </motion.div>
@@ -226,10 +368,10 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                         <CardHeader>
                             <CardTitle className="flex items-center gap-2">
                                 <ClipboardCheck className="h-5 w-5" />
-                                {isAgent ? 'My Coaching Summary' : 'Coaching Summary'}
+                                Coaching Summary
                             </CardTitle>
                             <CardDescription>
-                                {isAgent ? 'Your coaching activity this month' : 'Overview of coaching activity and pending actions'}
+                                Overview of coaching activity and pending actions
                             </CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
@@ -237,7 +379,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                                 <div className="flex flex-col items-center rounded-lg border p-4">
                                     <Users className="h-5 w-5 text-muted-foreground mb-1" />
                                     <span className="text-2xl font-bold">{total_agents}</span>
-                                    <span className="text-xs text-muted-foreground">{isAgent ? 'Total Sessions' : 'Total Agents'}</span>
+                                    <span className="text-xs text-muted-foreground">Total Agents</span>
                                 </div>
                                 <div className="flex flex-col items-center rounded-lg border p-4">
                                     <TrendingUp className="h-5 w-5 text-muted-foreground mb-1" />
@@ -253,7 +395,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                                     <div className="flex items-center justify-between rounded-lg border p-3">
                                         <span className="flex items-center gap-2 text-sm">
                                             <Clock className="h-4 w-4 text-yellow-600" />
-                                            {isAgent ? 'Pending Acknowledgements' : 'Awaiting Acknowledgement'}
+                                            Awaiting Acknowledgement
                                         </span>
                                         <Badge variant="outline" className={`${pending_acks > 0 ? 'bg-yellow-500/10 text-yellow-700 dark:text-yellow-400 border-yellow-500/30' : ''}`}>
                                             {pending_acks}
@@ -272,7 +414,7 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                             </div>
 
                             {/* Urgency Alert */}
-                            {urgentCount > 0 && !isAgent && (
+                            {urgentCount > 0 && (
                                 <div className="rounded-lg border border-red-500/30 bg-red-500/5 p-3">
                                     <div className="flex items-center gap-2">
                                         <ShieldAlert className="h-4 w-4 text-red-600" />
@@ -285,54 +427,10 @@ export const CoachingTab: React.FC<CoachingTabProps> = ({
                         </CardContent>
                     </Card>
 
-                    {/* Not Coached This Week - Only for non-agents */}
-                    {!isAgent && coachingFollowUps && coachingFollowUps.not_coached_count > 0 && (
-                        <Card className="border-amber-500/30">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="flex items-center justify-between text-base">
-                                    <span className="flex items-center gap-2">
-                                        <ShieldAlert className="h-4 w-4 text-amber-600" />
-                                        Not Coached This Week
-                                    </span>
-                                    <Badge variant="outline" className="bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/30 text-xs">
-                                        {coachingFollowUps.not_coached_count} agents
-                                    </Badge>
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="max-h-[200px] overflow-y-auto space-y-2 pr-1 scrollbar-thin">
-                                    {coachingFollowUps.not_coached_this_week.map((agent) => {
-                                        const badgeClass = STATUS_BADGE_STYLES[agent.coaching_status] ?? STATUS_BADGE_STYLES['No Record'];
-                                        return (
-                                            <Link
-                                                key={agent.id}
-                                                href={`/coaching/sessions/create?agent_id=${agent.id}`}
-                                                className="flex items-center justify-between rounded-lg border p-2.5 hover:bg-muted/50 transition-colors"
-                                            >
-                                                <div className="min-w-0">
-                                                    <p className="text-sm font-medium truncate">{agent.name}</p>
-                                                    <p className="text-xs text-muted-foreground">{agent.campaign}</p>
-                                                </div>
-                                                <Badge variant="outline" className={`${badgeClass} text-[10px] px-1.5 shrink-0`}>
-                                                    {agent.coaching_status}
-                                                </Badge>
-                                            </Link>
-                                        );
-                                    })}
-                                </div>
-                                {coachingFollowUps.not_coached_count > coachingFollowUps.not_coached_this_week.length && (
-                                    <p className="text-xs text-muted-foreground text-center mt-2">
-                                        +{coachingFollowUps.not_coached_count - coachingFollowUps.not_coached_this_week.length} more agents
-                                    </p>
-                                )}
-                            </CardContent>
-                        </Card>
-                    )}
-
                     {/* Quick Links */}
                     <div className="flex flex-col sm:flex-row gap-2">
                         <Button variant="outline" asChild className="flex-1">
-                            <Link href="/coaching" className="flex items-center gap-2">
+                            <Link href="/coaching/dashboard" className="flex items-center gap-2">
                                 <ClipboardCheck className="h-4 w-4" />
                                 Coaching Dashboard
                                 <ExternalLink className="h-3 w-3 ml-auto" />

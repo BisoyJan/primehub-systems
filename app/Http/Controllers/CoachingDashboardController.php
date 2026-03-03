@@ -92,8 +92,8 @@ class CoachingDashboardController extends Controller
         $recentSessions = CoachingSession::with(['agent'])
             ->forTeamLead($user->id)
             ->orderByDesc('session_date')
-            ->limit(10)
-            ->get();
+            ->paginate(15)
+            ->withQueryString();
 
         $campaignName = $user->activeSchedule?->campaign?->name ?? 'N/A';
 

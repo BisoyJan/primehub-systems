@@ -25,7 +25,7 @@ class CoachingDashboardServiceTest extends TestCase
         $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
     }
 
-    // ─── Status Calculation Tests ───────────────────────────────────
+    // ─── Status Calculation Tests (Threshold-Based) ──────────────
 
     #[Test]
     public function returns_coaching_done_when_session_within_15_days(): void
@@ -113,7 +113,7 @@ class CoachingDashboardServiceTest extends TestCase
     }
 
     #[Test]
-    public function returns_please_coach_asap_when_critical_severity_flag(): void
+    public function returns_coaching_done_even_with_critical_severity(): void
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
@@ -125,7 +125,28 @@ class CoachingDashboardServiceTest extends TestCase
 
         $status = $this->service->getCoachingStatus($agent->id);
 
-        $this->assertEquals(CoachingDashboardService::STATUS_PLEASE_COACH_ASAP, $status);
+        // Critical severity no longer overrides — status is purely time-based
+        $this->assertEquals(CoachingDashboardService::STATUS_COACHING_DONE, $status);
+    }
+
+    #[Test]
+    public function status_respects_custom_thresholds(): void
+    {
+        // Change coaching_done_max_days to 5
+        CoachingStatusSetting::where('key', 'coaching_done_max_days')->update(['value' => 5]);
+        CoachingStatusSetting::clearCache();
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'session_date' => now()->subDays(7),
+            'severity_flag' => 'Normal',
+        ]);
+
+        $status = $this->service->getCoachingStatus($agent->id);
+
+        // With threshold at 5 days, 7 days ago = needs coaching
+        $this->assertEquals(CoachingDashboardService::STATUS_NEEDS_COACHING, $status);
     }
 
     // ─── Agent Summary Tests ────────────────────────────────────────
@@ -254,27 +275,5 @@ class CoachingDashboardServiceTest extends TestCase
 
         $this->assertCount(1, $queueData['unacknowledged']);
         $this->assertCount(1, $queueData['for_review']);
-    }
-
-    // ─── Custom Threshold Tests ─────────────────────────────────────
-
-    #[Test]
-    public function status_respects_custom_thresholds(): void
-    {
-        // Change coaching_done_max_days to 5
-        CoachingStatusSetting::where('key', 'coaching_done_max_days')->update(['value' => 5]);
-        CoachingStatusSetting::clearCache();
-
-        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
-        CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'session_date' => now()->subDays(7),
-            'severity_flag' => 'Normal',
-        ]);
-
-        $status = $this->service->getCoachingStatus($agent->id);
-
-        // With threshold at 5 days, 7 days ago = needs coaching
-        $this->assertEquals(CoachingDashboardService::STATUS_NEEDS_COACHING, $status);
     }
 }

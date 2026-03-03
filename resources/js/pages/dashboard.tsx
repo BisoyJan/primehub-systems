@@ -81,7 +81,7 @@ export default function Dashboard({
     leaveCredits,
     leaveCalendarMonth,
     leaveConflicts,
-    // Phase 1 new props
+
     stockSummary,
     personalSchedule,
     personalRequests,
@@ -90,7 +90,7 @@ export default function Dashboard({
     userAccountStats,
     recentActivityLogs,
     biometricAnomalies,
-    // Phase 4 new props
+ 
     pointsEscalation,
     ncnsTrend,
     leaveUtilization,

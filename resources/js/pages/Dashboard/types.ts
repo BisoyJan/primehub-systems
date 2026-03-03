@@ -174,6 +174,8 @@ export interface PendingLeaveApprovals {
 export interface CoachingSummary {
     status_counts: Record<string, number>;
     total_agents: number;
+    coaching_status?: string;
+    total_sessions?: number;
     pending_acks: number;
     pending_reviews: number;
     sessions_this_month: number;

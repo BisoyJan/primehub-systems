@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { Calendar, Eye, Plus, Filter, Users } from 'lucide-react';
+import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -58,9 +59,14 @@ interface Filters {
     date_to?: string;
 }
 
+interface PaginatedSessions {
+    data: CoachingSession[];
+    links: PaginationLink[];
+}
+
 interface Props extends InertiaPageProps {
     dashboardData: DashboardData;
-    recentSessions: CoachingSession[];
+    recentSessions: PaginatedSessions;
     campaignName: string;
     filters: Filters;
     statusColors: CoachingStatusColors;
@@ -238,7 +244,7 @@ export default function CoachingDashboardIndex() {
                 </div>
 
                 {/* Recent Sessions */}
-                {recentSessions.length > 0 && (
+                {recentSessions.data.length > 0 && (
                     <div className="space-y-2">
                         <h3 className="flex items-center gap-2 text-sm font-semibold">
                             <Calendar className="h-4 w-4" /> Recent Sessions
@@ -257,7 +263,7 @@ export default function CoachingDashboardIndex() {
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {recentSessions.map((session) => (
+                                    {recentSessions.data.map((session) => (
                                         <TableRow key={session.id}>
                                             <TableCell className="whitespace-nowrap">
                                                 {new Date(session.session_date).toLocaleDateString()}
@@ -289,7 +295,7 @@ export default function CoachingDashboardIndex() {
 
                         {/* Mobile recent sessions */}
                         <div className="space-y-3 md:hidden">
-                            {recentSessions.map((session) => (
+                            {recentSessions.data.map((session) => (
                                 <div key={session.id} className="rounded-lg border bg-card p-3 shadow-sm">
                                     <div className="flex items-start justify-between gap-2">
                                         <div>
@@ -314,6 +320,11 @@ export default function CoachingDashboardIndex() {
                                 </div>
                             ))}
                         </div>
+
+                        {/* Pagination */}
+                        {recentSessions.links && recentSessions.links.length > 3 && (
+                            <PaginationNav links={recentSessions.links} />
+                        )}
                     </div>
                 )}
             </div>

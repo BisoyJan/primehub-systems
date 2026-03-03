@@ -1003,6 +1003,42 @@ class DashboardServiceTest extends TestCase
         $this->assertEquals(1, $result['sessions_this_month']);
     }
 
+    #[Test]
+    public function it_returns_coaching_summary_with_agent_specific_fields(): void
+    {
+        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+
+        $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now(),
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        CoachingSession::factory()->create([
+            'agent_id' => $agent->id,
+            'team_lead_id' => $tl->id,
+            'session_date' => now()->subDays(1),
+            'ack_status' => 'Acknowledged',
+            'compliance_status' => 'For_Review',
+        ]);
+
+        $result = $this->service->getCoachingSummary($agent);
+
+        // Agent-specific fields
+        $this->assertArrayHasKey('coaching_status', $result);
+        $this->assertArrayHasKey('total_sessions', $result);
+        $this->assertIsString($result['coaching_status']);
+        $this->assertEquals(2, $result['total_sessions']);
+        $this->assertEquals(2, $result['sessions_this_month']);
+        $this->assertEquals(1, $result['pending_acks']);
+        $this->assertEquals(1, $result['pending_reviews']);
+    }
+
     // ────────────────────────────────────────────────────────────────────────
     // Coaching Follow-ups Widget
     // ────────────────────────────────────────────────────────────────────────
