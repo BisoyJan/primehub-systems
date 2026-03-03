@@ -33,6 +33,8 @@ class AssignDayStatusesRequest extends FormRequest
                     LeaveRequestDay::STATUS_SL_CREDITED,
                     LeaveRequestDay::STATUS_NCNS,
                     LeaveRequestDay::STATUS_ADVISED_ABSENCE,
+                    LeaveRequestDay::STATUS_VL_CREDITED,
+                    LeaveRequestDay::STATUS_UPTO,
                 ]),
             ],
             'day_statuses.*.notes' => ['nullable', 'string', 'max:500'],

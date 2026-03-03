@@ -655,6 +655,15 @@ class LeaveRequestController extends Controller
 
             DB::commit();
 
+            // Notify agent if VL credits are insufficient (informational)
+            if ($leaveRequest->leave_type === 'VL' && ($validation['insufficient_vl_credits'] ?? false)) {
+                $this->notificationService->notifyLeaveRequestInsufficientVlCredits(
+                    $targetUser->id,
+                    $daysRequested,
+                    $leaveRequest->id
+                );
+            }
+
             // Send confirmation email to the employee (outside transaction to prevent rollback on mail failure)
             try {
                 if ($targetUser->email && filter_var($targetUser->email, FILTER_VALIDATE_EMAIL)) {
@@ -669,8 +678,13 @@ class LeaveRequestController extends Controller
                 // Don't fail the request just because email failed
             }
 
+            $flashMessage = 'Leave request submitted successfully.';
+            if ($leaveRequest->leave_type === 'VL' && ($validation['insufficient_vl_credits'] ?? false)) {
+                $flashMessage .= ' Note: You have insufficient VL credits. Some days may be converted to UPTO (Unpaid Time Off) upon approval.';
+            }
+
             return redirect()->route('leave-requests.show', $leaveRequest)
-                ->with('success', 'Leave request submitted successfully.');
+                ->with('success', $flashMessage);
         } catch (\Exception $e) {
             DB::rollBack();
 
@@ -829,11 +843,11 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Per-day statuses for SL requests (existing assigned days)
+        // Per-day statuses for SL and VL requests (existing assigned days)
         $leaveRequestDays = null;
         $suggestedDayStatuses = null;
 
-        if ($leaveRequest->leave_type === 'SL') {
+        if (in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
             // Load existing per-day statuses if any
             $leaveRequestDays = $leaveRequest->days->map(function ($day) {
                 return [
@@ -849,7 +863,7 @@ class LeaveRequestController extends Controller
                 ];
             });
 
-            // For pending SL requests, generate suggested day statuses for the approval UI
+            // For pending requests, generate suggested day statuses for the approval UI
             if ($leaveRequest->status === 'pending' && $isAdmin) {
                 $startDate = Carbon::parse($leaveRequest->start_date);
                 $endDate = Carbon::parse($leaveRequest->end_date);
@@ -873,9 +887,16 @@ class LeaveRequestController extends Controller
                 }
 
                 $leaveCreditService = app(LeaveCreditService::class);
-                $suggestedDayStatuses = $this->autoAssignSlDayStatuses($leaveRequest, $leaveCreditService, $allDates)
-                    ->values()
-                    ->toArray();
+
+                if ($leaveRequest->leave_type === 'SL') {
+                    $suggestedDayStatuses = $this->autoAssignSlDayStatuses($leaveRequest, $leaveCreditService, $allDates)
+                        ->values()
+                        ->toArray();
+                } elseif ($leaveRequest->leave_type === 'VL') {
+                    $suggestedDayStatuses = $this->autoAssignVlDayStatuses($leaveRequest, $leaveCreditService, $allDates)
+                        ->values()
+                        ->toArray();
+                }
             }
         }
 
@@ -1489,6 +1510,40 @@ class LeaveRequestController extends Controller
 
         $leaveCreditService = $this->leaveCreditService;
 
+        // Backend credit guard: day_statuses REQUIRED for SL/VL — admin must explicitly assign per-day statuses
+        // Exception: if the other approver already pre-stored day statuses, this approver doesn't need to re-send them
+        if (in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
+            $hasPreStoredDayStatuses = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->exists();
+
+            if (! $request->has('day_statuses') || empty($request->input('day_statuses'))) {
+                if (! $hasPreStoredDayStatuses) {
+                    return back()->withErrors(['error' => 'Per-day status assignment is required for '.($leaveRequest->leave_type === 'VL' ? 'Vacation' : 'Sick').' Leave requests. Each day must be assigned as credited or UPTO before approving.']);
+                }
+            } else {
+                $dayStatusesInput = $request->input('day_statuses');
+                $paidStatus = $leaveRequest->leave_type === 'VL' ? 'vl_credited' : 'sl_credited';
+                $creditedDaysCount = collect($dayStatusesInput)->where('status', $paidStatus)->count();
+                $pendingDaysCount = collect($dayStatusesInput)->where('status', 'pending')->count();
+
+                if ($pendingDaysCount > 0) {
+                    return back()->withErrors(['error' => 'All days must have a status assigned. '.$pendingDaysCount.' day(s) are still pending.']);
+                }
+
+                if ($leaveRequest->leave_type === 'VL') {
+                    $creditCheck = $leaveCreditService->checkVlCreditDeduction($leaveRequest->user, $leaveRequest);
+                } else {
+                    $creditCheck = $leaveCreditService->checkSlCreditDeduction($leaveRequest->user, $leaveRequest);
+                }
+
+                $availableCredits = (int) floor($creditCheck['credits_to_deduct'] ?? 0);
+                if ($creditedDaysCount > $availableCredits) {
+                    return back()->withErrors([
+                        'error' => "Cannot approve: {$creditedDaysCount} day(s) marked as {$paidStatus} but only {$availableCredits} credit(s) available. Reduce credited days or set excess days to ".($leaveRequest->leave_type === 'VL' ? 'UPTO' : 'Advised Absence').'.',
+                    ]);
+                }
+            }
+        }
+
         DB::beginTransaction();
         try {
             $updateData = [];
@@ -1506,8 +1561,8 @@ class LeaveRequestController extends Controller
             $leaveRequest->update($updateData);
             $leaveRequest->refresh();
 
-            // For SL: pre-store day statuses when admin provides them (before full approval)
-            if ($leaveRequest->leave_type === 'SL' && $request->has('day_statuses') && $request->input('day_statuses')) {
+            // For SL/VL: pre-store day statuses when admin provides them (before full approval)
+            if (in_array($leaveRequest->leave_type, ['SL', 'VL']) && $request->has('day_statuses') && $request->input('day_statuses')) {
                 $dayStatusesInput = $request->input('day_statuses');
                 // Delete any existing pre-stored records (in case of re-approval)
                 LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
@@ -1560,8 +1615,24 @@ class LeaveRequestController extends Controller
                     }
                     $this->handleSlApproval($leaveRequest, $leaveCreditService, $dayStatuses);
                 } elseif ($leaveRequest->leave_type === 'VL') {
-                    // Vacation Leave - credit check at approval with linked UPTO for excess
-                    $this->handleVlApproval($leaveRequest, $leaveCreditService);
+                    // Vacation Leave - per-day status assignment with UPTO conversion
+                    $vlDayStatuses = $request->input('day_statuses');
+                    if (! $vlDayStatuses) {
+                        $existingVlDays = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+                            ->orderBy('date')
+                            ->get();
+                        if ($existingVlDays->isNotEmpty()) {
+                            $vlDayStatuses = $existingVlDays->map(fn ($d) => [
+                                'date' => $d->date->format('Y-m-d'),
+                                'status' => $d->day_status,
+                                'notes' => $d->notes,
+                            ])->toArray();
+                            LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
+                        }
+                    } else {
+                        LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
+                    }
+                    $this->handleVlApproval($leaveRequest, $leaveCreditService, $vlDayStatuses);
                 } elseif ($leaveRequest->requiresCredits()) {
                     // Other credited leave types - normal deduction
                     $year = $request->input('credits_year', $leaveRequest->created_at->year);
@@ -1588,6 +1659,24 @@ class LeaveRequestController extends Controller
                     $leaveRequest->leave_type,
                     $leaveRequest->id
                 );
+
+                // If VL was approved with UPTO conversion, send additional notification
+                if ($leaveRequest->leave_type === 'VL') {
+                    $vlCreditedDays = $leaveRequest->days()->where('day_status', LeaveRequestDay::STATUS_VL_CREDITED)->count();
+                    $uptoDays = $leaveRequest->days()->where('day_status', LeaveRequestDay::STATUS_UPTO)->count();
+                    $totalDays = $vlCreditedDays + $uptoDays;
+
+                    if ($uptoDays > 0) {
+                        $this->notificationService->notifyLeaveRequestApprovedWithUptoConversion(
+                            $leaveRequest->user_id,
+                            $leaveRequest->leave_type,
+                            $vlCreditedDays,
+                            $uptoDays,
+                            $totalDays,
+                            $leaveRequest->id
+                        );
+                    }
+                }
 
                 DB::commit();
 
@@ -1676,12 +1765,41 @@ class LeaveRequestController extends Controller
             'denial_reason' => 'nullable|required_with:denied_dates|string|min:10',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto',
             'day_statuses.*.notes' => 'nullable|string|max:500',
         ]);
 
         $leaveCreditService = $this->leaveCreditService;
         $hasDeniedDates = ! empty($validated['denied_dates']);
+
+        // Backend credit guard: day_statuses REQUIRED for SL/VL — admin must explicitly assign per-day statuses
+        if (in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
+            if (empty($validated['day_statuses'])) {
+                return back()->withErrors(['error' => 'Per-day status assignment is required for '.($leaveRequest->leave_type === 'VL' ? 'Vacation' : 'Sick').' Leave requests. Each day must be assigned as credited or UPTO before force approving.']);
+            }
+
+            $dayStatusesInput = $validated['day_statuses'];
+            $paidStatus = $leaveRequest->leave_type === 'VL' ? 'vl_credited' : 'sl_credited';
+            $creditedDaysCount = collect($dayStatusesInput)->where('status', $paidStatus)->count();
+            $pendingDaysCount = collect($dayStatusesInput)->where('status', 'pending')->count();
+
+            if ($pendingDaysCount > 0) {
+                return back()->withErrors(['error' => 'All days must have a status assigned. '.$pendingDaysCount.' day(s) are still pending.']);
+            }
+
+            if ($leaveRequest->leave_type === 'VL') {
+                $creditCheck = $leaveCreditService->checkVlCreditDeduction($leaveRequest->user, $leaveRequest);
+            } else {
+                $creditCheck = $leaveCreditService->checkSlCreditDeduction($leaveRequest->user, $leaveRequest);
+            }
+
+            $availableCredits = (int) floor($creditCheck['credits_to_deduct'] ?? 0);
+            if ($creditedDaysCount > $availableCredits) {
+                return back()->withErrors([
+                    'error' => "Cannot approve: {$creditedDaysCount} day(s) marked as {$paidStatus} but only {$availableCredits} credit(s) available. Reduce credited days or set excess days to ".($leaveRequest->leave_type === 'VL' ? 'UPTO' : 'Advised Absence').'.',
+                ]);
+            }
+        }
 
         DB::beginTransaction();
         try {
@@ -1767,8 +1885,9 @@ class LeaveRequestController extends Controller
                 $dayStatuses = $request->input('day_statuses');
                 $this->handleSlApproval($leaveRequest, $leaveCreditService, $dayStatuses);
             } elseif ($leaveRequest->leave_type === 'VL') {
-                // Vacation Leave - credit check at approval with linked UPTO for excess
-                $this->handleVlApproval($leaveRequest, $leaveCreditService);
+                // Vacation Leave - per-day status assignment (VL Credited / UPTO)
+                $dayStatuses = $request->input('day_statuses');
+                $this->handleVlApproval($leaveRequest, $leaveCreditService, $dayStatuses);
             } elseif ($leaveRequest->requiresCredits()) {
                 // Other credited leave types - normal deduction
                 $year = $request->input('credits_year', $leaveRequest->created_at->year);
@@ -1795,6 +1914,24 @@ class LeaveRequestController extends Controller
                 $leaveRequest->leave_type,
                 $leaveRequest->id
             );
+
+            // If VL was approved with UPTO conversion, send additional notification
+            if ($leaveRequest->leave_type === 'VL') {
+                $vlCreditedDays = $leaveRequest->days()->where('day_status', LeaveRequestDay::STATUS_VL_CREDITED)->count();
+                $uptoDays = $leaveRequest->days()->where('day_status', LeaveRequestDay::STATUS_UPTO)->count();
+                $totalDays = $vlCreditedDays + $uptoDays;
+
+                if ($uptoDays > 0) {
+                    $this->notificationService->notifyLeaveRequestApprovedWithUptoConversion(
+                        $leaveRequest->user_id,
+                        $leaveRequest->leave_type,
+                        $vlCreditedDays,
+                        $uptoDays,
+                        $totalDays,
+                        $leaveRequest->id
+                    );
+                }
+            }
 
             DB::commit();
 
@@ -1838,8 +1975,8 @@ class LeaveRequestController extends Controller
     {
         $this->authorize('approve', $leaveRequest);
 
-        if ($leaveRequest->leave_type !== 'SL') {
-            return back()->withErrors(['error' => 'Per-day status assignment is only available for Sick Leave requests.']);
+        if (! in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
+            return back()->withErrors(['error' => 'Per-day status assignment is only available for Sick Leave and Vacation Leave requests.']);
         }
 
         if ($leaveRequest->status !== 'approved') {
@@ -1991,7 +2128,7 @@ class LeaveRequestController extends Controller
             'review_notes' => 'nullable|string|max:1000',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto',
             'day_statuses.*.notes' => 'nullable|string|max:500',
         ]);
 
@@ -2114,8 +2251,8 @@ class LeaveRequestController extends Controller
             if ($user->role === 'Team Lead') {
                 $leaveRequest->save();
 
-                // For SL: pre-store day statuses from TL for later use during full approval
-                if ($leaveRequest->leave_type === 'SL' && $request->has('day_statuses') && $request->input('day_statuses')) {
+                // For SL/VL: pre-store day statuses from TL for later use during full approval
+                if (in_array($leaveRequest->leave_type, ['SL', 'VL']) && $request->has('day_statuses') && $request->input('day_statuses')) {
                     LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
                     foreach ($request->input('day_statuses') as $dayData) {
                         LeaveRequestDay::create([
@@ -2147,9 +2284,9 @@ class LeaveRequestController extends Controller
             // Check if fully approved (Admin + HR, and TL if required)
             $fullyApproved = $adminApproved && $hrApproved && (! $tlRequired || $tlApproved);
 
-            // For non-TL partial approval where not yet fully approved, pre-store SL day statuses
+            // For non-TL partial approval where not yet fully approved, pre-store SL/VL day statuses
             if ($user->role !== 'Team Lead' && ! $fullyApproved) {
-                if ($leaveRequest->leave_type === 'SL' && $request->has('day_statuses') && $request->input('day_statuses')) {
+                if (in_array($leaveRequest->leave_type, ['SL', 'VL']) && $request->has('day_statuses') && $request->input('day_statuses')) {
                     LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
                     foreach ($request->input('day_statuses') as $dayData) {
                         LeaveRequestDay::create([
@@ -2195,8 +2332,24 @@ class LeaveRequestController extends Controller
                     }
                     $this->handleSlApproval($leaveRequest, $leaveCreditService, $dayStatuses);
                 } elseif ($leaveRequest->leave_type === 'VL') {
-                    // Vacation Leave - credit check at approval with linked UPTO for excess
-                    $this->handleVlApproval($leaveRequest, $leaveCreditService);
+                    // Vacation Leave - per-day status assignment with UPTO conversion
+                    $vlDayStatuses = $request->input('day_statuses');
+                    if (! $vlDayStatuses) {
+                        $existingVlDays = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+                            ->orderBy('date')
+                            ->get();
+                        if ($existingVlDays->isNotEmpty()) {
+                            $vlDayStatuses = $existingVlDays->map(fn ($d) => [
+                                'date' => $d->date->format('Y-m-d'),
+                                'status' => $d->day_status,
+                                'notes' => $d->notes,
+                            ])->toArray();
+                            LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
+                        }
+                    } else {
+                        LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
+                    }
+                    $this->handleVlApproval($leaveRequest, $leaveCreditService, $vlDayStatuses);
                 } elseif ($leaveRequest->requiresCredits()) {
                     // Other credited leave types - deduct for approved days only
                     $year = $leaveRequest->created_at->year;
@@ -2535,8 +2688,8 @@ class LeaveRequestController extends Controller
                 $this->rollbackAttendanceForCancelledLeave($leaveRequest);
             }
 
-            // Clean up per-day status records (SL per-day tracking)
-            if ($leaveRequest->leave_type === 'SL') {
+            // Clean up per-day status records (SL and VL per-day tracking)
+            if (in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
                 $leaveRequest->days()->delete();
             }
 
@@ -2937,45 +3090,124 @@ class LeaveRequestController extends Controller
     }
 
     /**
-     * Handle Vacation Leave approval with credit deduction logic.
-     * At approval time, re-checks credits and blocks if insufficient.
+     * Handle Vacation Leave approval with per-day status assignment.
+     *
+     * Each day in the VL request can be assigned one of:
+     * - vl_credited: Paid day (deducted from leave credits)
+     * - upto: UPTO — Unpaid Time Off (no credits deducted, attendance on_leave)
+     *
+     * If day_statuses are provided by the admin, use them directly.
+     * If not provided, auto-assign using credit logic (FIFO from earliest date).
+     *
+     * @param  array|null  $dayStatuses  Optional per-day statuses from admin
      */
-    protected function handleVlApproval(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService): void
+    protected function handleVlApproval(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService, ?array $dayStatuses = null): void
     {
         $user = $leaveRequest->user;
         $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
         $year = $startDate->year;
 
-        $creditCheck = $leaveCreditService->checkVlCreditDeduction($user, $leaveRequest);
-
-        // Use approved_days when there's a partial denial, otherwise use days_requested
-        $daysRequested = ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null)
-            ? (float) $leaveRequest->approved_days
-            : (float) $leaveRequest->days_requested;
-
-        if (! $creditCheck['should_deduct']) {
-            // Insufficient credits - this should not normally reach here since UI blocks it,
-            // but handle gracefully by updating attendance without credit deduction
-            $this->updateAttendanceForApprovedLeave($leaveRequest);
-
-            return;
+        // Get denied dates if this is a partial denial
+        $deniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $deniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
         }
 
-        // Full credits available - normal deduction
-        if ($leaveRequest->has_partial_denial && $leaveRequest->approved_days !== null) {
+        // Collect all valid dates in the leave period (excluding denied dates)
+        $allDates = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if (! in_array($dateStr, $deniedDates)) {
+                $allDates[] = $dateStr;
+            }
+            $currentDate->addDay();
+        }
+
+        // Build the per-day status map — day_statuses are now required for VL
+        if ($dayStatuses !== null) {
+            // Admin explicitly provided per-day statuses
+            $dayStatusMap = collect($dayStatuses)->keyBy('date');
+        } else {
+            // Fallback to auto-assign only for legacy/edge cases (e.g., pre-stored records)
+            \Log::warning("VL approval without explicit day_statuses for Leave Request #{$leaveRequest->id} — using auto-assign fallback");
+            $dayStatusMap = $this->autoAssignVlDayStatuses($leaveRequest, $leaveCreditService, $allDates);
+        }
+
+        // Store per-day statuses in leave_request_days table
+        $this->storeLeaveRequestDays($leaveRequest, $dayStatusMap);
+
+        // Process each day based on its assigned status
+        $creditedDays = 0;
+        $uptoDays = 0;
+
+        foreach ($allDates as $dateStr) {
+            $dayInfo = $dayStatusMap[$dateStr] ?? null;
+            $status = $dayInfo['status'] ?? LeaveRequestDay::STATUS_UPTO;
+            $dayNotes = $dayInfo['notes'] ?? null;
+
+            switch ($status) {
+                case LeaveRequestDay::STATUS_VL_CREDITED:
+                    // Paid day — set attendance to on_leave
+                    $this->createOrUpdateAttendanceForDate(
+                        $user,
+                        $dateStr,
+                        'on_leave',
+                        "VL Credited (Paid) - Leave Request #{$leaveRequest->id}".($dayNotes ? " - {$dayNotes}" : ''),
+                        $leaveRequest->id
+                    );
+                    $creditedDays++;
+                    break;
+
+                case LeaveRequestDay::STATUS_UPTO:
+                    // UPTO — Unpaid Time Off (attendance marked as on_leave, no violation)
+                    $this->createOrUpdateAttendanceForDate(
+                        $user,
+                        $dateStr,
+                        'on_leave',
+                        "UPTO (Unpaid) - VL Request #{$leaveRequest->id} - Insufficient VL credits".($dayNotes ? " - {$dayNotes}" : ''),
+                        $leaveRequest->id
+                    );
+                    $uptoDays++;
+                    break;
+
+                default:
+                    // Fallback — treat as UPTO (on_leave, no violation)
+                    $this->createOrUpdateAttendanceForDate(
+                        $user,
+                        $dateStr,
+                        'on_leave',
+                        "UPTO (Unpaid) - VL Request #{$leaveRequest->id}".($dayNotes ? " - {$dayNotes}" : ''),
+                        $leaveRequest->id
+                    );
+                    $uptoDays++;
+                    break;
+            }
+        }
+
+        // Deduct credits only for VL Credited days
+        if ($creditedDays > 0) {
+            // Only deduct from actually-accrued credit records.
+            // Future credit records are NOT pre-created — approval is blocked
+            // until the agent has accrued enough real credits.
+
+            // Temporarily set days_requested to credited days for deduction
             $originalDays = $leaveRequest->days_requested;
-            $leaveRequest->days_requested = $leaveRequest->approved_days;
+            $leaveRequest->days_requested = $creditedDays;
             $leaveCreditService->deductCredits($leaveRequest, $year);
             $leaveRequest->days_requested = $originalDays;
-            $leaveRequest->update(['credits_deducted' => $leaveRequest->approved_days]);
+
+            // deductCredits already sets credits_deducted to the actual amount deducted
         } else {
-            $leaveCreditService->deductCredits($leaveRequest, $year);
+            // No credited days — no deduction needed
             $leaveRequest->update([
-                'credits_deducted' => $daysRequested,
+                'credits_deducted' => 0,
             ]);
         }
-
-        $this->updateAttendanceForApprovedLeave($leaveRequest);
     }
 
     /**
@@ -3068,12 +3300,13 @@ class LeaveRequestController extends Controller
             $currentDate->addDay();
         }
 
-        // Build the per-day status map
+        // Build the per-day status map — day_statuses are now required for SL
         if ($dayStatuses !== null) {
             // Admin explicitly provided per-day statuses
             $dayStatusMap = collect($dayStatuses)->keyBy('date');
         } else {
-            // Auto-assign: use credit check logic to determine statuses
+            // Fallback to auto-assign only for legacy/edge cases (e.g., pre-stored records)
+            \Log::warning("SL approval without explicit day_statuses for Leave Request #{$leaveRequest->id} — using auto-assign fallback");
             $dayStatusMap = $this->autoAssignSlDayStatuses($leaveRequest, $leaveCreditService, $allDates);
         }
 
@@ -3210,6 +3443,54 @@ class LeaveRequestController extends Controller
                     'date' => $dateStr,
                     'status' => LeaveRequestDay::STATUS_ADVISED_ABSENCE,
                     'notes' => 'Auto-assigned: No SL credits remaining (UPTO - Unpaid)',
+                ];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
+     * Auto-assign per-day statuses for VL based on credit availability.
+     *
+     * Logic:
+     * 1. Check VL credit availability
+     * 2. First N days get vl_credited (up to available credits, FIFO from earliest date)
+     * 3. Remaining days get upto (UPTO — Unpaid Time Off)
+     *
+     * @return \Illuminate\Support\Collection<string, array{date: string, status: string, notes: string|null}>
+     */
+    protected function autoAssignVlDayStatuses(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService, array $allDates): \Illuminate\Support\Collection
+    {
+        $user = $leaveRequest->user;
+        $creditCheck = $leaveCreditService->checkVlCreditDeduction($user, $leaveRequest);
+
+        $result = collect();
+        $creditsAvailable = 0;
+
+        if ($creditCheck['should_deduct']) {
+            $creditsAvailable = (int) ($creditCheck['credits_to_deduct'] ?? 0);
+        } elseif ($creditCheck['convert_to_upto'] ?? false) {
+            $creditsAvailable = 0;
+        }
+
+        $creditsUsed = 0;
+
+        foreach ($allDates as $dateStr) {
+            if ($creditsUsed < $creditsAvailable) {
+                // Has credits remaining — mark as VL Credited
+                $result[$dateStr] = [
+                    'date' => $dateStr,
+                    'status' => LeaveRequestDay::STATUS_VL_CREDITED,
+                    'notes' => 'Auto-assigned: VL credit applied',
+                ];
+                $creditsUsed++;
+            } else {
+                // No credits remaining — UPTO (Unpaid Time Off)
+                $result[$dateStr] = [
+                    'date' => $dateStr,
+                    'status' => LeaveRequestDay::STATUS_UPTO,
+                    'notes' => 'Auto-assigned: No VL credits remaining (UPTO - Unpaid)',
                 ];
             }
         }
@@ -3953,7 +4234,7 @@ class LeaveRequestController extends Controller
     public function creditsShow(Request $request, User $user)
     {
         $authUser = auth()->user();
-        $permissionService = app(\App\Services\PermissionService::class);
+        $permissionService = app(PermissionService::class);
 
         // Check permissions
         $canViewAll = $permissionService->userHasPermission($authUser, 'leave_credits.view_all');
@@ -4444,7 +4725,7 @@ class LeaveRequestController extends Controller
         });
 
         // Get already processed count
-        $alreadyProcessedCount = \App\Models\LeaveCreditCarryover::where('is_first_regularization', true)
+        $alreadyProcessedCount = LeaveCreditCarryover::where('is_first_regularization', true)
             ->where('to_year', $year)
             ->count();
 

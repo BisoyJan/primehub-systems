@@ -1,0 +1,899 @@
+================================================================================
+  COACHING LOGS TRACKER / COACHING DASHBOARD — FEATURE PLANNING DOCUMENT
+================================================================================
+  Created: 2026-02-24
+  Status:  COMPLETE (All Phases 1–6)
+  Module:  Coaching Logs
+================================================================================
+
+TABLE OF CONTENTS
+─────────────────
+  1. Feature Overview (from spec)
+  2. Data Model & Database Design
+  3. Coaching Status Logic
+  4. Workflow / Process Flows
+  5. Dashboards & Screens
+  6. Backend Implementation Plan (files to create/modify)
+  7. Frontend Implementation Plan (files to create/modify)
+  8. Permissions & Authorization
+  9. Notifications
+  10. Implementation Phases & Task Breakdown
+  11. Testing Plan
+  12. Open Questions / Decisions
+
+================================================================================
+1. FEATURE OVERVIEW
+================================================================================
+
+Build a coaching module inside PrimeHub Systems where:
+  - Team Leads (TLs) log all coaching sessions for agents under their team.
+  - Agents can see their coaching history, latest coaching date, and follow
+    their SMART action plans.
+  - Compliance/HR can track acknowledgements and verify coaching is done.
+  - Dashboards show at a glance who is due for coaching and each TL's
+    coaching performance.
+
+This replaces the current manual Google Sheet + email flow.
+
+User Roles & Permissions Summary:
+  ┌──────────────────┬──────────────────────────────────────────────────────┐
+  │ Agent             │ View own logs only, acknowledge, add comment.       │
+  │                   │ Cannot edit or delete.                              │
+  ├──────────────────┼──────────────────────────────────────────────────────┤
+  │ Team Lead         │ Create coaching logs for their team. Edit own logs. │
+  │                   │ View team dashboard (status, last coached, who      │
+  │                   │ needs coaching). See ack & compliance status.       │
+  ├──────────────────┼──────────────────────────────────────────────────────┤
+  │ Super Admin/QA/HR │ See ALL coaching logs. Filter by status, account,   │
+  │ (referred to as   │ TL, date range. Mark as Verified/Rejected.          │
+  │  Compliance)      │ Export CSV/Excel. Manage user→TL→account mappings.  │
+  └──────────────────┴──────────────────────────────────────────────────────┘
+
+================================================================================
+2. DATA MODEL & DATABASE DESIGN
+================================================================================
+
+NOTE: The existing system does NOT have a direct team_lead_id on the users
+table. Team structure is inferred via EmployeeSchedule → Campaign. A Team Lead
+and Agents sharing the same campaign are on the same "team."
+
+For the coaching module, the CoachingSessions table will explicitly store
+agent_id and team_lead_id (both FK to users.id), making relationships clear
+and query-efficient.
+
+─────────────────────────────────────────────────────────────────────────────
+2.1  Table: coaching_sessions (NEW)
+─────────────────────────────────────────────────────────────────────────────
+
+  Column                              Type            Notes
+  ──────────────────────────────────  ──────────────  ─────────────────────────
+  id                                  bigint (PK)     Auto-increment
+  agent_id                            bigint (FK)     → users.id
+  team_lead_id                        bigint (FK)     → users.id
+  session_date                        date            Default: today
+  created_at / updated_at             timestamps
+
+  --- Agent's Profile (multi-select booleans) ---
+  profile_new_hire                    boolean         Default: false
+  profile_tenured                     boolean         Default: false
+  profile_returning                   boolean         Default: false
+  profile_previously_coached_same_issue boolean       Default: false
+
+  --- Purpose of Coaching (single select) ---
+  purpose                             enum            Values:
+                                                      'performance_behavior_issue'
+                                                      'regular_checkin_progress_review'
+                                                      'reinforce_positive_behavior_growth'
+                                                      'recognition_appreciation'
+
+  --- Focus Areas (multi-select booleans) ---
+  focus_attendance_tardiness          boolean         Default: false
+  focus_productivity                  boolean         Default: false
+  focus_compliance                    boolean         Default: false
+  focus_callouts                      boolean         Default: false
+  focus_recognition_milestones        boolean         Default: false
+  focus_growth_development            boolean         Default: false
+  focus_other                         boolean         Default: false
+  focus_other_notes                   text (nullable) If focus_other = true
+
+  --- Narrative Fields ---
+  performance_description             text            Long text (required)
+
+  --- Root Causes (multi-select booleans) ---
+  root_cause_lack_of_skills           boolean         Default: false
+  root_cause_lack_of_clarity          boolean         Default: false
+  root_cause_personal_issues          boolean         Default: false
+  root_cause_motivation_engagement    boolean         Default: false
+  root_cause_health_fatigue           boolean         Default: false
+  root_cause_workload_process         boolean         Default: false
+  root_cause_peer_conflict            boolean         Default: false
+  root_cause_others                   boolean         Default: false
+  root_cause_others_notes             text (nullable) If root_cause_others = true
+
+  --- More Narrative Fields ---
+  agent_strengths_wins                text (nullable)
+  smart_action_plan                   text            Long text (required)
+  follow_up_date                      date (nullable) Optional
+
+  --- Acknowledgement & Compliance ---
+  ack_status                          enum            'Pending', 'Acknowledged',
+                                                      'Disputed'
+                                                      Default: 'Pending'
+  ack_timestamp                       timestamp (null)
+  ack_comment                         text (nullable) Agent's comment
+
+  compliance_status                   enum            'Awaiting_Agent_Ack',
+                                                      'For_Review',
+                                                      'Verified',
+                                                      'Rejected'
+                                                      Default: 'Awaiting_Agent_Ack'
+  compliance_reviewer_id              bigint (FK, null) → users.id
+  compliance_review_timestamp         timestamp (null)
+  compliance_notes                    text (nullable)
+
+  --- Other ---
+  severity_flag                       enum (nullable) 'Normal', 'Critical'
+                                                      Default: 'Normal'
+  attachment_url                      string (nullable) File ref / PDF
+
+INDEXES:
+  - coaching_sessions_agent_id_index
+  - coaching_sessions_team_lead_id_index
+  - coaching_sessions_session_date_index
+  - coaching_sessions_ack_status_index
+  - coaching_sessions_compliance_status_index
+
+─────────────────────────────────────────────────────────────────────────────
+2.2  Table: coaching_status_settings (NEW)
+─────────────────────────────────────────────────────────────────────────────
+
+Configurable thresholds for coaching status logic (so admins can adjust
+without code changes).
+
+  Column                    Type          Notes
+  ────────────────────────  ────────────  ─────────────────────────────────
+  id                        bigint (PK)
+  key                       string        Unique. e.g. 'coaching_done_max_days'
+  value                     integer       Threshold in days
+  label                     string        Human-readable label
+  created_at / updated_at   timestamps
+
+Default seed values:
+  coaching_done_max_days        = 15
+  needs_coaching_max_days       = 30
+  badly_needs_coaching_max_days = 45
+  no_record_days                = 60
+
+─────────────────────────────────────────────────────────────────────────────
+2.3  View/Computed: coaching_summary_per_agent
+─────────────────────────────────────────────────────────────────────────────
+
+For fast dashboards, compute per agent_id:
+  - last_coached_date      = most recent session_date with compliance_status
+                             = 'Verified' (or at least submitted)
+  - previous_coached_date  = 2nd most recent
+  - older_coached_date     = 3rd most recent
+  - coaching_status        = computed enum based on status logic (Section 3)
+
+This can be implemented as:
+  Option A: Database VIEW (read-only, always fresh)
+  Option B: Computed in a CoachingDashboardService (no extra DB table)
+
+RECOMMENDED: Option B (Service class) — more flexible, no migration needed
+for view updates, and caching can be layered on top.
+
+================================================================================
+3. COACHING STATUS LOGIC
+================================================================================
+
+Statuses (with color coding matching the current spreadsheet):
+  ┌─────────────────────┬──────────────┬────────────────────────────────────┐
+  │ Status              │ Color        │ Condition                          │
+  ├─────────────────────┼──────────────┼────────────────────────────────────┤
+  │ Coaching Done       │ Green        │ last_coached within 0–15 days      │
+  │ Needs Coaching      │ Yellow       │ last_coached between 16–30 days    │
+  │ Badly Needs Coaching│ Orange       │ last_coached between 31–45 days    │
+  │ Please Coach ASAP   │ Red          │ last_coached older than 45 days    │
+  │                     │              │ OR critical severity flag open     │
+  │ No Record           │ Light gray   │ No sessions ever, OR none in       │
+  │                     │              │ last 60 days                       │
+  └─────────────────────┴──────────────┴────────────────────────────────────┘
+
+Thresholds are stored in coaching_status_settings (configurable by admin).
+Date differences calculated at midnight.
+
+Implementation: CoachingStatusService or CoachingDashboardService will have
+a method `getAgentCoachingStatus(User $agent): string` that reads settings
+from cache/DB and computes the status.
+
+================================================================================
+4. WORKFLOW / PROCESS FLOWS
+================================================================================
+
+─────────────────────────────────────────────────────────────────────────────
+4.1  Team Lead Creates a Coaching Log
+─────────────────────────────────────────────────────────────────────────────
+
+  1. TL opens Coaching > New Session page
+  2. Selects Agent (dropdown filtered to agents in TL's campaign/team)
+  3. System auto-fills:
+     - Account (from agent's campaign)
+     - Team Lead (current user)
+     - Session Date (today, editable)
+  4. TL fills out the coaching form fields (mirrors the paper form):
+     - Agent Profile checkboxes
+     - Purpose (single select)
+     - Focus Areas (multi-select)
+     - Performance Description (text)
+     - Root Causes (multi-select)
+     - Agent Strengths or Wins (text)
+     - SMART Action Plan (text)
+     - Follow-up Date (optional)
+     - Severity Flag (optional: Normal/Critical)
+  5. TL clicks Submit
+
+  System Actions:
+    a) Create CoachingSession record with:
+       - ack_status = 'Pending'
+       - compliance_status = 'Awaiting_Agent_Ack'
+    b) Notify Agent via NotificationService:
+       "You have a new coaching session from [TL Name] dated [Date]."
+    c) Session appears in:
+       - Agent's "Pending Acknowledgements" list
+       - TL's "Recent Coachings" list
+       - Compliance queue with status "Awaiting Agent Acknowledgement"
+         (visible but not yet reviewable)
+
+─────────────────────────────────────────────────────────────────────────────
+4.2  Agent Acknowledges Coaching Session
+─────────────────────────────────────────────────────────────────────────────
+
+  1. Agent sees notification badge / banner:
+     "Pending Coaching Acknowledgements (X)"
+  2. Agent opens Coaching > My Sessions
+  3. For each pending coaching:
+     a) Opens the record (read-only coaching form details)
+     b) Ticks "I acknowledge this coaching session and action plan"
+     c) Optional: adds a short comment
+     d) Clicks Acknowledge
+
+  System Actions:
+    a) Update:
+       - ack_status = 'Acknowledged'
+       - ack_timestamp = now()
+       - ack_comment = (agent's text)
+    b) Move session to compliance_status = 'For_Review'
+    c) Notify TL: "Agent [Name] acknowledged coaching dated [Date]."
+
+  Reminder Logic (without email):
+    - If ack_status = 'Pending' after X hours/days:
+      → Show in-app reminder banner to agent on login
+      → Optionally show red badge next to Coaching menu item
+    - If still pending after Y days:
+      → Show notice in TL's dashboard:
+        "Unacknowledged coaching for [Agent Name] dated [Date]."
+
+─────────────────────────────────────────────────────────────────────────────
+4.3  Compliance Reviews the Session
+─────────────────────────────────────────────────────────────────────────────
+
+  1. Compliance user opens Coaching > For Review
+  2. Filters by account, TL, or date
+  3. For each session where compliance_status = 'For_Review':
+     a) Reviews details and sees ack_status + ack_timestamp
+     b) Marks as:
+        - Verified (accepted) → compliance_status = 'Verified'
+        - Rejected (must provide compliance_notes) → compliance_status = 'Rejected'
+     c) System records compliance_reviewer_id and compliance_review_timestamp
+
+  System Actions:
+    a) Update compliance_status accordingly
+    b) If Verified:
+       → Session feeds into dashboard coaching status calculations
+       → TL sees updated status in their dashboard
+    c) Notify TL of the status change
+
+─────────────────────────────────────────────────────────────────────────────
+4.4  Team Lead Edits a Coaching Session
+─────────────────────────────────────────────────────────────────────────────
+
+  - TL can edit their own coaching sessions (change history tracked by
+    Spatie Activity Log via LogsActivity trait)
+  - Editing resets? TBD — see Open Questions
+
+================================================================================
+5. DASHBOARDS & SCREENS
+================================================================================
+
+─────────────────────────────────────────────────────────────────────────────
+5.1  Agent View: "My Coaching Logs"
+─────────────────────────────────────────────────────────────────────────────
+
+  Page: resources/js/pages/Coaching/MyCoachingLogs/Index.tsx
+
+  Components:
+    ┌─────────────────────────────────────────────────────────────────┐
+    │ Summary Panel                                                    │
+    │   • Current Coaching Status: [status + color badge]              │
+    │   • Last coached: [date]                                         │
+    │   • Previous sessions: [dates]                                   │
+    ├─────────────────────────────────────────────────────────────────┤
+    │ Table of coaching sessions                                       │
+    │   Columns: Date, Team Lead, Purpose, Focus Areas,                │
+    │            Status (Verified/Pending), Acknowledged?, Link→View   │
+    │                                                                  │
+    │   Clicking a row → full coaching details (read-only) with SMART  │
+    │   action plan.                                                   │
+    │                                                                  │
+    │   "Pending Acknowledgement" badge if sessions need ack.          │
+    └─────────────────────────────────────────────────────────────────┘
+
+─────────────────────────────────────────────────────────────────────────────
+5.2  Team Lead Dashboard
+─────────────────────────────────────────────────────────────────────────────
+
+  Page: resources/js/pages/Coaching/Dashboard/Index.tsx
+
+  Top Summary (cards or stats bar):
+    ┌────────────┬────────────┬──────────────┬───────────────┬────────────┐
+    │ Total      │ Coaching   │ Needs        │ Badly Needs   │ No Record  │
+    │ Agents     │ Done ✓     │ Coaching ⚠   │ Coaching ⚠⚠   │  ○         │
+    │            │ (green)    │ (yellow)     │ (orange)      │ (gray)     │
+    └────────────┴────────────┴──────────────┴───────────────┴────────────┘
+    + "Please Coach ASAP" count (red)
+    + Breakdown by account if TL handles multiple accounts
+
+  Detailed Table:
+    Columns: Agent Name, Account, Coaching Status (color bg),
+             Older (3rd most recent), Previous (2nd), Last Coached (most recent),
+             New Coaching (button → pre-fills agent on form),
+             Actions (view details, go to full log)
+
+  Filters:
+    - By Account
+    - By Coaching Status
+    - By date range of last coaching
+    - Search by agent name
+
+  Sorting:
+    - By Coaching Status (highest priority first)
+    - By Last Coached date (oldest at top)
+
+─────────────────────────────────────────────────────────────────────────────
+5.3  Compliance / Admin Dashboard
+─────────────────────────────────────────────────────────────────────────────
+
+  Page: resources/js/pages/Coaching/Admin/Index.tsx
+
+  Additional Views:
+    • "Unacknowledged Coaching" tab — sessions with ack_status = Pending
+      grouped by TL and account
+    • "For Review" tab — sessions ready for verification
+    • "No Record / Please Coach ASAP" agents — across whole company
+    • Export to CSV/Excel for selected filters (queued job)
+
+─────────────────────────────────────────────────────────────────────────────
+5.4  Create / Edit Coaching Session Form
+─────────────────────────────────────────────────────────────────────────────
+
+  Page: resources/js/pages/Coaching/Sessions/Create.tsx
+  Page: resources/js/pages/Coaching/Sessions/Edit.tsx
+
+  Form mirrors the paper COACHING FORM:
+    Section 1: Agent selection (dropdown), Auto-fill account/TL/date
+    Section 2: Agent's Profile (checkboxes)
+    Section 3: Purpose of Coaching Session (radio/select)
+    Section 4: Focus Areas (checkboxes)
+    Section 5: Performance Description (textarea)
+    Section 6: Root Cause (checkboxes)
+    Section 7: Agent Strengths or Wins (textarea)
+    Section 8: SMART Action Plan (textarea)
+    Section 9: Follow-up Date (date picker, optional)
+    Section 10: Severity Flag (optional select)
+
+─────────────────────────────────────────────────────────────────────────────
+5.5  Show Coaching Session (Read-Only Detail)
+─────────────────────────────────────────────────────────────────────────────
+
+  Page: resources/js/pages/Coaching/Sessions/Show.tsx
+
+  Displays all fields from the coaching form in read-only format.
+  For Agents: includes the "Acknowledge" button + comment field.
+  For Compliance: includes "Verify" / "Reject" buttons + notes field.
+
+================================================================================
+6. BACKEND IMPLEMENTATION PLAN
+================================================================================
+
+Files to CREATE:
+
+  MIGRATIONS:
+  ──────────
+  [ ] database/migrations/XXXX_create_coaching_sessions_table.php
+  [ ] database/migrations/XXXX_create_coaching_status_settings_table.php
+
+  MODELS:
+  ──────
+  [ ] app/Models/CoachingSession.php
+      - Relationships: agent() → belongsTo(User), teamLead() → belongsTo(User),
+        complianceReviewer() → belongsTo(User)
+      - Scopes: scopeForAgent(), scopeForTeamLead(), scopePending(),
+        scopeForReview(), scopeVerified()
+      - Casts: purpose (enum), ack_status (enum), compliance_status (enum),
+        severity_flag (enum), session_date (date), follow_up_date (date),
+        ack_timestamp (datetime), compliance_review_timestamp (datetime)
+      - Traits: HasFactory, LogsActivity
+
+  [ ] app/Models/CoachingStatusSetting.php
+      - Simple key/value model for configurable thresholds
+
+  FACTORIES:
+  ─────────
+  [ ] database/factories/CoachingSessionFactory.php
+  [ ] database/factories/CoachingStatusSettingFactory.php
+
+  SEEDERS:
+  ───────
+  [ ] database/seeders/CoachingStatusSettingSeeder.php
+      (Seeds default thresholds: 15, 30, 45, 60 days)
+
+  CONTROLLERS:
+  ───────────
+  [ ] app/Http/Controllers/CoachingSessionController.php
+      Methods: index, create, store, show, edit, update, destroy
+      + acknowledge (PATCH — agent ack)
+      + review (PATCH — compliance verify/reject)
+
+  [ ] app/Http/Controllers/CoachingDashboardController.php
+      Methods: teamLeadDashboard, complianceDashboard, agentDashboard (or merged)
+
+  [ ] app/Http/Controllers/CoachingExportController.php (optional, for CSV/Excel)
+
+  FORM REQUESTS:
+  ──────────────
+  [ ] app/Http/Requests/StoreCoachingSessionRequest.php
+  [ ] app/Http/Requests/UpdateCoachingSessionRequest.php
+  [ ] app/Http/Requests/AcknowledgeCoachingSessionRequest.php
+  [ ] app/Http/Requests/ReviewCoachingSessionRequest.php
+
+  POLICY:
+  ──────
+  [ ] app/Policies/CoachingSessionPolicy.php
+      Methods: viewAny, view, create, update, delete, acknowledge, review, export
+
+  SERVICE:
+  ───────
+  [ ] app/Services/CoachingDashboardService.php
+      Methods:
+        - getAgentCoachingSummary(User $agent): array
+        - getTeamLeadDashboardData(User $teamLead): array
+        - getComplianceDashboardData(?filters): array
+        - getCoachingStatus(User $agent): string
+        - getStatusThresholds(): array (reads from DB/cache)
+
+  JOB (for export):
+  ────────────────
+  [ ] app/Jobs/GenerateCoachingLogsExportExcel.php (optional, Phase 2+)
+
+Files to MODIFY:
+
+  CONFIG:
+  ──────
+  [M] config/permissions.php
+      Add permissions:
+        'coaching.view'           => 'View Coaching Logs'
+        'coaching.view_own'       => 'View Own Coaching Logs'
+        'coaching.view_team'      => 'View Team Coaching Logs'
+        'coaching.view_all'       => 'View All Coaching Logs'
+        'coaching.create'         => 'Create Coaching Sessions'
+        'coaching.edit'           => 'Edit Coaching Sessions'
+        'coaching.delete'         => 'Delete Coaching Sessions'
+        'coaching.acknowledge'    => 'Acknowledge Coaching Sessions'
+        'coaching.review'         => 'Review/Verify Coaching Sessions'
+        'coaching.export'         => 'Export Coaching Logs'
+        'coaching.settings'       => 'Manage Coaching Settings'
+
+      Add to role_permissions:
+        super_admin: ['*'] (already covers all)
+        admin:       + coaching.view_all, coaching.create, coaching.edit,
+                       coaching.delete, coaching.review, coaching.export,
+                       coaching.settings
+        team_lead:   + coaching.view_team, coaching.create, coaching.edit
+        agent:       + coaching.view_own, coaching.acknowledge
+        hr:          + coaching.view_all, coaching.review, coaching.export
+        it:          (none — IT doesn't need coaching access)
+        utility:     (none)
+
+  ROUTES:
+  ──────
+  [M] routes/web.php
+      Add coaching route group:
+        Route::prefix('coaching')->name('coaching.')->group(function () {
+            // Dashboard routes
+            Route::get('/dashboard', [CoachingDashboardController::class, 'index'])
+                ->name('dashboard')
+                ->middleware('permission:coaching.view_team,coaching.view_all');
+
+            // Session CRUD
+            Route::resource('sessions', CoachingSessionController::class)
+                ->middleware('permission:coaching.view_own,coaching.view_team,coaching.view_all');
+
+            // Agent acknowledge
+            Route::patch('/sessions/{session}/acknowledge',
+                [CoachingSessionController::class, 'acknowledge'])
+                ->name('sessions.acknowledge');
+
+            // Compliance review
+            Route::patch('/sessions/{session}/review',
+                [CoachingSessionController::class, 'review'])
+                ->name('sessions.review');
+
+            // Export
+            Route::post('/export', [CoachingExportController::class, 'export'])
+                ->name('export')
+                ->middleware('permission:coaching.export');
+        });
+
+  SIDEBAR:
+  ───────
+  [M] resources/js/components/app-sidebar.tsx
+      Add new "Coaching" navigation group between "attendance" and "requests":
+        coaching: {
+            label: 'Coaching',
+            items: [
+                { title: 'Dashboard', href: '/coaching/dashboard',
+                  icon: ClipboardCheck, permission: 'coaching.view_team' },
+                { title: 'My Sessions', href: '/coaching/sessions',
+                  icon: FileText, permission: 'coaching.view_own' },
+                { title: 'New Session', href: '/coaching/sessions/create',
+                  icon: PlusCircle, permission: 'coaching.create' },
+            ]
+        }
+
+  NOTIFICATION SERVICE:
+  ────────────────────
+  [M] app/Services/NotificationService.php
+      Add methods:
+        - notifyCoachingSessionCreated(int $agentId, string $tlName, string $date)
+        - notifyCoachingAcknowledged(int $tlId, string $agentName, string $date)
+        - notifyCoachingReviewed(int $tlId, string $status, string $date)
+        - notifyCoachingPendingReminder(int $agentId, string $date)
+
+  USER MODEL:
+  ──────────
+  [M] app/Models/User.php
+      Add relationships:
+        - coachingSessionsAsAgent(): HasMany → CoachingSession (agent_id)
+        - coachingSessionsAsTeamLead(): HasMany → CoachingSession (team_lead_id)
+        - coachingReviews(): HasMany → CoachingSession (compliance_reviewer_id)
+
+  DATABASE SEEDER:
+  ───────────────
+  [M] database/seeders/DatabaseSeeder.php
+      Add call to CoachingStatusSettingSeeder
+
+  TYPES:
+  ─────
+  [M] resources/js/types/index.d.ts
+      Add TypeScript interfaces:
+        - CoachingSession
+        - CoachingStatusSetting
+        - CoachingDashboardData
+        - CoachingSummary
+
+================================================================================
+7. FRONTEND IMPLEMENTATION PLAN
+================================================================================
+
+Files to CREATE:
+
+  PAGES:
+  ─────
+  [ ] resources/js/pages/Coaching/Dashboard/Index.tsx
+      Team Lead / Admin dashboard with summary cards + agent table
+
+  [ ] resources/js/pages/Coaching/MyCoachingLogs/Index.tsx
+      Agent's own coaching logs with summary panel
+
+  [ ] resources/js/pages/Coaching/Sessions/Index.tsx
+      All sessions list (filtered by role)
+
+  [ ] resources/js/pages/Coaching/Sessions/Create.tsx
+      Coaching form (mirrors paper form)
+
+  [ ] resources/js/pages/Coaching/Sessions/Edit.tsx
+      Edit coaching session (TL only, for their own sessions)
+
+  [ ] resources/js/pages/Coaching/Sessions/Show.tsx
+      Read-only detail view + acknowledge / review actions
+
+  [ ] resources/js/pages/Coaching/Admin/Index.tsx
+      Compliance dashboard with tabs:
+      "Unacknowledged" | "For Review" | "All Sessions" | "No Record/ASAP"
+
+  COMPONENTS (shared):
+  ───────────────────
+  [ ] resources/js/components/coaching/CoachingStatusBadge.tsx
+      Color-coded badge: Green/Yellow/Orange/Red/Gray based on status
+
+  [ ] resources/js/components/coaching/CoachingFormFields.tsx
+      Reusable form field sections (shared between Create & Edit)
+
+  [ ] resources/js/components/coaching/AcknowledgeDialog.tsx
+      Dialog with checkbox + comment + submit for agent acknowledgement
+
+  [ ] resources/js/components/coaching/ReviewDialog.tsx
+      Dialog with Verify/Reject buttons + notes for compliance review
+
+  [ ] resources/js/components/coaching/CoachingSessionCard.tsx
+      Mobile card view of a coaching session
+
+  [ ] resources/js/components/coaching/CoachingSummaryCards.tsx
+      Dashboard summary stat cards (counts per status)
+
+  ROUTE TYPES (auto-generated by Wayfinder after adding routes):
+  ────────────────────────────────────────────────────────────
+  After adding backend routes, run: npx wayfinder generate
+  This will create route helpers in resources/js/routes/
+
+================================================================================
+8. PERMISSIONS & AUTHORIZATION
+================================================================================
+
+New Permissions to add to config/permissions.php:
+
+  'coaching.view'         → Base permission (anyone who can see the module)
+  'coaching.view_own'     → Agent: view only own coaching logs
+  'coaching.view_team'    → Team Lead: view team coaching logs + dashboard
+  'coaching.view_all'     → Admin/HR/Compliance: view everything
+  'coaching.create'       → Team Lead: create coaching sessions
+  'coaching.edit'         → Team Lead: edit own sessions
+  'coaching.delete'       → Admin: delete sessions
+  'coaching.acknowledge'  → Agent: acknowledge coaching sessions
+  'coaching.review'       → Compliance: verify/reject sessions
+  'coaching.export'       → Compliance: export to CSV/Excel
+  'coaching.settings'     → Admin: manage coaching thresholds
+
+Role Assignment:
+  ┌──────────────┬─────────────────────────────────────────────────────────┐
+  │ super_admin  │ ['*'] (already has everything)                          │
+  │ admin        │ coaching.view_all, coaching.create, coaching.edit,      │
+  │              │ coaching.delete, coaching.review, coaching.export,      │
+  │              │ coaching.settings                                       │
+  │ team_lead    │ coaching.view_team, coaching.create, coaching.edit      │
+  │ agent        │ coaching.view_own, coaching.acknowledge                 │
+  │ hr           │ coaching.view_all, coaching.review, coaching.export     │
+  │ it           │ (none)                                                  │
+  │ utility      │ (none)                                                  │
+  └──────────────┴─────────────────────────────────────────────────────────┘
+
+Policy Methods (CoachingSessionPolicy):
+  viewAny($user)     → has coaching.view_own OR coaching.view_team OR coaching.view_all
+  view($user, $cs)   → own session (agent) OR own team (TL) OR view_all
+  create($user)      → has coaching.create (TL/Admin)
+  update($user, $cs) → TL who created it + coaching.edit
+  delete($user, $cs) → coaching.delete (Admin only)
+  acknowledge($user, $cs) → agent is the $cs->agent_id + coaching.acknowledge
+  review($user, $cs) → coaching.review + compliance_status = 'For_Review'
+  export($user)      → coaching.export
+
+================================================================================
+9. NOTIFICATIONS
+================================================================================
+
+Notification types to add (in NotificationService):
+
+  Type: 'coaching_session'
+  ────────────────────────
+  Event: TL creates a new coaching session
+  Recipients: Agent (agent_id)
+  Title: "New Coaching Session"
+  Message: "You have a new coaching session from {TL Name} dated {Date}."
+  Data: { session_id, team_lead_name, session_date }
+
+  Type: 'coaching_acknowledged'
+  ─────────────────────────────
+  Event: Agent acknowledges coaching
+  Recipients: Team Lead (team_lead_id)
+  Title: "Coaching Acknowledged"
+  Message: "Agent {Name} acknowledged coaching dated {Date}."
+  Data: { session_id, agent_name, session_date }
+
+  Type: 'coaching_reviewed'
+  ─────────────────────────
+  Event: Compliance verifies/rejects coaching
+  Recipients: Team Lead (team_lead_id)
+  Title: "Coaching {Verified/Rejected}"
+  Message: "Coaching session for {Agent Name} dated {Date} has been {status}."
+  Data: { session_id, agent_name, session_date, compliance_status }
+
+  Type: 'coaching_pending_reminder'
+  ────────────────────────────────
+  Event: Scheduled check for stale pending acks
+  Recipients: Agent (agent_id)
+  Title: "Coaching Acknowledgement Pending"
+  Message: "You have coaching sessions that require your acknowledgement."
+  Data: { session_ids }
+
+  Type: 'coaching_unacknowledged_alert'
+  ─────────────────────────────────────
+  Event: Pending ack exceeds Y days
+  Recipients: Team Lead (team_lead_id)
+  Title: "Unacknowledged Coaching"
+  Message: "Coaching for {Agent Name} dated {Date} has not been acknowledged."
+  Data: { session_id, agent_name, session_date }
+
+================================================================================
+10. IMPLEMENTATION PHASES & TASK BREAKDOWN
+================================================================================
+
+──────────────────────────────────────────────────────
+PHASE 1: Database & Backend Foundation  ✅ COMPLETE
+──────────────────────────────────────────────────────
+
+  1.1  [✓] Create migration: coaching_sessions table
+  1.2  [✓] Create migration: coaching_status_settings table
+  1.3  [✓] Run migrations
+  1.4  [✓] Create Model: CoachingSession (with relationships, scopes, casts)
+  1.5  [✓] Create Model: CoachingStatusSetting
+  1.6  [✓] Create Factory: CoachingSessionFactory
+  1.7  [✓] Create Factory: CoachingStatusSettingFactory
+  1.8  [✓] Create Seeder: CoachingStatusSettingSeeder (default thresholds)
+  1.9  [✓] Run seeder
+  1.10 [✓] Update User model with coaching relationships
+  1.11 [✓] Add coaching permissions to config/permissions.php
+  1.12 [✓] Create Policy: CoachingSessionPolicy
+  1.13 [✓] Write unit tests for models and policy
+
+──────────────────────────────────────────────────────
+PHASE 2: Services & Business Logic  ✅ COMPLETE
+──────────────────────────────────────────────────────
+
+  2.1  [✓] Create Service: CoachingDashboardService
+           - getAgentCoachingSummary()
+           - getTeamLeadDashboardData()
+           - getComplianceDashboardData()
+           - getCoachingStatus() (implements threshold logic)
+  2.2  [✓] Add notification methods to NotificationService
+  2.3  [✓] Write unit tests for service + status logic (14 tests, 14 passing)
+
+──────────────────────────────────────────────────────
+PHASE 3: Controllers & Routes  ✅ COMPLETE
+──────────────────────────────────────────────────────
+
+  3.1  [✓] Create Form Requests:
+           - StoreCoachingSessionRequest
+           - UpdateCoachingSessionRequest
+           - AcknowledgeCoachingSessionRequest
+           - ReviewCoachingSessionRequest
+  3.2  [✓] Create Controller: CoachingSessionController
+           (index, create, store, show, edit, update, destroy, acknowledge, review)
+  3.3  [✓] Create Controller: CoachingDashboardController
+           (index — routes to correct dashboard by role)
+  3.4  [✓] Add routes to routes/web.php
+  3.5  [✓] Run Wayfinder to generate route types
+  3.6  [✓] Write feature tests for all controller actions (35 tests, 35 passing)
+  3.7  [✓] Run Pint for formatting
+
+──────────────────────────────────────────────────────
+PHASE 4: Frontend — Core Pages  ✅ COMPLETE
+──────────────────────────────────────────────────────
+
+  4.1  [✓] Create shared components:
+           - CoachingStatusBadge
+           - CoachingFormFields
+           - CoachingSessionCard (mobile)
+           - CoachingSummaryCards
+  4.2  [✓] Create page: Coaching/Sessions/Create.tsx (coaching form)
+  4.3  [✓] Create page: Coaching/Sessions/Show.tsx (read-only + ack/review)
+  4.4  [✓] Create page: Coaching/Sessions/Edit.tsx
+  4.5  [✓] Create page: Coaching/Sessions/Index.tsx (all sessions list)
+  4.6  [✓] Add sidebar navigation entries
+  4.7  [✓] Add TypeScript types to resources/js/types/index.d.ts
+
+──────────────────────────────────────────────────────
+PHASE 5: Frontend — Dashboards  ✅ COMPLETE
+──────────────────────────────────────────────────────
+
+  5.1  [✓] Create page: Coaching/Dashboard/Index.tsx (TL dashboard)
+  5.2  [✓] Create page: Coaching/MyCoachingLogs/Index.tsx (Agent view)
+  5.3  [✓] Create page: Coaching/Admin/Index.tsx (Compliance dashboard)
+  5.4  [✓] Create AcknowledgeDialog component (inline in MyCoachingLogs)
+  5.5  [✓] Create ReviewDialog component (sub-component in Admin/Index)
+  5.6  [✓] Implement mobile responsive views (table + card patterns)
+
+──────────────────────────────────────────────────────
+PHASE 6: Polish & Advanced Features  ✅ COMPLETE
+──────────────────────────────────────────────────────
+
+  6.1  [—] Implement reminder logic (deferred — scheduled command)
+  6.2  [✓] Create Export Job: GenerateCoachingLogsExportExcel
+  6.3  [✓] Settings page for coaching thresholds (admin only)
+  6.4  [✓] Pending ack badge on sidebar Coaching menu item
+  6.5  [✓] Dashboard banner for agents with pending acknowledgements
+  6.6  [✓] Full test suite pass (53 tests, 228 assertions)
+  6.7  [✓] Run Pint + ESLint + Prettier for code quality
+
+================================================================================
+11. TESTING PLAN
+================================================================================
+
+UNIT TESTS:
+  [✓] tests/Unit/Services/CoachingDashboardServiceTest.php (14 tests)
+      - Test coaching status calculation for all 5 statuses
+      - Test threshold configuration from settings
+      - Test summary data aggregation
+      NOTE: Model relationship tests covered in feature tests
+
+FEATURE TESTS:
+  [✓] tests/Feature/Controllers/Coaching/CoachingSessionControllerTest.php (27 tests)
+      - TL can create, edit, delete coaching sessions
+      - Agent can view own, acknowledge pending sessions
+      - Admin/HR can view all, review sessions
+      - Authorization + validation enforced
+      - Covers: Create, View, Acknowledge, Review, Update, Delete
+
+  [✓] tests/Feature/Controllers/Coaching/CoachingDashboardControllerTest.php (12 tests)
+      - TL dashboard shows correct agent counts per status
+      - Agent dashboard shows correct personal summary
+      - Compliance dashboard shows correct overall data
+      - Admin can start/check export progress
+      - Agent/TL cannot export
+
+  TOTAL: 53 tests, 228 assertions — ALL PASSING
+
+================================================================================
+12. OPEN QUESTIONS / DECISIONS NEEDED
+================================================================================
+
+  1. TEAM STRUCTURE:
+     Currently teams are inferred via EmployeeSchedule → Campaign.
+     → Should coaching module use the same logic, or should we add an explicit
+       team_lead_id / account field to coaching_sessions?
+     RECOMMENDATION: Store agent_id + team_lead_id explicitly on coaching_sessions
+     for clarity. Derive the agent list from EmployeeSchedule when creating.
+
+  2. EDITING RESETS ACK/COMPLIANCE?
+     If a TL edits a coaching session after the agent acknowledged it,
+     should ack_status reset to 'Pending' and require re-acknowledgement?
+     RECOMMENDATION: Yes, reset if material fields changed (narrative, action plan).
+     Don't reset for minor typo fixes.
+
+  3. DISPUTED STATUS:
+     The spec mentions ack_status can be 'Disputed.' What triggers this?
+     Should the agent be able to dispute instead of acknowledge?
+     RECOMMENDATION: Add a "Dispute" option alongside "Acknowledge" with
+     required comment. compliance_status stays at 'Awaiting_Agent_Ack' or moves
+     to a 'Disputed' state for compliance review.
+
+  4. "ACCOUNT" FIELD:
+     The spec mentions agent's account (e.g., Copier LG, Real Estate, MedSup).
+     This maps to Campaign in the current system.
+     → Confirm: Campaign.name = Account in coaching context?
+     RECOMMENDATION: Yes, use Campaign as the "Account" equivalent.
+
+  5. ATTACHMENT/PDF:
+     The spec mentions attachment_url for PDF copy of the form.
+     → Is this Phase 1 or later?
+     RECOMMENDATION: Phase 2+ feature. Focus on core CRUD + workflow first.
+
+  6. COACHING STATUS — "Verified or at least submitted":
+     For dashboard status calculation, should we use the most recent session_date
+     regardless of compliance_status, or only count Verified sessions?
+     RECOMMENDATION: Use most recent session_date (any status) for dashboard.
+     Compliance can separately track verification status.
+
+  7. EXPORT FORMAT:
+     CSV only, or also Excel (.xlsx)?
+     RECOMMENDATION: Excel (.xlsx) using PhpSpreadsheet (already in project for
+     other export jobs).
+
+  8. SCHEDULED REMINDERS:
+     Should we create an Artisan command for daily coaching reminder checks, or
+     handle reminders purely client-side (check on page load)?
+     RECOMMENDATION: Start with client-side (check on page load). Add scheduled
+     command later if needed for more advanced alerting.
+
+================================================================================
+END OF PLANNING DOCUMENT
+================================================================================

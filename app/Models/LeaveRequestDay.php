@@ -31,6 +31,10 @@ class LeaveRequestDay extends Model
 
     const STATUS_ADVISED_ABSENCE = 'advised_absence';
 
+    const STATUS_VL_CREDITED = 'vl_credited';
+
+    const STATUS_UPTO = 'upto';
+
     /**
      * Human-readable labels for day statuses.
      */
@@ -39,17 +43,19 @@ class LeaveRequestDay extends Model
         self::STATUS_SL_CREDITED => 'SL Credited (Paid)',
         self::STATUS_NCNS => 'NCNS',
         self::STATUS_ADVISED_ABSENCE => 'Advised Absence (UPTO — Unpaid Time Off)',
+        self::STATUS_VL_CREDITED => 'VL Credited (Paid)',
+        self::STATUS_UPTO => 'UPTO — Unpaid Time Off',
     ];
 
     /**
      * Statuses that are considered paid (deducted from credits).
      */
-    const PAID_STATUSES = [self::STATUS_SL_CREDITED];
+    const PAID_STATUSES = [self::STATUS_SL_CREDITED, self::STATUS_VL_CREDITED];
 
     /**
      * Statuses that are considered unpaid.
      */
-    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE];
+    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE, self::STATUS_UPTO];
 
     protected $fillable = [
         'leave_request_id',
@@ -109,6 +115,22 @@ class LeaveRequestDay extends Model
     }
 
     /**
+     * Scope: only VL credited (paid) days.
+     */
+    public function scopeVlCredited($query)
+    {
+        return $query->where('day_status', self::STATUS_VL_CREDITED);
+    }
+
+    /**
+     * Scope: only UPTO (VL unpaid) days.
+     */
+    public function scopeUpto($query)
+    {
+        return $query->where('day_status', self::STATUS_UPTO);
+    }
+
+    /**
      * Scope: only assigned (non-pending) days.
      */
     public function scopeAssigned($query)
@@ -125,7 +147,7 @@ class LeaveRequestDay extends Model
     }
 
     /**
-     * Check if this day is unpaid (NCNS or Advised Absence).
+     * Check if this day is unpaid (NCNS, Advised Absence, or UPTO).
      */
     public function isUnpaid(): bool
     {

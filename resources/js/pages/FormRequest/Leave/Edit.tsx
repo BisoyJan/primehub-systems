@@ -19,7 +19,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check, FileImage, Upload, X, Users, Lightbulb, ArrowRight } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check, FileImage, FileText, Eye, Upload, X, Users, Lightbulb, ArrowRight } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { show as leaveShowRoute, update as leaveUpdateRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
@@ -161,6 +161,7 @@ export default function Edit({
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
     const [absenceWindowInfo, setAbsenceWindowInfo] = useState<string | null>(null);
     const [medicalCertPreview, setMedicalCertPreview] = useState<string | null>(null);
+    const [isPdfFile, setIsPdfFile] = useState<boolean>(false);
     const [campaignConflicts, setCampaignConflicts] = useState<CampaignConflict[]>([]);
     const [suggestedDates, setSuggestedDates] = useState<DateSuggestion[]>([]);
     const [futureCredits, setFutureCredits] = useState<number>(0);
@@ -276,25 +277,39 @@ export default function Edit({
             }
             setData('medical_cert_file', file);
             setData('medical_cert_submitted', true);
-            // Create preview for images only
+
+            // Revoke previous object URL if any
+            if (isPdfFile && medicalCertPreview) {
+                URL.revokeObjectURL(medicalCertPreview);
+            }
+
+            // Create preview
             if (file.type.startsWith('image/')) {
+                setIsPdfFile(false);
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     setMedicalCertPreview(reader.result as string);
                 };
                 reader.readAsDataURL(file);
             } else {
-                // For PDFs, just set a placeholder
-                setMedicalCertPreview('pdf');
+                // For PDFs, create an object URL for embedded preview
+                setIsPdfFile(true);
+                const objectUrl = URL.createObjectURL(file);
+                setMedicalCertPreview(objectUrl);
             }
         }
     };
 
     // Clear selected medical certificate
     const clearMedicalCert = () => {
+        // Revoke object URL if it was a PDF
+        if (isPdfFile && medicalCertPreview) {
+            URL.revokeObjectURL(medicalCertPreview);
+        }
         setData('medical_cert_file', null);
         setData('medical_cert_submitted', false);
         setMedicalCertPreview(null);
+        setIsPdfFile(false);
         // Reset file input
         const fileInput = document.getElementById('medical_cert_file') as HTMLInputElement;
         if (fileInput) fileInput.value = '';
@@ -1517,15 +1532,31 @@ export default function Edit({
                                     {/* Preview uploaded file */}
                                     {medicalCertPreview ? (
                                         <div className="relative">
-                                            {medicalCertPreview !== 'pdf' ? (
+                                            {!isPdfFile ? (
                                                 <img
                                                     src={medicalCertPreview}
                                                     alt="Medical Certificate Preview"
                                                     className="max-h-48 rounded-lg border object-contain"
                                                 />
                                             ) : (
-                                                <div className="flex items-center justify-center p-6 bg-muted rounded-md">
-                                                    <FileImage className="h-12 w-12 text-muted-foreground" />
+                                                <div className="space-y-2">
+                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-[200px]">
+                                                        <iframe
+                                                            src={medicalCertPreview}
+                                                            title="PDF preview"
+                                                            className="w-full h-full"
+                                                        />
+                                                    </div>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        onClick={() => window.open(medicalCertPreview!, '_blank')}
+                                                        className="w-full"
+                                                    >
+                                                        <Eye className="h-4 w-4 mr-1" />
+                                                        View Full Document
+                                                    </Button>
                                                 </div>
                                             )}
                                             <Button

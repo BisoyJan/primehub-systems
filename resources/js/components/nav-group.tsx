@@ -60,6 +60,11 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                                 <Link href={item.href} prefetch="mount">
                                     {item.icon && <item.icon />}
                                     <span>{item.title}</span>
+                                    {item.badge != null && item.badge > 0 && (
+                                        <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                                            {item.badge > 99 ? '99+' : item.badge}
+                                        </span>
+                                    )}
                                 </Link>
                             </SidebarMenuButton>
                         </SidebarMenuItem>
@@ -105,6 +110,11 @@ export function NavGroup({ label, items = [], groupId, isOpen, onToggle }: NavGr
                                     <Link href={item.href} prefetch="mount">
                                         {item.icon && <item.icon />}
                                         <span>{item.title}</span>
+                                        {item.badge != null && item.badge > 0 && (
+                                            <span className="ml-auto inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[10px] font-semibold text-white">
+                                                {item.badge > 99 ? '99+' : item.badge}
+                                            </span>
+                                        )}
                                     </Link>
                                 </SidebarMenuButton>
                             </SidebarMenuItem>

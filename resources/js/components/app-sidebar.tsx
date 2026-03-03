@@ -22,8 +22,10 @@ import { index as stationIndex } from '@/routes/stations'
 import { index as monitorIndex } from '@/routes/monitorspecs'
 import { index as medicationRequestsIndex } from '@/routes/medication-requests'
 import { index as attendanceToolsIndex } from '@/routes/attendance-tools'
+import { dashboard as coachingDashboard } from '@/routes/coaching'
+import { index as coachingSessionsIndex } from '@/routes/coaching/sessions'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, Computer, CpuIcon, CreditCard, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -36,10 +38,11 @@ interface NavItemConfig {
     href: string | { url: string } | (() => string);
     icon: LucideIcon;
     permission?: string;
+    badge?: number;
 }
 
 // Navigation configuration function that takes auth user
-const getNavigationConfig = (userId: number, userRole: string) => {
+const getNavigationConfig = (userId: number, userRole: string, coachingPendingAck: number = 0) => {
     // Restricted roles should go to their own show page
     const restrictedRoles = ['Agent', 'IT', 'Utility'];
     const isRestrictedUser = restrictedRoles.includes(userRole);
@@ -163,6 +166,24 @@ const getNavigationConfig = (userId: number, userRole: string) => {
                 },
             ],
         },
+        coaching: {
+            label: 'Coaching',
+            items: [
+                {
+                    title: 'Dashboard',
+                    href: coachingDashboard.url(),
+                    icon: ClipboardCheck,
+                    permission: 'coaching.view_own',
+                    badge: coachingPendingAck,
+                },
+                {
+                    title: 'Sessions',
+                    href: coachingSessionsIndex.url(),
+                    icon: FileText,
+                    permission: 'coaching.view_own',
+                },
+            ],
+        },
         requests: {
             label: 'Request Forms',
             items: [
@@ -236,7 +257,7 @@ const MAX_OPEN_GROUPS = 1;
 
 export function AppSidebar() {
     const { can } = usePermission();
-    const { auth } = usePage<SharedData>().props;
+    const { auth, coachingPendingAck } = usePage<SharedData>().props;
     const { state } = useSidebar();
 
     // Track which groups are currently open (max 1)
@@ -260,7 +281,7 @@ export function AppSidebar() {
     }, []);
 
     // Get navigation config based on current user
-    const navigationConfig = getNavigationConfig(auth.user.id, auth.user.role);
+    const navigationConfig = getNavigationConfig(auth.user.id, auth.user.role, (coachingPendingAck as number) ?? 0);
 
     // Filter navigation items based on permissions
     const filterItemsByPermission = (items: readonly NavItemConfig[]): NavItem[] => {
@@ -282,6 +303,7 @@ export function AppSidebar() {
                     title: item.title,
                     href,
                     icon: item.icon,
+                    badge: item.badge,
                 };
             });
     };
@@ -302,6 +324,10 @@ export function AppSidebar() {
         attendance: {
             label: navigationConfig.attendance.label,
             items: filterItemsByPermission(navigationConfig.attendance.items),
+        },
+        coaching: {
+            label: navigationConfig.coaching.label,
+            items: filterItemsByPermission(navigationConfig.coaching.items),
         },
         requests: {
             label: navigationConfig.requests.label,
@@ -357,6 +383,13 @@ export function AppSidebar() {
                     label={filteredNavigation.attendance.label}
                     items={filteredNavigation.attendance.items}
                     isOpen={isCollapsed || openGroups.includes('attendance')}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="coaching"
+                    label={filteredNavigation.coaching.label}
+                    items={filteredNavigation.coaching.items}
+                    isOpen={isCollapsed || openGroups.includes('coaching')}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup

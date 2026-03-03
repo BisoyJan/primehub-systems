@@ -42,7 +42,10 @@ class AccrueLeaveCredits extends Command
 
         $this->info("Accruing leave credits for {$year}-{$month}...");
 
-        $users = User::whereNotNull('hired_date')->get();
+        $users = User::whereNotNull('hired_date')
+            ->where('is_approved', true)
+            ->where('is_active', true)
+            ->get();
         $accrued = 0;
         $skipped = 0;
         $errors = 0;
@@ -61,11 +64,13 @@ class AccrueLeaveCredits extends Command
             } catch (\Exception $e) {
                 $this->error("✗ {$user->name}: {$e->getMessage()}");
                 $errors++;
+            } finally {
+                $this->leaveCreditService->clearCache();
             }
         }
 
         $this->newLine();
-        $this->info("Summary:");
+        $this->info('Summary:');
         $this->info("  Accrued: {$accrued}");
         $this->info("  Skipped: {$skipped}");
         if ($errors > 0) {
