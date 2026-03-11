@@ -176,8 +176,8 @@ export default function CoachingSessionsShow() {
                 {/* Session Details */}
                 <SectionCard title="Session Details">
                     <dl className="space-y-3">
-                        <InfoRow label="Agent">{formatName(session.agent)}</InfoRow>
-                        <InfoRow label="Team Lead">{formatName(session.team_lead)}</InfoRow>
+                        <InfoRow label="Coachee">{formatName(session.coachee)}</InfoRow>
+                        <InfoRow label="Coach">{formatName(session.coach)}</InfoRow>
                         <InfoRow label="Session Date">{formatDate(session.session_date)}</InfoRow>
                         <InfoRow label="Purpose">{purposes[session.purpose] ?? session.purpose}</InfoRow>
                         <InfoRow label="Severity">{session.severity_flag}</InfoRow>

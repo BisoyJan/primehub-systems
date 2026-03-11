@@ -26,7 +26,7 @@ import {
     CommandList,
 } from '@/components/ui/command';
 import { Check, ChevronsUpDown } from 'lucide-react';
-import type { CoachingPurposeLabels, User } from '@/types';
+import type { CoachingMode, CoachingPurposeLabels, User } from '@/types';
 
 interface CoachingFormFieldsProps {
     data: Record<string, unknown>;
@@ -34,7 +34,9 @@ interface CoachingFormFieldsProps {
     errors: Record<string, string>;
     agents?: User[];
     teamLeads?: User[];
+    coachableTeamLeads?: User[];
     isAdmin?: boolean;
+    coachingMode?: CoachingMode;
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
     showAgentSelect?: boolean;
@@ -47,7 +49,9 @@ export function CoachingFormFields({
     errors,
     agents = [],
     teamLeads = [],
+    coachableTeamLeads = [],
     isAdmin = false,
+    coachingMode = 'assign',
     purposes,
     severityFlags,
     showAgentSelect = true,
@@ -57,11 +61,15 @@ export function CoachingFormFields({
     const [agentSearchQuery, setAgentSearchQuery] = useState('');
     const [tlSearchOpen, setTlSearchOpen] = useState(false);
     const [tlSearchQuery, setTlSearchQuery] = useState('');
+    const [coacheeSearchOpen, setCoacheeSearchOpen] = useState(false);
+    const [coacheeSearchQuery, setCoacheeSearchQuery] = useState('');
+
+    const isDirectMode = coachingMode === 'direct';
 
     const selectedTeamLead = useMemo(() => {
-        const id = Number(data.team_lead_id);
+        const id = Number(data.coach_id);
         return teamLeads.find((tl) => tl.id === id) ?? null;
-    }, [data.team_lead_id, teamLeads]);
+    }, [data.coach_id, teamLeads]);
 
     const getAgentCampaign = (agent: User): { id: number; name: string } | null => {
         const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { id?: number; name?: string } } | null;
@@ -75,9 +83,15 @@ export function CoachingFormFields({
     }, [isAdmin, selectedTeamLead]);
 
     const selectedAgent = useMemo(() => {
-        const id = Number(data.agent_id || selectedAgentId);
+        const id = Number(data.coachee_id || selectedAgentId);
         return agents.find((a) => a.id === id) ?? null;
-    }, [data.agent_id, selectedAgentId, agents]);
+    }, [data.coachee_id, selectedAgentId, agents]);
+
+    const selectedCoacheeTl = useMemo(() => {
+        if (!isDirectMode) return null;
+        const id = Number(data.coachee_id);
+        return coachableTeamLeads.find((tl) => tl.id === id) ?? null;
+    }, [data.coachee_id, coachableTeamLeads, isDirectMode]);
 
     // For admin: filter agents to the selected TL's campaign; for TL: show all (already pre-filtered by backend)
     const campaignFilteredAgents = useMemo(() => {
@@ -109,6 +123,18 @@ export function CoachingFormFields({
             .slice(0, 50);
     }, [teamLeads, tlSearchQuery]);
 
+    const filteredCoachableTeamLeads = useMemo(() => {
+        if (!coacheeSearchQuery) return coachableTeamLeads.slice(0, 50);
+        const q = coacheeSearchQuery.toLowerCase();
+        return coachableTeamLeads
+            .filter((tl) => {
+                const name = `${tl.first_name} ${tl.last_name}`.toLowerCase();
+                const campaign = getAgentCampaign(tl)?.name?.toLowerCase() ?? '';
+                return name.includes(q) || campaign.includes(q);
+            })
+            .slice(0, 50);
+    }, [coachableTeamLeads, coacheeSearchQuery]);
+
     // Follow-up date must be next week or later (next Monday onwards)
     const nextMonday = useMemo(() => {
         const d = new Date();
@@ -130,10 +156,10 @@ export function CoachingFormFields({
                     Session Details
                 </h3>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {/* Team Lead selector (Admin only) */}
-                    {showAgentSelect && isAdmin && (
+                    {/* Team Lead (Coach) selector (Admin assign mode only) */}
+                    {showAgentSelect && isAdmin && !isDirectMode && (
                         <div>
-                            <Label htmlFor="team_lead_id">Team Lead <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="coach_id">Team Lead (Coach) <span className="text-red-500">*</span></Label>
                             <Popover open={tlSearchOpen} onOpenChange={setTlSearchOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -165,9 +191,9 @@ export function CoachingFormFields({
                                                         key={tl.id}
                                                         value={String(tl.id)}
                                                         onSelect={() => {
-                                                            setData('team_lead_id', tl.id);
-                                                            // Reset agent when TL changes
-                                                            setData('agent_id', '');
+                                                            setData('coach_id', tl.id);
+                                                            // Reset coachee when coach changes
+                                                            setData('coachee_id', '');
                                                             setTlSearchOpen(false);
                                                             setTlSearchQuery('');
                                                         }}
@@ -190,12 +216,73 @@ export function CoachingFormFields({
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                            {errors.team_lead_id && <p className="text-red-600 text-sm mt-1">{errors.team_lead_id}</p>}
+                            {errors.coach_id && <p className="text-red-600 text-sm mt-1">{errors.coach_id}</p>}
                         </div>
                     )}
-                    {showAgentSelect && (
+                    {/* Coachee TL selector (Admin direct mode only) */}
+                    {showAgentSelect && isAdmin && isDirectMode && (
                         <div>
-                            <Label htmlFor="agent_id">Agent <span className="text-red-500">*</span></Label>
+                            <Label htmlFor="coachee_id">Team Lead (Coachee) <span className="text-red-500">*</span></Label>
+                            <Popover open={coacheeSearchOpen} onOpenChange={setCoacheeSearchOpen}>
+                                <PopoverTrigger asChild>
+                                    <Button
+                                        variant="outline"
+                                        role="combobox"
+                                        aria-expanded={coacheeSearchOpen}
+                                        className="w-full justify-between font-normal"
+                                    >
+                                        <span className="truncate">
+                                            {selectedCoacheeTl
+                                                ? `${selectedCoacheeTl.first_name} ${selectedCoacheeTl.last_name}${getAgentCampaign(selectedCoacheeTl) ? ` — ${getAgentCampaign(selectedCoacheeTl)!.name}` : ''}`
+                                                : 'Select a team lead to coach'}
+                                        </span>
+                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                    </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0" align="start">
+                                    <Command shouldFilter={false}>
+                                        <CommandInput
+                                            placeholder="Search team lead..."
+                                            value={coacheeSearchQuery}
+                                            onValueChange={setCoacheeSearchQuery}
+                                        />
+                                        <CommandList>
+                                            <CommandEmpty>No team lead found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {filteredCoachableTeamLeads.map((tl) => (
+                                                    <CommandItem
+                                                        key={tl.id}
+                                                        value={String(tl.id)}
+                                                        onSelect={() => {
+                                                            setData('coachee_id', tl.id);
+                                                            setCoacheeSearchOpen(false);
+                                                            setCoacheeSearchQuery('');
+                                                        }}
+                                                        className="cursor-pointer"
+                                                    >
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${selectedCoacheeTl?.id === tl.id ? 'opacity-100' : 'opacity-0'}`}
+                                                        />
+                                                        <div className="flex flex-col">
+                                                            <span>{tl.first_name} {tl.last_name}</span>
+                                                            {getAgentCampaign(tl) && (
+                                                                <span className="text-xs text-muted-foreground">{getAgentCampaign(tl)!.name}</span>
+                                                            )}
+                                                        </div>
+                                                    </CommandItem>
+                                                ))}
+                                            </CommandGroup>
+                                        </CommandList>
+                                    </Command>
+                                </PopoverContent>
+                            </Popover>
+                            {errors.coachee_id && <p className="text-red-600 text-sm mt-1">{errors.coachee_id}</p>}
+                        </div>
+                    )}
+                    {/* Agent (Coachee) selector (assign mode) */}
+                    {showAgentSelect && !isDirectMode && (
+                        <div>
+                            <Label htmlFor="coachee_id">Agent <span className="text-red-500">*</span></Label>
                             <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -230,7 +317,7 @@ export function CoachingFormFields({
                                                         key={agent.id}
                                                         value={String(agent.id)}
                                                         onSelect={() => {
-                                                            setData('agent_id', agent.id);
+                                                            setData('coachee_id', agent.id);
                                                             setAgentSearchOpen(false);
                                                             setAgentSearchQuery('');
                                                         }}
@@ -253,7 +340,7 @@ export function CoachingFormFields({
                                     </Command>
                                 </PopoverContent>
                             </Popover>
-                            {errors.agent_id && <p className="text-red-600 text-sm mt-1">{errors.agent_id}</p>}
+                            {errors.coachee_id && <p className="text-red-600 text-sm mt-1">{errors.coachee_id}</p>}
                         </div>
                     )}
                     <div>

@@ -1,7 +1,7 @@
 import React from 'react';
-import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Users, UserPlus } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -16,20 +16,22 @@ import {
     store as sessionsStore,
 } from '@/routes/coaching/sessions';
 
-import type { CoachingPurposeLabels, User, Campaign } from '@/types';
+import type { CoachingMode, CoachingPurposeLabels, User, Campaign } from '@/types';
 
 interface Props extends InertiaPageProps {
     agents: User[];
     teamLeads: User[];
+    coachableTeamLeads: User[];
     campaigns: Campaign[];
     isAdmin: boolean;
+    coachingMode: CoachingMode;
     selectedAgentId: number | null;
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
 }
 
 export default function CoachingSessionsCreate() {
-    const { agents, teamLeads, isAdmin, selectedAgentId, purposes, severityFlags } = usePage<Props>().props;
+    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Coaching Session',
@@ -42,8 +44,9 @@ export default function CoachingSessionsCreate() {
     const isPageLoading = usePageLoading();
 
     const { data, setData, post, errors, processing } = useForm({
-        team_lead_id: '' as number | '',
-        agent_id: selectedAgentId ?? ('' as number | ''),
+        coaching_mode: coachingMode ?? 'assign',
+        coach_id: '' as number | '',
+        coachee_id: selectedAgentId ?? ('' as number | ''),
         session_date: new Date().toISOString().split('T')[0],
         // Agent Profile
         profile_new_hire: false,
@@ -80,6 +83,11 @@ export default function CoachingSessionsCreate() {
         severity_flag: 'Normal',
     });
 
+    const handleModeSwitch = (mode: CoachingMode) => {
+        if (mode === coachingMode) return;
+        router.get(sessionsCreate.url({ query: { coaching_mode: mode } }), {}, { preserveState: false });
+    };
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         post(sessionsStore().url);
@@ -105,6 +113,33 @@ export default function CoachingSessionsCreate() {
                     }
                 />
 
+                {isAdmin && (
+                    <div className="flex rounded-lg border bg-muted/30 p-1 w-fit">
+                        <button
+                            type="button"
+                            onClick={() => handleModeSwitch('assign')}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'assign'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                        >
+                            <Users className="h-4 w-4" />
+                            Assign TL → Agent
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeSwitch('direct')}
+                            className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'direct'
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                        >
+                            <UserPlus className="h-4 w-4" />
+                            Coach a Team Lead
+                        </button>
+                    </div>
+                )}
+
                 <form onSubmit={handleSubmit} className="space-y-2">
                     <CoachingFormFields
                         data={data}
@@ -112,7 +147,9 @@ export default function CoachingSessionsCreate() {
                         errors={errors}
                         agents={agents}
                         teamLeads={teamLeads}
+                        coachableTeamLeads={coachableTeamLeads}
                         isAdmin={isAdmin}
+                        coachingMode={coachingMode}
                         purposes={purposes}
                         severityFlags={severityFlags}
                         showAgentSelect={true}

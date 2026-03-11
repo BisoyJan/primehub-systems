@@ -69,7 +69,7 @@ class HandleInertiaRequests extends Middleware
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             'coachingPendingAck' => fn () => $user
-                ? CoachingSession::where('agent_id', $user->id)->where('ack_status', 'Pending')->count()
+                ? CoachingSession::where('coachee_id', $user->id)->where('ack_status', 'Pending')->count()
                 : 0,
         ];
     }

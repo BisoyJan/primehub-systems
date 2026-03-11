@@ -122,7 +122,7 @@ export const CoachingFollowUpsWidget: React.FC<CoachingFollowUpsWidgetProps> = (
                                             return (
                                                 <Link
                                                     key={agent.id}
-                                                    href={`/coaching/sessions/create?agent_id=${agent.id}`}
+                                                    href={`/coaching/sessions/create?coachee_id=${agent.id}`}
                                                     className="block rounded-lg border p-2 space-y-0.5 hover:bg-muted/50 transition-colors cursor-pointer"
                                                 >
                                                     <div className="flex items-start justify-between gap-2">

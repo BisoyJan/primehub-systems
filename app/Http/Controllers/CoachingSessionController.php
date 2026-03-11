@@ -46,22 +46,26 @@ class CoachingSessionController extends Controller
             $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
         }
 
-        $query = CoachingSession::with(['agent', 'teamLead', 'complianceReviewer']);
+        $query = CoachingSession::with(['coachee', 'coach', 'complianceReviewer']);
 
         // Role-based filtering
         if ($isAgent) {
-            $query->forAgent($user->id);
+            $query->forCoachee($user->id);
         } elseif ($isTeamLead) {
-            // TL sees sessions they created + sessions for agents in their campaign
+            // TL sees sessions they coached + sessions for agents in their campaign + sessions where TL is coachee
             if ($teamLeadCampaignId) {
                 $query->where(function ($q) use ($user, $teamLeadCampaignId) {
-                    $q->where('team_lead_id', $user->id)
-                        ->orWhereHas('agent.activeSchedule', function ($sq) use ($teamLeadCampaignId) {
+                    $q->where('coach_id', $user->id)
+                        ->orWhere('coachee_id', $user->id)
+                        ->orWhereHas('coachee.activeSchedule', function ($sq) use ($teamLeadCampaignId) {
                             $sq->where('campaign_id', $teamLeadCampaignId);
                         });
                 });
             } else {
-                $query->forTeamLead($user->id);
+                $query->where(function ($q) use ($user) {
+                    $q->where('coach_id', $user->id)
+                        ->orWhere('coachee_id', $user->id);
+                });
             }
         }
         // Admin/HR see all — no filter
@@ -91,6 +95,13 @@ class CoachingSessionController extends Controller
             $query->forCampaign($request->campaign_id);
         }
 
+        // Coachee role filter (admin only)
+        if ($request->filled('coachee_role') && $isAdmin) {
+            $query->whereHas('coachee', function ($q) use ($request) {
+                $q->where('role', $request->coachee_role);
+            });
+        }
+
         // Date range filter
         if ($request->filled('date_from') || $request->filled('date_to')) {
             $query->dateRange($request->date_from, $request->date_to);
@@ -107,13 +118,13 @@ class CoachingSessionController extends Controller
         // Get all agents for the search combobox (for admin/TL)
         $allAgents = collect();
         if ($isAdmin) {
-            $allAgents = User::where('role', 'Agent')
+            $allAgents = User::whereIn('role', ['Agent', 'Team Lead'])
                 ->where('is_approved', true)
                 ->where('is_active', true)
                 ->with('activeSchedule.campaign:id,name')
                 ->orderBy('first_name')
                 ->orderBy('last_name')
-                ->get(['id', 'first_name', 'middle_name', 'last_name']);
+                ->get(['id', 'first_name', 'middle_name', 'last_name', 'role']);
         } elseif ($isTeamLead && $teamLeadCampaignId) {
             $agentIds = EmployeeSchedule::where('campaign_id', $teamLeadCampaignId)
                 ->where('is_active', true)
@@ -132,10 +143,10 @@ class CoachingSessionController extends Controller
                 ->get(['id', 'first_name', 'middle_name', 'last_name']);
         }
 
-        // Agent coaching summary (for agent view)
+        // Coachee summary (for agent or TL-as-coachee view)
         $agentSummary = null;
-        if ($isAgent) {
-            $agentSummary = $this->dashboardService->getAgentCoachingSummary($user->id);
+        if ($isAgent || $isTeamLead) {
+            $agentSummary = $this->dashboardService->getCoacheeSummary($user->id);
         }
 
         return Inertia::render('Coaching/Sessions/Index', [
@@ -145,7 +156,7 @@ class CoachingSessionController extends Controller
             'allAgents' => $allAgents,
             'filters' => $request->only([
                 'search', 'ack_status', 'compliance_status', 'purpose',
-                'campaign_id', 'date_from', 'date_to',
+                'campaign_id', 'date_from', 'date_to', 'coachee_role',
             ]),
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
@@ -167,6 +178,9 @@ class CoachingSessionController extends Controller
         $agents = collect();
         $teamLeads = collect();
 
+        // Coaching mode from query param (for admin)
+        $coachingMode = $request->input('coaching_mode', 'assign');
+
         if ($isAdmin) {
             // Admins: fetch all agents (frontend filters by selected TL's campaign)
             $agents = User::where('role', 'Agent')
@@ -186,6 +200,9 @@ class CoachingSessionController extends Controller
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(['id', 'first_name', 'middle_name', 'last_name']);
+
+            // Coachable team leads (for direct coaching mode)
+            $coachableTeamLeads = $teamLeads;
         } else {
             // Team Lead: agents in their campaign only
             $campaignId = $user->activeSchedule?->campaign_id;
@@ -217,8 +234,10 @@ class CoachingSessionController extends Controller
         return Inertia::render('Coaching/Sessions/Create', [
             'agents' => $agents,
             'teamLeads' => $teamLeads,
+            'coachableTeamLeads' => $isAdmin ? ($coachableTeamLeads ?? collect()) : collect(),
             'campaigns' => $campaigns,
             'isAdmin' => $isAdmin,
+            'coachingMode' => $coachingMode,
             'selectedAgentId' => $selectedAgentId ? (int) $selectedAgentId : null,
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'severityFlags' => CoachingSession::SEVERITY_FLAGS,
@@ -238,11 +257,20 @@ class CoachingSessionController extends Controller
 
                 $user = auth()->user();
                 $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+                $coachingMode = $validated['coaching_mode'] ?? 'assign';
 
-                // Admin selects the team lead; TL is always themselves
-                $validated['team_lead_id'] = $isAdmin
-                    ? $validated['team_lead_id']
-                    : $user->id;
+                if ($coachingMode === 'direct' && $isAdmin) {
+                    // Admin directly coaches a TL
+                    $validated['coach_id'] = $user->id;
+                } else {
+                    // Admin assigns TL→Agent, or TL creates their own
+                    $validated['coach_id'] = $isAdmin
+                        ? $validated['coach_id']
+                        : $user->id;
+                }
+
+                // Remove coaching_mode from validated data before creating
+                unset($validated['coaching_mode']);
 
                 $validated['ack_status'] = 'Pending';
                 $validated['compliance_status'] = 'Awaiting_Agent_Ack';
@@ -250,11 +278,11 @@ class CoachingSessionController extends Controller
                 return CoachingSession::create($validated);
             });
 
-            // Notify the agent
-            $session->load('agent', 'teamLead');
+            // Notify the coachee
+            $session->load('coachee', 'coach');
             $this->notificationService->notifyCoachingSessionCreated(
-                $session->agent_id,
-                $session->teamLead->name,
+                $session->coachee_id,
+                $session->coach->name,
                 $session->session_date->format('Y-m-d'),
                 $session->id,
             );
@@ -277,7 +305,7 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('view', $session);
 
-        $session->load(['agent', 'teamLead', 'complianceReviewer']);
+        $session->load(['coachee', 'coach', 'complianceReviewer']);
 
         $user = auth()->user();
         $canAcknowledge = $user->can('acknowledge', $session);
@@ -300,7 +328,7 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('update', $session);
 
-        $session->load(['agent', 'teamLead']);
+        $session->load(['coachee', 'coach']);
 
         return Inertia::render('Coaching/Sessions/Edit', [
             'session' => $session,
@@ -371,11 +399,11 @@ class CoachingSessionController extends Controller
                 ]);
             });
 
-            // Notify the team lead
-            $session->load('agent', 'teamLead');
+            // Notify the coach
+            $session->load('coachee', 'coach');
             $this->notificationService->notifyCoachingAcknowledged(
-                $session->team_lead_id,
-                $session->agent->name,
+                $session->coach_id,
+                $session->coachee->name,
                 $session->session_date->format('Y-m-d'),
                 $session->id,
             );
@@ -409,11 +437,11 @@ class CoachingSessionController extends Controller
                 ]);
             });
 
-            // Notify the team lead
-            $session->load('agent', 'teamLead');
+            // Notify the coach
+            $session->load('coachee', 'coach');
             $this->notificationService->notifyCoachingReviewed(
-                $session->team_lead_id,
-                $session->agent->name,
+                $session->coach_id,
+                $session->coachee->name,
                 $session->session_date->format('Y-m-d'),
                 $session->compliance_status,
                 $session->id,

@@ -52,15 +52,15 @@ class CoachingDashboardController extends Controller
     protected function agentDashboard(Request $request)
     {
         $user = auth()->user();
-        $summary = $this->dashboardService->getAgentCoachingSummary($user->id);
+        $summary = $this->dashboardService->getCoacheeSummary($user->id);
 
-        $sessions = CoachingSession::with(['teamLead'])
-            ->forAgent($user->id)
+        $sessions = CoachingSession::with(['coach'])
+            ->forCoachee($user->id)
             ->orderByDesc('session_date')
             ->paginate(15)
             ->withQueryString();
 
-        $pendingSessions = CoachingSession::forAgent($user->id)
+        $pendingSessions = CoachingSession::forCoachee($user->id)
             ->pending()
             ->count();
 
@@ -89,18 +89,28 @@ class CoachingDashboardController extends Controller
         $dashboardData = $this->dashboardService->getTeamLeadDashboardData($user, $filters ?: null);
 
         // Get recent sessions created by this TL
-        $recentSessions = CoachingSession::with(['agent'])
-            ->forTeamLead($user->id)
+        $recentSessions = CoachingSession::with(['coachee'])
+            ->forCoach($user->id)
             ->orderByDesc('session_date')
             ->paginate(15)
             ->withQueryString();
 
         $campaignName = $user->activeSchedule?->campaign?->name ?? 'N/A';
 
+        // TL's own coaching data (sessions where TL is coachee)
+        $myCoachingData = $this->dashboardService->getCoacheeSummary($user->id);
+        $myCoachingSessions = CoachingSession::with(['coach'])
+            ->forCoachee($user->id)
+            ->orderByDesc('session_date')
+            ->limit(10)
+            ->get();
+
         return Inertia::render('Coaching/Dashboard/Index', [
             'dashboardData' => $dashboardData,
             'recentSessions' => $recentSessions,
             'campaignName' => $campaignName,
+            'myCoachingData' => $myCoachingData,
+            'myCoachingSessions' => $myCoachingSessions,
             'filters' => $request->only(['coaching_status', 'date_from', 'date_to']),
             'statusColors' => CoachingDashboardService::STATUS_COLORS,
             'purposes' => CoachingSession::PURPOSE_LABELS,
@@ -114,13 +124,24 @@ class CoachingDashboardController extends Controller
     {
         $filters = array_filter([
             'campaign_id' => $request->input('campaign_id'),
-            'team_lead_id' => $request->input('team_lead_id'),
+            'coach_id' => $request->input('coach_id'),
             'coaching_status' => $request->input('coaching_status'),
+            'coachee_role' => $request->input('coachee_role'),
             'date_from' => $request->input('date_from'),
             'date_to' => $request->input('date_to'),
         ]);
 
-        $dashboardData = $this->dashboardService->getComplianceDashboardData($filters ?: null);
+        $coacheeRole = $filters['coachee_role'] ?? null;
+        $emptyData = ['total_agents' => 0, 'status_counts' => [], 'agents' => []];
+
+        $dashboardData = $coacheeRole === 'Team Lead'
+            ? $emptyData
+            : $this->dashboardService->getComplianceDashboardData($filters ?: null);
+
+        $teamLeadCoachingData = $coacheeRole === 'Agent'
+            ? $emptyData
+            : $this->dashboardService->getTeamLeadCoachingData($filters ?: null);
+
         $queueData = $this->dashboardService->getComplianceQueueData($filters ?: null);
 
         // Get campaigns and team leads for filter dropdowns
@@ -134,10 +155,11 @@ class CoachingDashboardController extends Controller
 
         return Inertia::render('Coaching/Admin/Index', [
             'dashboardData' => $dashboardData,
+            'teamLeadCoachingData' => $teamLeadCoachingData,
             'queueData' => $queueData,
             'campaigns' => $campaigns,
             'teamLeads' => $teamLeads,
-            'filters' => $request->only(['campaign_id', 'team_lead_id', 'coaching_status', 'date_from', 'date_to']),
+            'filters' => $request->only(['campaign_id', 'coach_id', 'coaching_status', 'coachee_role', 'date_from', 'date_to']),
             'statusColors' => CoachingDashboardService::STATUS_COLORS,
             'purposes' => CoachingSession::PURPOSE_LABELS,
         ]);
@@ -204,7 +226,7 @@ class CoachingDashboardController extends Controller
             'date_from' => 'nullable|date',
             'date_to' => 'nullable|date|after_or_equal:date_from',
             'campaign_id' => 'nullable|exists:campaigns,id',
-            'team_lead_id' => 'nullable|exists:users,id',
+            'coach_id' => 'nullable|exists:users,id',
         ]);
 
         $jobId = (string) Str::uuid();
@@ -214,7 +236,7 @@ class CoachingDashboardController extends Controller
             $request->input('date_from'),
             $request->input('date_to'),
             $request->input('campaign_id') ? (int) $request->input('campaign_id') : null,
-            $request->input('team_lead_id') ? (int) $request->input('team_lead_id') : null,
+            $request->input('coach_id') ? (int) $request->input('coach_id') : null,
         );
 
         if (config('queue.default') === 'sync') {

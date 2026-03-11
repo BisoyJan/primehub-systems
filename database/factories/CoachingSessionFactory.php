@@ -21,8 +21,8 @@ class CoachingSessionFactory extends Factory
     public function definition(): array
     {
         return [
-            'agent_id' => User::factory()->state(['role' => 'Agent', 'is_approved' => true]),
-            'team_lead_id' => User::factory()->state(['role' => 'Team Lead', 'is_approved' => true]),
+            'coachee_id' => User::factory()->state(['role' => 'Agent', 'is_approved' => true]),
+            'coach_id' => User::factory()->state(['role' => 'Team Lead', 'is_approved' => true]),
             'session_date' => fake()->dateTimeBetween('-60 days', 'now')->format('Y-m-d'),
             // Agent Profile
             'profile_new_hire' => fake()->boolean(30),
@@ -115,6 +115,17 @@ class CoachingSessionFactory extends Factory
             'ack_timestamp' => now(),
             'ack_comment' => fake()->sentence(),
             'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+    }
+
+    /**
+     * State: session where a Team Lead is the coachee (coached by admin).
+     */
+    public function forTeamLead(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'coachee_id' => User::factory()->state(['role' => 'Team Lead', 'is_approved' => true]),
+            'coach_id' => User::factory()->state(['role' => 'Super Admin', 'is_approved' => true]),
         ]);
     }
 

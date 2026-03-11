@@ -8,15 +8,15 @@ import { show } from '@/routes/coaching/sessions';
 interface CoachingSessionCardProps {
     session: CoachingSession;
     purposes: CoachingPurposeLabels;
-    showAgent?: boolean;
-    showTeamLead?: boolean;
+    showCoachee?: boolean;
+    showCoach?: boolean;
 }
 
 export function CoachingSessionCard({
     session,
     purposes,
-    showAgent = true,
-    showTeamLead = false,
+    showCoachee = true,
+    showCoach = false,
 }: CoachingSessionCardProps) {
     return (
         <div className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
@@ -26,18 +26,18 @@ export function CoachingSessionCard({
                         <Calendar className="h-3.5 w-3.5" />
                         <span>{new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}</span>
                     </div>
-                    {showAgent && session.agent && (
+                    {showCoachee && session.coachee && (
                         <div className="flex items-center gap-2">
                             <User2 className="h-3.5 w-3.5 text-muted-foreground" />
                             <span className="font-medium text-sm">
-                                {session.agent.first_name} {session.agent.last_name}
+                                {session.coachee.first_name} {session.coachee.last_name}
                             </span>
                         </div>
                     )}
-                    {showTeamLead && session.team_lead && (
+                    {showCoach && session.coach && (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
                             <User2 className="h-3.5 w-3.5" />
-                            <span>TL: {session.team_lead.first_name} {session.team_lead.last_name}</span>
+                            <span>Coach: {session.coach.first_name} {session.coach.last_name}</span>
                         </div>
                     )}
                 </div>

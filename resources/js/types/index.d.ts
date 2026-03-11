@@ -75,8 +75,8 @@ export type CoachingStatusLabel =
 
 export interface CoachingSession {
     id: number;
-    agent_id: number;
-    team_lead_id: number;
+    coachee_id: number;
+    coach_id: number;
     session_date: string;
     // Agent Profile
     profile_new_hire: boolean;
@@ -125,10 +125,12 @@ export interface CoachingSession {
     created_at: string;
     updated_at: string;
     // Relationships (loaded via with())
-    agent?: User;
-    team_lead?: User;
+    coachee?: User;
+    coach?: User;
     compliance_reviewer?: User;
 }
+
+export type CoachingMode = 'assign' | 'direct';
 
 export interface CoachingSummary {
     coaching_status: CoachingStatusLabel;

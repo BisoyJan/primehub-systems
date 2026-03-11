@@ -134,7 +134,7 @@ export default function MyCoachingLogsIndex() {
                                 <TableHeader>
                                     <TableRow className="bg-muted/50">
                                         <TableHead>Date</TableHead>
-                                        <TableHead>Team Lead</TableHead>
+                                        <TableHead>Coach</TableHead>
                                         <TableHead>Purpose</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead>Severity</TableHead>
@@ -154,7 +154,7 @@ export default function MyCoachingLogsIndex() {
                                                 <TableCell className="whitespace-nowrap">
                                                     {new Date(session.session_date).toLocaleDateString()}
                                                 </TableCell>
-                                                <TableCell>{formatName(session.team_lead)}</TableCell>
+                                                <TableCell>{formatName(session.coach)}</TableCell>
                                                 <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
                                                 <TableCell>
                                                     <AckStatusBadge status={session.ack_status} />
@@ -180,7 +180,7 @@ export default function MyCoachingLogsIndex() {
                                                                     <DialogHeader>
                                                                         <DialogTitle>Acknowledge Session</DialogTitle>
                                                                         <DialogDescription>
-                                                                            Confirm you have reviewed this coaching session from {formatName(session.team_lead)} on{' '}
+                                                                            Confirm you have reviewed this coaching session from {formatName(session.coach)} on{' '}
                                                                             {new Date(session.session_date).toLocaleDateString()}.
                                                                         </DialogDescription>
                                                                     </DialogHeader>
@@ -228,7 +228,7 @@ export default function MyCoachingLogsIndex() {
                                             <p className="text-xs text-muted-foreground">
                                                 {new Date(session.session_date).toLocaleDateString()}
                                             </p>
-                                            <p className="text-sm font-medium">{formatName(session.team_lead)}</p>
+                                            <p className="text-sm font-medium">{formatName(session.coach)}</p>
                                             <p className="text-xs text-muted-foreground">{purposes[session.purpose] ?? session.purpose}</p>
                                         </div>
                                         <div className="flex flex-col items-end gap-1">

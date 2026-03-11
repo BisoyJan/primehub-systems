@@ -57,10 +57,10 @@ class CoachingSessionControllerTest extends TestCase
     /**
      * Helper to build valid session data for store requests.
      */
-    protected function validSessionData(int $agentId): array
+    protected function validSessionData(int $coacheeId): array
     {
         return [
-            'agent_id' => $agentId,
+            'coachee_id' => $coacheeId,
             'session_date' => now()->format('Y-m-d'),
             'purpose' => 'performance_behavior_issue',
             'performance_description' => 'The agent has been consistently late for the past week.',
@@ -94,8 +94,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         // Create another session for a different agent — should not appear
@@ -117,8 +117,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $response = $this->actingAs($team['teamLead'])->get(route('coaching.sessions.index'));
@@ -207,8 +207,8 @@ class CoachingSessionControllerTest extends TestCase
         $response->assertRedirect(route('coaching.sessions.index'));
 
         $this->assertDatabaseHas('coaching_sessions', [
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
             'purpose' => 'performance_behavior_issue',
@@ -236,7 +236,7 @@ class CoachingSessionControllerTest extends TestCase
             ->post(route('coaching.sessions.store'), []);
 
         $response->assertSessionHasErrors([
-            'agent_id', 'session_date', 'purpose',
+            'coachee_id', 'session_date', 'purpose',
             'performance_description', 'smart_action_plan',
         ]);
     }
@@ -255,13 +255,14 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     #[Test]
-    public function admin_can_create_session_with_team_lead_id(): void
+    public function admin_can_create_session_in_assign_mode(): void
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $team = $this->createTeamWithCampaign();
 
         $data = $this->validSessionData($team['agent']->id);
-        $data['team_lead_id'] = $team['teamLead']->id;
+        $data['coaching_mode'] = 'assign';
+        $data['coach_id'] = $team['teamLead']->id;
 
         $response = $this->actingAs($admin)
             ->post(route('coaching.sessions.store'), $data);
@@ -269,25 +270,26 @@ class CoachingSessionControllerTest extends TestCase
         $response->assertRedirect(route('coaching.sessions.index'));
 
         $this->assertDatabaseHas('coaching_sessions', [
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
             'ack_status' => 'Pending',
         ]);
     }
 
     #[Test]
-    public function admin_store_requires_team_lead_id(): void
+    public function admin_store_requires_coach_id_in_assign_mode(): void
     {
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $team = $this->createTeamWithCampaign();
 
         $data = $this->validSessionData($team['agent']->id);
-        // Do not include team_lead_id
+        $data['coaching_mode'] = 'assign';
+        // Do not include coach_id
 
         $response = $this->actingAs($admin)
             ->post(route('coaching.sessions.store'), $data);
 
-        $response->assertSessionHasErrors('team_lead_id');
+        $response->assertSessionHasErrors('coach_id');
     }
 
     #[Test]
@@ -309,7 +311,7 @@ class CoachingSessionControllerTest extends TestCase
         $response = $this->actingAs($team['teamLead'])
             ->post(route('coaching.sessions.store'), $data);
 
-        $response->assertSessionHasErrors('agent_id');
+        $response->assertSessionHasErrors('coachee_id');
     }
 
     // ─── Show Tests ─────────────────────────────────────────────────
@@ -319,8 +321,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $response = $this->actingAs($team['agent'])
@@ -352,8 +354,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $data = [
@@ -398,8 +400,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $response = $this->actingAs($team['agent'])
@@ -433,7 +435,7 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'team_lead_id' => $team['teamLead']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $response = $this->actingAs($team['teamLead'])
@@ -448,7 +450,7 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
+            'coachee_id' => $team['agent']->id,
         ]);
 
         $response = $this->actingAs($team['agent'])
@@ -464,8 +466,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
         ]);
@@ -490,8 +492,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->acknowledged()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $response = $this->actingAs($team['agent'])
@@ -505,8 +507,8 @@ class CoachingSessionControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
             'ack_status' => 'Pending',
         ]);
 
@@ -636,6 +638,195 @@ class CoachingSessionControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->has('sessions.data', 1)
                 ->where('sessions.data.0.ack_status', 'Pending')
+            );
+    }
+
+    // ─── Admin Direct Coaching (TL as Coachee) Tests ────────────────
+
+    #[Test]
+    public function admin_create_form_passes_coachable_team_leads_and_coaching_mode(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $this->createTeamWithCampaign();
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.create', ['coaching_mode' => 'direct']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Create')
+                ->has('coachableTeamLeads')
+                ->where('coachingMode', 'direct')
+                ->where('isAdmin', true)
+            );
+    }
+
+    #[Test]
+    public function admin_can_create_direct_coaching_session_for_team_lead(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        $data = $this->validSessionData($team['teamLead']->id);
+        $data['coaching_mode'] = 'direct';
+
+        $response = $this->actingAs($admin)
+            ->post(route('coaching.sessions.store'), $data);
+
+        $response->assertRedirect(route('coaching.sessions.index'));
+
+        $this->assertDatabaseHas('coaching_sessions', [
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+            'ack_status' => 'Pending',
+        ]);
+    }
+
+    #[Test]
+    public function admin_direct_mode_sets_self_as_coach(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        $data = $this->validSessionData($team['teamLead']->id);
+        $data['coaching_mode'] = 'direct';
+
+        $this->actingAs($admin)
+            ->post(route('coaching.sessions.store'), $data);
+
+        $session = CoachingSession::latest('id')->first();
+        $this->assertEquals($admin->id, $session->coach_id);
+        $this->assertEquals($team['teamLead']->id, $session->coachee_id);
+    }
+
+    #[Test]
+    public function team_lead_cannot_create_direct_coaching_session(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $otherTl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        $data = $this->validSessionData($otherTl->id);
+        $data['coaching_mode'] = 'direct';
+
+        $response = $this->actingAs($team['teamLead'])
+            ->post(route('coaching.sessions.store'), $data);
+
+        // TL should not be able to use direct mode — coaching_mode is nullable for non-admins
+        // The TL store flow uses assign mode; coachee must be in their campaign
+        $this->assertDatabaseMissing('coaching_sessions', [
+            'coachee_id' => $otherTl->id,
+        ]);
+    }
+
+    // ─── Coachee Role Filter Tests ──────────────────────────────────
+
+    #[Test]
+    public function admin_can_filter_sessions_by_coachee_role_agent(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        // Session with agent coachee
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        // Session with TL coachee (admin coaching a TL)
+        $otherTl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $otherTl->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index', ['coachee_role' => 'Agent']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.coachee_id', $team['agent']->id)
+                ->where('filters.coachee_role', 'Agent')
+            );
+    }
+
+    #[Test]
+    public function admin_can_filter_sessions_by_coachee_role_team_lead(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        // Session with agent coachee
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        // Session with TL coachee
+        $otherTl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $otherTl->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index', ['coachee_role' => 'Team Lead']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.coachee_id', $otherTl->id)
+                ->where('filters.coachee_role', 'Team Lead')
+            );
+    }
+
+    #[Test]
+    public function admin_without_coachee_role_filter_returns_all_sessions(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        $otherTl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $otherTl->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 2)
+            );
+    }
+
+    #[Test]
+    public function non_admin_coachee_role_filter_is_ignored(): void
+    {
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        // TL tries to use coachee_role filter — should be ignored
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.index', ['coachee_role' => 'Agent']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
             );
     }
 }

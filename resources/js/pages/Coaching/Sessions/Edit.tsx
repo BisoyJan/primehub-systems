@@ -94,7 +94,7 @@ export default function CoachingSessionsEdit() {
 
                 <PageHeader
                     title="Edit Coaching Session"
-                    description={`Editing session for ${formatName(session.agent)} on ${new Date(session.session_date).toLocaleDateString()}`}
+                    description={`Editing session for ${formatName(session.coachee)} on ${new Date(session.session_date).toLocaleDateString()}`}
                     actions={
                         <Link href={sessionsShow.url(session.id)}>
                             <Button variant="outline">

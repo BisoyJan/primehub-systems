@@ -36,7 +36,7 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
         try {
             $this->updateProgress($cacheKey, 5, 'Fetching coaching sessions...');
 
-            $query = CoachingSession::with(['agent', 'teamLead', 'complianceReviewer']);
+            $query = CoachingSession::with(['coachee', 'coach', 'complianceReviewer']);
 
             if ($this->dateFrom) {
                 $query->where('session_date', '>=', Carbon::parse($this->dateFrom)->toDateString());
@@ -47,11 +47,11 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
             }
 
             if ($this->teamLeadId) {
-                $query->where('team_lead_id', $this->teamLeadId);
+                $query->where('coach_id', $this->teamLeadId);
             }
 
             if ($this->campaignId) {
-                $query->whereHas('agent', function ($q) {
+                $query->whereHas('coachee', function ($q) {
                     $q->whereHas('activeSchedule', function ($sq) {
                         $sq->where('campaign_id', $this->campaignId);
                     });
@@ -69,8 +69,8 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
 
             $headers = [
                 'Session Date',
-                'Agent Name',
-                'Team Lead',
+                'Coachee Name',
+                'Coach',
                 'Purpose',
                 'Severity',
                 'Agent Profile',
@@ -98,12 +98,12 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
             $processed = 0;
 
             foreach ($records as $record) {
-                $agentName = $record->agent
-                    ? $record->agent->first_name.' '.$record->agent->last_name
+                $agentName = $record->coachee
+                    ? $record->coachee->first_name.' '.$record->coachee->last_name
                     : 'N/A';
 
-                $teamLeadName = $record->teamLead
-                    ? $record->teamLead->first_name.' '.$record->teamLead->last_name
+                $teamLeadName = $record->coach
+                    ? $record->coach->first_name.' '.$record->coach->last_name
                     : 'N/A';
 
                 $reviewerName = $record->complianceReviewer

@@ -52,10 +52,10 @@ class CoachingDashboardService
      * Threshold-based logic using configurable day ranges.
      * No Critical severity override — severity is tracked separately on sessions.
      */
-    public function getCoachingStatus(int $agentId): string
+    public function getCoachingStatus(int $coacheeId): string
     {
         $thresholds = CoachingStatusSetting::getThresholds();
-        $lastSession = CoachingSession::where('agent_id', $agentId)
+        $lastSession = CoachingSession::where('coachee_id', $coacheeId)
             ->orderByDesc('session_date')
             ->first();
 
@@ -96,21 +96,21 @@ class CoachingDashboardService
      *
      * @return array{coaching_status: string, status_color: string, last_coached_date: ?string, previous_coached_date: ?string, older_coached_date: ?string, pending_acknowledgements: int, total_sessions: int}
      */
-    public function getAgentCoachingSummary(int $agentId): array
+    public function getCoacheeSummary(int $coacheeId): array
     {
-        $recentSessions = CoachingSession::where('agent_id', $agentId)
+        $recentSessions = CoachingSession::where('coachee_id', $coacheeId)
             ->orderByDesc('session_date')
             ->limit(3)
             ->pluck('session_date')
             ->toArray();
 
-        $pendingCount = CoachingSession::where('agent_id', $agentId)
+        $pendingCount = CoachingSession::where('coachee_id', $coacheeId)
             ->where('ack_status', 'Pending')
             ->count();
 
-        $totalSessions = CoachingSession::where('agent_id', $agentId)->count();
+        $totalSessions = CoachingSession::where('coachee_id', $coacheeId)->count();
 
-        $status = $this->getCoachingStatus($agentId);
+        $status = $this->getCoachingStatus($coacheeId);
 
         return [
             'coaching_status' => $status,
@@ -173,11 +173,10 @@ class CoachingDashboardService
             });
         }
 
-        if (isset($filters['team_lead_id'])) {
-            // Filter agents who have sessions from this TL
-            $tlId = $filters['team_lead_id'];
-            $query->whereHas('coachingSessionsAsAgent', function ($q) use ($tlId) {
-                $q->where('team_lead_id', $tlId);
+        if (isset($filters['coach_id'])) {
+            $coachId = $filters['coach_id'];
+            $query->whereHas('coachingSessionsAsCoachee', function ($q) use ($coachId) {
+                $q->where('coach_id', $coachId);
             });
         }
 
@@ -189,14 +188,14 @@ class CoachingDashboardService
     /**
      * Build dashboard data for a set of agent IDs.
      */
-    protected function buildDashboardData(Collection $agentIds, ?array $filters = null): array
+    protected function buildDashboardData(Collection $coacheeIds, ?array $filters = null): array
     {
         $statusCounts = $this->emptyStatusCounts();
         $agents = collect();
 
-        foreach ($agentIds as $agentId) {
-            $summary = $this->getAgentCoachingSummary($agentId);
-            $user = User::find($agentId);
+        foreach ($coacheeIds as $coacheeId) {
+            $summary = $this->getCoacheeSummary($coacheeId);
+            $user = User::find($coacheeId);
 
             if (! $user) {
                 continue;
@@ -245,7 +244,7 @@ class CoachingDashboardService
         ])->values();
 
         return [
-            'total_agents' => $agentIds->count(),
+            'total_agents' => $coacheeIds->count(),
             'status_counts' => $statusCounts,
             'agents' => $agents,
         ];
@@ -258,33 +257,47 @@ class CoachingDashboardService
      */
     public function getComplianceQueueData(?array $filters = null): array
     {
-        $unacknowledgedQuery = CoachingSession::with(['agent', 'teamLead'])
+        $unacknowledgedQuery = CoachingSession::with(['coachee', 'coach'])
             ->where('ack_status', 'Pending')
             ->orderBy('session_date');
 
-        $forReviewQuery = CoachingSession::with(['agent', 'teamLead'])
+        $forReviewQuery = CoachingSession::with(['coachee', 'coach'])
             ->where('compliance_status', 'For_Review')
             ->orderBy('session_date');
 
         // Apply filters
         if (isset($filters['campaign_id'])) {
             $campaignId = $filters['campaign_id'];
-            $unacknowledgedQuery->whereHas('agent.activeSchedule', function ($q) use ($campaignId) {
+            $unacknowledgedQuery->whereHas('coachee.activeSchedule', function ($q) use ($campaignId) {
                 $q->where('campaign_id', $campaignId);
             });
-            $forReviewQuery->whereHas('agent.activeSchedule', function ($q) use ($campaignId) {
+            $forReviewQuery->whereHas('coachee.activeSchedule', function ($q) use ($campaignId) {
                 $q->where('campaign_id', $campaignId);
             });
         }
 
-        if (isset($filters['team_lead_id'])) {
-            $unacknowledgedQuery->where('team_lead_id', $filters['team_lead_id']);
-            $forReviewQuery->where('team_lead_id', $filters['team_lead_id']);
+        if (isset($filters['coach_id'])) {
+            $unacknowledgedQuery->where('coach_id', $filters['coach_id']);
+            $forReviewQuery->where('coach_id', $filters['coach_id']);
+        }
+
+        if (isset($filters['coachee_role'])) {
+            $coacheeRole = $filters['coachee_role'];
+            $unacknowledgedQuery->whereHas('coachee', fn ($q) => $q->where('role', $coacheeRole));
+            $forReviewQuery->whereHas('coachee', fn ($q) => $q->where('role', $coacheeRole));
         }
 
         // Get at-risk agents (No Record / Please Coach ASAP)
         $atRiskAgents = collect();
-        $allAgents = User::where('role', 'Agent')->where('is_active', true)->whereNull('deleted_at')->pluck('id');
+        $atRiskQuery = User::where('is_active', true)->whereNull('deleted_at');
+
+        if (isset($filters['coachee_role'])) {
+            $atRiskQuery->where('role', $filters['coachee_role']);
+        } else {
+            $atRiskQuery->where('role', 'Agent');
+        }
+
+        $allAgents = $atRiskQuery->pluck('id');
         foreach ($allAgents as $agentId) {
             $status = $this->getCoachingStatus($agentId);
             if (in_array($status, [self::STATUS_NO_RECORD, self::STATUS_PLEASE_COACH_ASAP])) {
@@ -306,6 +319,29 @@ class CoachingDashboardService
             'for_review' => $forReviewQuery->get(),
             'at_risk_agents' => $atRiskAgents,
         ];
+    }
+
+    /**
+     * Get coaching data for Team Leads (as coachees), used by admin dashboard.
+     *
+     * @return array{total_agents: int, status_counts: array<string, int>, agents: Collection}
+     */
+    public function getTeamLeadCoachingData(?array $filters = null): array
+    {
+        $query = User::where('role', 'Team Lead')
+            ->where('is_active', true)
+            ->whereNull('deleted_at');
+
+        if (isset($filters['campaign_id'])) {
+            $campaignId = $filters['campaign_id'];
+            $query->whereHas('activeSchedule', function ($q) use ($campaignId) {
+                $q->where('campaign_id', $campaignId);
+            });
+        }
+
+        $tlIds = $query->pluck('id');
+
+        return $this->buildDashboardData($tlIds, $filters);
     }
 
     /**

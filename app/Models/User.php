@@ -225,19 +225,19 @@ class User extends Authenticatable
     }
 
     /**
-     * Get coaching sessions where this user is the agent.
+     * Get coaching sessions where this user is the coachee.
      */
-    public function coachingSessionsAsAgent()
+    public function coachingSessionsAsCoachee()
     {
-        return $this->hasMany(CoachingSession::class, 'agent_id');
+        return $this->hasMany(CoachingSession::class, 'coachee_id');
     }
 
     /**
-     * Get coaching sessions where this user is the team lead.
+     * Get coaching sessions where this user is the coach.
      */
-    public function coachingSessionsAsTeamLead()
+    public function coachingSessionsAsCoach()
     {
-        return $this->hasMany(CoachingSession::class, 'team_lead_id');
+        return $this->hasMany(CoachingSession::class, 'coach_id');
     }
 
     /**

@@ -22,8 +22,8 @@ class CoachingSession extends Model
     }
 
     protected $fillable = [
-        'agent_id',
-        'team_lead_id',
+        'coachee_id',
+        'coach_id',
         'session_date',
         // Agent's Profile
         'profile_new_hire',
@@ -152,19 +152,19 @@ class CoachingSession extends Model
     // ─── Relationships ──────────────────────────────────────────────
 
     /**
-     * Get the agent (employee) being coached.
+     * Get the person being coached (agent or team lead).
      */
-    public function agent(): BelongsTo
+    public function coachee(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'agent_id');
+        return $this->belongsTo(User::class, 'coachee_id');
     }
 
     /**
-     * Get the team lead who conducted the session.
+     * Get the coach who conducted the session.
      */
-    public function teamLead(): BelongsTo
+    public function coach(): BelongsTo
     {
-        return $this->belongsTo(User::class, 'team_lead_id');
+        return $this->belongsTo(User::class, 'coach_id');
     }
 
     /**
@@ -178,19 +178,19 @@ class CoachingSession extends Model
     // ─── Scopes ─────────────────────────────────────────────────────
 
     /**
-     * Scope to sessions for a specific agent.
+     * Scope to sessions for a specific coachee.
      */
-    public function scopeForAgent(Builder $query, int $agentId): Builder
+    public function scopeForCoachee(Builder $query, int $coacheeId): Builder
     {
-        return $query->where('agent_id', $agentId);
+        return $query->where('coachee_id', $coacheeId);
     }
 
     /**
-     * Scope to sessions created by a specific team lead.
+     * Scope to sessions created by a specific coach.
      */
-    public function scopeForTeamLead(Builder $query, int $teamLeadId): Builder
+    public function scopeForCoach(Builder $query, int $coachId): Builder
     {
-        return $query->where('team_lead_id', $teamLeadId);
+        return $query->where('coach_id', $coachId);
     }
 
     /**
@@ -198,7 +198,7 @@ class CoachingSession extends Model
      */
     public function scopeForCampaign(Builder $query, int $campaignId): Builder
     {
-        return $query->whereHas('agent', function (Builder $q) use ($campaignId) {
+        return $query->whereHas('coachee', function (Builder $q) use ($campaignId) {
             $q->whereHas('activeSchedule', function (Builder $sq) use ($campaignId) {
                 $sq->where('campaign_id', $campaignId);
             });
@@ -239,10 +239,10 @@ class CoachingSession extends Model
         }
 
         return $query->where(function (Builder $q) use ($search) {
-            $q->whereHas('agent', function (Builder $aq) use ($search) {
+            $q->whereHas('coachee', function (Builder $aq) use ($search) {
                 $aq->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%");
-            })->orWhereHas('teamLead', function (Builder $tq) use ($search) {
+            })->orWhereHas('coach', function (Builder $tq) use ($search) {
                 $tq->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%");
             });

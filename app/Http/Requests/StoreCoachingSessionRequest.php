@@ -26,12 +26,10 @@ class StoreCoachingSessionRequest extends FormRequest
     {
         $user = $this->user();
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
+        $coachingMode = $this->input('coaching_mode', 'assign');
 
-        return [
-            'team_lead_id' => $isAdmin
-                ? ['required', 'exists:users,id']
-                : ['nullable'],
-            'agent_id' => ['required', 'exists:users,id'],
+        $rules = [
+            'coaching_mode' => [$isAdmin ? 'required' : 'nullable', Rule::in(['assign', 'direct'])],
             'session_date' => ['required', 'date', 'before_or_equal:today'],
             // Agent Profile
             'profile_new_hire' => ['sometimes', 'boolean'],
@@ -68,6 +66,18 @@ class StoreCoachingSessionRequest extends FormRequest
             // Other
             'severity_flag' => ['sometimes', Rule::in(CoachingSession::SEVERITY_FLAGS)],
         ];
+
+        if ($coachingMode === 'direct' && $isAdmin) {
+            $rules['coach_id'] = ['nullable'];
+            $rules['coachee_id'] = ['required', 'exists:users,id'];
+        } else {
+            $rules['coach_id'] = $isAdmin
+                ? ['required', 'exists:users,id']
+                : ['nullable'];
+            $rules['coachee_id'] = ['required', 'exists:users,id'];
+        }
+
+        return $rules;
     }
 
     /**
@@ -76,10 +86,10 @@ class StoreCoachingSessionRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'team_lead_id.required' => 'Please select a team lead.',
-            'team_lead_id.exists' => 'The selected team lead does not exist.',
-            'agent_id.required' => 'Please select an agent.',
-            'agent_id.exists' => 'The selected agent does not exist.',
+            'coach_id.required' => 'Please select a team lead.',
+            'coach_id.exists' => 'The selected team lead does not exist.',
+            'coachee_id.required' => 'Please select a coachee.',
+            'coachee_id.exists' => 'The selected coachee does not exist.',
             'session_date.required' => 'Session date is required.',
             'session_date.before_or_equal' => 'Session date cannot be in the future.',
             'purpose.required' => 'Please select the purpose of coaching.',
@@ -101,37 +111,73 @@ class StoreCoachingSessionRequest extends FormRequest
     {
         return [
             function (\Illuminate\Validation\Validator $validator) {
-                $agentId = $this->input('agent_id');
-                if (! $agentId) {
+                $coachingMode = $this->input('coaching_mode', 'assign');
+
+                if ($coachingMode === 'direct') {
+                    $coacheeId = $this->input('coachee_id');
+                    if (! $coacheeId) {
+                        return;
+                    }
+
+                    $coachee = \App\Models\User::find($coacheeId);
+                    if (! $coachee) {
+                        return;
+                    }
+
+                    if ($coachee->role !== 'Team Lead') {
+                        $validator->errors()->add(
+                            'coachee_id',
+                            'The selected coachee must be a Team Lead for direct coaching.',
+                        );
+                    }
+
+                    $hasActiveCampaign = EmployeeSchedule::where('user_id', $coacheeId)
+                        ->where('is_active', true)
+                        ->whereNotNull('campaign_id')
+                        ->exists();
+
+                    if (! $hasActiveCampaign) {
+                        $validator->errors()->add(
+                            'coachee_id',
+                            'The selected Team Lead does not have an active campaign.',
+                        );
+                    }
+
+                    return;
+                }
+
+                // Assign mode: validate coachee belongs to same campaign as coach
+                $coacheeId = $this->input('coachee_id');
+                if (! $coacheeId) {
                     return;
                 }
 
                 $user = $this->user();
                 $isAdmin = in_array($user->role, ['Super Admin', 'Admin']);
-                $teamLeadId = $isAdmin ? $this->input('team_lead_id') : $user->id;
+                $coachId = $isAdmin ? $this->input('coach_id') : $user->id;
 
-                if (! $teamLeadId) {
+                if (! $coachId) {
                     return;
                 }
 
-                // Get team lead's active campaign
-                $tlSchedule = EmployeeSchedule::where('user_id', $teamLeadId)
+                // Get coach's active campaign
+                $coachSchedule = EmployeeSchedule::where('user_id', $coachId)
                     ->where('is_active', true)
                     ->first();
 
-                if (! $tlSchedule?->campaign_id) {
+                if (! $coachSchedule?->campaign_id) {
                     return;
                 }
 
-                // Check if agent has an active schedule in the same campaign
-                $agentInCampaign = EmployeeSchedule::where('user_id', $agentId)
-                    ->where('campaign_id', $tlSchedule->campaign_id)
+                // Check if coachee has an active schedule in the same campaign
+                $coacheeInCampaign = EmployeeSchedule::where('user_id', $coacheeId)
+                    ->where('campaign_id', $coachSchedule->campaign_id)
                     ->where('is_active', true)
                     ->exists();
 
-                if (! $agentInCampaign) {
+                if (! $coacheeInCampaign) {
                     $validator->errors()->add(
-                        'agent_id',
+                        'coachee_id',
                         'The selected agent does not belong to the same campaign as the team lead.',
                     );
                 }

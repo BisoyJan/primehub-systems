@@ -179,6 +179,15 @@ export interface CoachingSummary {
     pending_acks: number;
     pending_reviews: number;
     sessions_this_month: number;
+    // TL personal coaching status (when user is Team Lead)
+    tl_coaching_status?: string;
+    tl_coaching_status_color?: string;
+    // Admin: TL coaching overview
+    tl_status_counts?: Record<string, number>;
+    tl_total?: number;
+    tl_sessions_this_month?: number;
+    tl_pending_acks?: number;
+    tl_pending_reviews?: number;
 }
 
 export interface CoachingFollowUp {
@@ -203,6 +212,10 @@ export interface CoachingFollowUps {
     follow_ups: CoachingFollowUp[];
     not_coached_this_week: NotCoachedAgent[];
     not_coached_count: number;
+    coached_this_week: NotCoachedAgent[];
+    coached_count: number;
+    not_coached_tls_this_week: NotCoachedAgent[];
+    coached_tls_this_week: NotCoachedAgent[];
 }
 
 // ─── Phase 4: Enhanced Analytics Types ───────────────────────────────────────

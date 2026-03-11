@@ -32,7 +32,7 @@ class CoachingDashboardServiceTest extends TestCase
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(5),
             'severity_flag' => 'Normal',
         ]);
@@ -47,7 +47,7 @@ class CoachingDashboardServiceTest extends TestCase
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(20),
             'severity_flag' => 'Normal',
         ]);
@@ -62,7 +62,7 @@ class CoachingDashboardServiceTest extends TestCase
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(35),
             'severity_flag' => 'Normal',
         ]);
@@ -77,7 +77,7 @@ class CoachingDashboardServiceTest extends TestCase
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(50),
             'severity_flag' => 'Normal',
         ]);
@@ -102,7 +102,7 @@ class CoachingDashboardServiceTest extends TestCase
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(65),
             'severity_flag' => 'Normal',
         ]);
@@ -117,7 +117,7 @@ class CoachingDashboardServiceTest extends TestCase
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(5),
             'severity_flag' => 'Critical',
             'compliance_status' => 'Awaiting_Agent_Ack',
@@ -138,7 +138,7 @@ class CoachingDashboardServiceTest extends TestCase
 
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(7),
             'severity_flag' => 'Normal',
         ]);
@@ -156,13 +156,13 @@ class CoachingDashboardServiceTest extends TestCase
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(3),
             'ack_status' => 'Pending',
             'severity_flag' => 'Normal',
         ]);
 
-        $summary = $this->service->getAgentCoachingSummary($agent->id);
+        $summary = $this->service->getCoacheeSummary($agent->id);
 
         $this->assertArrayHasKey('coaching_status', $summary);
         $this->assertArrayHasKey('status_color', $summary);
@@ -181,22 +181,22 @@ class CoachingDashboardServiceTest extends TestCase
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
 
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(3),
             'severity_flag' => 'Normal',
         ]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(10),
             'severity_flag' => 'Normal',
         ]);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
+            'coachee_id' => $agent->id,
             'session_date' => now()->subDays(20),
             'severity_flag' => 'Normal',
         ]);
 
-        $summary = $this->service->getAgentCoachingSummary($agent->id);
+        $summary = $this->service->getCoacheeSummary($agent->id);
 
         $this->assertNotNull($summary['last_coached_date']);
         $this->assertNotNull($summary['previous_coached_date']);
@@ -275,5 +275,96 @@ class CoachingDashboardServiceTest extends TestCase
 
         $this->assertCount(1, $queueData['unacknowledged']);
         $this->assertCount(1, $queueData['for_review']);
+    }
+
+    // ─── Team Lead Coaching Data Tests ──────────────────────────────
+
+    #[Test]
+    public function coaching_status_works_for_team_lead_coachee(): void
+    {
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        CoachingSession::factory()->forTeamLead()->create([
+            'coachee_id' => $tl->id,
+            'session_date' => now()->subDays(5),
+            'severity_flag' => 'Normal',
+        ]);
+
+        $status = $this->service->getCoachingStatus($tl->id);
+
+        $this->assertEquals(CoachingDashboardService::STATUS_COACHING_DONE, $status);
+    }
+
+    #[Test]
+    public function coachee_summary_works_for_team_lead(): void
+    {
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        CoachingSession::factory()->forTeamLead()->create([
+            'coachee_id' => $tl->id,
+            'session_date' => now()->subDays(3),
+            'ack_status' => 'Pending',
+            'severity_flag' => 'Normal',
+        ]);
+
+        $summary = $this->service->getCoacheeSummary($tl->id);
+
+        $this->assertEquals(CoachingDashboardService::STATUS_COACHING_DONE, $summary['coaching_status']);
+        $this->assertEquals(1, $summary['total_sessions']);
+        $this->assertEquals(1, $summary['pending_acknowledgements']);
+    }
+
+    #[Test]
+    public function team_lead_coaching_data_returns_correct_structure(): void
+    {
+        $campaign = Campaign::factory()->create();
+
+        $tl1 = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $tl1->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+
+        $tl2 = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $tl2->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+
+        CoachingSession::factory()->forTeamLead()->create([
+            'coachee_id' => $tl1->id,
+            'session_date' => now()->subDays(5),
+        ]);
+
+        $data = $this->service->getTeamLeadCoachingData();
+
+        $this->assertGreaterThanOrEqual(2, $data['total_agents']);
+        $this->assertArrayHasKey('status_counts', $data);
+        $this->assertArrayHasKey('agents', $data);
+    }
+
+    #[Test]
+    public function team_lead_coaching_data_filters_by_campaign(): void
+    {
+        $campaign = Campaign::factory()->create();
+
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $tl->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
+        ]);
+
+        $otherCampaign = Campaign::factory()->create();
+        $otherTl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $otherTl->id,
+            'campaign_id' => $otherCampaign->id,
+            'is_active' => true,
+        ]);
+
+        $data = $this->service->getTeamLeadCoachingData(['campaign_id' => $campaign->id]);
+
+        $this->assertEquals(1, $data['total_agents']);
     }
 }

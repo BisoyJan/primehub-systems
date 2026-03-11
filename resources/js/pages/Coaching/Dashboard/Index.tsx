@@ -196,7 +196,7 @@ export default function CoachingDashboardIndex() {
                                                 </TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center justify-center">
-                                                        <Link href={sessionsCreate().url + `?agent_id=${agent.id}`}>
+                                                        <Link href={sessionsCreate().url + `?coachee_id=${agent.id}`}>
                                                             <Button variant="ghost" size="icon" title="Coach Agent">
                                                                 <Plus className="h-4 w-4" />
                                                             </Button>
@@ -232,7 +232,7 @@ export default function CoachingDashboardIndex() {
                                             <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
                                         )}
                                     </div>
-                                    <Link href={sessionsCreate().url + `?agent_id=${agent.id}`}>
+                                    <Link href={sessionsCreate().url + `?coachee_id=${agent.id}`}>
                                         <Button variant="outline" size="sm" className="mt-1 w-full">
                                             <Plus className="mr-1.5 h-3.5 w-3.5" /> Coach Agent
                                         </Button>
@@ -255,7 +255,7 @@ export default function CoachingDashboardIndex() {
                                 <TableHeader>
                                     <TableRow className="bg-muted/50">
                                         <TableHead>Date</TableHead>
-                                        <TableHead>Agent</TableHead>
+                                        <TableHead>Coachee</TableHead>
                                         <TableHead>Purpose</TableHead>
                                         <TableHead>Ack</TableHead>
                                         <TableHead>Severity</TableHead>
@@ -269,7 +269,7 @@ export default function CoachingDashboardIndex() {
                                                 {new Date(session.session_date).toLocaleDateString()}
                                             </TableCell>
                                             <TableCell className="font-medium">
-                                                {session.agent ? `${session.agent.first_name} ${session.agent.last_name}` : 'N/A'}
+                                                {session.coachee ? `${session.coachee.first_name} ${session.coachee.last_name}` : 'N/A'}
                                             </TableCell>
                                             <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
                                             <TableCell>
@@ -303,7 +303,7 @@ export default function CoachingDashboardIndex() {
                                                 {new Date(session.session_date).toLocaleDateString()}
                                             </p>
                                             <p className="text-sm font-medium">
-                                                {session.agent ? `${session.agent.first_name} ${session.agent.last_name}` : 'N/A'}
+                                                {session.coachee ? `${session.coachee.first_name} ${session.coachee.last_name}` : 'N/A'}
                                             </p>
                                             <p className="text-xs text-muted-foreground">{purposes[session.purpose] ?? session.purpose}</p>
                                         </div>

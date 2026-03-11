@@ -940,8 +940,8 @@ class DashboardServiceTest extends TestCase
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
 
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => User::factory()->create(['role' => 'Team Lead'])->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => User::factory()->create(['role' => 'Team Lead'])->id,
             'session_date' => now(),
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
@@ -980,8 +980,8 @@ class DashboardServiceTest extends TestCase
 
         // Session by this TL
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now(),
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
@@ -990,8 +990,8 @@ class DashboardServiceTest extends TestCase
         // Session by a different TL — should not count in TL's pending
         $otherTl = User::factory()->create(['role' => 'Team Lead']);
         CoachingSession::factory()->create([
-            'agent_id' => User::factory()->create(['role' => 'Agent'])->id,
-            'team_lead_id' => $otherTl->id,
+            'coachee_id' => User::factory()->create(['role' => 'Agent'])->id,
+            'coach_id' => $otherTl->id,
             'session_date' => now(),
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
@@ -1012,16 +1012,16 @@ class DashboardServiceTest extends TestCase
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
 
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now(),
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
         ]);
 
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now()->subDays(1),
             'ack_status' => 'Acknowledged',
             'compliance_status' => 'For_Review',
@@ -1054,16 +1054,16 @@ class DashboardServiceTest extends TestCase
 
         // Follow-up in 3 days — should appear
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now()->subDays(10),
             'follow_up_date' => now()->addDays(3),
         ]);
 
         // Follow-up in 10 days — should NOT appear
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now()->subDays(20),
             'follow_up_date' => now()->addDays(10),
         ]);
@@ -1071,7 +1071,7 @@ class DashboardServiceTest extends TestCase
         $result = $this->service->getCoachingFollowUps($admin);
 
         $this->assertCount(1, $result['follow_ups']);
-        $this->assertEquals($agent->id, CoachingSession::where('follow_up_date', now()->addDays(3)->format('Y-m-d'))->first()->agent_id);
+        $this->assertEquals($agent->id, CoachingSession::where('follow_up_date', now()->addDays(3)->format('Y-m-d'))->first()->coachee_id);
     }
 
     #[Test]
@@ -1084,8 +1084,8 @@ class DashboardServiceTest extends TestCase
         // Agent coached this week — should NOT appear
         $coachedAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $coachedAgent->id,
-            'team_lead_id' => User::factory()->create(['role' => 'Team Lead'])->id,
+            'coachee_id' => $coachedAgent->id,
+            'coach_id' => User::factory()->create(['role' => 'Team Lead'])->id,
             'session_date' => now(),
         ]);
 
@@ -1135,8 +1135,8 @@ class DashboardServiceTest extends TestCase
 
         // Follow-up by this TL — should appear
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now()->subDays(5),
             'follow_up_date' => now()->addDays(2),
         ]);
@@ -1144,8 +1144,8 @@ class DashboardServiceTest extends TestCase
         // Follow-up by another TL — should NOT appear
         $otherTl = User::factory()->create(['role' => 'Team Lead']);
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $otherTl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $otherTl->id,
             'session_date' => now()->subDays(3),
             'follow_up_date' => now()->addDays(1),
         ]);
@@ -1168,8 +1168,8 @@ class DashboardServiceTest extends TestCase
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
 
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now(),
             'ack_status' => 'Pending',
             'compliance_status' => 'Awaiting_Agent_Ack',
@@ -1178,8 +1178,8 @@ class DashboardServiceTest extends TestCase
         // Another agent's session should NOT count
         $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         CoachingSession::factory()->create([
-            'agent_id' => $otherAgent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $otherAgent->id,
+            'coach_id' => $tl->id,
             'session_date' => now(),
             'ack_status' => 'Pending',
         ]);
@@ -1203,16 +1203,16 @@ class DashboardServiceTest extends TestCase
 
         // Follow-up for this agent
         CoachingSession::factory()->create([
-            'agent_id' => $agent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $agent->id,
+            'coach_id' => $tl->id,
             'session_date' => now()->subDays(5),
             'follow_up_date' => now()->addDays(3),
         ]);
 
         // Follow-up for another agent — should NOT appear
         CoachingSession::factory()->create([
-            'agent_id' => $otherAgent->id,
-            'team_lead_id' => $tl->id,
+            'coachee_id' => $otherAgent->id,
+            'coach_id' => $tl->id,
             'session_date' => now()->subDays(3),
             'follow_up_date' => now()->addDays(2),
         ]);

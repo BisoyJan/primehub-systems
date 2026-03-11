@@ -10,6 +10,7 @@ import {
     Users,
     Clock,
     ClipboardCheck,
+    UserPlus,
 } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
@@ -49,6 +50,7 @@ import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import {
+    create as sessionsCreate,
     show as sessionsShow,
     review as sessionsReview,
 } from '@/routes/coaching/sessions';
@@ -90,8 +92,9 @@ interface QueueData {
 
 interface Filters {
     campaign_id?: string;
-    team_lead_id?: string;
+    coach_id?: string;
     coaching_status?: string;
+    coachee_role?: string;
     date_from?: string;
     date_to?: string;
 }
@@ -120,8 +123,9 @@ export default function CoachingAdminIndex() {
 
     const [activeTab, setActiveTab] = useState<TabKey>('overview');
     const [campaignId, setCampaignId] = useState(initialFilters.campaign_id || '');
-    const [teamLeadId, setTeamLeadId] = useState(initialFilters.team_lead_id || '');
+    const [coachId, setCoachId] = useState(initialFilters.coach_id || '');
     const [coachingStatus, setCoachingStatus] = useState(initialFilters.coaching_status || '');
+    const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || '');
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
 
@@ -132,8 +136,9 @@ export default function CoachingAdminIndex() {
             coachingDashboard().url,
             {
                 campaign_id: campaignId || undefined,
-                team_lead_id: teamLeadId || undefined,
+                coach_id: coachId || undefined,
                 coaching_status: coachingStatus || undefined,
+                coachee_role: coacheeRole || undefined,
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
             },
@@ -143,8 +148,9 @@ export default function CoachingAdminIndex() {
 
     const handleReset = () => {
         setCampaignId('');
-        setTeamLeadId('');
+        setCoachId('');
         setCoachingStatus('');
+        setCoacheeRole('');
         setDateFrom('');
         setDateTo('');
         router.get(coachingDashboard().url);
@@ -175,13 +181,23 @@ export default function CoachingAdminIndex() {
             <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isLoading} />
 
-                <PageHeader title="Coaching Compliance Dashboard" />
+                <PageHeader
+                    title="Coaching Compliance Dashboard"
+                    actions={
+                        <Link href={sessionsCreate.url({ query: { coaching_mode: 'direct' } })}>
+                            <Button variant="outline">
+                                <UserPlus className="mr-2 h-4 w-4" />
+                                Coach a Team Lead
+                            </Button>
+                        </Link>
+                    }
+                />
 
                 {/* Summary Cards */}
                 <CoachingSummaryCards totalAgents={dashboardData.total_agents} statusCounts={dashboardData.status_counts} />
 
                 {/* Filters */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8">
                     <Select value={campaignId} onValueChange={setCampaignId}>
                         <SelectTrigger>
                             <SelectValue placeholder="Campaign" />
@@ -192,7 +208,7 @@ export default function CoachingAdminIndex() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Select value={teamLeadId} onValueChange={setTeamLeadId}>
+                    <Select value={coachId} onValueChange={setCoachId}>
                         <SelectTrigger>
                             <SelectValue placeholder="Team Lead" />
                         </SelectTrigger>
@@ -214,6 +230,15 @@ export default function CoachingAdminIndex() {
                             <SelectItem value="Badly Needs Coaching">Badly Needs Coaching</SelectItem>
                             <SelectItem value="Please Coach ASAP">Please Coach ASAP</SelectItem>
                             <SelectItem value="No Record">No Record</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Select value={coacheeRole} onValueChange={setCoacheeRole}>
+                        <SelectTrigger>
+                            <SelectValue placeholder="Coachee Role" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="Team Lead">Team Lead</SelectItem>
+                            <SelectItem value="Agent">Agent</SelectItem>
                         </SelectContent>
                     </Select>
                     <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} placeholder="Date from" />
@@ -358,8 +383,8 @@ export default function CoachingAdminIndex() {
                                     <TableHeader>
                                         <TableRow className="bg-muted/50">
                                             <TableHead>Date</TableHead>
-                                            <TableHead>Agent</TableHead>
-                                            <TableHead>Team Lead</TableHead>
+                                            <TableHead>Coachee</TableHead>
+                                            <TableHead>Coach</TableHead>
                                             <TableHead>Purpose</TableHead>
                                             <TableHead>Severity</TableHead>
                                             <TableHead className="text-center">Actions</TableHead>
@@ -378,8 +403,8 @@ export default function CoachingAdminIndex() {
                                                     <TableCell className="whitespace-nowrap">
                                                         {new Date(session.session_date).toLocaleDateString()}
                                                     </TableCell>
-                                                    <TableCell className="font-medium">{formatName(session.agent)}</TableCell>
-                                                    <TableCell>{formatName(session.team_lead)}</TableCell>
+                                                    <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
+                                                    <TableCell>{formatName(session.coach)}</TableCell>
                                                     <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
                                                     <TableCell>
                                                         <SeverityBadge flag={session.severity_flag} />
@@ -416,8 +441,8 @@ export default function CoachingAdminIndex() {
                                         <div className="flex items-start justify-between gap-2">
                                             <div>
                                                 <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()}</p>
-                                                <p className="text-sm font-medium">{formatName(session.agent)}</p>
-                                                <p className="text-xs text-muted-foreground">TL: {formatName(session.team_lead)}</p>
+                                                <p className="text-sm font-medium">{formatName(session.coachee)}</p>
+                                                <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
                                             </div>
                                             <SeverityBadge flag={session.severity_flag} />
                                         </div>
@@ -534,8 +559,8 @@ function SessionQueueTable({
                         <TableHeader>
                             <TableRow className="bg-muted/50">
                                 <TableHead>Date</TableHead>
-                                <TableHead>Agent</TableHead>
-                                <TableHead>Team Lead</TableHead>
+                                <TableHead>Coachee</TableHead>
+                                <TableHead>Coach</TableHead>
                                 <TableHead>Purpose</TableHead>
                                 <TableHead>Severity</TableHead>
                                 <TableHead className="text-center">Actions</TableHead>
@@ -554,8 +579,8 @@ function SessionQueueTable({
                                         <TableCell className="whitespace-nowrap">
                                             {new Date(session.session_date).toLocaleDateString()}
                                         </TableCell>
-                                        <TableCell className="font-medium">{formatName(session.agent)}</TableCell>
-                                        <TableCell>{formatName(session.team_lead)}</TableCell>
+                                        <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
+                                        <TableCell>{formatName(session.coach)}</TableCell>
                                         <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
                                         <TableCell>
                                             <SeverityBadge flag={session.severity_flag} />
@@ -587,8 +612,8 @@ function SessionQueueTable({
                             <div className="flex items-start justify-between gap-2">
                                 <div>
                                     <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()}</p>
-                                    <p className="text-sm font-medium">{formatName(session.agent)}</p>
-                                    <p className="text-xs text-muted-foreground">TL: {formatName(session.team_lead)}</p>
+                                    <p className="text-sm font-medium">{formatName(session.coachee)}</p>
+                                    <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
                                 </div>
                                 <SeverityBadge flag={session.severity_flag} />
                             </div>

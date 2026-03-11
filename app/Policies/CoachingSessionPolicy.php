@@ -32,22 +32,22 @@ class CoachingSessionPolicy
      */
     public function view(User $user, CoachingSession $coachingSession): bool
     {
-        // Agent can view their own sessions
-        if ($coachingSession->agent_id === $user->id) {
+        // Coachee can view their own sessions
+        if ($coachingSession->coachee_id === $user->id) {
             return $this->permissionService->userHasPermission($user, 'coaching.view_own');
         }
 
-        // Team Lead can view sessions they created
-        if ($coachingSession->team_lead_id === $user->id) {
+        // Coach can view sessions they created
+        if ($coachingSession->coach_id === $user->id) {
             return $this->permissionService->userHasPermission($user, 'coaching.view_team');
         }
 
-        // Team Lead can view sessions for agents on their campaign
+        // Team Lead can view sessions for coachees on their campaign
         if ($user->role === 'Team Lead') {
             $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
             if ($teamLeadCampaignId) {
-                $agentCampaignId = $coachingSession->agent?->activeSchedule?->campaign_id;
-                if ($teamLeadCampaignId === $agentCampaignId) {
+                $coacheeCampaignId = $coachingSession->coachee?->activeSchedule?->campaign_id;
+                if ($teamLeadCampaignId === $coacheeCampaignId) {
                     return $this->permissionService->userHasPermission($user, 'coaching.view_team');
                 }
             }
@@ -70,8 +70,8 @@ class CoachingSessionPolicy
      */
     public function update(User $user, CoachingSession $coachingSession): bool
     {
-        // Only the TL who created the session can edit it
-        if ($coachingSession->team_lead_id !== $user->id) {
+        // Only the coach who created the session can edit it
+        if ($coachingSession->coach_id !== $user->id) {
             // Unless they have admin-level access
             if (! in_array($user->role, ['Super Admin', 'Admin'])) {
                 return false;
@@ -94,8 +94,8 @@ class CoachingSessionPolicy
      */
     public function acknowledge(User $user, CoachingSession $coachingSession): bool
     {
-        // Only the agent of this session can acknowledge
-        if ($coachingSession->agent_id !== $user->id) {
+        // Only the coachee of this session can acknowledge
+        if ($coachingSession->coachee_id !== $user->id) {
             return false;
         }
 

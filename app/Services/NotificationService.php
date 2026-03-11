@@ -1010,18 +1010,18 @@ class NotificationService
     // ─── Coaching Notifications ─────────────────────────────────────
 
     /**
-     * Notify agent that a new coaching session was created for them.
+     * Notify coachee that a new coaching session was created for them.
      */
-    public function notifyCoachingSessionCreated(int $agentId, string $teamLeadName, string $sessionDate, int $sessionId): Notification
+    public function notifyCoachingSessionCreated(int $coacheeId, string $coachName, string $sessionDate, int $sessionId): Notification
     {
         return $this->create(
-            $agentId,
+            $coacheeId,
             'coaching_session',
             'New Coaching Session',
-            "You have a new coaching session from {$teamLeadName} dated {$sessionDate}.",
+            "You have a new coaching session from {$coachName} dated {$sessionDate}.",
             [
                 'session_id' => $sessionId,
-                'team_lead_name' => $teamLeadName,
+                'coach_name' => $coachName,
                 'session_date' => $sessionDate,
                 'link' => route('coaching.sessions.show', $sessionId),
             ]
@@ -1029,18 +1029,18 @@ class NotificationService
     }
 
     /**
-     * Notify team lead that agent acknowledged a coaching session.
+     * Notify coach that coachee acknowledged a coaching session.
      */
-    public function notifyCoachingAcknowledged(int $teamLeadId, string $agentName, string $sessionDate, int $sessionId): Notification
+    public function notifyCoachingAcknowledged(int $coachId, string $coacheeName, string $sessionDate, int $sessionId): Notification
     {
         return $this->create(
-            $teamLeadId,
+            $coachId,
             'coaching_acknowledged',
             'Coaching Acknowledged',
-            "Agent {$agentName} acknowledged coaching dated {$sessionDate}.",
+            "{$coacheeName} acknowledged coaching dated {$sessionDate}.",
             [
                 'session_id' => $sessionId,
-                'agent_name' => $agentName,
+                'coachee_name' => $coacheeName,
                 'session_date' => $sessionDate,
                 'link' => route('coaching.sessions.show', $sessionId),
             ]
@@ -1048,20 +1048,20 @@ class NotificationService
     }
 
     /**
-     * Notify team lead that coaching session was reviewed by compliance.
+     * Notify coach that coaching session was reviewed by compliance.
      */
-    public function notifyCoachingReviewed(int $teamLeadId, string $agentName, string $sessionDate, string $complianceStatus, int $sessionId): Notification
+    public function notifyCoachingReviewed(int $coachId, string $coacheeName, string $sessionDate, string $complianceStatus, int $sessionId): Notification
     {
         $statusLabel = $complianceStatus === 'Verified' ? 'Verified' : 'Rejected';
 
         return $this->create(
-            $teamLeadId,
+            $coachId,
             'coaching_reviewed',
             "Coaching {$statusLabel}",
-            "Coaching session for {$agentName} dated {$sessionDate} has been {$statusLabel}.",
+            "Coaching session for {$coacheeName} dated {$sessionDate} has been {$statusLabel}.",
             [
                 'session_id' => $sessionId,
-                'agent_name' => $agentName,
+                'coachee_name' => $coacheeName,
                 'session_date' => $sessionDate,
                 'compliance_status' => $complianceStatus,
                 'link' => route('coaching.sessions.show', $sessionId),
@@ -1070,15 +1070,15 @@ class NotificationService
     }
 
     /**
-     * Notify agent about pending coaching acknowledgement reminder.
+     * Notify coachee about pending coaching acknowledgement reminder.
      */
-    public function notifyCoachingPendingReminder(int $agentId, array $sessionIds): Notification
+    public function notifyCoachingPendingReminder(int $coacheeId, array $sessionIds): Notification
     {
         $count = count($sessionIds);
         $plural = $count > 1 ? 'sessions' : 'session';
 
         return $this->create(
-            $agentId,
+            $coacheeId,
             'coaching_pending_reminder',
             'Coaching Acknowledgement Pending',
             "You have {$count} coaching {$plural} that require your acknowledgement.",
@@ -1091,18 +1091,18 @@ class NotificationService
     }
 
     /**
-     * Notify team lead about unacknowledged coaching sessions.
+     * Notify coach about unacknowledged coaching sessions.
      */
-    public function notifyCoachingUnacknowledgedAlert(int $teamLeadId, string $agentName, string $sessionDate, int $sessionId): Notification
+    public function notifyCoachingUnacknowledgedAlert(int $coachId, string $coacheeName, string $sessionDate, int $sessionId): Notification
     {
         return $this->create(
-            $teamLeadId,
+            $coachId,
             'coaching_unacknowledged_alert',
             'Unacknowledged Coaching',
-            "Coaching for {$agentName} dated {$sessionDate} has not been acknowledged.",
+            "Coaching for {$coacheeName} dated {$sessionDate} has not been acknowledged.",
             [
                 'session_id' => $sessionId,
-                'agent_name' => $agentName,
+                'coachee_name' => $coacheeName,
                 'session_date' => $sessionDate,
                 'link' => route('coaching.sessions.show', $sessionId),
             ]

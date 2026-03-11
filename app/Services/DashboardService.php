@@ -1356,12 +1356,12 @@ class DashboardService
                 'status_counts' => $statusCounts,
                 'total_agents' => $totalAgents,
                 'coaching_status' => $status,
-                'total_sessions' => CoachingSession::where('agent_id', $user->id)->count(),
-                'pending_acks' => CoachingSession::where('agent_id', $user->id)
+                'total_sessions' => CoachingSession::where('coachee_id', $user->id)->count(),
+                'pending_acks' => CoachingSession::where('coachee_id', $user->id)
                     ->where('ack_status', 'Pending')->count(),
-                'pending_reviews' => CoachingSession::where('agent_id', $user->id)
+                'pending_reviews' => CoachingSession::where('coachee_id', $user->id)
                     ->where('compliance_status', 'For_Review')->count(),
-                'sessions_this_month' => CoachingSession::where('agent_id', $user->id)
+                'sessions_this_month' => CoachingSession::where('coachee_id', $user->id)
                     ->whereMonth('session_date', Carbon::now()->month)
                     ->whereYear('session_date', Carbon::now()->year)
                     ->count(),
@@ -1385,27 +1385,59 @@ class DashboardService
             ->whereYear('session_date', Carbon::now()->year)
             ->count();
 
-        // Scope pending counts for Team Lead
+        // Scope pending counts for Team Lead (sessions they coached)
         if ($role === 'Team Lead') {
-            $pendingAcks = CoachingSession::where('team_lead_id', $user->id)
+            $pendingAcks = CoachingSession::where('coach_id', $user->id)
                 ->where('ack_status', 'Pending')
                 ->count();
-            $pendingReviews = CoachingSession::where('team_lead_id', $user->id)
+            $pendingReviews = CoachingSession::where('coach_id', $user->id)
                 ->where('compliance_status', 'For_Review')
                 ->count();
-            $sessionsThisMonth = CoachingSession::where('team_lead_id', $user->id)
+            $sessionsThisMonth = CoachingSession::where('coach_id', $user->id)
                 ->whereMonth('session_date', Carbon::now()->month)
                 ->whereYear('session_date', Carbon::now()->year)
                 ->count();
         }
 
-        return [
+        $result = [
             'status_counts' => $statusCounts,
             'total_agents' => $totalAgents,
             'pending_acks' => $pendingAcks,
             'pending_reviews' => $pendingReviews,
             'sessions_this_month' => $sessionsThisMonth,
         ];
+
+        // TL: add personal coaching status as a coachee
+        if ($role === 'Team Lead') {
+            $tlStatus = $this->coachingDashboardService->getCoachingStatus($user->id);
+            $result['tl_coaching_status'] = $tlStatus;
+            $result['tl_coaching_status_color'] = CoachingDashboardService::STATUS_COLORS[$tlStatus] ?? 'gray';
+        }
+
+        // Admin: add TL coaching overview
+        if (in_array($role, ['Super Admin', 'Admin'])) {
+            $tlCoachingData = $this->coachingDashboardService->getTeamLeadCoachingData();
+            $result['tl_status_counts'] = $tlCoachingData['status_counts'];
+            $result['tl_total'] = $tlCoachingData['total_agents'];
+
+            $tlIds = User::where('role', 'Team Lead')
+                ->where('is_active', true)
+                ->where('is_approved', true)
+                ->pluck('id');
+
+            $result['tl_sessions_this_month'] = CoachingSession::whereIn('coachee_id', $tlIds)
+                ->whereMonth('session_date', Carbon::now()->month)
+                ->whereYear('session_date', Carbon::now()->year)
+                ->count();
+            $result['tl_pending_acks'] = CoachingSession::whereIn('coachee_id', $tlIds)
+                ->where('ack_status', 'Pending')
+                ->count();
+            $result['tl_pending_reviews'] = CoachingSession::whereIn('coachee_id', $tlIds)
+                ->where('compliance_status', 'For_Review')
+                ->count();
+        }
+
+        return $result;
     }
 
     /**
@@ -1423,8 +1455,8 @@ class DashboardService
 
         // ─── Agent: personal follow-ups only ────────────────────────
         if ($role === 'Agent') {
-            $followUps = CoachingSession::with(['agent:id,first_name,last_name', 'teamLead:id,first_name,last_name'])
-                ->where('agent_id', $user->id)
+            $followUps = CoachingSession::with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
+                ->where('coachee_id', $user->id)
                 ->whereNotNull('follow_up_date')
                 ->whereBetween('follow_up_date', [$today, $sevenDaysFromNow])
                 ->orderBy('follow_up_date')
@@ -1433,8 +1465,8 @@ class DashboardService
                 ->map(function (CoachingSession $session) {
                     return [
                         'id' => $session->id,
-                        'agent_name' => ($session->agent?->last_name ?? '').', '.($session->agent?->first_name ?? ''),
-                        'team_lead_name' => ($session->teamLead?->last_name ?? '').', '.($session->teamLead?->first_name ?? ''),
+                        'agent_name' => ($session->coachee?->last_name ?? '').', '.($session->coachee?->first_name ?? ''),
+                        'team_lead_name' => ($session->coach?->last_name ?? '').', '.($session->coach?->first_name ?? ''),
                         'follow_up_date' => $session->follow_up_date->format('Y-m-d'),
                         'purpose_label' => CoachingSession::PURPOSE_LABELS[$session->purpose] ?? $session->purpose,
                         'session_date' => $session->session_date->format('Y-m-d'),
@@ -1449,25 +1481,30 @@ class DashboardService
         }
 
         // ─── Upcoming follow-ups ────────────────────────────────────
-        $followUpQuery = CoachingSession::with(['agent:id,first_name,last_name', 'teamLead:id,first_name,last_name'])
+        $followUpQuery = CoachingSession::with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
             ->whereNotNull('follow_up_date')
             ->whereBetween('follow_up_date', [$today, $sevenDaysFromNow])
             ->orderBy('follow_up_date');
 
         if ($role === 'Team Lead') {
-            $followUpQuery->where('team_lead_id', $user->id);
+            $followUpQuery->where(function ($q) use ($user) {
+                $q->where('coach_id', $user->id)
+                    ->orWhere('coachee_id', $user->id);
+            });
         }
 
-        $followUps = $followUpQuery->limit(10)->get()->map(function (CoachingSession $session) {
-            return [
-                'id' => $session->id,
-                'agent_name' => ($session->agent?->last_name ?? '').', '.($session->agent?->first_name ?? ''),
-                'team_lead_name' => ($session->teamLead?->last_name ?? '').', '.($session->teamLead?->first_name ?? ''),
-                'follow_up_date' => $session->follow_up_date->format('Y-m-d'),
-                'purpose_label' => CoachingSession::PURPOSE_LABELS[$session->purpose] ?? $session->purpose,
-                'session_date' => $session->session_date->format('Y-m-d'),
-            ];
-        })->toArray();
+        $followUps = $followUpQuery->limit(10)->get()
+            ->filter(fn (CoachingSession $session) => $this->coachingDashboardService->getCoachingStatus($session->coachee_id) !== CoachingDashboardService::STATUS_COACHING_DONE)
+            ->map(function (CoachingSession $session) {
+                return [
+                    'id' => $session->id,
+                    'agent_name' => ($session->coachee?->last_name ?? '').', '.($session->coachee?->first_name ?? ''),
+                    'team_lead_name' => ($session->coach?->last_name ?? '').', '.($session->coach?->first_name ?? ''),
+                    'follow_up_date' => $session->follow_up_date->format('Y-m-d'),
+                    'purpose_label' => CoachingSession::PURPOSE_LABELS[$session->purpose] ?? $session->purpose,
+                    'session_date' => $session->session_date->format('Y-m-d'),
+                ];
+            })->values()->toArray();
 
         // ─── Agents not coached this week ───────────────────────────
         $agentIds = collect();
@@ -1495,8 +1532,8 @@ class DashboardService
 
         // Agent IDs who HAVE been coached this week
         $coachedThisWeek = CoachingSession::whereBetween('session_date', [$weekStart, $weekEnd])
-            ->whereIn('agent_id', $agentIds)
-            ->pluck('agent_id')
+            ->whereIn('coachee_id', $agentIds)
+            ->pluck('coachee_id')
             ->unique();
 
         // Agents NOT coached this week
@@ -1517,16 +1554,126 @@ class DashboardService
                     'campaign' => $agent->activeSchedule?->campaign?->name ?? 'N/A',
                     'coaching_status' => $status,
                     'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
-                    'last_coached_date' => CoachingSession::where('agent_id', $agent->id)
+                    'last_coached_date' => CoachingSession::where('coachee_id', $agent->id)
                         ->orderByDesc('session_date')
                         ->value('session_date')?->format('Y-m-d'),
                 ];
-            })->toArray();
+            })
+            ->filter(fn (array $agent) => $agent['coaching_status'] !== CoachingDashboardService::STATUS_COACHING_DONE)
+            ->values()
+            ->toArray();
+
+        // Agents coached this week
+        $coachedThisWeekList = User::whereIn('id', $coachedThisWeek)
+            ->with('activeSchedule.campaign:id,name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->limit(15)
+            ->get()
+            ->map(function (User $agent) {
+                $status = $this->coachingDashboardService->getCoachingStatus($agent->id);
+
+                return [
+                    'id' => $agent->id,
+                    'name' => ($agent->last_name ?? '').', '.($agent->first_name ?? ''),
+                    'campaign' => $agent->activeSchedule?->campaign?->name ?? 'N/A',
+                    'coaching_status' => $status,
+                    'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
+                    'last_coached_date' => CoachingSession::where('coachee_id', $agent->id)
+                        ->orderByDesc('session_date')
+                        ->value('session_date')?->format('Y-m-d'),
+                ];
+            })
+            ->values()
+            ->toArray();
 
         return [
             'follow_ups' => $followUps,
             'not_coached_this_week' => $notCoachedThisWeek,
-            'not_coached_count' => $notCoachedIds->count(),
+            'not_coached_count' => count($notCoachedThisWeek),
+            'coached_this_week' => $coachedThisWeekList,
+            'coached_count' => count($coachedThisWeekList),
+            'not_coached_tls_this_week' => $this->getNotCoachedTeamLeadsThisWeek($weekStart, $weekEnd),
+            'coached_tls_this_week' => $this->getCoachedTeamLeadsThisWeek($weekStart, $weekEnd),
         ];
+    }
+
+    /**
+     * Get Team Leads not coached this week (for admin dashboard).
+     */
+    protected function getNotCoachedTeamLeadsThisWeek(Carbon $weekStart, Carbon $weekEnd): array
+    {
+        $tlIds = User::where('role', 'Team Lead')
+            ->where('is_active', true)
+            ->where('is_approved', true)
+            ->pluck('id');
+
+        $coachedTlsThisWeek = CoachingSession::whereBetween('session_date', [$weekStart, $weekEnd])
+            ->whereIn('coachee_id', $tlIds)
+            ->pluck('coachee_id')
+            ->unique();
+
+        $notCoachedTlIds = $tlIds->diff($coachedTlsThisWeek);
+
+        return User::whereIn('id', $notCoachedTlIds)
+            ->with('activeSchedule.campaign:id,name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(function (User $tl) {
+                $status = $this->coachingDashboardService->getCoachingStatus($tl->id);
+
+                return [
+                    'id' => $tl->id,
+                    'name' => ($tl->last_name ?? '').', '.($tl->first_name ?? ''),
+                    'campaign' => $tl->activeSchedule?->campaign?->name ?? 'N/A',
+                    'coaching_status' => $status,
+                    'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
+                    'last_coached_date' => CoachingSession::where('coachee_id', $tl->id)
+                        ->orderByDesc('session_date')
+                        ->value('session_date')?->format('Y-m-d'),
+                ];
+            })
+            ->filter(fn (array $tl) => $tl['coaching_status'] !== CoachingDashboardService::STATUS_COACHING_DONE)
+            ->values()
+            ->toArray();
+    }
+
+    /**
+     * Get Team Leads coached this week (for admin dashboard).
+     */
+    protected function getCoachedTeamLeadsThisWeek(Carbon $weekStart, Carbon $weekEnd): array
+    {
+        $tlIds = User::where('role', 'Team Lead')
+            ->where('is_active', true)
+            ->where('is_approved', true)
+            ->pluck('id');
+
+        $coachedTlsThisWeek = CoachingSession::whereBetween('session_date', [$weekStart, $weekEnd])
+            ->whereIn('coachee_id', $tlIds)
+            ->pluck('coachee_id')
+            ->unique();
+
+        return User::whereIn('id', $coachedTlsThisWeek)
+            ->with('activeSchedule.campaign:id,name')
+            ->orderBy('first_name')
+            ->orderBy('last_name')
+            ->get()
+            ->map(function (User $tl) {
+                $status = $this->coachingDashboardService->getCoachingStatus($tl->id);
+
+                return [
+                    'id' => $tl->id,
+                    'name' => ($tl->last_name ?? '').', '.($tl->first_name ?? ''),
+                    'campaign' => $tl->activeSchedule?->campaign?->name ?? 'N/A',
+                    'coaching_status' => $status,
+                    'status_color' => CoachingDashboardService::STATUS_COLORS[$status] ?? 'gray',
+                    'last_coached_date' => CoachingSession::where('coachee_id', $tl->id)
+                        ->orderByDesc('session_date')
+                        ->value('session_date')?->format('Y-m-d'),
+                ];
+            })
+            ->values()
+            ->toArray();
     }
 }

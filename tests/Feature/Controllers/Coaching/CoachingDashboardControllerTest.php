@@ -61,8 +61,8 @@ class CoachingDashboardControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $response = $this->actingAs($team['agent'])
@@ -84,8 +84,8 @@ class CoachingDashboardControllerTest extends TestCase
     {
         $team = $this->createTeamWithCampaign();
         CoachingSession::factory()->create([
-            'agent_id' => $team['agent']->id,
-            'team_lead_id' => $team['teamLead']->id,
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
         ]);
 
         $response = $this->actingAs($team['teamLead'])
@@ -251,5 +251,140 @@ class CoachingDashboardControllerTest extends TestCase
             ->postJson(route('coaching.export.start'));
 
         $response->assertStatus(403);
+    }
+
+    // ─── TL Personal Coaching Dashboard ─────────────────────────────
+
+    #[Test]
+    public function team_lead_dashboard_includes_personal_coaching_data(): void
+    {
+        $team = $this->createTeamWithCampaign();
+
+        // Create a session where TL is the coachee (coached by admin)
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.dashboard'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Dashboard/Index')
+                ->has('myCoachingData')
+                ->has('myCoachingSessions')
+                ->where('myCoachingData.total_sessions', 1)
+            );
+    }
+
+    // ─── Admin TL Coaching Dashboard ────────────────────────────────
+
+    #[Test]
+    public function admin_dashboard_includes_team_lead_coaching_data(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        // Create TLs and coaching sessions for them
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $tl->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.dashboard'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Admin/Index')
+                ->has('teamLeadCoachingData')
+                ->has('teamLeadCoachingData.total_agents')
+                ->has('teamLeadCoachingData.status_counts')
+                ->has('teamLeadCoachingData.agents')
+            );
+    }
+
+    // ─── Admin Coachee Role Filter ──────────────────────────────────
+
+    #[Test]
+    public function admin_can_filter_dashboard_by_coachee_role_agent(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $team = $this->createTeamWithCampaign();
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.dashboard', ['coachee_role' => 'Agent']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Admin/Index')
+                ->has('dashboardData.agents')
+                ->where('teamLeadCoachingData.total_agents', 0)
+                ->where('filters.coachee_role', 'Agent')
+            );
+    }
+
+    #[Test]
+    public function admin_can_filter_dashboard_by_coachee_role_team_lead(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $team = $this->createTeamWithCampaign();
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.dashboard', ['coachee_role' => 'Team Lead']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Admin/Index')
+                ->where('dashboardData.total_agents', 0)
+                ->has('teamLeadCoachingData.agents')
+                ->where('filters.coachee_role', 'Team Lead')
+            );
+    }
+
+    #[Test]
+    public function admin_without_coachee_role_filter_returns_both_roles(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $team = $this->createTeamWithCampaign();
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.dashboard'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Admin/Index')
+                ->has('dashboardData.agents')
+                ->has('teamLeadCoachingData.agents')
+            );
     }
 }

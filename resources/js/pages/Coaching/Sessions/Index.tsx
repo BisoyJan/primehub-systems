@@ -80,6 +80,7 @@ interface Filters {
     campaign_id?: string;
     date_from?: string;
     date_to?: string;
+    coachee_role?: string;
 }
 
 interface Props extends InertiaPageProps {
@@ -130,6 +131,7 @@ export default function CoachingSessionsIndex() {
     const [campaignId, setCampaignId] = useState(initialFilters.campaign_id || '');
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
+    const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || '');
 
     const deleteForm = useForm({});
 
@@ -161,6 +163,7 @@ export default function CoachingSessionsIndex() {
                 campaign_id: campaignId || undefined,
                 date_from: dateFrom || undefined,
                 date_to: dateTo || undefined,
+                coachee_role: coacheeRole || undefined,
             },
             { preserveState: true, preserveScroll: true },
         );
@@ -174,6 +177,7 @@ export default function CoachingSessionsIndex() {
         setCampaignId('');
         setDateFrom('');
         setDateTo('');
+        setCoacheeRole('');
         router.get(sessionsIndex().url);
     };
 
@@ -334,7 +338,7 @@ export default function CoachingSessionsIndex() {
                         </Select>
                     </div>
 
-                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         {(isAdmin || isTeamLead) && (
                             <Select value={campaignId} onValueChange={setCampaignId}>
                                 <SelectTrigger>
@@ -346,6 +350,17 @@ export default function CoachingSessionsIndex() {
                                             {c.name}
                                         </SelectItem>
                                     ))}
+                                </SelectContent>
+                            </Select>
+                        )}
+                        {isAdmin && (
+                            <Select value={coacheeRole} onValueChange={setCoacheeRole}>
+                                <SelectTrigger>
+                                    <SelectValue placeholder="Coachee Role" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="Team Lead">Team Lead</SelectItem>
+                                    <SelectItem value="Agent">Agent</SelectItem>
                                 </SelectContent>
                             </Select>
                         )}
@@ -383,8 +398,8 @@ export default function CoachingSessionsIndex() {
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
                                     <TableHead>Date</TableHead>
-                                    {!isAgent && <TableHead>Agent</TableHead>}
-                                    {isAdmin && <TableHead>Team Lead</TableHead>}
+                                    {!isAgent && <TableHead>Coachee</TableHead>}
+                                    {isAdmin && <TableHead>Coach</TableHead>}
                                     <TableHead>Purpose</TableHead>
                                     <TableHead>Severity</TableHead>
                                     <TableHead>Ack Status</TableHead>
@@ -407,10 +422,10 @@ export default function CoachingSessionsIndex() {
                                             </TableCell>
                                             {!isAgent && (
                                                 <TableCell className="font-medium">
-                                                    {formatName(session.agent)}
+                                                    {formatName(session.coachee)}
                                                 </TableCell>
                                             )}
-                                            {isAdmin && <TableCell>{formatName(session.team_lead)}</TableCell>}
+                                            {isAdmin && <TableCell>{formatName(session.coach)}</TableCell>}
                                             <TableCell className="max-w-[200px] truncate">
                                                 {purposes[session.purpose] ?? session.purpose}
                                             </TableCell>
@@ -474,8 +489,8 @@ export default function CoachingSessionsIndex() {
                                 key={session.id}
                                 session={session}
                                 purposes={purposes}
-                                showAgent={!isAgent}
-                                showTeamLead={isAdmin}
+                                showCoachee={!isAgent}
+                                showCoach={isAdmin}
                             />
                         ))
                     )}

@@ -90,7 +90,7 @@ export default function Dashboard({
     userAccountStats,
     recentActivityLogs,
     biometricAnomalies,
- 
+
     pointsEscalation,
     ncnsTrend,
     leaveUtilization,
@@ -186,7 +186,7 @@ export default function Dashboard({
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ duration: 0.3, delay: 0.2 }}
                             >
-                                <TabsList className="grid w-full max-w-3xl" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
+                                <TabsList className="grid w-full" style={{ gridTemplateColumns: `repeat(${availableTabs.length}, 1fr)` }}>
                                     {availableTabs.map((tab) => {
                                         const config = TAB_CONFIG[tab];
                                         const Icon = TAB_ICONS[tab];
@@ -299,6 +299,8 @@ export default function Dashboard({
                                             coachingSummary={coachingSummary}
                                             coachingFollowUps={coachingFollowUps}
                                             isAgent={userRole === 'Agent'}
+                                            isTeamLead={userRole === 'Team Lead'}
+                                            isAdmin={userRole === 'Super Admin' || userRole === 'Admin'}
                                         />
                                     </Suspense>
                                 </TabsContent>
