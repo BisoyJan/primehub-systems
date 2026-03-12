@@ -19,7 +19,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, FileText, Eye, Users, Info, Lightbulb, ArrowRight } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, Eye, Users, Info, Lightbulb, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
@@ -438,7 +438,7 @@ export default function Create({
         // Check leave credits balance for VL (informational warning only — does not block submission)
         // SL handles insufficient credits at approval time (SL→UPTO conversion)
         // BL does not consume credits (non-credited leave type)
-        let newCreditError: string | null = null;
+        const newCreditError: string | null = null;
         let newVlCreditWarning: string | null = null;
         if (data.leave_type === 'VL' && calculatedDays > 0) {
             // Calculate projected credits inline to avoid stale state from concurrent useEffect

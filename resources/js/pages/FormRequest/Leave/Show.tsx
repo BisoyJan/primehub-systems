@@ -24,7 +24,7 @@ import {
 import { ArrowLeft, Check, X, Ban, Info, Trash2, CheckCircle, Clock, UserCheck, XCircle, Shield, Edit, AlertTriangle, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
 import { usePermission } from '@/hooks/use-permission';
-import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, show as leaveShowRoute, updateDayStatuses as leaveUpdateDayStatusesRoute } from '@/routes/leave-requests';
+import { index as leaveIndexRoute, approve as leaveApproveRoute, deny as leaveDenyRoute, partialDeny as leavePartialDenyRoute, cancel as leaveCancelRoute, destroy as leaveDestroyRoute, edit as leaveEditRoute, medicalCert as leaveMedicalCertRoute, updateDayStatuses as leaveUpdateDayStatusesRoute } from '@/routes/leave-requests';
 import DayStatusAssignment, { type DayStatus, VL_STATUS_OPTIONS } from './Components/DayStatusAssignment';
 
 interface User {

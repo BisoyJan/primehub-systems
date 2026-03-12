@@ -1850,8 +1850,8 @@ class LeaveRequestController extends Controller
                 $leaveRequest->original_end_date = $leaveRequest->end_date;
 
                 // Update start and end dates to reflect only approved dates
-                $leaveRequest->start_date = min($approvedDates);
-                $leaveRequest->end_date = max($approvedDates);
+                $leaveRequest->start_date = Carbon::parse(min($approvedDates));
+                $leaveRequest->end_date = Carbon::parse(max($approvedDates));
                 $leaveRequest->has_partial_denial = true;
                 $leaveRequest->approved_days = $approvedDaysCount;
                 $leaveRequest->save();
@@ -3759,8 +3759,8 @@ class LeaveRequestController extends Controller
      */
     protected function rollbackExcusedAttendancePoints(LeaveRequest $leaveRequest): int
     {
-        // Only SL and UPTO with medical cert had auto-excused points
-        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO'])) {
+        // Only SL, UPTO, and BL with medical/death cert had auto-excused points
+        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO', 'BL'])) {
             return 0;
         }
 
@@ -3823,8 +3823,8 @@ class LeaveRequestController extends Controller
             return 0;
         }
 
-        // Only for SL and UPTO leave types
-        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO'])) {
+        // Only for SL, UPTO, and BL leave types
+        if (! in_array($leaveRequest->leave_type, ['SL', 'UPTO', 'BL'])) {
             return 0;
         }
 
@@ -3842,7 +3842,11 @@ class LeaveRequestController extends Controller
         }
 
         // Build the default excuse reason
-        $certificateType = $leaveRequest->leave_type === 'SL' ? 'medical certificate' : 'supporting certificate';
+        $certificateType = match ($leaveRequest->leave_type) {
+            'SL' => 'medical certificate',
+            'BL' => 'death certificate',
+            default => 'supporting certificate',
+        };
         $defaultReason = "Auto-excused: Approved {$leaveRequest->leave_type} with {$certificateType} - Leave Request #{$leaveRequest->id}";
         $reason = $excuseReason ?? $defaultReason;
 
@@ -3959,9 +3963,9 @@ class LeaveRequestController extends Controller
             $currentDate->addDay();
         }
 
-        // Auto-excuse attendance points for UPTO with medical certificate
-        // (SL is handled in handleSlApproval, but UPTO submitted directly also needs this)
-        if ($leaveRequest->leave_type === 'UPTO' && $leaveRequest->medical_cert_submitted) {
+        // Auto-excuse attendance points for UPTO/BL with certificate
+        // (SL is handled in handleSlApproval, but UPTO and BL submitted directly also need this)
+        if (in_array($leaveRequest->leave_type, ['UPTO', 'BL']) && $leaveRequest->medical_cert_submitted) {
             $this->autoExcuseAttendancePoints($leaveRequest);
         }
     }
@@ -4589,6 +4593,7 @@ class LeaveRequestController extends Controller
 
                     if ($isUndoingRevert) {
                         // Cascade: delete the revert entry and the new activity entry
+                        /** @var Activity|null $newActivity */
                         $newActivity = Activity::where('log_name', 'leave-credits')
                             ->where('event', 'carryover_manually_adjusted')
                             ->where('properties->user_id', $carryover->user_id)
@@ -4611,6 +4616,7 @@ class LeaveRequestController extends Controller
                         $activity->delete();
                     } else {
                         // Normal revert: mark the new activity as a revert
+                        /** @var Activity|null $revertActivity */
                         $revertActivity = Activity::where('log_name', 'leave-credits')
                             ->where('event', 'carryover_manually_adjusted')
                             ->where('properties->user_id', $carryover->user_id)
@@ -4658,6 +4664,7 @@ class LeaveRequestController extends Controller
 
                     if ($isUndoingRevert) {
                         // Cascade: delete the revert entry and the new activity entry
+                        /** @var Activity|null $newActivity */
                         $newActivity = Activity::where('log_name', 'leave-credits')
                             ->where('event', 'credit_manually_adjusted')
                             ->where('properties->user_id', $leaveCredit->user_id)
@@ -4671,6 +4678,7 @@ class LeaveRequestController extends Controller
                         $activity->delete();
                     } else {
                         // Normal revert: mark the new activity as a revert
+                        /** @var Activity|null $revertActivity */
                         $revertActivity = Activity::where('log_name', 'leave-credits')
                             ->where('event', 'credit_manually_adjusted')
                             ->where('properties->user_id', $leaveCredit->user_id)

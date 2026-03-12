@@ -19,7 +19,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check, FileImage, FileText, Eye, Upload, X, Users, Lightbulb, ArrowRight } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check, FileImage, Eye, Upload, X, Users, Lightbulb, ArrowRight } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { show as leaveShowRoute, update as leaveUpdateRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';

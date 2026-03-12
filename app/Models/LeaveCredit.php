@@ -52,6 +52,9 @@ class LeaveCredit extends Model
 
     /**
      * Scope to get credits for a specific year.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<self>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<self>
      */
     public function scopeForYear($query, int $year)
     {
@@ -60,6 +63,9 @@ class LeaveCredit extends Model
 
     /**
      * Scope to get credits for a specific user.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<self>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<self>
      */
     public function scopeForUser($query, int $userId)
     {
@@ -68,6 +74,9 @@ class LeaveCredit extends Model
 
     /**
      * Scope to get credits for a specific month and year.
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<self>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<self>
      */
     public function scopeForMonth($query, int $year, int $month)
     {

@@ -740,6 +740,7 @@ class LeaveCreditService
         // This allows proper nesting when called from within an existing transaction
         try {
             // Deduct from carryover first (month 0), then monthly accruals (1, 2, 3...)
+            /** @var LeaveCredit $credit */
             foreach ($credits as $credit) {
                 if ($remainingToDeduct <= 0) {
                     break;
@@ -856,6 +857,7 @@ class LeaveCreditService
 
         // Note: No DB::beginTransaction() here - the caller (controller) handles the transaction
         try {
+            /** @var LeaveCredit $credit */
             foreach ($credits as $credit) {
                 if ($remainingToRestore <= 0) {
                     break;
@@ -923,6 +925,7 @@ class LeaveCreditService
 
         // Note: No DB::beginTransaction() here - the caller (controller) handles the transaction
         try {
+            /** @var LeaveCredit $credit */
             foreach ($credits as $credit) {
                 if ($remainingToRestore <= 0) {
                     break;
@@ -2551,6 +2554,7 @@ class LeaveCreditService
 
         $remaining = $excess;
 
+        /** @var LeaveCredit $credit */
         foreach ($monthlies as $credit) {
             if ($remaining <= 0) {
                 break;
