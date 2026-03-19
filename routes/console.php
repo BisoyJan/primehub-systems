@@ -40,7 +40,7 @@ Schedule::command('form-request:clean-old-records --force')
     ->withoutOverlapping()
     ->onOneServer();
 
-// Clean old activity logs (older than 90 days) - runs daily at 1:45 AM
+// Clean old activity logs (older than 122 days per config) - runs daily at 1:45 AM
 // Priority: HIGH - Large volume of log records to process
 Schedule::command('activitylog:clean')
     ->dailyAt('01:45')
@@ -92,7 +92,7 @@ Schedule::command('form-request:check-expiry --days=7')
 
 // Check activity log expiry and notify admins - runs daily at 2:25 AM
 // Priority: LOW - Quick check and notification only
-Schedule::command('activitylog:check-expiry --days=7 --retention=90')
+Schedule::command('activitylog:check-expiry --days=7 --retention=122')
     ->dailyAt('02:25')
     ->withoutOverlapping()
     ->onOneServer();
