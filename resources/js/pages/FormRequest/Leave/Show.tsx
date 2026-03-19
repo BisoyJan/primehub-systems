@@ -876,7 +876,7 @@ export default function Show({
                                 <span className="hidden sm:inline">{leaveRequest.status === 'approved' ? 'Cancel Approved' : 'Cancel'}</span>
                             </Button>
                         )}
-                        {canCancel && !canAdminCancel && (leaveRequest.status === 'pending' || (leaveRequest.status === 'approved' && leaveRequest.has_partial_denial)) && (
+                        {canCancel && !canAdminCancel && (leaveRequest.status === 'pending' || leaveRequest.status === 'approved') && (
                             <Can permission="leave.cancel">
                                 <Button variant="outline" size="sm" onClick={() => setShowCancelDialog(true)}>
                                     <Ban className="mr-1 h-4 w-4" />

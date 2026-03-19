@@ -799,7 +799,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                                             </Button>
                                                         </Link>
                                                     )}
-                                                    {(request.status === 'pending' || (request.status === 'approved' && request.has_partial_denial)) && auth.user.id === request.user.id && (
+                                                    {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
                                                         <Button
                                                             size="icon"
                                                             variant="outline"
@@ -930,7 +930,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                             </Button>
                                         </Link>
                                     )}
-                                    {(request.status === 'pending' || (request.status === 'approved' && request.has_partial_denial)) && auth.user.id === request.user.id && (
+                                    {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
                                         <Button
                                             size="sm"
                                             variant="outline"

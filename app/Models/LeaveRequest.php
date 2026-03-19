@@ -375,13 +375,14 @@ class LeaveRequest extends Model
 
     /**
      * Check if request can be cancelled by the request owner.
-     * Owners can cancel: pending (any date) or partially approved (any date).
-     * Fully approved leaves require privileged role cancellation.
+     * Owners can cancel: pending (any date), partially approved (any date),
+     * or fully approved leaves whose start_date has not yet passed.
      */
     public function canBeCancelled(): bool
     {
         return $this->isPending()
-            || $this->isPartiallyApproved();
+            || $this->isPartiallyApproved()
+            || ($this->isApproved() && ! $this->has_partial_denial && $this->start_date && $this->start_date->startOfDay()->isFuture());
     }
 
     /**

@@ -146,12 +146,44 @@ class LeaveRequestPolicyTest extends TestCase
     }
 
     #[Test]
-    public function user_cannot_cancel_approved_leave_request(): void
+    public function user_cannot_cancel_approved_leave_request_with_past_start_date(): void
     {
         $user = User::factory()->create(['role' => 'Agent']);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $user->id,
             'status' => 'approved',
+            'start_date' => now()->subDays(3),
+            'end_date' => now()->addDays(2),
+        ]);
+
+        $this->assertFalse($this->policy->cancel($user, $leaveRequest));
+    }
+
+    #[Test]
+    public function agent_can_cancel_own_approved_leave_with_future_start_date(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'has_partial_denial' => false,
+            'start_date' => now()->addDays(5),
+            'end_date' => now()->addDays(7),
+        ]);
+
+        $this->assertTrue($this->policy->cancel($user, $leaveRequest));
+    }
+
+    #[Test]
+    public function agent_cannot_cancel_own_approved_leave_on_start_date(): void
+    {
+        $user = User::factory()->create(['role' => 'Agent']);
+        $leaveRequest = LeaveRequest::factory()->create([
+            'user_id' => $user->id,
+            'status' => 'approved',
+            'has_partial_denial' => false,
+            'start_date' => now()->startOfDay(),
+            'end_date' => now()->addDays(3),
         ]);
 
         $this->assertFalse($this->policy->cancel($user, $leaveRequest));

@@ -196,6 +196,13 @@ class LeaveRequestPolicy
             return $this->permissionService->userHasPermission($user, 'leave.cancel');
         }
 
+        // Users can cancel their own fully approved requests if the leave has not yet started
+        if ($leaveRequest->isApproved() && $isOwnRequest
+            && $leaveRequest->start_date
+            && $leaveRequest->start_date->startOfDay()->isFuture()) {
+            return $this->permissionService->userHasPermission($user, 'leave.cancel');
+        }
+
         return false;
     }
 
