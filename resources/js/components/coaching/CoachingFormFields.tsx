@@ -464,13 +464,13 @@ export function CoachingFormFields({
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {[
                         { field: 'root_cause_lack_of_skills', label: 'Lack of Skills / Knowledge' },
-                        { field: 'root_cause_lack_of_clarity', label: 'Lack of Clarity' },
+                        { field: 'root_cause_lack_of_clarity', label: 'Lack of Clarity on Expectations' },
                         { field: 'root_cause_personal_issues', label: 'Personal Issues' },
                         { field: 'root_cause_motivation_engagement', label: 'Motivation / Engagement' },
                         { field: 'root_cause_health_fatigue', label: 'Health / Fatigue' },
-                        { field: 'root_cause_workload_process', label: 'Workload / Process' },
-                        { field: 'root_cause_peer_conflict', label: 'Peer Conflict' },
-                        { field: 'root_cause_others', label: 'Others' },
+                        { field: 'root_cause_workload_process', label: 'Workload or Process Issues' },
+                        { field: 'root_cause_peer_conflict', label: 'Peer / Team Conflict' },
+                        { field: 'root_cause_others', label: 'Progress Update' },
                     ].map(({ field, label }) => (
                         <div key={field} className="flex items-center gap-2">
                             <Checkbox
@@ -482,18 +482,6 @@ export function CoachingFormFields({
                         </div>
                     ))}
                 </div>
-                {!!data.root_cause_others && (
-                    <div>
-                        <Label htmlFor="root_cause_others_notes">Other Root Cause Details</Label>
-                        <Input
-                            id="root_cause_others_notes"
-                            value={String(data.root_cause_others_notes || '')}
-                            onChange={(e) => setData('root_cause_others_notes', e.target.value)}
-                            placeholder="Specify other root cause..."
-                        />
-                        {errors.root_cause_others_notes && <p className="text-red-600 text-sm mt-1">{errors.root_cause_others_notes}</p>}
-                    </div>
-                )}
             </section>
 
             {/* Section 7: Agent Strengths */}

@@ -3,6 +3,7 @@
 namespace App\Http\Requests;
 
 use App\Models\CoachingSession;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -19,7 +20,7 @@ class UpdateCoachingSessionRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -52,7 +53,7 @@ class UpdateCoachingSessionRequest extends FormRequest
             'root_cause_workload_process' => ['sometimes', 'boolean'],
             'root_cause_peer_conflict' => ['sometimes', 'boolean'],
             'root_cause_others' => ['sometimes', 'boolean'],
-            'root_cause_others_notes' => ['nullable', 'required_if:root_cause_others,true', 'string', 'max:2000'],
+            'root_cause_others_notes' => ['nullable', 'string', 'max:2000'],
             // More Narrative
             'agent_strengths_wins' => ['nullable', 'string', 'max:10000'],
             'smart_action_plan' => ['required', 'string', 'min:10', 'max:10000'],
@@ -77,7 +78,7 @@ class UpdateCoachingSessionRequest extends FormRequest
             'smart_action_plan.required' => 'SMART action plan is required.',
             'smart_action_plan.min' => 'SMART action plan must be at least 10 characters.',
             'focus_other_notes.required_if' => 'Please specify the other focus area.',
-            'root_cause_others_notes.required_if' => 'Please specify the other root cause.',
+
         ];
     }
 }

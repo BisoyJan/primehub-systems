@@ -222,17 +222,14 @@ export default function CoachingSessionsShow() {
                 <SectionCard title="Root Causes">
                     <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                         <CheckItem checked={session.root_cause_lack_of_skills} label="Lack of Skills / Knowledge" />
-                        <CheckItem checked={session.root_cause_lack_of_clarity} label="Lack of Clarity" />
+                        <CheckItem checked={session.root_cause_lack_of_clarity} label="Lack of Clarity on Expectations" />
                         <CheckItem checked={session.root_cause_personal_issues} label="Personal Issues" />
                         <CheckItem checked={session.root_cause_motivation_engagement} label="Motivation / Engagement" />
                         <CheckItem checked={session.root_cause_health_fatigue} label="Health / Fatigue" />
-                        <CheckItem checked={session.root_cause_workload_process} label="Workload / Process" />
-                        <CheckItem checked={session.root_cause_peer_conflict} label="Peer Conflict" />
-                        <CheckItem checked={session.root_cause_others} label="Others" />
+                        <CheckItem checked={session.root_cause_workload_process} label="Workload or Process Issues" />
+                        <CheckItem checked={session.root_cause_peer_conflict} label="Peer / Team Conflict" />
+                        <CheckItem checked={session.root_cause_others} label="Progress Update" />
                     </div>
-                    {session.root_cause_others && session.root_cause_others_notes && (
-                        <p className="mt-3 rounded bg-muted/50 p-3 text-sm">{session.root_cause_others_notes}</p>
-                    )}
                 </SectionCard>
 
                 {/* Agent Strengths */}

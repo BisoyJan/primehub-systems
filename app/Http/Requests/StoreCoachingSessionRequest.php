@@ -4,8 +4,11 @@ namespace App\Http\Requests;
 
 use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
+use App\Models\User;
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreCoachingSessionRequest extends FormRequest
 {
@@ -20,7 +23,7 @@ class StoreCoachingSessionRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -58,7 +61,7 @@ class StoreCoachingSessionRequest extends FormRequest
             'root_cause_workload_process' => ['sometimes', 'boolean'],
             'root_cause_peer_conflict' => ['sometimes', 'boolean'],
             'root_cause_others' => ['sometimes', 'boolean'],
-            'root_cause_others_notes' => ['nullable', 'required_if:root_cause_others,true', 'string', 'max:2000'],
+            'root_cause_others_notes' => ['nullable', 'string', 'max:2000'],
             // More Narrative
             'agent_strengths_wins' => ['nullable', 'string', 'max:10000'],
             'smart_action_plan' => ['required', 'string', 'min:10', 'max:10000'],
@@ -99,7 +102,7 @@ class StoreCoachingSessionRequest extends FormRequest
             'smart_action_plan.required' => 'SMART action plan is required.',
             'smart_action_plan.min' => 'SMART action plan must be at least 10 characters.',
             'focus_other_notes.required_if' => 'Please specify the other focus area.',
-            'root_cause_others_notes.required_if' => 'Please specify the other root cause.',
+
             'follow_up_date.after_or_equal' => 'Follow-up date must be today or later.',
         ];
     }
@@ -110,7 +113,7 @@ class StoreCoachingSessionRequest extends FormRequest
     public function after(): array
     {
         return [
-            function (\Illuminate\Validation\Validator $validator) {
+            function (Validator $validator) {
                 $coachingMode = $this->input('coaching_mode', 'assign');
 
                 if ($coachingMode === 'direct') {
@@ -119,7 +122,7 @@ class StoreCoachingSessionRequest extends FormRequest
                         return;
                     }
 
-                    $coachee = \App\Models\User::find($coacheeId);
+                    $coachee = User::find($coacheeId);
                     if (! $coachee) {
                         return;
                     }

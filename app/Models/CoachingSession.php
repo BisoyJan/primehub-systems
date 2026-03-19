@@ -313,14 +313,14 @@ class CoachingSession extends Model
     {
         $causes = [];
         $map = [
-            'root_cause_lack_of_skills' => 'Lack of skills',
-            'root_cause_lack_of_clarity' => 'Lack of clarity on expectations',
-            'root_cause_personal_issues' => 'Personal issues',
-            'root_cause_motivation_engagement' => 'Motivation/engagement',
-            'root_cause_health_fatigue' => 'Health/fatigue',
-            'root_cause_workload_process' => 'Workload or process issues',
-            'root_cause_peer_conflict' => 'Peer/team conflict',
-            'root_cause_others' => 'Others',
+            'root_cause_lack_of_skills' => 'Lack of Skills / Knowledge',
+            'root_cause_lack_of_clarity' => 'Lack of Clarity on Expectations',
+            'root_cause_personal_issues' => 'Personal Issues',
+            'root_cause_motivation_engagement' => 'Motivation / Engagement',
+            'root_cause_health_fatigue' => 'Health / Fatigue',
+            'root_cause_workload_process' => 'Workload or Process Issues',
+            'root_cause_peer_conflict' => 'Peer / Team Conflict',
+            'root_cause_others' => 'Progress Update',
         ];
 
         foreach ($map as $field => $label) {

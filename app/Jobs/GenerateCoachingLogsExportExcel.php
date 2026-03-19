@@ -264,28 +264,28 @@ class GenerateCoachingLogsExportExcel implements ShouldQueue
     {
         $causes = [];
         if ($session->root_cause_lack_of_skills) {
-            $causes[] = 'Lack of Skills';
+            $causes[] = 'Lack of Skills / Knowledge';
         }
         if ($session->root_cause_lack_of_clarity) {
-            $causes[] = 'Lack of Clarity';
+            $causes[] = 'Lack of Clarity on Expectations';
         }
         if ($session->root_cause_personal_issues) {
             $causes[] = 'Personal Issues';
         }
         if ($session->root_cause_motivation_engagement) {
-            $causes[] = 'Motivation/Engagement';
+            $causes[] = 'Motivation / Engagement';
         }
         if ($session->root_cause_health_fatigue) {
-            $causes[] = 'Health/Fatigue';
+            $causes[] = 'Health / Fatigue';
         }
         if ($session->root_cause_workload_process) {
-            $causes[] = 'Workload/Process';
+            $causes[] = 'Workload or Process Issues';
         }
         if ($session->root_cause_peer_conflict) {
-            $causes[] = 'Peer Conflict';
+            $causes[] = 'Peer / Team Conflict';
         }
         if ($session->root_cause_others) {
-            $causes[] = 'Others: '.($session->root_cause_others_notes ?? '');
+            $causes[] = 'Progress Update';
         }
 
         return implode(', ', $causes) ?: 'N/A';
