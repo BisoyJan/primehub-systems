@@ -9,6 +9,7 @@ use App\Models\LeaveCreditCarryover;
 use App\Models\LeaveRequest;
 use App\Models\User;
 use Carbon\Carbon;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Facades\Activity;
 
@@ -1094,6 +1095,19 @@ class LeaveCreditService
         $endDate = Carbon::parse($data['end_date']);
         $year = $data['credits_year'] ?? now()->year;
 
+        // SPL validation: check solo parent status and credit balance
+        if ($leaveType === 'SPL') {
+            $splCreditService = app(SplCreditService::class);
+            $splErrors = $splCreditService->validateSplRequest($user);
+            $errors = array_merge($errors, $splErrors);
+
+            return [
+                'valid' => empty($errors),
+                'errors' => $errors,
+                'insufficient_vl_credits' => false,
+            ];
+        }
+
         // Check if short notice override is enabled (Admin/Super Admin bypassing 2-week rule)
         $shortNoticeOverride = $data['short_notice_override'] ?? false;
 
@@ -1730,7 +1744,7 @@ class LeaveCreditService
     /**
      * Get all pending cash conversions for a specific year.
      *
-     * @return \Illuminate\Database\Eloquent\Collection
+     * @return Collection
      */
     public function getPendingCashConversions(int $toYear)
     {
@@ -2154,7 +2168,7 @@ class LeaveCreditService
      *
      * @param  int|null  $toYear  The year to transfer credits to (defaults to current year)
      */
-    public function getUsersNeedingFirstRegularization(?int $toYear = null): \Illuminate\Database\Eloquent\Collection
+    public function getUsersNeedingFirstRegularization(?int $toYear = null): Collection
     {
         $toYear = $toYear ?? now()->year;
         $previousYear = $toYear - 1;

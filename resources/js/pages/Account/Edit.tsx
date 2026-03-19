@@ -25,6 +25,7 @@ interface User {
     role: string;
     hired_date: string;
     is_active: boolean;
+    is_solo_parent: boolean;
 }
 
 export default function AccountEdit() {
@@ -56,6 +57,7 @@ export default function AccountEdit() {
         password_confirmation: "",
         role: user.role,
         hired_date: user.hired_date,
+        is_solo_parent: user.is_solo_parent,
     });
 
     const handleToggleActive = () => {
@@ -226,6 +228,29 @@ export default function AccountEdit() {
                                                 checked={employeeStatus}
                                                 onCheckedChange={handleToggleActive}
                                                 aria-label="Toggle employee active status"
+                                            />
+                                        </div>
+                                    </div>
+                                    <div className="flex items-center justify-between p-4 border rounded-lg">
+                                        <div className="space-y-1">
+                                            <p className="font-medium">Solo Parent</p>
+                                            <p className="text-sm text-muted-foreground">
+                                                {data.is_solo_parent
+                                                    ? "Employee is eligible for Solo Parent Leave (SPL) credits"
+                                                    : "Enable to grant Solo Parent Leave (SPL) eligibility"}
+                                            </p>
+                                        </div>
+                                        <div className="flex items-center gap-3">
+                                            <span className={`px-2 py-1 rounded-full text-xs font-medium border ${data.is_solo_parent
+                                                ? 'bg-blue-100 text-blue-800 border-blue-300 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700'
+                                                : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
+                                                }`}>
+                                                {data.is_solo_parent ? 'Solo Parent' : 'Not Solo Parent'}
+                                            </span>
+                                            <Switch
+                                                checked={data.is_solo_parent}
+                                                onCheckedChange={(checked) => setData('is_solo_parent', checked)}
+                                                aria-label="Toggle solo parent status"
                                             />
                                         </div>
                                     </div>

@@ -35,6 +35,10 @@ class LeaveRequestDay extends Model
 
     const STATUS_UPTO = 'upto';
 
+    const STATUS_SPL_CREDITED = 'spl_credited';
+
+    const STATUS_ABSENT = 'absent';
+
     /**
      * Human-readable labels for day statuses.
      */
@@ -45,22 +49,25 @@ class LeaveRequestDay extends Model
         self::STATUS_ADVISED_ABSENCE => 'Advised Absence (UPTO — Unpaid Time Off)',
         self::STATUS_VL_CREDITED => 'VL Credited (Paid)',
         self::STATUS_UPTO => 'UPTO — Unpaid Time Off',
+        self::STATUS_SPL_CREDITED => 'SPL Credited (Paid)',
+        self::STATUS_ABSENT => 'Absent',
     ];
 
     /**
      * Statuses that are considered paid (deducted from credits).
      */
-    const PAID_STATUSES = [self::STATUS_SL_CREDITED, self::STATUS_VL_CREDITED];
+    const PAID_STATUSES = [self::STATUS_SL_CREDITED, self::STATUS_VL_CREDITED, self::STATUS_SPL_CREDITED];
 
     /**
      * Statuses that are considered unpaid.
      */
-    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE, self::STATUS_UPTO];
+    const UNPAID_STATUSES = [self::STATUS_NCNS, self::STATUS_ADVISED_ABSENCE, self::STATUS_UPTO, self::STATUS_ABSENT];
 
     protected $fillable = [
         'leave_request_id',
         'date',
         'day_status',
+        'is_half_day',
         'notes',
         'assigned_by',
         'assigned_at',
@@ -70,6 +77,7 @@ class LeaveRequestDay extends Model
     {
         return [
             'date' => 'date',
+            'is_half_day' => 'boolean',
             'assigned_at' => 'datetime',
         ];
     }
@@ -155,10 +163,39 @@ class LeaveRequestDay extends Model
     }
 
     /**
+     * Scope: only SPL credited (paid) days.
+     */
+    public function scopeSplCredited($query)
+    {
+        return $query->where('day_status', self::STATUS_SPL_CREDITED);
+    }
+
+    /**
+     * Scope: only absent days.
+     */
+    public function scopeAbsent($query)
+    {
+        return $query->where('day_status', self::STATUS_ABSENT);
+    }
+
+    /**
      * Get the human-readable label for the current status.
      */
     public function getStatusLabel(): string
     {
         return self::STATUS_LABELS[$this->day_status] ?? 'Unknown';
+    }
+
+    /**
+     * Get the credit value for this day.
+     * Returns 0.5 for half-day paid, 1.0 for whole-day paid, 0 for unpaid.
+     */
+    public function getCreditValue(): float
+    {
+        if (! $this->isPaid()) {
+            return 0.0;
+        }
+
+        return $this->is_half_day ? 0.5 : 1.0;
     }
 }

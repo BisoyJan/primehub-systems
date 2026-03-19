@@ -24,9 +24,12 @@ use App\Services\AttendancePoint\GbroCalculationService;
 use App\Services\LeaveCreditService;
 use App\Services\NotificationService;
 use App\Services\PermissionService;
+use App\Services\SplCreditService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -42,10 +45,13 @@ class LeaveRequestController extends Controller
 
     protected $notificationService;
 
-    public function __construct(LeaveCreditService $leaveCreditService, NotificationService $notificationService)
+    protected $splCreditService;
+
+    public function __construct(LeaveCreditService $leaveCreditService, NotificationService $notificationService, SplCreditService $splCreditService)
     {
         $this->leaveCreditService = $leaveCreditService;
         $this->notificationService = $notificationService;
+        $this->splCreditService = $splCreditService;
     }
 
     /**
@@ -135,12 +141,12 @@ class LeaveRequestController extends Controller
             ->withQueryString();
 
         // Get list of campaigns/departments for filters (unique names from campaigns table)
-        $campaigns = \App\Models\Campaign::orderBy('name')->pluck('name')->toArray();
+        $campaigns = Campaign::orderBy('name')->pluck('name')->toArray();
 
         // Get all employees who have leave requests (for admin/TL employee search dropdown)
         $allEmployees = [];
         if ($isAdmin || $isTeamLead) {
-            $employeeQuery = \App\Models\User::whereHas('leaveRequests');
+            $employeeQuery = User::whereHas('leaveRequests');
 
             // Team Leads only see employees whose requests they can view
             if ($isTeamLead) {
@@ -467,6 +473,8 @@ class LeaveRequestController extends Controller
             'selectedEmployeeId' => $targetUser->id,
             'canOverrideShortNotice' => $canOverrideShortNotice,
             'existingLeaveRequests' => $existingLeaveRequests,
+            'splCreditsSummary' => $targetUser->is_solo_parent ? $this->splCreditService->getSummary($targetUser) : null,
+            'isSoloParent' => (bool) $targetUser->is_solo_parent,
         ]);
     }
 
@@ -533,6 +541,23 @@ class LeaveRequestController extends Controller
 
         // Calculate days
         $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate);
+
+        // For SPL: validate solo parent status and calculate days accounting for half-days
+        if ($request->leave_type === 'SPL') {
+            $splErrors = $this->splCreditService->validateSplRequest($targetUser);
+            if (! empty($splErrors)) {
+                return back()->withErrors(['validation' => $splErrors])->withInput();
+            }
+
+            // If SPL day settings provided, recalculate days_requested with half-day support
+            if ($request->has('spl_day_settings') && is_array($request->input('spl_day_settings'))) {
+                $splDaySettings = $request->input('spl_day_settings');
+                $daysRequested = 0;
+                foreach ($splDaySettings as $daySetting) {
+                    $daysRequested += ! empty($daySetting['is_half_day']) ? 0.5 : 1.0;
+                }
+            }
+        }
 
         // Get current attendance points
         $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
@@ -612,6 +637,18 @@ class LeaveRequestController extends Controller
                 'short_notice_override_by' => $shortNoticeOverrideBy,
                 'short_notice_override_at' => $shortNoticeOverride ? now() : null,
             ]);
+
+            // For SPL: create per-day records at submission time with is_half_day setting
+            if ($request->leave_type === 'SPL' && $request->has('spl_day_settings') && is_array($request->input('spl_day_settings'))) {
+                foreach ($request->input('spl_day_settings') as $daySetting) {
+                    LeaveRequestDay::create([
+                        'leave_request_id' => $leaveRequest->id,
+                        'date' => $daySetting['date'],
+                        'day_status' => 'pending',
+                        'is_half_day' => ! empty($daySetting['is_half_day']),
+                    ]);
+                }
+            }
 
             // Notify based on whether TL approval is required
             if ($requiresTlApproval) {
@@ -843,28 +880,44 @@ class LeaveRequestController extends Controller
             }
         }
 
-        // Per-day statuses for SL and VL requests (existing assigned days)
+        // SPL credit preview for SPL pending requests
+        $splCreditPreview = null;
+        $splCreditsSummary = null;
+        if ($leaveRequest->leave_type === 'SPL') {
+            $splCreditsSummary = $this->splCreditService->getSummary($leaveRequest->user);
+            if ($leaveRequest->status === 'pending' && $isAdmin) {
+                $splCreditPreview = $this->splCreditService->checkSplCreditDeduction(
+                    $leaveRequest->user,
+                    (float) $leaveRequest->days_requested
+                );
+            }
+        }
+
+        // Per-day statuses for SL, VL, and SPL requests (existing assigned days)
         $leaveRequestDays = null;
         $suggestedDayStatuses = null;
 
-        if (in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
+        if (in_array($leaveRequest->leave_type, ['SL', 'VL', 'SPL'])) {
             // Load existing per-day statuses if any
             $leaveRequestDays = $leaveRequest->days->map(function ($day) {
                 return [
                     'id' => $day->id,
                     'date' => $day->date->format('Y-m-d'),
                     'day_status' => $day->day_status,
+                    'is_half_day' => (bool) $day->is_half_day,
                     'notes' => $day->notes,
                     'status_label' => $day->getStatusLabel(),
                     'is_paid' => $day->isPaid(),
+                    'credit_value' => $day->getCreditValue(),
                     'assigned_by' => $day->assigner?->name,
                     'assigned_by_role' => $day->assigner?->role,
                     'assigned_at' => $day->assigned_at?->format('Y-m-d H:i'),
                 ];
             });
 
-            // For pending requests, generate suggested day statuses for the approval UI
-            if ($leaveRequest->status === 'pending' && $isAdmin) {
+            // For pending SL/VL requests, generate suggested day statuses for the approval UI
+            // SPL uses auto-FIFO at approval time — no suggested statuses needed
+            if ($leaveRequest->status === 'pending' && $isAdmin && in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
                 $startDate = Carbon::parse($leaveRequest->start_date);
                 $endDate = Carbon::parse($leaveRequest->end_date);
 
@@ -916,6 +969,8 @@ class LeaveRequestController extends Controller
             'absenceWindowInfo' => $absenceWindowInfo,
             'activeAttendancePoints' => $activeAttendancePoints,
             'creditPreview' => $creditPreview,
+            'splCreditPreview' => $splCreditPreview,
+            'splCreditsSummary' => $splCreditsSummary,
             'leaveRequestDays' => $leaveRequestDays,
             'suggestedDayStatuses' => $suggestedDayStatuses,
         ]);
@@ -1048,6 +1103,17 @@ class LeaveRequestController extends Controller
                 ];
             });
 
+        // Load existing SPL day settings if this is an SPL leave request
+        $splDaySettings = [];
+        if ($leaveRequest->leave_type === 'SPL') {
+            $splDaySettings = $leaveRequest->days()->orderBy('date')->get()->map(function ($day) {
+                return [
+                    'date' => Carbon::parse($day->date)->format('Y-m-d'),
+                    'is_half_day' => (bool) $day->is_half_day,
+                ];
+            })->values()->toArray();
+        }
+
         return Inertia::render('FormRequest/Leave/Edit', [
             'leaveRequest' => $leaveRequestData,
             'creditsSummary' => $creditsSummary,
@@ -1062,6 +1128,7 @@ class LeaveRequestController extends Controller
             'isApprovedLeave' => $isApprovedLeave,
             'canOverrideShortNotice' => $canOverrideShortNotice,
             'existingLeaveRequests' => $existingLeaveRequests,
+            'splDaySettings' => $splDaySettings,
         ]);
     }
 
@@ -1119,6 +1186,23 @@ class LeaveRequestController extends Controller
         $startDate = Carbon::parse($request->start_date);
         $endDate = Carbon::parse($request->end_date);
         $daysRequested = $leaveCreditService->calculateDays($startDate, $endDate);
+
+        // For SPL: validate solo parent status and calculate days accounting for half-days
+        if ($request->leave_type === 'SPL') {
+            $splErrors = $this->splCreditService->validateSplRequest($targetUser);
+            if (! empty($splErrors)) {
+                return back()->withErrors(['validation' => $splErrors])->withInput();
+            }
+
+            // If SPL day settings provided, recalculate days_requested with half-day support
+            if ($request->has('spl_day_settings') && is_array($request->input('spl_day_settings'))) {
+                $splDaySettings = $request->input('spl_day_settings');
+                $daysRequested = 0;
+                foreach ($splDaySettings as $daySetting) {
+                    $daysRequested += ! empty($daySetting['is_half_day']) ? 0.5 : 1.0;
+                }
+            }
+        }
 
         // Get current attendance points
         $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
@@ -1180,6 +1264,19 @@ class LeaveRequestController extends Controller
             }
 
             $leaveRequest->update($updateData);
+
+            // For SPL: update per-day records with is_half_day settings
+            if ($request->leave_type === 'SPL' && $request->has('spl_day_settings') && is_array($request->input('spl_day_settings'))) {
+                $leaveRequest->days()->delete();
+                foreach ($request->input('spl_day_settings') as $daySetting) {
+                    LeaveRequestDay::create([
+                        'leave_request_id' => $leaveRequest->id,
+                        'date' => $daySetting['date'],
+                        'day_status' => 'pending',
+                        'is_half_day' => ! empty($daySetting['is_half_day']),
+                    ]);
+                }
+            }
 
             DB::commit();
 
@@ -1506,6 +1603,8 @@ class LeaveRequestController extends Controller
 
         $request->validate([
             'review_notes' => 'required|string|min:10',
+            'spl_half_day_overrides' => 'nullable|array',
+            'spl_half_day_overrides.*' => 'boolean',
         ]);
 
         $leaveCreditService = $this->leaveCreditService;
@@ -1544,6 +1643,8 @@ class LeaveRequestController extends Controller
             }
         }
 
+        // SPL: no credit guard needed — auto-FIFO allocation handles credit assignment at approval time
+
         DB::beginTransaction();
         try {
             $updateData = [];
@@ -1571,10 +1672,21 @@ class LeaveRequestController extends Controller
                         'leave_request_id' => $leaveRequest->id,
                         'date' => $dayData['date'],
                         'day_status' => $dayData['status'],
+                        'is_half_day' => ! empty($dayData['is_half_day']),
                         'notes' => $dayData['notes'] ?? null,
                         'assigned_by' => $user->id,
                         'assigned_at' => now(),
                     ]);
+                }
+            }
+
+            // For SPL: persist half-day overrides to pre-stored day records (before full approval)
+            if ($leaveRequest->leave_type === 'SPL' && $request->has('spl_half_day_overrides')) {
+                $splOverrides = $request->input('spl_half_day_overrides', []);
+                foreach ($splOverrides as $date => $isHalf) {
+                    LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+                        ->where('date', $date)
+                        ->update(['is_half_day' => (bool) $isHalf]);
                 }
             }
 
@@ -1633,6 +1745,10 @@ class LeaveRequestController extends Controller
                         LeaveRequestDay::where('leave_request_id', $leaveRequest->id)->delete();
                     }
                     $this->handleVlApproval($leaveRequest, $leaveCreditService, $vlDayStatuses);
+                } elseif ($leaveRequest->leave_type === 'SPL') {
+                    // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
+                    $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
+                    $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
                 } elseif ($leaveRequest->requiresCredits()) {
                     // Other credited leave types - normal deduction
                     $year = $request->input('credits_year', $leaveRequest->created_at->year);
@@ -1649,7 +1765,7 @@ class LeaveRequestController extends Controller
 
                     $this->updateAttendanceForApprovedLeave($leaveRequest);
                 } else {
-                    // Non-credited leave types (UPTO, LOA, BL, SPL, LDV, ML) - no credit deduction, but still update attendance
+                    // Non-credited leave types (UPTO, LOA, BL, LDV, ML) - no credit deduction, but still update attendance
                     $this->updateAttendanceForApprovedLeave($leaveRequest);
                 }
 
@@ -1765,8 +1881,11 @@ class LeaveRequestController extends Controller
             'denial_reason' => 'nullable|required_with:denied_dates|string|min:10',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent',
+            'day_statuses.*.is_half_day' => 'nullable|boolean',
             'day_statuses.*.notes' => 'nullable|string|max:500',
+            'spl_half_day_overrides' => 'nullable|array',
+            'spl_half_day_overrides.*' => 'boolean',
         ]);
 
         $leaveCreditService = $this->leaveCreditService;
@@ -1800,6 +1919,8 @@ class LeaveRequestController extends Controller
                 ]);
             }
         }
+
+        // SPL: no credit guard needed — auto-FIFO allocation with auto-denial handles credit assignment at approval time
 
         DB::beginTransaction();
         try {
@@ -1888,6 +2009,10 @@ class LeaveRequestController extends Controller
                 // Vacation Leave - per-day status assignment (VL Credited / UPTO)
                 $dayStatuses = $request->input('day_statuses');
                 $this->handleVlApproval($leaveRequest, $leaveCreditService, $dayStatuses);
+            } elseif ($leaveRequest->leave_type === 'SPL') {
+                // Solo Parent Leave - auto-FIFO credit allocation with optional half-day overrides
+                $splHalfDayOverrides = $request->input('spl_half_day_overrides', []);
+                $this->handleSplApproval($leaveRequest, $splHalfDayOverrides);
             } elseif ($leaveRequest->requiresCredits()) {
                 // Other credited leave types - normal deduction
                 $year = $request->input('credits_year', $leaveRequest->created_at->year);
@@ -1904,7 +2029,7 @@ class LeaveRequestController extends Controller
 
                 $this->updateAttendanceForApprovedLeave($leaveRequest);
             } else {
-                // Non-credited leave types (UPTO, LOA, BL, SPL, LDV, ML) - no credit deduction, but still update attendance
+                // Non-credited leave types (UPTO, LOA, BL, LDV, ML) - no credit deduction, but still update attendance
                 $this->updateAttendanceForApprovedLeave($leaveRequest);
             }
 
@@ -2128,7 +2253,8 @@ class LeaveRequestController extends Controller
             'review_notes' => 'nullable|string|max:1000',
             'day_statuses' => 'nullable|array',
             'day_statuses.*.date' => 'required_with:day_statuses|date',
-            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto',
+            'day_statuses.*.status' => 'required_with:day_statuses|string|in:pending,sl_credited,ncns,advised_absence,vl_credited,upto,spl_credited,absent',
+            'day_statuses.*.is_half_day' => 'nullable|boolean',
             'day_statuses.*.notes' => 'nullable|string|max:500',
         ]);
 
@@ -2679,7 +2805,11 @@ class LeaveRequestController extends Controller
         try {
             // Restore credits if it was approved and credits were deducted
             if ($leaveRequest->status === 'approved' && $leaveRequest->credits_deducted) {
-                $leaveCreditService->restoreCredits($leaveRequest);
+                if ($leaveRequest->leave_type === 'SPL') {
+                    $this->splCreditService->restoreCredits($leaveRequest);
+                } else {
+                    $leaveCreditService->restoreCredits($leaveRequest);
+                }
             }
 
             // Rollback for approved leaves: un-excuse points first (before attendance cascade-delete)
@@ -2688,8 +2818,8 @@ class LeaveRequestController extends Controller
                 $this->rollbackAttendanceForCancelledLeave($leaveRequest);
             }
 
-            // Clean up per-day status records (SL and VL per-day tracking)
-            if (in_array($leaveRequest->leave_type, ['SL', 'VL'])) {
+            // Clean up per-day status records (SL, VL, and SPL per-day tracking)
+            if (in_array($leaveRequest->leave_type, ['SL', 'VL', 'SPL'])) {
                 $leaveRequest->days()->delete();
             }
 
@@ -2832,7 +2962,7 @@ class LeaveRequestController extends Controller
      * Check for campaign conflicts (employees in the same campaign with overlapping leave dates).
      * Returns informational data only - users can still apply.
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return JsonResponse
      */
     public function checkCampaignConflicts(Request $request)
     {
@@ -3211,6 +3341,215 @@ class LeaveRequestController extends Controller
     }
 
     /**
+     * Handle Solo Parent Leave approval with automatic FIFO credit allocation.
+     *
+     * Credits are assigned chronologically (earliest dates first) until exhausted:
+     * - spl_credited: Paid from SPL credits. Attendance → 'on_leave', points auto-excused (no cert needed).
+     * - auto-denied: Dates that cannot be covered by credits are automatically denied (partial denial).
+     *
+     * Half-day support: Pre-stored day records from submission may have is_half_day (0.5 credit instead of 1.0).
+     */
+    protected function handleSplApproval(LeaveRequest $leaveRequest, array $halfDayOverrides = []): void
+    {
+        $user = $leaveRequest->user;
+        $startDate = Carbon::parse($leaveRequest->start_date);
+        $endDate = Carbon::parse($leaveRequest->end_date);
+
+        // Get denied dates if this is already a partial denial
+        $existingDeniedDates = [];
+        if ($leaveRequest->has_partial_denial) {
+            $existingDeniedDates = $leaveRequest->deniedDates()
+                ->pluck('denied_date')
+                ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
+                ->toArray();
+        }
+
+        // Collect all valid weekday dates in the leave period (excluding weekends and already-denied dates)
+        $allDates = [];
+        $currentDate = $startDate->copy();
+        while ($currentDate->lte($endDate)) {
+            $dateStr = $currentDate->format('Y-m-d');
+            if ($currentDate->isWeekday() && ! in_array($dateStr, $existingDeniedDates)) {
+                $allDates[] = $dateStr;
+            }
+            $currentDate->addDay();
+        }
+
+        // Get is_half_day settings from pre-stored day records (from submission), then apply admin overrides
+        $preStoredDays = LeaveRequestDay::where('leave_request_id', $leaveRequest->id)
+            ->pluck('is_half_day', 'date')
+            ->mapWithKeys(fn ($isHalf, $date) => [Carbon::parse($date)->format('Y-m-d') => (bool) $isHalf]);
+
+        // Merge admin half-day overrides on top of pre-stored settings
+        $halfDayMap = $preStoredDays->toArray();
+        foreach ($halfDayOverrides as $date => $isHalf) {
+            $halfDayMap[$date] = (bool) $isHalf;
+        }
+
+        // Compute FIFO coverage: which dates are credited and which are uncovered
+        $balance = $this->splCreditService->getBalance($user, $startDate->year);
+        $creditsRemaining = $balance;
+        $creditedDates = [];
+        $uncoveredDates = [];
+
+        foreach ($allDates as $dateStr) {
+            $isHalfDay = $halfDayMap[$dateStr] ?? false;
+            $creditNeeded = $isHalfDay ? 0.5 : 1.0;
+
+            // Auto-downgrade to half-day if only 0.5 credits remain and day is full
+            if (! $isHalfDay && $creditsRemaining >= 0.5 && $creditsRemaining < 1.0) {
+                $isHalfDay = true;
+                $creditNeeded = 0.5;
+                $halfDayMap[$dateStr] = true;
+            }
+
+            if ($creditsRemaining >= $creditNeeded) {
+                $creditedDates[] = $dateStr;
+                $creditsRemaining -= $creditNeeded;
+            } else {
+                $uncoveredDates[] = $dateStr;
+            }
+        }
+
+        // Auto-deny uncovered dates (insufficient credits)
+        if (! empty($uncoveredDates)) {
+            // Store original dates before modification (only on first partial denial)
+            if (! $leaveRequest->original_start_date) {
+                $leaveRequest->original_start_date = $leaveRequest->start_date;
+            }
+            if (! $leaveRequest->original_end_date) {
+                $leaveRequest->original_end_date = $leaveRequest->end_date;
+            }
+
+            // Create denied date records for uncovered dates
+            $approverId = auth()->id();
+            foreach ($uncoveredDates as $dateStr) {
+                LeaveRequestDeniedDate::create([
+                    'leave_request_id' => $leaveRequest->id,
+                    'denied_date' => $dateStr,
+                    'denial_reason' => 'Auto-denied: Insufficient SPL credits',
+                    'denied_by' => $approverId,
+                ]);
+            }
+
+            // Update leave request with partial denial info
+            if (! empty($creditedDates)) {
+                $leaveRequest->start_date = Carbon::parse(min($creditedDates));
+                $leaveRequest->end_date = Carbon::parse(max($creditedDates));
+            }
+            $leaveRequest->has_partial_denial = true;
+            $leaveRequest->approved_days = count($creditedDates);
+            $leaveRequest->save();
+        }
+
+        // Clear existing day records and rebuild (only for credited dates)
+        $leaveRequest->days()->delete();
+        $assignedBy = auth()->id();
+        $now = now();
+        $totalCreditsToDeduct = 0;
+
+        foreach ($creditedDates as $dateStr) {
+            $isHalfDay = $halfDayMap[$dateStr] ?? false;
+            $creditValue = $isHalfDay ? 0.5 : 1.0;
+            $halfDayLabel = $isHalfDay ? ' (Half-day)' : '';
+
+            LeaveRequestDay::create([
+                'leave_request_id' => $leaveRequest->id,
+                'date' => $dateStr,
+                'day_status' => LeaveRequestDay::STATUS_SPL_CREDITED,
+                'is_half_day' => $isHalfDay,
+                'notes' => 'Auto-assigned: SPL credit applied',
+                'assigned_by' => $assignedBy,
+                'assigned_at' => $now,
+            ]);
+
+            $this->createOrUpdateAttendanceForDate(
+                $user,
+                $dateStr,
+                'on_leave',
+                "SPL Credited{$halfDayLabel} - Leave Request #{$leaveRequest->id}",
+                $leaveRequest->id
+            );
+
+            $totalCreditsToDeduct += $creditValue;
+        }
+
+        // Deduct SPL credits for credited days
+        if ($totalCreditsToDeduct > 0) {
+            $this->splCreditService->deductCredits($leaveRequest, $totalCreditsToDeduct, $startDate->year);
+        } else {
+            $leaveRequest->update(['credits_deducted' => 0]);
+        }
+
+        // Auto-excuse attendance points for spl_credited days (no certificate required for SPL)
+        $this->autoExcuseAttendancePointsForSplDays($leaveRequest);
+
+        \Log::info("SPL approval with auto-FIFO credit allocation for Leave Request #{$leaveRequest->id}", [
+            'user_id' => $user->id,
+            'credited_days' => count($creditedDates),
+            'auto_denied_days' => count($uncoveredDates),
+            'total_credits_deducted' => $totalCreditsToDeduct,
+            'total_days' => count($allDates),
+        ]);
+    }
+
+    /**
+     * Auto-excuse attendance points for SPL Credited days.
+     * SPL does NOT require a medical certificate — points are auto-excused on approval.
+     * Only spl_credited days are excused; absent days are left untouched.
+     */
+    protected function autoExcuseAttendancePointsForSplDays(LeaveRequest $leaveRequest): int
+    {
+        $user = $leaveRequest->user;
+
+        // Get spl_credited day dates
+        $creditedDates = $leaveRequest->days()
+            ->where('day_status', LeaveRequestDay::STATUS_SPL_CREDITED)
+            ->pluck('date')
+            ->map(fn ($d) => Carbon::parse($d)->format('Y-m-d'))
+            ->toArray();
+
+        if (empty($creditedDates)) {
+            return 0;
+        }
+
+        $reason = "Auto-excused: Approved SPL (Solo Parent Leave) - Leave Request #{$leaveRequest->id}";
+
+        $pointsToExcuse = AttendancePoint::where('user_id', $user->id)
+            ->where('is_excused', false)
+            ->whereIn('shift_date', $creditedDates)
+            ->get();
+
+        $excusedCount = 0;
+        foreach ($pointsToExcuse as $point) {
+            $point->update([
+                'is_excused' => true,
+                'excused_by' => auth()->id(),
+                'excused_at' => now(),
+                'excuse_reason' => $reason,
+            ]);
+            $excusedCount++;
+        }
+
+        // Recalculate GBRO if any points were excused
+        if ($excusedCount > 0) {
+            try {
+                $gbroService = app(GbroCalculationService::class);
+                $gbroService->cascadeRecalculateGbro($user->id);
+            } catch (\Exception $e) {
+                \Log::warning("Failed to recalculate GBRO after SPL auto-excusing: {$e->getMessage()}");
+            }
+        }
+
+        \Log::info("Auto-excused {$excusedCount} attendance points for SPL Leave Request #{$leaveRequest->id}", [
+            'user_id' => $user->id,
+            'credited_dates' => $creditedDates,
+        ]);
+
+        return $excusedCount;
+    }
+
+    /**
      * Create or update an attendance record for a specific date.
      */
     protected function createOrUpdateAttendanceForDate(
@@ -3396,9 +3735,9 @@ class LeaveRequestController extends Controller
      * 3. First N non-NCNS days get sl_credited (up to available credits)
      * 4. Remaining non-NCNS days get advised_absence
      *
-     * @return \Illuminate\Support\Collection<string, array{date: string, status: string, notes: string|null}>
+     * @return Collection<string, array{date: string, status: string, notes: string|null}>
      */
-    protected function autoAssignSlDayStatuses(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService, array $allDates): \Illuminate\Support\Collection
+    protected function autoAssignSlDayStatuses(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService, array $allDates): Collection
     {
         $user = $leaveRequest->user;
         $creditCheck = $leaveCreditService->checkSlCreditDeduction($user, $leaveRequest);
@@ -3458,9 +3797,9 @@ class LeaveRequestController extends Controller
      * 2. First N days get vl_credited (up to available credits, FIFO from earliest date)
      * 3. Remaining days get upto (UPTO — Unpaid Time Off)
      *
-     * @return \Illuminate\Support\Collection<string, array{date: string, status: string, notes: string|null}>
+     * @return Collection<string, array{date: string, status: string, notes: string|null}>
      */
-    protected function autoAssignVlDayStatuses(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService, array $allDates): \Illuminate\Support\Collection
+    protected function autoAssignVlDayStatuses(LeaveRequest $leaveRequest, LeaveCreditService $leaveCreditService, array $allDates): Collection
     {
         $user = $leaveRequest->user;
         $creditCheck = $leaveCreditService->checkVlCreditDeduction($user, $leaveRequest);
@@ -3514,6 +3853,7 @@ class LeaveRequestController extends Controller
                 'leave_request_id' => $leaveRequest->id,
                 'date' => $dayInfo['date'] ?? $dateStr,
                 'day_status' => $dayInfo['status'],
+                'is_half_day' => ! empty($dayInfo['is_half_day']),
                 'notes' => $dayInfo['notes'] ?? null,
                 'assigned_by' => $assignedBy,
                 'assigned_at' => $now,
@@ -4211,7 +4551,7 @@ class LeaveRequestController extends Controller
             ]);
 
         // Get campaigns for filter dropdown
-        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('FormRequest/Leave/Credits/Index', [
             'creditsData' => $creditsData,
@@ -4387,6 +4727,7 @@ class LeaveRequestController extends Controller
             'canEdit' => $canViewAll && app(PermissionService::class)->userHasPermission(auth()->user(), 'leave_credits.edit'),
             'pendingLeaveInfo' => $this->leaveCreditService->getPendingLeaveInfo($user->id, (int) $year),
             'creditEditHistory' => $canViewAll ? $this->getCreditEditHistory($user->id, (int) $year) : [],
+            'splCreditsSummary' => $user->is_solo_parent ? $this->splCreditService->getSummary($user, (int) $year) : null,
         ]);
     }
 
@@ -4528,7 +4869,7 @@ class LeaveRequestController extends Controller
      * undoing it will delete the revert entry and restore the previous state,
      * revealing the original edit as the new latest entry.
      */
-    public function creditsRevertEdit(Request $request, User $user, Activity $activity): \Illuminate\Http\RedirectResponse
+    public function creditsRevertEdit(Request $request, User $user, Activity $activity): RedirectResponse
     {
         $request->validate([
             'reason' => 'nullable|string|max:500',

@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Can } from '@/components/authorization';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
 import {
@@ -131,6 +132,7 @@ interface LeaveRequestDayRecord {
     notes: string | null;
     status_label: string;
     is_paid: boolean;
+    is_half_day?: boolean;
     assigned_by: string | null;
     assigned_by_role: string | null;
     assigned_at: string | null;
@@ -138,8 +140,9 @@ interface LeaveRequestDayRecord {
 
 interface SuggestedDayStatus {
     date: string;
-    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto';
+    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent';
     notes: string | null;
+    is_half_day?: boolean;
 }
 
 interface Props {
@@ -158,6 +161,8 @@ interface Props {
     absenceWindowInfo?: AbsenceWindowInfo | null;
     activeAttendancePoints?: ActiveAttendancePoint[];
     creditPreview?: CreditPreview | null;
+    splCreditPreview?: { should_deduct: boolean; credits_to_deduct: number; available: number; insufficient: boolean } | null;
+    splCreditsSummary?: { total: number; used: number; balance: number; year: number } | null;
     leaveRequestDays?: LeaveRequestDayRecord[] | null;
     suggestedDayStatuses?: SuggestedDayStatus[] | null;
 }
@@ -187,6 +192,7 @@ export default function Show({
     absenceWindowInfo = null,
     activeAttendancePoints = [],
     creditPreview = null,
+    splCreditsSummary = null,
     leaveRequestDays = null,
     suggestedDayStatuses = null,
 }: Props) {
@@ -218,9 +224,10 @@ export default function Show({
     const { can } = usePermission();
     const getInitials = useInitials();
 
-    // SL/VL Per-Day Status Assignment state
+    // SL/VL/SPL Per-Day Status Assignment state
     const isSl = leaveRequest.leave_type === 'SL';
     const isVl = leaveRequest.leave_type === 'VL';
+    const isSpl = leaveRequest.leave_type === 'SPL';
     const hasDayStatuses = isSl || isVl;
 
     // Check if there are pre-stored day statuses from a previous approver (TL/Admin)
@@ -277,6 +284,9 @@ export default function Show({
     // SL/VL Per-Day Status for Force Approve dialog
     const [forceApproveSlDayStatuses, setForceApproveSlDayStatuses] = useState<DayStatus[]>([]);
 
+    // SPL half-day overrides — admin can toggle each date between full/half day during approval
+    const [splHalfDayOverrides, setSplHalfDayOverrides] = useState<Record<string, boolean>>({});
+
     const approveForm = useForm({
         review_notes: '',
         day_statuses: [] as Array<{ date: string; status: string; notes?: string }>,
@@ -311,10 +321,11 @@ export default function Show({
         (!leaveRequest.requires_tl_approval || isTlApproved);
 
     const handleApprove = () => {
-        // For SL, include per-day statuses in the approval data
+        // For SL/VL/SPL, include per-day statuses in the approval data
         const submitData: {
             review_notes: string;
-            day_statuses?: Array<{ date: string; status: string; notes?: string }>;
+            day_statuses?: Array<{ date: string; status: string; notes?: string; is_half_day?: boolean }>;
+            spl_half_day_overrides?: Record<string, boolean>;
         } = {
             review_notes: approveForm.data.review_notes,
         };
@@ -327,9 +338,15 @@ export default function Show({
             }));
         }
 
+        // Include SPL half-day overrides if any were changed
+        if (isSpl && Object.keys(splHalfDayOverrides).length > 0) {
+            submitData.spl_half_day_overrides = splHalfDayOverrides;
+        }
+
         router.post(leaveApproveRoute(leaveRequest.id).url, submitData, {
             onSuccess: () => {
                 setShowApproveDialog(false);
+                setSplHalfDayOverrides({});
                 toast.success('Leave request approved successfully');
             },
             onError: (errors) => {
@@ -405,6 +422,7 @@ export default function Show({
             denied_dates: string[];
             denial_reason: string;
             day_statuses?: Array<{ date: string; status: string; notes?: string }>;
+            spl_half_day_overrides?: Record<string, boolean>;
         } = {
             review_notes: forceApproveForm.data.review_notes,
             denied_dates: [],
@@ -432,12 +450,18 @@ export default function Show({
             }
         }
 
+        // Include SPL half-day overrides if any were changed
+        if (isSpl && Object.keys(splHalfDayOverrides).length > 0) {
+            submitData.spl_half_day_overrides = splHalfDayOverrides;
+        }
+
         router.post(`/form-requests/leave-requests/${leaveRequest.id}/force-approve`, submitData, {
             onSuccess: () => {
                 setShowForceApproveDialog(false);
                 setForceApprovePartialMode(false);
                 setForceApproveSelectedDates([]);
                 setForceApproveSlDayStatuses([]);
+                setSplHalfDayOverrides({});
                 forceApproveForm.reset();
                 toast.success(forceApprovePartialMode && forceApproveSelectedDates.length > 0
                     ? 'Leave request force approved with partial denial'
@@ -580,6 +604,65 @@ export default function Show({
         });
     }, [hasDayStatuses, workDays, leaveRequestDays, suggestedDayStatuses]);
 
+    // Compute SPL credit coverage for each date (FIFO, accounting for half-days + admin overrides)
+    const splCoverage = useMemo(() => {
+        if (!isSpl || !splCreditsSummary) return null;
+
+        const balance = splCreditsSummary.balance;
+        let creditsRemaining = balance;
+        const coveredDates: string[] = [];
+        const uncoveredDates: string[] = [];
+        const autoHalfDays = new Set<string>();
+
+        // Build half-day lookup from leaveRequestDays, then apply admin overrides
+        const halfDayMap = new Map<string, boolean>();
+        if (leaveRequestDays) {
+            for (const d of leaveRequestDays) {
+                halfDayMap.set(d.date, d.is_half_day ?? false);
+            }
+        }
+        // Apply admin overrides on top
+        for (const [dateStr, isHalf] of Object.entries(splHalfDayOverrides)) {
+            halfDayMap.set(dateStr, isHalf);
+        }
+
+        // Use workDays (Mon-Fri in current date range) — FIFO chronological order
+        for (const date of workDays) {
+            const dateStr = format(date, 'yyyy-MM-dd');
+            let isHalfDay = halfDayMap.get(dateStr) ?? false;
+            let creditNeeded = isHalfDay ? 0.5 : 1.0;
+
+            // Auto-downgrade to half-day if only 0.5 credits remain and day is full
+            if (!isHalfDay && creditsRemaining >= 0.5 && creditsRemaining < 1.0) {
+                isHalfDay = true;
+                creditNeeded = 0.5;
+                halfDayMap.set(dateStr, true);
+                autoHalfDays.add(dateStr);
+            }
+
+            if (creditsRemaining >= creditNeeded) {
+                coveredDates.push(dateStr);
+                creditsRemaining -= creditNeeded;
+            } else {
+                uncoveredDates.push(dateStr);
+            }
+        }
+
+        return {
+            coveredDates,
+            uncoveredDates,
+            allCovered: uncoveredDates.length === 0,
+            noCoverage: coveredDates.length === 0,
+            creditsNeeded: workDays.reduce((sum, date) => {
+                const dateStr = format(date, 'yyyy-MM-dd');
+                return sum + ((halfDayMap.get(dateStr) ?? false) ? 0.5 : 1.0);
+            }, 0),
+            balance,
+            halfDayMap,
+            autoHalfDays,
+        };
+    }, [isSpl, splCreditsSummary, workDays, leaveRequestDays, splHalfDayOverrides]);
+
     // Get list of dates in leave period for the adjust dialog
     const getLeaveDates = () => {
         try {
@@ -618,7 +701,7 @@ export default function Show({
             denied_dates: string[];
             denial_reason: string;
             review_notes: string;
-            day_statuses?: Array<{ date: string; status: string; notes?: string }>;
+            day_statuses?: Array<{ date: string; status: string; notes?: string; is_half_day?: boolean }>;
         } = {
             denied_dates: deniedDates,
             denial_reason: partialDenyForm.data.denial_reason,
@@ -1166,8 +1249,8 @@ export default function Show({
                         <div>
                             <p className="text-sm font-medium text-muted-foreground mb-2">Reason</p>
                             <Alert className="overflow-hidden">
-                                <Info className="h-4 w-4 flex-shrink-0" />
-                                <AlertDescription className="break-words whitespace-pre-wrap">{leaveRequest.reason}</AlertDescription>
+                                <Info className="h-4 w-4 shrink-0" />
+                                <AlertDescription className="wrap-break-word whitespace-pre-wrap">{leaveRequest.reason}</AlertDescription>
                             </Alert>
                         </div>
 
@@ -1432,7 +1515,7 @@ export default function Show({
                                                     Review Notes
                                                 </p>
                                                 <Alert className="overflow-hidden">
-                                                    <AlertDescription className="break-words whitespace-pre-wrap">{leaveRequest.review_notes}</AlertDescription>
+                                                    <AlertDescription className="wrap-break-word whitespace-pre-wrap">{leaveRequest.review_notes}</AlertDescription>
                                                 </Alert>
                                             </div>
                                         )}
@@ -1446,7 +1529,7 @@ export default function Show({
 
             {/* Approve Dialog */}
             <Dialog open={showApproveDialog} onOpenChange={setShowApproveDialog}>
-                <DialogContent className={hasDayStatuses ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : undefined}>
+                <DialogContent className={(hasDayStatuses || (isSpl && splCoverage && !splCoverage.allCovered)) ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : undefined}>
                     <DialogHeader>
                         <DialogTitle>Approve Leave Request</DialogTitle>
                         <DialogDescription>
@@ -1518,6 +1601,73 @@ export default function Show({
                             </>
                         )}
 
+                        {/* SPL Credit Coverage Preview */}
+                        {isSpl && splCreditsSummary && splCoverage && (
+                            <div className="space-y-2">
+                                {splCoverage.allCovered ? (
+                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <AlertDescription className="text-green-800 dark:text-green-200">
+                                            <strong>SPL Credits:</strong> {splCoverage.balance.toFixed(2)} available — sufficient for all {workDays.length} day(s) ({splCoverage.creditsNeeded.toFixed(2)} credits needed).
+                                            {' '}Credits will be assigned chronologically (earliest first).
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : splCoverage.noCoverage ? (
+                                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                        <XCircle className="h-4 w-4 text-red-600" />
+                                        <AlertDescription className="text-red-800 dark:text-red-200">
+                                            <strong>No SPL credits available.</strong> Balance is {splCoverage.balance.toFixed(2)} — cannot approve any dates.
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : (
+                                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                            <strong>Insufficient SPL Credits:</strong> {splCoverage.balance.toFixed(2)} of {splCoverage.creditsNeeded.toFixed(2)} needed.
+                                            {' '}{splCoverage.coveredDates.length} day(s) will be credited, {splCoverage.uncoveredDates.length} day(s) will be automatically denied.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                <div className="border rounded-md p-3 space-y-2 text-sm">
+                                    <p className="text-xs text-muted-foreground mb-2">Toggle each day between whole day (1 credit) and half-day (0.5 credit).</p>
+                                    {[...splCoverage.coveredDates, ...splCoverage.uncoveredDates].sort().map(dateStr => {
+                                        const isCovered = splCoverage.coveredDates.includes(dateStr);
+                                        const isHalf = splCoverage.halfDayMap.get(dateStr) ?? false;
+                                        const isAutoHalf = splCoverage.autoHalfDays.has(dateStr);
+                                        return (
+                                            <div key={dateStr} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isHalf ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800' : isCovered ? 'bg-card border-border' : 'bg-muted/50 border-border opacity-60'}`}>
+                                                {isCovered ? (
+                                                    <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                                ) : (
+                                                    <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                                )}
+                                                <span className={`flex-1 ${!isCovered ? 'text-muted-foreground' : ''}`}>{format(parseISO(dateStr), 'EEE, MMM d, yyyy')}</span>
+                                                {isCovered ? (
+                                                    <Badge className="text-[10px] px-1 py-0 bg-green-600 text-white">Credited ({isHalf ? '0.5' : '1.0'})</Badge>
+                                                ) : (
+                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0">Auto-Denied</Badge>
+                                                )}
+                                                {isAutoHalf && (
+                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 border-violet-300 text-violet-700 dark:text-violet-300">Auto</Badge>
+                                                )}
+                                                {isCovered && (
+                                                    <div className="flex items-center gap-1.5 ml-auto">
+                                                        <span className={`text-[11px] ${isHalf ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
+                                                            {isHalf ? 'Half' : 'Whole'}
+                                                        </span>
+                                                        <Switch
+                                                            checked={isHalf}
+                                                            onCheckedChange={(checked) => setSplHalfDayOverrides(prev => ({ ...prev, [dateStr]: checked }))}
+                                                        />
+                                                    </div>
+                                                )}
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            </div>
+                        )}
+
                         {/* SL/VL Per-Day Status Assignment */}
                         {hasDayStatuses && slDayStatuses.length > 0 && (
                             <div className="space-y-3">
@@ -1543,7 +1693,11 @@ export default function Show({
                                 <DayStatusAssignment
                                     dayStatuses={slDayStatuses}
                                     onChange={setSlDayStatuses}
-                                    creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) } : null}
+                                    creditPreviewInfo={
+                                        creditPreview
+                                            ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
+                                            : null
+                                    }
                                     statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
                                     creditLabel={isVl ? 'VL' : 'SL'}
                                     onCreditValidation={setDayStatusInvalid}
@@ -1584,7 +1738,7 @@ export default function Show({
                         <Button variant="outline" onClick={() => setShowApproveDialog(false)}>
                             Cancel
                         </Button>
-                        <Button onClick={handleApprove} disabled={approveForm.processing || !approveForm.data.review_notes.trim() || (hasDayStatuses && dayStatusInvalid)}>
+                        <Button onClick={handleApprove} disabled={approveForm.processing || !approveForm.data.review_notes.trim() || (hasDayStatuses && dayStatusInvalid) || (isSpl && splCoverage?.noCoverage)}>
                             Approve
                         </Button>
                     </DialogFooter>
@@ -1762,7 +1916,11 @@ export default function Show({
                                 <DayStatusAssignment
                                     dayStatuses={partialDenySlDayStatuses}
                                     onChange={setPartialDenySlDayStatuses}
-                                    creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) } : null}
+                                    creditPreviewInfo={
+                                        creditPreview
+                                            ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
+                                            : null
+                                    }
                                     statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
                                     creditLabel={isVl ? 'VL' : 'SL'}
                                     onCreditValidation={setPartialDenyDayStatusInvalid}
@@ -1999,7 +2157,7 @@ export default function Show({
                     forceApproveForm.reset();
                 }
             }}>
-                <DialogContent className={hasDayStatuses ? 'max-w-2xl max-h-[90vh] overflow-y-auto' : 'max-w-lg'}>
+                <DialogContent className={(hasDayStatuses || (isSpl && splCoverage)) ? 'max-w-2xl max-h-[90vh] flex flex-col' : 'max-w-lg max-h-[90vh] flex flex-col'}>
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <Shield className="h-5 w-5 text-purple-600" />
@@ -2009,6 +2167,7 @@ export default function Show({
                             As Super Admin, you can force approve this leave request, bypassing the requirement for HR approval. This action will immediately approve the request.
                         </DialogDescription>
                     </DialogHeader>
+                    <div className="overflow-y-auto flex-1 space-y-4 pr-1">
                     <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
                         <Shield className="h-4 w-4 text-purple-600" />
                         <AlertDescription className="text-purple-800 dark:text-purple-200">
@@ -2057,6 +2216,78 @@ export default function Show({
                                 </Alert>
                             )}
                         </>
+                    )}
+                    {/* SPL Credit Coverage Preview in Force Approve */}
+                    {isSpl && splCreditsSummary && splCoverage && (
+                        <div className="space-y-2">
+                            {splCoverage.allCovered ? (
+                                <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                    <CheckCircle className="h-4 w-4 text-green-600" />
+                                    <AlertDescription className="text-green-800 dark:text-green-200">
+                                        <strong>SPL Credits:</strong> {splCoverage.balance.toFixed(2)} available — sufficient for all {workDays.length} day(s) ({splCoverage.creditsNeeded.toFixed(2)} credits needed).
+                                        {' '}Credits will be assigned chronologically (earliest first).
+                                    </AlertDescription>
+                                </Alert>
+                            ) : splCoverage.noCoverage ? (
+                                <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                    <XCircle className="h-4 w-4 text-red-600" />
+                                    <AlertDescription className="text-red-800 dark:text-red-200">
+                                        <strong>No SPL credits available.</strong> Balance is {splCoverage.balance.toFixed(2)} — cannot approve any dates.
+                                    </AlertDescription>
+                                </Alert>
+                            ) : (
+                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <strong>Insufficient SPL Credits:</strong> {splCoverage.balance.toFixed(2)} of {splCoverage.creditsNeeded.toFixed(2)} needed.
+                                        {' '}{splCoverage.coveredDates.length} day(s) will be credited, {splCoverage.uncoveredDates.length} day(s) will be automatically denied.
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+                            <div className="border rounded-md p-3 space-y-2 text-sm">
+                                <p className="text-xs text-muted-foreground mb-2">Toggle each day between whole day (1 credit) and half-day (0.5 credit).</p>
+                                {[...splCoverage.coveredDates, ...splCoverage.uncoveredDates].sort().map(dateStr => {
+                                    const isCovered = splCoverage.coveredDates.includes(dateStr);
+                                    const isDeniedByPartial = forceApprovePartialMode && forceApproveSelectedDates.length > 0 && !forceApproveSelectedDates.includes(dateStr);
+                                    const isHalf = splCoverage.halfDayMap.get(dateStr) ?? false;
+                                    const isAutoHalf = splCoverage.autoHalfDays.has(dateStr);
+                                    const showToggle = isCovered && !isDeniedByPartial;
+                                    return (
+                                        <div key={dateStr} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isDeniedByPartial ? 'bg-red-50/50 border-red-200 opacity-60 dark:bg-red-950/20 dark:border-red-800' : isHalf ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800' : isCovered ? 'bg-card border-border' : 'bg-muted/50 border-border opacity-60'}`}>
+                                            {isDeniedByPartial ? (
+                                                <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                            ) : isCovered ? (
+                                                <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                            ) : (
+                                                <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                            )}
+                                            <span className={`flex-1 ${(!isCovered || isDeniedByPartial) ? 'text-muted-foreground' : ''}`}>{format(parseISO(dateStr), 'EEE, MMM d, yyyy')}</span>
+                                            {isDeniedByPartial ? (
+                                                <Badge variant="destructive" className="text-[10px] px-1 py-0">Denied</Badge>
+                                            ) : isCovered ? (
+                                                <Badge className="text-[10px] px-1 py-0 bg-green-600 text-white">Credited ({isHalf ? '0.5' : '1.0'})</Badge>
+                                            ) : (
+                                                <Badge variant="destructive" className="text-[10px] px-1 py-0">Auto-Denied</Badge>
+                                            )}
+                                            {isAutoHalf && !isDeniedByPartial && (
+                                                <Badge variant="outline" className="text-[10px] px-1 py-0 border-violet-300 text-violet-700 dark:text-violet-300">Auto</Badge>
+                                            )}
+                                            {showToggle && (
+                                                <div className="flex items-center gap-1.5 ml-auto">
+                                                    <span className={`text-[11px] ${isHalf ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
+                                                        {isHalf ? 'Half' : 'Whole'}
+                                                    </span>
+                                                    <Switch
+                                                        checked={isHalf}
+                                                        onCheckedChange={(checked) => setSplHalfDayOverrides(prev => ({ ...prev, [dateStr]: checked }))}
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
                     )}
                     <div className="space-y-4">
                         {/* Partial Approval Toggle */}
@@ -2157,7 +2388,11 @@ export default function Show({
                                             ? forceApproveSlDayStatuses
                                             : forceApproveAllSlDayStatuses}
                                     onChange={setForceApproveSlDayStatuses}
-                                    creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) } : null}
+                                    creditPreviewInfo={
+                                        creditPreview
+                                            ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
+                                            : null
+                                    }
                                     statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
                                     creditLabel={isVl ? 'VL' : 'SL'}
                                     onCreditValidation={setForceApproveDayStatusInvalid}
@@ -2190,6 +2425,7 @@ export default function Show({
                             </Alert>
                         )}
                     </div>
+                    </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => {
                             setShowForceApproveDialog(false);
@@ -2207,7 +2443,8 @@ export default function Show({
                                 forceApproveForm.processing ||
                                 (forceApprovePartialMode && forceApproveSelectedDates.length === 0) ||
                                 (forceApprovePartialMode && forceApproveSelectedDates.length === workDays.length) ||
-                                (hasDayStatuses && forceApproveDayStatusInvalid)
+                                (hasDayStatuses && forceApproveDayStatusInvalid) ||
+                                (isSpl && splCoverage?.noCoverage)
                             }
                         >
                             <Shield className="mr-1 h-4 w-4" />
@@ -2358,7 +2595,7 @@ export default function Show({
                                         title="Zoom level"
                                     />
                                     <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
-                                    <span className="text-sm font-medium min-w-[50px] text-center tabular-nums">{medicalCertZoom}%</span>
+                                    <span className="text-sm font-medium min-w-12.5 text-center tabular-nums">{medicalCertZoom}%</span>
                                     <Button
                                         size="sm"
                                         variant="ghost"
@@ -2569,7 +2806,11 @@ export default function Show({
                             <DayStatusAssignment
                                 dayStatuses={editDayStatuses}
                                 onChange={setEditDayStatuses}
-                                creditPreviewInfo={creditPreview ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) + (leaveRequest.credits_deducted ?? 0) } : null}
+                                creditPreviewInfo={
+                                    creditPreview
+                                        ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) + (leaveRequest.credits_deducted ?? 0) }
+                                        : null
+                                }
                                 statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
                                 creditLabel={isVl ? 'VL' : 'SL'}
                             />

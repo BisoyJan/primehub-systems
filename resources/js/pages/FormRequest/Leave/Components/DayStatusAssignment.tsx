@@ -9,8 +9,9 @@ import { cn } from '@/lib/utils';
 
 export interface DayStatus {
     date: string;
-    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto';
+    status: 'pending' | 'sl_credited' | 'ncns' | 'advised_absence' | 'vl_credited' | 'upto' | 'spl_credited' | 'absent';
     notes?: string;
+    is_half_day?: boolean;
 }
 
 export interface ExistingDayRecord {
@@ -71,7 +72,31 @@ const SL_STATUS_OPTIONS = [
     },
 ] as const;
 
-export type StatusOption = (typeof SL_STATUS_OPTIONS)[number] | (typeof VL_STATUS_OPTIONS)[number];
+/** SPL-specific status options (used internally for ReadOnlyView lookups). */
+const SPL_STATUS_OPTIONS = [
+    {
+        value: 'spl_credited',
+        label: 'SPL Credited',
+        shortLabel: 'SPL Credited',
+        description: 'Paid — uses SPL credit, attendance excused',
+        color: 'bg-violet-100 text-violet-800 border-violet-200 dark:bg-violet-900/30 dark:text-violet-300 dark:border-violet-800',
+        dotColor: 'bg-violet-500',
+        tag: 'Paid',
+        tagColor: 'text-violet-600 dark:text-violet-400',
+    },
+    {
+        value: 'absent',
+        label: 'Absent',
+        shortLabel: 'Absent',
+        description: 'Unpaid — marked absent, no credit deduction',
+        color: 'bg-red-100 text-red-800 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800',
+        dotColor: 'bg-red-500',
+        tag: 'Unpaid',
+        tagColor: 'text-red-600 dark:text-red-400',
+    },
+] as const;
+
+export type StatusOption = (typeof SL_STATUS_OPTIONS)[number] | (typeof VL_STATUS_OPTIONS)[number] | (typeof SPL_STATUS_OPTIONS)[number];
 
 /** VL-specific status options: VL Credited (paid) or UPTO (unpaid). */
 const VL_STATUS_OPTIONS = [
@@ -102,7 +127,7 @@ function getStatusOption(value: string, options: readonly StatusOption[] = SL_ST
 }
 
 /** All possible status options (for ReadOnlyView lookups). */
-const ALL_STATUS_OPTIONS = [...SL_STATUS_OPTIONS, ...VL_STATUS_OPTIONS];
+const ALL_STATUS_OPTIONS = [...SL_STATUS_OPTIONS, ...VL_STATUS_OPTIONS, ...SPL_STATUS_OPTIONS];
 
 function StatusBadge({ status, options }: { status: string; options?: readonly StatusOption[] }) {
     const opt = getStatusOption(status, options as StatusOption[]);
@@ -143,13 +168,17 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
 
     const summary = useMemo(() => {
         const credited = dayStatuses.filter((d) => (paidStatuses as string[]).includes(d.status)).length;
+        const creditedValue = dayStatuses
+            .filter((d) => (paidStatuses as string[]).includes(d.status))
+            .reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0);
         const ncns = dayStatuses.filter((d) => d.status === 'ncns').length;
         const advised = dayStatuses.filter((d) => d.status === 'advised_absence' || d.status === 'upto').length;
+        const absent = dayStatuses.filter((d) => d.status === 'absent').length;
         const pending = dayStatuses.filter((d) => d.status === 'pending').length;
-        return { credited, ncns, advised, pending, total: dayStatuses.length };
+        return { credited, creditedValue, ncns, advised, absent, pending, total: dayStatuses.length };
     }, [dayStatuses, paidStatuses]);
 
-    const creditExceeded = creditPreviewInfo && summary.credited > creditPreviewInfo.availableCredits;
+    const creditExceeded = creditPreviewInfo && summary.creditedValue > creditPreviewInfo.availableCredits;
 
     // Notify parent when credit validation state changes (exceeded or pending days remain)
     useEffect(() => {
@@ -187,7 +216,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                 <span className="text-xs font-medium text-muted-foreground">Summary:</span>
                 {summary.credited > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 dark:text-green-400">
-                        <CheckCircle className="h-3 w-3" /> {summary.credited} {creditLabel} Credited
+                        <CheckCircle className="h-3 w-3" /> {summary.creditedValue} {creditLabel} Credited
                     </span>
                 )}
                 {summary.ncns > 0 && (
@@ -198,6 +227,11 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                 {summary.advised > 0 && (
                     <span className="inline-flex items-center gap-1 text-xs font-medium text-amber-700 dark:text-amber-400">
                         <AlertTriangle className="h-3 w-3" /> {summary.advised} {creditLabel === 'VL' ? 'UPTO' : 'Advised Absence'}
+                    </span>
+                )}
+                {summary.absent > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400">
+                        <XCircle className="h-3 w-3" /> {summary.absent} Absent
                     </span>
                 )}
                 {summary.pending > 0 && (
@@ -212,10 +246,10 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                 <Alert className="border-red-200 bg-red-50 py-2 dark:border-red-800 dark:bg-red-950">
                     <AlertTriangle className="h-4 w-4 text-red-600" />
                     <AlertDescription className="text-red-800 dark:text-red-200 text-xs">
-                        <strong>Credit limit exceeded.</strong> {summary.credited} {creditLabel} Credited assigned, but only{' '}
+                        <strong>Credit limit exceeded.</strong> {summary.creditedValue} {creditLabel} credits assigned, but only{' '}
                         {creditPreviewInfo.availableCredits} credit(s) available.
                         {' '}Reduce {creditLabel} Credited days to {creditPreviewInfo.availableCredits} or fewer, or set excess days to{' '}
-                        {creditLabel === 'SL' ? 'Advised Absence / NCNS' : 'UPTO'} to proceed.
+                        {creditLabel === 'SL' ? 'Advised Absence / NCNS' : creditLabel === 'SPL' ? 'Absent' : 'UPTO'} to proceed.
                     </AlertDescription>
                 </Alert>
             )}
@@ -262,8 +296,9 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                             key={day.date}
                             className={cn(
                                 'transition-colors',
-                                (day.status === 'sl_credited' || day.status === 'vl_credited') && 'bg-green-50/40 dark:bg-green-950/10',
+                                (day.status === 'sl_credited' || day.status === 'vl_credited' || day.status === 'spl_credited') && 'bg-green-50/40 dark:bg-green-950/10',
                                 day.status === 'ncns' && 'bg-red-50/40 dark:bg-red-950/10',
+                                day.status === 'absent' && 'bg-red-50/40 dark:bg-red-950/10',
                                 (day.status === 'advised_absence' || day.status === 'upto') && 'bg-amber-50/40 dark:bg-amber-950/10',
                                 day.status === 'pending' && 'bg-background',
                             )}
@@ -292,7 +327,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                                         onValueChange={(value) => handleStatusChange(index, value as DayStatus['status'])}
                                         disabled={readOnly}
                                     >
-                                        <SelectTrigger className="h-7 w-[170px] text-xs border-0 bg-white/70 dark:bg-white/10 shadow-sm">
+                                        <SelectTrigger className="h-7 w-42.5 text-xs border-0 bg-white/70 dark:bg-white/10 shadow-sm">
                                             <SelectValue />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -342,7 +377,7 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
                                         onChange={(e) => handleNotesChange(index, e.target.value)}
                                         placeholder="Add a note for this day..."
                                         rows={1}
-                                        className="text-xs resize-none min-h-[28px] bg-white/70 dark:bg-white/10"
+                                        className="text-xs resize-none min-h-7 bg-white/70 dark:bg-white/10"
                                         disabled={readOnly}
                                         autoFocus
                                     />
@@ -367,12 +402,14 @@ export default function DayStatusAssignment({ dayStatuses, onChange, readOnly = 
 
 function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
     const summary = useMemo(() => {
-        const credited = records.filter((r) => r.day_status === 'sl_credited' || r.day_status === 'vl_credited').length;
+        const credited = records.filter((r) => r.day_status === 'sl_credited' || r.day_status === 'vl_credited' || r.day_status === 'spl_credited').length;
         const ncns = records.filter((r) => r.day_status === 'ncns').length;
         const advised = records.filter((r) => r.day_status === 'advised_absence' || r.day_status === 'upto').length;
+        const absent = records.filter((r) => r.day_status === 'absent').length;
         // Determine label from records
         const hasVl = records.some((r) => r.day_status === 'vl_credited' || r.day_status === 'upto');
-        return { credited, ncns, advised, total: records.length, creditLabel: hasVl ? 'VL' : 'SL' };
+        const hasSpl = records.some((r) => r.day_status === 'spl_credited' || r.day_status === 'absent');
+        return { credited, ncns, advised, absent, total: records.length, creditLabel: hasSpl ? 'SPL' : hasVl ? 'VL' : 'SL' };
     }, [records]);
 
     return (
@@ -395,6 +432,11 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                         <AlertTriangle className="h-3 w-3" /> {summary.advised} {summary.creditLabel === 'VL' ? 'UPTO' : 'Advised Absence'}
                     </span>
                 )}
+                {summary.absent > 0 && (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-red-700 dark:text-red-400">
+                        <XCircle className="h-3 w-3" /> {summary.absent} Absent
+                    </span>
+                )}
             </div>
 
             {/* Per-Day Records — Compact */}
@@ -407,8 +449,8 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                             key={record.id}
                             className={cn(
                                 'transition-colors',
-                                (record.day_status === 'sl_credited' || record.day_status === 'vl_credited') && 'bg-green-50/40 dark:bg-green-950/10',
-                                record.day_status === 'ncns' && 'bg-red-50/40 dark:bg-red-950/10',
+                                (record.day_status === 'sl_credited' || record.day_status === 'vl_credited' || record.day_status === 'spl_credited') && 'bg-green-50/40 dark:bg-green-950/10',
+                                (record.day_status === 'ncns' || record.day_status === 'absent') && 'bg-red-50/40 dark:bg-red-950/10',
                                 (record.day_status === 'advised_absence' || record.day_status === 'upto') && 'bg-amber-50/40 dark:bg-amber-950/10',
                             )}
                         >
@@ -441,7 +483,7 @@ function ReadOnlyView({ records }: { records: ExistingDayRecord[] }) {
                             {(record.notes || record.assigned_by) && (
                                 <div className="flex items-center gap-3 px-3 pb-1.5 pl-7 text-[11px] text-muted-foreground">
                                     {record.notes && (
-                                        <span className="italic truncate max-w-[300px]" title={record.notes}>
+                                        <span className="italic truncate max-w-75" title={record.notes}>
                                             {record.notes}
                                         </span>
                                     )}

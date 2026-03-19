@@ -804,7 +804,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                             </Popover>
 
                             <Select value={yearFilter} onValueChange={(v) => { setYearFilter(v); }}>
-                                <SelectTrigger className="w-full sm:w-[120px]">
+                                <SelectTrigger className="w-full sm:w-30">
                                     <SelectValue placeholder="Year" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -817,7 +817,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                             </Select>
 
                             <Select value={roleFilter} onValueChange={setRoleFilter}>
-                                <SelectTrigger className="w-full sm:w-[140px]">
+                                <SelectTrigger className="w-full sm:w-35">
                                     <SelectValue placeholder="Role" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -833,7 +833,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                             </Select>
 
                             <Select value={eligibilityFilter} onValueChange={setEligibilityFilter}>
-                                <SelectTrigger className="w-full sm:w-[180px]">
+                                <SelectTrigger className="w-full sm:w-45">
                                     <SelectValue placeholder="Status" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -845,7 +845,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                             </Select>
 
                             <Select value={campaignFilter} onValueChange={setCampaignFilter}>
-                                <SelectTrigger className="w-full sm:w-[180px]">
+                                <SelectTrigger className="w-full sm:w-45">
                                     <SelectValue placeholder="All Campaigns" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -1436,7 +1436,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
 
             {/* Management Dialog */}
             <Dialog open={isManagementDialogOpen} onOpenChange={setIsManagementDialogOpen}>
-                <DialogContent className="sm:max-w-[550px] max-h-[85vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-137.5 max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Leave Credits Management</DialogTitle>
                         <DialogDescription>
@@ -1665,7 +1665,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
 
             {/* Credits Year Mismatch Dialog */}
             <Dialog open={isMismatchDialogOpen} onOpenChange={setIsMismatchDialogOpen}>
-                <DialogContent className="sm:max-w-[700px] max-h-[85vh] overflow-y-auto">
+                <DialogContent className="sm:max-w-175 max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                             <AlertTriangle className="h-5 w-5 text-amber-500" />

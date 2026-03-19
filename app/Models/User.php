@@ -3,6 +3,8 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Services\PermissionService;
+use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
@@ -14,7 +16,7 @@ use Spatie\Activitylog\Traits\LogsActivity;
 
 class User extends Authenticatable
 {
-    /** @use HasFactory<\Database\Factories\UserFactory> */
+    /** @use HasFactory<UserFactory> */
     use HasFactory, LogsActivity, Notifiable, TwoFactorAuthenticatable;
 
     public function getActivitylogOptions(): LogOptions
@@ -49,6 +51,7 @@ class User extends Authenticatable
         'hired_date',
         'is_approved',
         'is_active',
+        'is_solo_parent',
         'approved_at',
         'deleted_at',
         'deleted_by',
@@ -86,6 +89,7 @@ class User extends Authenticatable
             'hired_date' => 'date',
             'is_approved' => 'boolean',
             'is_active' => 'boolean',
+            'is_solo_parent' => 'boolean',
             'approved_at' => 'datetime',
             'deleted_at' => 'datetime',
             'deletion_confirmed_at' => 'datetime',
@@ -209,6 +213,14 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the SPL credits for the user.
+     */
+    public function splCredits()
+    {
+        return $this->hasMany(SplCredit::class);
+    }
+
+    /**
      * Get the leave requests for the user.
      */
     public function leaveRequests()
@@ -269,7 +281,7 @@ class User extends Authenticatable
      */
     public function hasPermission(string $permission): bool
     {
-        return app(\App\Services\PermissionService::class)->userHasPermission($this, $permission);
+        return app(PermissionService::class)->userHasPermission($this, $permission);
     }
 
     /**
@@ -277,7 +289,7 @@ class User extends Authenticatable
      */
     public function hasAnyPermission(array $permissions): bool
     {
-        return app(\App\Services\PermissionService::class)->userHasAnyPermission($this, $permissions);
+        return app(PermissionService::class)->userHasAnyPermission($this, $permissions);
     }
 
     /**
@@ -285,7 +297,7 @@ class User extends Authenticatable
      */
     public function hasAllPermissions(array $permissions): bool
     {
-        return app(\App\Services\PermissionService::class)->userHasAllPermissions($this, $permissions);
+        return app(PermissionService::class)->userHasAllPermissions($this, $permissions);
     }
 
     /**
@@ -293,7 +305,7 @@ class User extends Authenticatable
      */
     public function hasRole(string|array $roles): bool
     {
-        return app(\App\Services\PermissionService::class)->userHasRole($this, $roles);
+        return app(PermissionService::class)->userHasRole($this, $roles);
     }
 
     /**
@@ -301,7 +313,7 @@ class User extends Authenticatable
      */
     public function getPermissions(): array
     {
-        return app(\App\Services\PermissionService::class)->getPermissionsForRole($this->role);
+        return app(PermissionService::class)->getPermissionsForRole($this->role);
     }
 
     /**

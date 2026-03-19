@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -18,7 +19,7 @@ class LeaveRequestRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -57,6 +58,13 @@ class LeaveRequestRequest extends FormRequest
             'medical_cert_submitted' => ['sometimes', 'boolean'],
             'medical_cert_file' => ['nullable', 'file', 'mimes:jpeg,jpg,png,gif,webp,pdf', 'max:4096'], // 4MB max - Accept images and PDF
         ];
+
+        // SPL half-day settings per day
+        if ($leaveType === 'SPL') {
+            $rules['spl_day_settings'] = ['nullable', 'array'];
+            $rules['spl_day_settings.*.date'] = ['required', 'date'];
+            $rules['spl_day_settings.*.is_half_day'] = ['required', 'boolean'];
+        }
 
         // Allow employee_id for admins and team leads
         $user = $this->user();

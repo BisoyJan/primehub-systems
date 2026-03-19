@@ -22,6 +22,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { AlertCircle, Calendar, CreditCard, AlertTriangle, Info, Check, FileImage, Eye, Upload, X, Users, Lightbulb, ArrowRight } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { show as leaveShowRoute, update as leaveUpdateRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
 
 interface LeaveRequest {
@@ -123,6 +124,7 @@ interface Props {
     isApprovedLeave: boolean;
     canOverrideShortNotice: boolean;
     existingLeaveRequests: ExistingLeaveRequest[];
+    splDaySettings: { date: string; is_half_day: boolean }[];
 }
 
 export default function Edit({
@@ -139,6 +141,7 @@ export default function Edit({
     isApprovedLeave = false,
     canOverrideShortNotice = false,
     existingLeaveRequests = [],
+    splDaySettings = [],
 }: Props) {
     const { data, setData, post, processing, errors, progress } = useForm({
         leave_type: leaveRequest.leave_type,
@@ -150,6 +153,7 @@ export default function Edit({
         medical_cert_file: null as File | null,
         date_modification_reason: '',
         short_notice_override: leaveRequest.short_notice_override || false,
+        spl_day_settings: splDaySettings as { date: string; is_half_day: boolean }[],
         _method: 'PUT', // For method spoofing
     });
 
@@ -419,6 +423,51 @@ export default function Edit({
             setFutureCredits(0);
         }
     }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate, calculateFutureCredits]);
+
+    // Auto-generate SPL day settings when dates change
+    useEffect(() => {
+        if (data.leave_type !== 'SPL' || !data.start_date || !data.end_date) {
+            if (data.spl_day_settings.length > 0) {
+                setData('spl_day_settings', []);
+            }
+            return;
+        }
+
+        const start = parseISO(data.start_date);
+        const end = parseISO(data.end_date);
+        const newSettings: { date: string; is_half_day: boolean }[] = [];
+        const currentDate = new Date(start);
+
+        while (currentDate <= end) {
+            const dayOfWeek = currentDate.getDay();
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                const dateStr = format(currentDate, 'yyyy-MM-dd');
+                // Preserve existing setting if date matches
+                const existing = data.spl_day_settings.find(s => s.date === dateStr);
+                newSettings.push({
+                    date: dateStr,
+                    is_half_day: existing ? existing.is_half_day : false,
+                });
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Only update if settings actually changed
+        const hasChanged = newSettings.length !== data.spl_day_settings.length ||
+            newSettings.some((s, i) => s.date !== data.spl_day_settings[i]?.date);
+        if (hasChanged) {
+            setData('spl_day_settings', newSettings);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.leave_type, data.start_date, data.end_date]);
+
+    // Update calculatedDays for SPL based on half-day settings
+    useEffect(() => {
+        if (data.leave_type === 'SPL' && data.spl_day_settings.length > 0) {
+            const splDays = data.spl_day_settings.reduce((sum, s) => sum + (s.is_half_day ? 0.5 : 1.0), 0);
+            setCalculatedDays(splDays);
+        }
+    }, [data.leave_type, data.spl_day_settings]);
 
     // Real-time validation warnings
     useEffect(() => {
@@ -951,7 +1000,7 @@ export default function Edit({
                             {futureCredits > 0 && (
                                 <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-md">
                                     <div className="flex items-start gap-2">
-                                        <Info className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                                        <Info className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
                                         <p className="text-sm text-purple-800 dark:text-purple-200">
                                             <strong>Future Credits Applied:</strong> Since your leave starts in a future month, {futureCredits.toFixed(2)} credits will accrue before your leave date ({creditsSummary.monthly_rate} per month). These are included in your available balance.
                                         </p>
@@ -1012,7 +1061,7 @@ export default function Edit({
                                                 </div>
                                                 <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
                                                     <div className="flex items-start gap-2">
-                                                        <Info className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                                        <Info className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
                                                         <div className="text-sm text-green-800 dark:text-green-200">
                                                             <p>
                                                                 <strong>Future Eligibility:</strong> You are not yet eligible (eligible on{' '}
@@ -1472,6 +1521,48 @@ export default function Edit({
                                 </Alert>
                             )}
 
+                            {/* SPL Half-Day Toggles */}
+                            {data.leave_type === 'SPL' && data.spl_day_settings.length > 0 && (
+                                <div className="space-y-3">
+                                    <Label>Half-Day Settings per Day</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Toggle half-day for days you only need a half day off. Half-day = 0.5 credits, whole day = 1.0 credits.
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {data.spl_day_settings.map((daySetting, index) => (
+                                            <div
+                                                key={daySetting.date}
+                                                className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${
+                                                    daySetting.is_half_day
+                                                        ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800'
+                                                        : 'bg-card'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                                                    <span className="text-sm font-medium">
+                                                        {format(parseISO(daySetting.date), 'EEE, MMM d')}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-xs ${daySetting.is_half_day ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
+                                                        {daySetting.is_half_day ? 'Half Day (0.5)' : 'Whole Day (1.0)'}
+                                                    </span>
+                                                    <Switch
+                                                        checked={daySetting.is_half_day}
+                                                        onCheckedChange={(checked) => {
+                                                            const updated = [...data.spl_day_settings];
+                                                            updated[index] = { ...updated[index], is_half_day: checked };
+                                                            setData('spl_day_settings', updated);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Campaign/Department */}
                             <div className="space-y-2">
                                 <Label htmlFor="campaign_department">
@@ -1540,7 +1631,7 @@ export default function Edit({
                                                 />
                                             ) : (
                                                 <div className="space-y-2">
-                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-[200px]">
+                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-50">
                                                         <iframe
                                                             src={medicalCertPreview}
                                                             title="PDF preview"

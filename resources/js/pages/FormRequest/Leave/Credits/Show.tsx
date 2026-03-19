@@ -146,9 +146,15 @@ interface Props {
         is_reverted: boolean;
         created_at: string;
     }>;
+    splCreditsSummary?: {
+        total: number;
+        used: number;
+        balance: number;
+        year: number;
+    } | null;
 }
 
-export default function Show({ user, year, summary, carryoverSummary, carryoverReceived, monthlyCredits, leaveRequests, availableYears, canViewAll, canEdit = false, pendingLeaveInfo = { pending_count: 0, pending_credits: 0, future_accrual: 0, pending_requests: [] }, creditEditHistory = [] }: Props) {
+export default function Show({ user, year, summary, carryoverSummary, carryoverReceived, monthlyCredits, leaveRequests, availableYears, canViewAll, canEdit = false, pendingLeaveInfo = { pending_count: 0, pending_credits: 0, future_accrual: 0, pending_requests: [] }, creditEditHistory = [], splCreditsSummary = null }: Props) {
     const getInitials = useInitials();
 
     const { title, breadcrumbs } = usePageMeta({
@@ -368,6 +374,39 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
                         </CardContent>
                     </Card>
                 </div>
+
+                {/* Solo Parent Leave Credits */}
+                {splCreditsSummary && (
+                    <Card className="border-violet-200 bg-violet-50/50 dark:border-violet-800 dark:bg-violet-950/20">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-violet-700 dark:text-violet-400">
+                                <CreditCard className="h-5 w-5" />
+                                Solo Parent Leave (SPL) Credits — {splCreditsSummary.year}
+                            </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                                <div className="p-3 rounded-lg bg-background border">
+                                    <p className="text-sm text-muted-foreground">Total Credits</p>
+                                    <p className="text-xl font-bold">{splCreditsSummary.total.toFixed(2)}</p>
+                                    <p className="text-xs text-muted-foreground">Per year (lump-sum)</p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-background border">
+                                    <p className="text-sm text-muted-foreground">Used</p>
+                                    <p className="text-xl font-bold text-red-600">{splCreditsSummary.used.toFixed(2)}</p>
+                                    <p className="text-xs text-muted-foreground">Credits consumed</p>
+                                </div>
+                                <div className="p-3 rounded-lg bg-background border">
+                                    <p className="text-sm text-muted-foreground">Available</p>
+                                    <p className={`text-xl font-bold ${splCreditsSummary.balance > 0 ? 'text-violet-600' : 'text-gray-600'}`}>
+                                        {splCreditsSummary.balance.toFixed(2)}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">Remaining balance</p>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                )}
 
                 {/* Carryover Credits Section - For Conversion/Leave */}
                 {carryoverSummary && carryoverSummary.carryover_credits > 0 && (

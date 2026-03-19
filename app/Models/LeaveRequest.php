@@ -262,11 +262,19 @@ class LeaveRequest extends Model
     }
 
     /**
-     * Check if this leave type requires leave credits.
+     * Check if this leave type requires leave credits (VL/SL).
      */
     public function requiresCredits(): bool
     {
         return in_array($this->leave_type, self::CREDITED_LEAVE_TYPES);
+    }
+
+    /**
+     * Check if this leave type requires SPL credits.
+     */
+    public function requiresSplCredits(): bool
+    {
+        return $this->leave_type === 'SPL';
     }
 
     /**

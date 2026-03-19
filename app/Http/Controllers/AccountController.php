@@ -3,10 +3,11 @@
 namespace App\Http\Controllers;
 
 use App\Mail\EmployeeAccessRevoked;
+use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\NotificationService;
-use Illuminate\Http\Request;
 use Carbon\Carbon;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Log;
@@ -36,10 +37,10 @@ class AccountController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('first_name', 'like', "%{$search}%")
-                  ->orWhere('middle_name', 'like', "%{$search}%")
-                  ->orWhere('last_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhereRaw("CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name) LIKE ?", ["%{$search}%"]);
+                    ->orWhere('middle_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhereRaw("CONCAT(first_name, ' ', COALESCE(middle_name, ''), ' ', last_name) LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -144,7 +145,7 @@ class AccountController extends Controller
                 'unique:users',
                 function ($attribute, $value, $fail) use ($allowedDomains) {
                     $domain = substr(strrchr($value, '@'), 1);
-                    if (!in_array($domain, $allowedDomains)) {
+                    if (! in_array($domain, $allowedDomains)) {
                         $fail('Only @primehubmail.com and @prmhubsolutions.com email addresses are allowed.');
                     }
                 },
@@ -164,7 +165,7 @@ class AccountController extends Controller
         return redirect()->route('accounts.index')
             ->with('flash', [
                 'message' => 'User account created successfully',
-                'type' => 'success'
+                'type' => 'success',
             ]);
     }
 
@@ -183,6 +184,7 @@ class AccountController extends Controller
                 'role' => $account->role,
                 'hired_date' => $account->hired_date ? Carbon::parse($account->hired_date)->format('Y-m-d') : '',
                 'is_active' => $account->is_active,
+                'is_solo_parent' => $account->is_solo_parent,
             ],
             'roles' => ['Super Admin', 'Admin', 'Team Lead', 'Agent', 'HR', 'IT', 'Utility'],
         ]);
@@ -204,10 +206,10 @@ class AccountController extends Controller
                 'string',
                 'email',
                 'max:255',
-                'unique:users,email,' . $account->id,
+                'unique:users,email,'.$account->id,
                 function ($attribute, $value, $fail) use ($allowedDomains) {
                     $domain = substr(strrchr($value, '@'), 1);
-                    if (!in_array($domain, $allowedDomains)) {
+                    if (! in_array($domain, $allowedDomains)) {
                         $fail('Only @primehubmail.com and @prmhubsolutions.com email addresses are allowed.');
                     }
                 },
@@ -215,9 +217,10 @@ class AccountController extends Controller
             'password' => ['nullable', 'confirmed', Password::defaults()],
             'role' => 'required|in:Super Admin,Admin,Team Lead,Agent,HR,IT,Utility',
             'hired_date' => 'required|date',
+            'is_solo_parent' => 'sometimes|boolean',
         ]);
 
-        if (!empty($validated['password'])) {
+        if (! empty($validated['password'])) {
             $validated['password'] = Hash::make($validated['password']);
         } else {
             unset($validated['password']);
@@ -228,7 +231,7 @@ class AccountController extends Controller
         return redirect()->route('accounts.index')
             ->with('flash', [
                 'message' => 'User account updated successfully',
-                'type' => 'success'
+                'type' => 'success',
             ]);
     }
 
@@ -241,7 +244,7 @@ class AccountController extends Controller
         if ($account->id === auth()->id()) {
             return back()->with('flash', [
                 'message' => 'You cannot delete your own account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
@@ -249,7 +252,7 @@ class AccountController extends Controller
         if ($account->isSoftDeleted()) {
             return back()->with('flash', [
                 'message' => 'This account has already been marked for deletion',
-                'type' => 'info'
+                'type' => 'info',
             ]);
         }
 
@@ -268,13 +271,14 @@ class AccountController extends Controller
 
             return back()->with('flash', [
                 'message' => 'User account marked for deletion. Awaiting confirmation from administrators.',
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
-            Log::error('AccountController Destroy Error: ' . $e->getMessage());
+            Log::error('AccountController Destroy Error: '.$e->getMessage());
+
             return back()->with('flash', [
                 'message' => 'Failed to delete user account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
     }
@@ -290,7 +294,7 @@ class AccountController extends Controller
         if ($account->id === auth()->id()) {
             return back()->with('flash', [
                 'message' => 'You cannot confirm deletion of your own account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
@@ -298,15 +302,15 @@ class AccountController extends Controller
         if ($account->isDeletionConfirmed()) {
             return back()->with('flash', [
                 'message' => 'This account deletion has already been confirmed',
-                'type' => 'info'
+                'type' => 'info',
             ]);
         }
 
         // Check if not pending deletion
-        if (!$account->isDeletionPending()) {
+        if (! $account->isDeletionPending()) {
             return back()->with('flash', [
                 'message' => 'This account is not pending deletion',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
@@ -325,13 +329,14 @@ class AccountController extends Controller
 
             return back()->with('flash', [
                 'message' => 'User account deletion has been confirmed, employee and schedules deactivated',
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
-            Log::error('AccountController ConfirmDelete Error: ' . $e->getMessage());
+            Log::error('AccountController ConfirmDelete Error: '.$e->getMessage());
+
             return back()->with('flash', [
                 'message' => 'Failed to confirm account deletion',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
     }
@@ -345,10 +350,10 @@ class AccountController extends Controller
         $this->authorize('update', $account);
 
         // Check if not deleted
-        if (!$account->isSoftDeleted()) {
+        if (! $account->isSoftDeleted()) {
             return back()->with('flash', [
                 'message' => 'This account is not deleted',
-                'type' => 'info'
+                'type' => 'info',
             ]);
         }
 
@@ -365,13 +370,14 @@ class AccountController extends Controller
 
             return back()->with('flash', [
                 'message' => 'User account has been restored successfully',
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
-            Log::error('AccountController Restore Error: ' . $e->getMessage());
+            Log::error('AccountController Restore Error: '.$e->getMessage());
+
             return back()->with('flash', [
                 'message' => 'Failed to restore user account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
     }
@@ -391,10 +397,10 @@ class AccountController extends Controller
             ->whereNull('deletion_confirmed_at')
             ->first();
 
-        if (!$user) {
+        if (! $user) {
             return back()->with('flash', [
                 'message' => 'Account not found or cannot be reactivated',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
@@ -412,10 +418,11 @@ class AccountController extends Controller
 
             return redirect()->route('login')->with('status', 'Your account has been reactivated. You can now log in with your new password.');
         } catch (\Exception $e) {
-            Log::error('AccountController Reactivate Error: ' . $e->getMessage());
+            Log::error('AccountController Reactivate Error: '.$e->getMessage());
+
             return back()->with('flash', [
                 'message' => 'Failed to reactivate account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
     }
@@ -444,15 +451,15 @@ class AccountController extends Controller
         if ($account->id === auth()->id()) {
             return back()->with('flash', [
                 'message' => 'You cannot permanently delete your own account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
         // Only allow force delete if deletion is confirmed
-        if (!$account->isDeletionConfirmed()) {
+        if (! $account->isDeletionConfirmed()) {
             return back()->with('flash', [
                 'message' => 'Cannot permanently delete an account that has not been confirmed for deletion',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
@@ -462,13 +469,14 @@ class AccountController extends Controller
 
             return back()->with('flash', [
                 'message' => "User account '{$accountName}' has been permanently deleted",
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
-            Log::error('AccountController ForceDelete Error: ' . $e->getMessage());
+            Log::error('AccountController ForceDelete Error: '.$e->getMessage());
+
             return back()->with('flash', [
                 'message' => 'Failed to permanently delete user account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
     }
@@ -483,7 +491,7 @@ class AccountController extends Controller
         if ($account->is_approved) {
             return back()->with('flash', [
                 'message' => 'User account is already approved',
-                'type' => 'info'
+                'type' => 'info',
             ]);
         }
 
@@ -494,7 +502,7 @@ class AccountController extends Controller
 
         return back()->with('flash', [
             'message' => 'User account approved successfully',
-            'type' => 'success'
+            'type' => 'success',
         ]);
     }
 
@@ -509,14 +517,14 @@ class AccountController extends Controller
         if ($account->id === auth()->id()) {
             return back()->with('flash', [
                 'message' => 'You cannot unapprove your own account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
-        if (!$account->is_approved) {
+        if (! $account->is_approved) {
             return back()->with('flash', [
                 'message' => 'User account is already unapproved',
-                'type' => 'info'
+                'type' => 'info',
             ]);
         }
 
@@ -546,7 +554,7 @@ class AccountController extends Controller
 
         return back()->with('flash', [
             'message' => $message,
-            'type' => 'success'
+            'type' => 'success',
         ]);
     }
 
@@ -562,14 +570,14 @@ class AccountController extends Controller
         if ($account->id === auth()->id()) {
             return back()->with('flash', [
                 'message' => 'You cannot change the status of your own account',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
 
-        $newStatus = !$account->is_active;
+        $newStatus = ! $account->is_active;
 
         // If deactivating, also deactivate all employee schedules
-        if (!$newStatus) {
+        if (! $newStatus) {
             $account->employeeSchedules()->update(['is_active' => false]);
         }
 
@@ -578,13 +586,13 @@ class AccountController extends Controller
         $statusText = $newStatus ? 'activated' : 'deactivated';
         $message = "Employee {$statusText} successfully";
 
-        if (!$newStatus) {
-            $message .= ". All schedules have been deactivated.";
+        if (! $newStatus) {
+            $message .= '. All schedules have been deactivated.';
         }
 
         return back()->with('flash', [
             'message' => $message,
-            'type' => 'success'
+            'type' => 'success',
         ]);
     }
 
@@ -610,7 +618,7 @@ class AccountController extends Controller
         if ($usersToApprove->isEmpty()) {
             return back()->with('flash', [
                 'message' => 'No accounts to approve. Selected accounts may already be approved or deleted.',
-                'type' => 'info'
+                'type' => 'info',
             ]);
         }
 
@@ -629,13 +637,14 @@ class AccountController extends Controller
 
             return back()->with('flash', [
                 'message' => "{$count} user account(s) approved successfully",
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
-            Log::error('AccountController BulkApprove Error: ' . $e->getMessage());
+            Log::error('AccountController BulkApprove Error: '.$e->getMessage());
+
             return back()->with('flash', [
                 'message' => 'Failed to approve selected accounts',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
     }
@@ -664,7 +673,7 @@ class AccountController extends Controller
         if ($usersToUnapprove->isEmpty()) {
             return back()->with('flash', [
                 'message' => 'No accounts to revoke. Selected accounts may already be pending or deleted.',
-                'type' => 'info'
+                'type' => 'info',
             ]);
         }
 
@@ -688,7 +697,7 @@ class AccountController extends Controller
                     ]);
 
                 // Deactivate all employee schedules for these users
-                \App\Models\EmployeeSchedule::whereIn('user_id', $userIds)
+                EmployeeSchedule::whereIn('user_id', $userIds)
                     ->update(['is_active' => false]);
             });
 
@@ -709,13 +718,14 @@ class AccountController extends Controller
 
             return back()->with('flash', [
                 'message' => $message,
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
-            Log::error('AccountController BulkUnapprove Error: ' . $e->getMessage());
+            Log::error('AccountController BulkUnapprove Error: '.$e->getMessage());
+
             return back()->with('flash', [
                 'message' => 'Failed to revoke approval for selected accounts',
-                'type' => 'error'
+                'type' => 'error',
             ]);
         }
     }
@@ -732,9 +742,9 @@ class AccountController extends Controller
             Mail::to($employee->email)
                 ->queue(new EmployeeAccessRevoked($employee, $department, $revokedBy));
 
-            Log::info('Access revoked email queued for employee: ' . $employee->name);
+            Log::info('Access revoked email queued for employee: '.$employee->name);
         } catch (\Exception $e) {
-            Log::error('Failed to send access revoked email: ' . $e->getMessage());
+            Log::error('Failed to send access revoked email: '.$e->getMessage());
         }
     }
 }

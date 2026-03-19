@@ -22,6 +22,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, Eye, Users, Info, Lightbulb, ArrowRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import { Switch } from '@/components/ui/switch';
 import { index as leaveIndexRoute, create as leaveCreateRoute, store as leaveStoreRoute } from '@/routes/leave-requests';
 
 interface PendingRegularizationCredits {
@@ -87,6 +88,8 @@ interface DateSuggestion {
 
 interface Props {
     creditsSummary: CreditsSummary;
+    splCreditsSummary: { total: number; used: number; balance: number; year: number } | null;
+    isSoloParent: boolean;
     attendancePoints: number;
     attendanceViolations: AttendanceViolation[];
     hasRecentAbsence: boolean;
@@ -105,6 +108,8 @@ interface Props {
 
 export default function Create({
     creditsSummary,
+    splCreditsSummary,
+    isSoloParent,
     attendancePoints,
     attendanceViolations,
     hasRecentAbsence,
@@ -129,6 +134,7 @@ export default function Create({
         medical_cert_submitted: false,
         medical_cert_file: null as File | null,
         short_notice_override: false,
+        spl_day_settings: [] as { date: string; is_half_day: boolean }[],
     });
 
     const [selectedEmployee, setSelectedEmployee] = useState<number>(selectedEmployeeId);
@@ -371,6 +377,43 @@ export default function Create({
             setFutureCredits(0);
         }
     }, [data.start_date, data.end_date, creditsSummary.is_eligible, creditsSummary.monthly_rate, calculateFutureCredits]);
+
+    // Auto-generate SPL day settings when dates change
+    useEffect(() => {
+        if (data.leave_type !== 'SPL' || !data.start_date || !data.end_date) {
+            if (data.spl_day_settings.length > 0) {
+                setData('spl_day_settings', []);
+            }
+            return;
+        }
+
+        const start = parseISO(data.start_date);
+        const end = parseISO(data.end_date);
+        const newSettings: { date: string; is_half_day: boolean }[] = [];
+        const currentDate = new Date(start);
+
+        while (currentDate <= end) {
+            const dayOfWeek = currentDate.getDay();
+            if (dayOfWeek >= 1 && dayOfWeek <= 5) {
+                const dateStr = format(currentDate, 'yyyy-MM-dd');
+                // Preserve existing setting if date matches
+                const existing = data.spl_day_settings.find(s => s.date === dateStr);
+                newSettings.push({
+                    date: dateStr,
+                    is_half_day: existing ? existing.is_half_day : false,
+                });
+            }
+            currentDate.setDate(currentDate.getDate() + 1);
+        }
+
+        // Only update if settings actually changed
+        const hasChanged = newSettings.length !== data.spl_day_settings.length ||
+            newSettings.some((s, i) => s.date !== data.spl_day_settings[i]?.date);
+        if (hasChanged) {
+            setData('spl_day_settings', newSettings);
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [data.leave_type, data.start_date, data.end_date]);
 
     // Real-time validation warnings
     useEffect(() => {
@@ -887,7 +930,7 @@ export default function Create({
                             {futureCredits > 0 && (
                                 <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-md">
                                     <div className="flex items-start gap-2">
-                                        <Info className="h-4 w-4 text-purple-600 mt-0.5 flex-shrink-0" />
+                                        <Info className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
                                         <p className="text-sm text-purple-800 dark:text-purple-200">
                                             <strong>Future Credits Applied:</strong> Since your leave starts in a future month, {futureCredits.toFixed(2)} credits will accrue before your leave date ({creditsSummary.monthly_rate} per month). These are included in your available balance.
                                         </p>
@@ -943,7 +986,7 @@ export default function Create({
                                     </div>
                                     <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
                                         <div className="flex items-start gap-2">
-                                            <Info className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+                                            <Info className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
                                             <div className="text-sm text-green-800 dark:text-green-200">
                                                 <p>
                                                     <strong>Future Eligibility:</strong> You are not yet eligible (eligible on{' '}
@@ -998,6 +1041,70 @@ export default function Create({
                             </Alert>
                         )}
                     </>
+                )}
+
+                {/* SPL Credits Balance - Show when SPL is selected */}
+                {data.leave_type === 'SPL' && splCreditsSummary && (
+                    <Card className="mb-6 border-violet-200 dark:border-violet-800">
+                        <CardHeader>
+                            <CardTitle className="flex items-center gap-2 text-violet-700 dark:text-violet-400">
+                                <CreditCard className="h-5 w-5" />
+                                Solo Parent Leave Credits
+                            </CardTitle>
+                            <CardDescription>
+                                Year {splCreditsSummary.year} • {splCreditsSummary.total} days per year (lump-sum, no carryover)
+                            </CardDescription>
+                        </CardHeader>
+                        <CardContent>
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Total Credits</p>
+                                    <p className="text-2xl font-bold">{splCreditsSummary.total.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Credits Used</p>
+                                    <p className="text-2xl font-bold text-orange-600">{splCreditsSummary.used.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">Available</p>
+                                    <p className="text-2xl font-bold text-blue-600">{splCreditsSummary.balance.toFixed(2)}</p>
+                                </div>
+                                <div>
+                                    <p className="text-sm text-muted-foreground">This Request</p>
+                                    <p className="text-2xl font-bold text-violet-600">
+                                        {data.spl_day_settings.length > 0
+                                            ? `-${data.spl_day_settings.reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0).toFixed(1)}`
+                                            : '0'}
+                                    </p>
+                                </div>
+                            </div>
+                            {data.spl_day_settings.length > 0 && (() => {
+                                const requestedCredits = data.spl_day_settings.reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0);
+                                if (requestedCredits > splCreditsSummary.balance) {
+                                    return (
+                                        <Alert className="mt-4 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                            <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                            <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                                Requesting {requestedCredits.toFixed(1)} credits but only {splCreditsSummary.balance.toFixed(2)} available.
+                                                Days exceeding your balance will be marked as absent (no credit deduction, no attendance excuse).
+                                            </AlertDescription>
+                                        </Alert>
+                                    );
+                                }
+                                return null;
+                            })()}
+                        </CardContent>
+                    </Card>
+                )}
+
+                {data.leave_type === 'SPL' && !isSoloParent && (
+                    <Alert className="mb-6 border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                        <AlertCircle className="h-4 w-4 text-red-600" />
+                        <AlertTitle className="text-red-800 dark:text-red-200">Not Eligible for SPL</AlertTitle>
+                        <AlertDescription className="text-red-700 dark:text-red-300">
+                            Your account is not flagged as a solo parent. Please contact HR to update your solo parent status before filing SPL.
+                        </AlertDescription>
+                    </Alert>
                 )}
 
                 {/* Attendance Violations Display - Only show if points >= 6, hide for ML */}
@@ -1378,7 +1485,9 @@ export default function Create({
                                         <SelectItem value="VL">Vacation Leave (VL)</SelectItem>
                                         <SelectItem value="SL">Sick Leave (SL)</SelectItem>
                                         <SelectItem value="BL">Bereavement Leave (BL)</SelectItem>
-                                        <SelectItem value="SPL">Solo Parent Leave (SPL)</SelectItem>
+                                        {isSoloParent && (
+                                            <SelectItem value="SPL">Solo Parent Leave (SPL)</SelectItem>
+                                        )}
                                         <SelectItem value="LOA">Leave of Absence (LOA)</SelectItem>
                                         <SelectItem value="LDV">
                                             Leave Due to Domestic Violence (LDV)
@@ -1471,8 +1580,53 @@ export default function Create({
                                     <AlertDescription>
                                         <strong>{calculatedDays}</strong> day{calculatedDays !== 1 ? 's' : ''}{' '}
                                         requested
+                                        {data.leave_type === 'SPL' && data.spl_day_settings.length > 0 && (
+                                            <> ({data.spl_day_settings.reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0).toFixed(1)} credit{data.spl_day_settings.reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0) !== 1 ? 's' : ''} to consume)</>
+                                        )}
                                     </AlertDescription>
                                 </Alert>
+                            )}
+
+                            {/* SPL Half-Day Toggles */}
+                            {data.leave_type === 'SPL' && data.spl_day_settings.length > 0 && (
+                                <div className="space-y-3">
+                                    <Label>Half-Day Settings per Day</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Toggle half-day for days you only need a half day off. Half-day = 0.5 credits, whole day = 1.0 credits.
+                                    </p>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        {data.spl_day_settings.map((daySetting, index) => (
+                                            <div
+                                                key={daySetting.date}
+                                                className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${
+                                                    daySetting.is_half_day
+                                                        ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800'
+                                                        : 'bg-card'
+                                                }`}
+                                            >
+                                                <div className="flex items-center gap-2">
+                                                    <Calendar className="h-4 w-4 text-muted-foreground" />
+                                                    <span className="text-sm font-medium">
+                                                        {format(parseISO(daySetting.date), 'EEE, MMM d')}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className={`text-xs ${daySetting.is_half_day ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
+                                                        {daySetting.is_half_day ? 'Half Day (0.5)' : 'Whole Day (1.0)'}
+                                                    </span>
+                                                    <Switch
+                                                        checked={daySetting.is_half_day}
+                                                        onCheckedChange={(checked) => {
+                                                            const updated = [...data.spl_day_settings];
+                                                            updated[index] = { ...updated[index], is_half_day: checked };
+                                                            setData('spl_day_settings', updated);
+                                                        }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
                             )}
 
                             {/* Campaign/Department */}
@@ -1583,7 +1737,7 @@ export default function Create({
                                                 </div>
                                             ) : medicalCertPreview && isPdfFile ? (
                                                 <div className="space-y-2">
-                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-[200px]">
+                                                    <div className="relative rounded-md overflow-hidden border bg-muted h-50">
                                                         <iframe
                                                             src={medicalCertPreview}
                                                             title="PDF preview"
