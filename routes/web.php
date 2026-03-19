@@ -462,6 +462,11 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::resource('sessions', CoachingSessionController::class)
             ->middleware('permission:coaching.view_own,coaching.view_team,coaching.view_all,coaching.create,coaching.edit,coaching.delete');
 
+        // Session attachment viewing
+        Route::get('/sessions/{session}/attachments/{attachment}', [CoachingSessionController::class, 'viewAttachment'])
+            ->middleware('permission:coaching.view_own,coaching.view_team,coaching.view_all')
+            ->name('sessions.attachment');
+
         // Agent acknowledge
         Route::patch('/sessions/{session}/acknowledge', [CoachingSessionController::class, 'acknowledge'])
             ->middleware('permission:coaching.acknowledge')

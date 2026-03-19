@@ -14,9 +14,11 @@ import {
     index as sessionsIndex,
     show as sessionsShow,
     update as sessionsUpdate,
+    attachment as sessionsAttachment,
 } from '@/routes/coaching/sessions';
 
 import type { CoachingSession, CoachingPurposeLabels } from '@/types';
+import { useState, useCallback } from 'react';
 
 interface Props extends InertiaPageProps {
     session: CoachingSession;
@@ -73,7 +75,20 @@ export default function CoachingSessionsEdit() {
         smart_action_plan: session.smart_action_plan,
         follow_up_date: session.follow_up_date ?? '',
         severity_flag: session.severity_flag,
+        attachments: [] as File[],
+        removed_attachments: [] as number[],
     });
+
+    const [removedAttachmentIds, setRemovedAttachmentIds] = useState<number[]>([]);
+
+    const handleRemoveExistingAttachment = useCallback((id: number) => {
+        setRemovedAttachmentIds((prev) => [...prev, id]);
+        setData('removed_attachments', [...(data.removed_attachments as number[] || []), id]);
+    }, [data.removed_attachments, setData]);
+
+    const getAttachmentViewUrl = useCallback((sessionId: number, attachmentId: number) => {
+        return sessionsAttachment.url({ session: sessionId, attachment: attachmentId });
+    }, []);
 
     const formatName = (user?: { first_name: string; last_name: string } | null) => {
         if (!user) return 'N/A';
@@ -82,7 +97,9 @@ export default function CoachingSessionsEdit() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        put(sessionsUpdate(session.id).url);
+        put(sessionsUpdate(session.id).url, {
+            forceFormData: true,
+        });
     };
 
     return (
@@ -113,6 +130,10 @@ export default function CoachingSessionsEdit() {
                         purposes={purposes}
                         severityFlags={severityFlags}
                         showAgentSelect={false}
+                        existingAttachments={session.attachments ?? []}
+                        removedAttachmentIds={removedAttachmentIds}
+                        onRemoveExistingAttachment={handleRemoveExistingAttachment}
+                        attachmentViewUrl={getAttachmentViewUrl}
                     />
 
                     <div className="flex justify-end gap-3 pt-6">

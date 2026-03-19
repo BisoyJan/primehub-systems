@@ -81,6 +81,7 @@ export default function CoachingSessionsCreate() {
         smart_action_plan: '',
         follow_up_date: '',
         severity_flag: 'Normal',
+        attachments: [] as File[],
     });
 
     const handleModeSwitch = (mode: CoachingMode) => {
@@ -90,7 +91,9 @@ export default function CoachingSessionsCreate() {
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        post(sessionsStore().url);
+        post(sessionsStore().url, {
+            forceFormData: true,
+        });
     };
 
     return (
@@ -119,8 +122,8 @@ export default function CoachingSessionsCreate() {
                             type="button"
                             onClick={() => handleModeSwitch('assign')}
                             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'assign'
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
                                 }`}
                         >
                             <Users className="h-4 w-4" />
@@ -130,8 +133,8 @@ export default function CoachingSessionsCreate() {
                             type="button"
                             onClick={() => handleModeSwitch('direct')}
                             className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${coachingMode === 'direct'
-                                    ? 'bg-background text-foreground shadow-sm'
-                                    : 'text-muted-foreground hover:text-foreground'
+                                ? 'bg-background text-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground'
                                 }`}
                         >
                             <UserPlus className="h-4 w-4" />

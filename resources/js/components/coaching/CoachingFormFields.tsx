@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -25,8 +25,15 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { Check, ChevronsUpDown } from 'lucide-react';
-import type { CoachingMode, CoachingPurposeLabels, User } from '@/types';
+import { Check, ChevronsUpDown, ImagePlus, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import {
+    Dialog,
+    DialogContent,
+    DialogDescription,
+    DialogHeader,
+    DialogTitle,
+} from '@/components/ui/dialog';
+import type { CoachingMode, CoachingPurposeLabels, CoachingSessionAttachment, User } from '@/types';
 
 interface CoachingFormFieldsProps {
     data: Record<string, unknown>;
@@ -41,6 +48,325 @@ interface CoachingFormFieldsProps {
     severityFlags: string[];
     showAgentSelect?: boolean;
     selectedAgentId?: number | null;
+    existingAttachments?: CoachingSessionAttachment[];
+    removedAttachmentIds?: number[];
+    onRemoveExistingAttachment?: (id: number) => void;
+    attachmentViewUrl?: (sessionId: number, attachmentId: number) => string;
+}
+
+const MAX_ATTACHMENTS = 10;
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4MB
+const ALLOWED_TYPES = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
+
+function ImageAttachments({
+    data,
+    setData,
+    errors,
+    existingAttachments = [],
+    removedAttachmentIds = [],
+    onRemoveExistingAttachment,
+    attachmentViewUrl,
+}: Pick<CoachingFormFieldsProps, 'data' | 'setData' | 'errors' | 'existingAttachments' | 'removedAttachmentIds' | 'onRemoveExistingAttachment' | 'attachmentViewUrl'>) {
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [previews, setPreviews] = useState<string[]>([]);
+    const [warning, setWarning] = useState<string | null>(null);
+    const [previewImage, setPreviewImage] = useState<{ src: string; name: string } | null>(null);
+    const [imageZoom, setImageZoom] = useState(100);
+
+    const newFiles = (data.attachments as File[]) || [];
+    const activeExisting = existingAttachments.filter((a) => !removedAttachmentIds.includes(a.id));
+    const totalCount = activeExisting.length + newFiles.length;
+    const canAddMore = totalCount < MAX_ATTACHMENTS;
+
+    const addFiles = useCallback(
+        (files: File[]) => {
+            if (files.length === 0) return;
+
+            setWarning(null);
+
+            const currentFiles = (data.attachments as File[]) || [];
+            const currentExisting = existingAttachments.filter((a) => !removedAttachmentIds.includes(a.id));
+            const currentTotal = currentExisting.length + currentFiles.length;
+            const availableSlots = MAX_ATTACHMENTS - currentTotal;
+
+            if (availableSlots <= 0) {
+                setWarning(`Maximum of ${MAX_ATTACHMENTS} images allowed. You already have ${currentTotal}.`);
+                return;
+            }
+
+            const validFiles = files.filter((f) => ALLOWED_TYPES.includes(f.type) && f.size <= MAX_FILE_SIZE);
+            const skippedCount = files.length - validFiles.length;
+            const excessCount = Math.max(0, validFiles.length - availableSlots);
+            const filesToAdd = validFiles.slice(0, availableSlots);
+
+            const warnings: string[] = [];
+            if (excessCount > 0) {
+                warnings.push(`${excessCount} image${excessCount > 1 ? 's were' : ' was'} not added — limit is ${MAX_ATTACHMENTS}.`);
+            }
+            if (skippedCount > 0) {
+                warnings.push(`${skippedCount} file${skippedCount > 1 ? 's were' : ' was'} skipped (invalid type or exceeds 4MB).`);
+            }
+            if (warnings.length > 0) {
+                setWarning(warnings.join(' '));
+            }
+
+            if (filesToAdd.length > 0) {
+                const newPreviewUrls = filesToAdd.map((f) => URL.createObjectURL(f));
+                setData('attachments', [...currentFiles, ...filesToAdd]);
+                setPreviews((prev) => [...prev, ...newPreviewUrls]);
+            }
+        },
+        [data.attachments, existingAttachments, removedAttachmentIds, setData],
+    );
+
+    // Auto-dismiss warning after 5 seconds
+    useEffect(() => {
+        if (!warning) return;
+        const timer = setTimeout(() => setWarning(null), 5000);
+        return () => clearTimeout(timer);
+    }, [warning]);
+
+    const handleFileSelect = useCallback(
+        (e: React.ChangeEvent<HTMLInputElement>) => {
+            const selectedFiles = Array.from(e.target.files || []);
+            addFiles(selectedFiles);
+
+            // Reset file input so the same file can be re-selected
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        },
+        [addFiles],
+    );
+
+    // Handle Ctrl+V paste from clipboard (screenshots, copied images)
+    // Listens on the document so paste works anywhere on the page
+    useEffect(() => {
+        const handlePaste = (e: ClipboardEvent) => {
+            const items = e.clipboardData?.items;
+            if (!items) return;
+
+            const imageFiles: File[] = [];
+            for (const item of Array.from(items)) {
+                if (item.kind === 'file' && ALLOWED_TYPES.includes(item.type)) {
+                    const file = item.getAsFile();
+                    if (file) {
+                        const ext = file.type.split('/')[1] || 'png';
+                        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                        const namedFile = new File([file], `pasted-image-${timestamp}.${ext}`, { type: file.type });
+                        imageFiles.push(namedFile);
+                    }
+                }
+            }
+
+            if (imageFiles.length > 0) {
+                e.preventDefault();
+                addFiles(imageFiles);
+            }
+        };
+
+        document.addEventListener('paste', handlePaste);
+        return () => document.removeEventListener('paste', handlePaste);
+    }, [addFiles]);
+
+    const handleRemoveNewFile = useCallback(
+        (index: number) => {
+            const currentFiles = [...((data.attachments as File[]) || [])];
+            currentFiles.splice(index, 1);
+            setData('attachments', currentFiles);
+
+            setPreviews((prev) => {
+                const updated = [...prev];
+                URL.revokeObjectURL(updated[index]);
+                updated.splice(index, 1);
+                return updated;
+            });
+        },
+        [data.attachments, setData],
+    );
+
+    // Collect all attachment-related errors
+    const attachmentErrors: string[] = [];
+    if (errors.attachments) attachmentErrors.push(errors.attachments);
+    Object.keys(errors).forEach((key) => {
+        if (key.startsWith('attachments.')) attachmentErrors.push(errors[key]);
+    });
+
+    return (
+        <section className="space-y-4">
+            <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
+                Image Attachments
+                <span className="ml-2 text-xs font-normal normal-case text-muted-foreground">
+                    ({totalCount}/{MAX_ATTACHMENTS})
+                </span>
+            </h3>
+
+            {/* Preview Grid */}
+            {(activeExisting.length > 0 || previews.length > 0) && (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
+                    {/* Existing Attachments */}
+                    {activeExisting.map((attachment) => (
+                        <div key={`existing-${attachment.id}`} className="group relative aspect-square rounded-lg border bg-muted/30 overflow-hidden">
+                            <button
+                                type="button"
+                                className="h-full w-full"
+                                onClick={() => {
+                                    setPreviewImage({
+                                        src: attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#',
+                                        name: attachment.original_filename,
+                                    });
+                                    setImageZoom(100);
+                                }}
+                            >
+                                <img
+                                    src={attachmentViewUrl ? attachmentViewUrl(attachment.coaching_session_id, attachment.id) : '#'}
+                                    alt={attachment.original_filename}
+                                    className="h-full w-full object-cover"
+                                />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                                    <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                </div>
+                            </button>
+                            {onRemoveExistingAttachment && (
+                                <button
+                                    type="button"
+                                    title="Remove attachment"
+                                    onClick={() => onRemoveExistingAttachment(attachment.id)}
+                                    className="absolute top-1 right-1 rounded-full bg-red-600 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 z-10"
+                                >
+                                    <X className="h-3 w-3" />
+                                </button>
+                            )}
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-0.5 text-[10px] text-white truncate pointer-events-none">
+                                {attachment.original_filename}
+                            </div>
+                        </div>
+                    ))}
+
+                    {/* New File Previews */}
+                    {previews.map((previewUrl, index) => (
+                        <div key={`new-${index}`} className="group relative aspect-square rounded-lg border bg-muted/30 overflow-hidden">
+                            <button
+                                type="button"
+                                className="h-full w-full"
+                                onClick={() => {
+                                    setPreviewImage({
+                                        src: previewUrl,
+                                        name: newFiles[index]?.name ?? 'New image',
+                                    });
+                                    setImageZoom(100);
+                                }}
+                            >
+                                <img src={previewUrl} alt={newFiles[index]?.name ?? 'Preview'} className="h-full w-full object-cover" />
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                                    <ZoomIn className="h-5 w-5 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                </div>
+                            </button>
+                            <button
+                                type="button"
+                                title="Remove image"
+                                onClick={() => handleRemoveNewFile(index)}
+                                className="absolute top-1 right-1 rounded-full bg-red-600 p-1 text-white opacity-0 transition-opacity group-hover:opacity-100 z-10"
+                            >
+                                <X className="h-3 w-3" />
+                            </button>
+                            <div className="absolute bottom-0 left-0 right-0 bg-black/50 px-1.5 py-0.5 text-[10px] text-white truncate pointer-events-none">
+                                {newFiles[index]?.name ?? 'New image'}
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            )}
+
+            {/* Upload Button */}
+            {canAddMore && (
+                <div className="flex flex-wrap items-center gap-2">
+                    <label htmlFor="coaching-attachments" className="sr-only">Upload image attachments</label>
+                    <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept="image/jpeg,image/jpg,image/png,image/gif,image/webp"
+                        multiple
+                        onChange={handleFileSelect}
+                        className="hidden"
+                        id="coaching-attachments"
+                    />
+                    <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="gap-2"
+                    >
+                        <ImagePlus className="h-4 w-4" />
+                        Add Images
+                    </Button>
+                    <p className="text-xs text-muted-foreground">
+                        JPEG, PNG, GIF, or WebP. Max 4MB per image. You can also <kbd className="rounded border bg-muted px-1 py-0.5 text-[10px] font-mono">Ctrl+V</kbd> to paste screenshots.
+                    </p>
+                </div>
+            )}
+
+            {/* Warning */}
+            {warning && (
+                <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-700 dark:bg-amber-950/50 dark:text-amber-200">
+                    <span className="shrink-0 mt-0.5">⚠️</span>
+                    <span>{warning}</span>
+                </div>
+            )}
+
+            {/* Errors */}
+            {attachmentErrors.map((err, i) => (
+                <p key={i} className="text-red-600 text-sm">{err}</p>
+            ))}
+
+            {/* Image Preview Lightbox */}
+            <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+                <DialogContent className="max-w-[95vw] sm:max-w-3xl">
+                    <DialogHeader>
+                        <DialogTitle className="truncate pr-8">{previewImage?.name}</DialogTitle>
+                        <DialogDescription className="sr-only">Image preview</DialogDescription>
+                    </DialogHeader>
+                    <div className="flex items-center gap-3 pb-2 border-b px-2">
+                        <ZoomOut className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <input
+                            type="range"
+                            min={25}
+                            max={300}
+                            step={5}
+                            value={imageZoom}
+                            onChange={(e) => setImageZoom(Number(e.target.value))}
+                            className="w-full h-2 accent-primary cursor-pointer"
+                            title="Zoom level"
+                        />
+                        <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
+                        <span className="text-sm font-medium min-w-12.5 text-center tabular-nums">{imageZoom}%</span>
+                        <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setImageZoom(100)}
+                            className="h-7 px-2"
+                            title="Reset zoom"
+                        >
+                            <RotateCcw className="h-3.5 w-3.5" />
+                        </Button>
+                    </div>
+                    <div className="overflow-auto max-h-[70vh] rounded-lg bg-muted/30">
+                        <div className="min-w-full min-h-full flex justify-center items-start p-4">
+                            {previewImage && (
+                                <img
+                                    src={previewImage.src}
+                                    alt={previewImage.name}
+                                    className="object-contain rounded-lg border transition-transform duration-200 origin-top"
+                                    style={{ transform: `scale(${imageZoom / 100})` }}
+                                />
+                            )}
+                        </div>
+                    </div>
+                </DialogContent>
+            </Dialog>
+        </section>
+    );
 }
 
 export function CoachingFormFields({
@@ -56,6 +382,10 @@ export function CoachingFormFields({
     severityFlags,
     showAgentSelect = true,
     selectedAgentId,
+    existingAttachments = [],
+    removedAttachmentIds = [],
+    onRemoveExistingAttachment,
+    attachmentViewUrl,
 }: CoachingFormFieldsProps) {
     const [agentSearchOpen, setAgentSearchOpen] = useState(false);
     const [agentSearchQuery, setAgentSearchQuery] = useState('');
@@ -455,6 +785,17 @@ export function CoachingFormFields({
                 />
                 {errors.performance_description && <p className="text-red-600 text-sm mt-1">{errors.performance_description}</p>}
             </section>
+
+            {/* Section 5b: Image Attachments */}
+            <ImageAttachments
+                data={data}
+                setData={setData}
+                errors={errors}
+                existingAttachments={existingAttachments}
+                removedAttachmentIds={removedAttachmentIds}
+                onRemoveExistingAttachment={onRemoveExistingAttachment}
+                attachmentViewUrl={attachmentViewUrl}
+            />
 
             {/* Section 6: Root Causes */}
             <section className="space-y-4">

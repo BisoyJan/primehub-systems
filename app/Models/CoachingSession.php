@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Spatie\Activitylog\LogOptions;
 use Spatie\Activitylog\Traits\LogsActivity;
 
@@ -173,6 +174,14 @@ class CoachingSession extends Model
     public function complianceReviewer(): BelongsTo
     {
         return $this->belongsTo(User::class, 'compliance_reviewer_id');
+    }
+
+    /**
+     * Get the image attachments for this session.
+     */
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(CoachingSessionAttachment::class);
     }
 
     // ─── Scopes ─────────────────────────────────────────────────────

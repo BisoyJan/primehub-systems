@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, Pencil, CheckCircle2, ShieldCheck, ShieldX } from 'lucide-react';
+import { ArrowLeft, Pencil, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -37,6 +37,7 @@ import {
     edit as sessionsEdit,
     acknowledge as sessionsAcknowledge,
     review as sessionsReview,
+    attachment as sessionsAttachment,
 } from '@/routes/coaching/sessions';
 
 import type { CoachingSession, CoachingPurposeLabels } from '@/types';
@@ -96,6 +97,13 @@ export default function CoachingSessionsShow() {
     // Dialog open states
     const [ackDialogOpen, setAckDialogOpen] = useState(false);
     const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
+
+    // Attachment lightbox
+    const [selectedAttachment, setSelectedAttachment] = useState<{
+        id: number;
+        original_filename: string;
+    } | null>(null);
+    const [imageZoom, setImageZoom] = useState(100);
 
     // Acknowledge form
     const ackForm = useForm({ ack_comment: '' });
@@ -217,6 +225,40 @@ export default function CoachingSessionsShow() {
                 <SectionCard title="Performance Description">
                     <p className="whitespace-pre-wrap text-sm">{session.performance_description}</p>
                 </SectionCard>
+
+                {/* Attachments */}
+                {session.attachments && session.attachments.length > 0 && (
+                    <SectionCard title="Attachments">
+                        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                            {session.attachments.map((attachment) => (
+                                <button
+                                    key={attachment.id}
+                                    type="button"
+                                    className="group relative aspect-square overflow-hidden rounded-lg border bg-muted/50 focus:outline-none focus:ring-2 focus:ring-ring"
+                                    onClick={() => {
+                                        setSelectedAttachment(attachment);
+                                        setImageZoom(100);
+                                    }}
+                                >
+                                    <img
+                                        src={sessionsAttachment({ session: session.id, attachment: attachment.id }).url}
+                                        alt={attachment.original_filename}
+                                        className="h-full w-full object-cover transition-transform group-hover:scale-105"
+                                    />
+                                    <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+                                        <ZoomIn className="h-6 w-6 text-white opacity-0 transition-opacity group-hover:opacity-100" />
+                                    </div>
+                                    <p className="absolute bottom-0 left-0 right-0 truncate bg-black/50 px-2 py-1 text-xs text-white">
+                                        {attachment.original_filename}
+                                    </p>
+                                </button>
+                            ))}
+                        </div>
+                        <p className="mt-2 text-xs text-muted-foreground">
+                            {session.attachments.length} attachment{session.attachments.length !== 1 ? 's' : ''}
+                        </p>
+                    </SectionCard>
+                )}
 
                 {/* Root Causes */}
                 <SectionCard title="Root Causes">
@@ -395,6 +437,52 @@ export default function CoachingSessionsShow() {
                 <div className="text-xs text-muted-foreground">
                     Created: {formatDateTime(session.created_at)} · Updated: {formatDateTime(session.updated_at)}
                 </div>
+
+                {/* Attachment Lightbox Dialog */}
+                <Dialog open={!!selectedAttachment} onOpenChange={(open) => !open && setSelectedAttachment(null)}>
+                    <DialogContent className="max-w-[95vw] sm:max-w-3xl">
+                        <DialogHeader>
+                            <DialogTitle className="truncate pr-8">{selectedAttachment?.original_filename}</DialogTitle>
+                            <DialogDescription className="sr-only">Image attachment preview</DialogDescription>
+                        </DialogHeader>
+                        <div className="flex items-center gap-3 pb-2 border-b px-2">
+                            <ZoomOut className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <input
+                                type="range"
+                                min={25}
+                                max={300}
+                                step={5}
+                                value={imageZoom}
+                                onChange={(e) => setImageZoom(Number(e.target.value))}
+                                className="w-full h-2 accent-primary cursor-pointer"
+                                title="Zoom level"
+                            />
+                            <ZoomIn className="h-4 w-4 shrink-0 text-muted-foreground" />
+                            <span className="text-sm font-medium min-w-12.5 text-center tabular-nums">{imageZoom}%</span>
+                            <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setImageZoom(100)}
+                                className="h-7 px-2"
+                                title="Reset zoom"
+                            >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                            </Button>
+                        </div>
+                        <div className="overflow-auto max-h-[70vh] rounded-lg bg-muted/30">
+                            <div className="min-w-full min-h-full flex justify-center items-start p-4">
+                                {selectedAttachment && (
+                                    <img
+                                        src={sessionsAttachment({ session: session.id, attachment: selectedAttachment.id }).url}
+                                        alt={selectedAttachment.original_filename}
+                                        className="object-contain rounded-lg border transition-transform duration-200 origin-top"
+                                        style={{ transform: `scale(${imageZoom / 100})` }}
+                                    />
+                                )}
+                            </div>
+                        </div>
+                    </DialogContent>
+                </Dialog>
             </div>
         </AppLayout>
     );

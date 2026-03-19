@@ -60,6 +60,11 @@ class UpdateCoachingSessionRequest extends FormRequest
             'follow_up_date' => ['nullable', 'date'],
             // Other
             'severity_flag' => ['sometimes', Rule::in(CoachingSession::SEVERITY_FLAGS)],
+            // Attachments
+            'attachments' => ['nullable', 'array', 'max:10'],
+            'attachments.*' => ['image', 'mimes:jpeg,jpg,png,gif,webp', 'max:4096'],
+            'removed_attachments' => ['nullable', 'array'],
+            'removed_attachments.*' => ['integer'],
         ];
     }
 
@@ -78,7 +83,10 @@ class UpdateCoachingSessionRequest extends FormRequest
             'smart_action_plan.required' => 'SMART action plan is required.',
             'smart_action_plan.min' => 'SMART action plan must be at least 10 characters.',
             'focus_other_notes.required_if' => 'Please specify the other focus area.',
-
+            'attachments.max' => 'You can upload a maximum of 10 images.',
+            'attachments.*.image' => 'Each attachment must be an image.',
+            'attachments.*.mimes' => 'Only JPEG, PNG, GIF, and WebP images are allowed.',
+            'attachments.*.max' => 'Each image must be less than 4MB.',
         ];
     }
 }

@@ -9,6 +9,7 @@ use App\Http\Requests\UpdateCoachingSessionRequest;
 use App\Http\Traits\RedirectsWithFlashMessages;
 use App\Models\Campaign;
 use App\Models\CoachingSession;
+use App\Models\CoachingSessionAttachment;
 use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\CoachingDashboardService;
@@ -17,6 +18,7 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Inertia;
 
 class CoachingSessionController extends Controller
@@ -269,14 +271,29 @@ class CoachingSessionController extends Controller
                         : $user->id;
                 }
 
-                // Remove coaching_mode from validated data before creating
-                unset($validated['coaching_mode']);
+                // Remove non-model fields from validated data before creating
+                unset($validated['coaching_mode'], $validated['attachments']);
 
                 $validated['ack_status'] = 'Pending';
                 $validated['compliance_status'] = 'Awaiting_Agent_Ack';
 
                 return CoachingSession::create($validated);
             });
+
+            // Handle file uploads outside transaction
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $path = $file->storeAs('coaching_attachments', $filename, 'local');
+
+                    $session->attachments()->create([
+                        'file_path' => $path,
+                        'original_filename' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                    ]);
+                }
+            }
 
             // Notify the coachee
             $session->load('coachee', 'coach');
@@ -305,7 +322,7 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('view', $session);
 
-        $session->load(['coachee', 'coach', 'complianceReviewer']);
+        $session->load(['coachee', 'coach', 'complianceReviewer', 'attachments']);
 
         $user = auth()->user();
         $canAcknowledge = $user->can('acknowledge', $session);
@@ -328,7 +345,7 @@ class CoachingSessionController extends Controller
     {
         $this->authorize('update', $session);
 
-        $session->load(['coachee', 'coach']);
+        $session->load(['coachee', 'coach', 'attachments']);
 
         return Inertia::render('Coaching/Sessions/Edit', [
             'session' => $session,
@@ -346,8 +363,37 @@ class CoachingSessionController extends Controller
 
         try {
             DB::transaction(function () use ($request, $session) {
-                $session->update($request->validated());
+                $validated = $request->validated();
+                unset($validated['attachments'], $validated['removed_attachments']);
+                $session->update($validated);
             });
+
+            // Handle removed attachments
+            if ($request->filled('removed_attachments')) {
+                $attachmentsToRemove = $session->attachments()
+                    ->whereIn('id', $request->input('removed_attachments'))
+                    ->get();
+
+                foreach ($attachmentsToRemove as $attachment) {
+                    Storage::disk('local')->delete($attachment->file_path);
+                    $attachment->delete();
+                }
+            }
+
+            // Handle new file uploads
+            if ($request->hasFile('attachments')) {
+                foreach ($request->file('attachments') as $file) {
+                    $filename = 'coaching_'.$session->id.'_'.time().'_'.uniqid().'.'.$file->getClientOriginalExtension();
+                    $path = $file->storeAs('coaching_attachments', $filename, 'local');
+
+                    $session->attachments()->create([
+                        'file_path' => $path,
+                        'original_filename' => $file->getClientOriginalName(),
+                        'mime_type' => $file->getMimeType(),
+                        'file_size' => $file->getSize(),
+                    ]);
+                }
+            }
 
             return redirect()->route('coaching.sessions.show', $session)
                 ->with('message', 'Coaching session updated successfully.')
@@ -367,6 +413,11 @@ class CoachingSessionController extends Controller
         $this->authorize('delete', $session);
 
         try {
+            // Delete attachment files from storage
+            foreach ($session->attachments as $attachment) {
+                Storage::disk('local')->delete($attachment->file_path);
+            }
+
             DB::transaction(function () use ($session) {
                 $session->delete();
             });
@@ -380,6 +431,26 @@ class CoachingSessionController extends Controller
 
             return $this->backWithFlash('Failed to delete coaching session.', 'error');
         }
+    }
+
+    /**
+     * View a coaching session attachment image.
+     */
+    public function viewAttachment(CoachingSession $session, CoachingSessionAttachment $attachment)
+    {
+        $this->authorize('view', $session);
+
+        if ($attachment->coaching_session_id !== $session->id) {
+            abort(404);
+        }
+
+        $path = Storage::disk('local')->path($attachment->file_path);
+
+        if (! file_exists($path)) {
+            abort(404, 'Attachment not found.');
+        }
+
+        return response()->file($path);
     }
 
     /**

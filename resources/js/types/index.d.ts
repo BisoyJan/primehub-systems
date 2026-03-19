@@ -73,6 +73,17 @@ export type CoachingStatusLabel =
     | 'Please Coach ASAP'
     | 'No Record';
 
+export interface CoachingSessionAttachment {
+    id: number;
+    coaching_session_id: number;
+    file_path: string;
+    original_filename: string;
+    mime_type: string;
+    file_size: number;
+    created_at: string;
+    updated_at: string;
+}
+
 export interface CoachingSession {
     id: number;
     coachee_id: number;
@@ -128,6 +139,7 @@ export interface CoachingSession {
     coachee?: User;
     coach?: User;
     compliance_reviewer?: User;
+    attachments?: CoachingSessionAttachment[];
 }
 
 export type CoachingMode = 'assign' | 'direct';
