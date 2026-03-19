@@ -18,6 +18,7 @@ use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\EmployeeScheduleController;
 use App\Http\Controllers\FormRequestRetentionPolicyController;
 use App\Http\Controllers\ItConcernController;
+use App\Http\Controllers\LeaveCreditController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\MedicationRequestController;
 use App\Http\Controllers\MonitorSpecsController;
@@ -341,41 +342,41 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
     Route::prefix('form-requests/leave-requests/credits')->name('leave-requests.credits.')
         ->middleware('permission:leave_credits.view_all,leave_credits.view_own')
         ->group(function () {
-            Route::get('/', [LeaveRequestController::class, 'creditsIndex'])->name('index');
-            Route::get('/regularization/stats', [LeaveRequestController::class, 'getRegularizationStats'])->name('regularization.stats');
-            Route::post('/regularization/process', [LeaveRequestController::class, 'processRegularization'])->name('regularization.process');
-            Route::post('/accruals/process', [LeaveRequestController::class, 'processMonthlyAccruals'])->name('accruals.process');
-            Route::post('/carryovers/process', [LeaveRequestController::class, 'processYearEndCarryovers'])->name('carryovers.process');
-            Route::post('/cash-conversion/process', [LeaveRequestController::class, 'processCashConversions'])->name('cash-conversion.process');
-            Route::get('/mismatch/scan', [LeaveRequestController::class, 'creditsYearMismatchScan'])->name('mismatch.scan');
-            Route::post('/mismatch/fix', [LeaveRequestController::class, 'creditsYearMismatchFix'])->name('mismatch.fix');
+            Route::get('/', [LeaveCreditController::class, 'index'])->name('index');
+            Route::get('/regularization/stats', [LeaveCreditController::class, 'getRegularizationStats'])->name('regularization.stats');
+            Route::post('/regularization/process', [LeaveCreditController::class, 'processRegularization'])->name('regularization.process');
+            Route::post('/accruals/process', [LeaveCreditController::class, 'processMonthlyAccruals'])->name('accruals.process');
+            Route::post('/carryovers/process', [LeaveCreditController::class, 'processYearEndCarryovers'])->name('carryovers.process');
+            Route::post('/cash-conversion/process', [LeaveCreditController::class, 'processCashConversions'])->name('cash-conversion.process');
+            Route::get('/mismatch/scan', [LeaveCreditController::class, 'yearMismatchScan'])->name('mismatch.scan');
+            Route::post('/mismatch/fix', [LeaveCreditController::class, 'yearMismatchFix'])->name('mismatch.fix');
+
+            // Export routes
+            Route::post('/export', [LeaveCreditController::class, 'export'])->name('export');
+            Route::get('/export/progress', [LeaveCreditController::class, 'exportProgress'])->name('export.progress');
+            Route::get('/export/download/{filename}', [LeaveCreditController::class, 'exportDownload'])->name('export.download')->where('filename', '.*');
 
             // Manual credit editing routes (requires leave_credits.edit permission)
-            Route::put('/{user}/carryover', [LeaveRequestController::class, 'creditsUpdateCarryover'])
+            Route::put('/{user}/carryover', [LeaveCreditController::class, 'updateCarryover'])
                 ->name('update-carryover')
                 ->middleware('permission:leave_credits.edit');
-            Route::put('/{user}/credits/{leaveCredit}', [LeaveRequestController::class, 'creditsUpdateMonthly'])
+            Route::put('/{user}/credits/{leaveCredit}', [LeaveCreditController::class, 'updateMonthly'])
                 ->name('update-monthly')
                 ->middleware('permission:leave_credits.edit');
-            Route::post('/{user}/revert/{activity}', [LeaveRequestController::class, 'creditsRevertEdit'])
+            Route::post('/{user}/revert/{activity}', [LeaveCreditController::class, 'revertEdit'])
                 ->name('revert-edit')
                 ->middleware('permission:leave_credits.edit');
-            Route::post('/{user}/cash-conversion', [LeaveRequestController::class, 'convertUserCarryover'])
+            Route::post('/{user}/cash-conversion', [LeaveCreditController::class, 'convertUserCarryover'])
                 ->name('cash-conversion')
                 ->middleware('permission:leave_credits.edit');
 
-            Route::get('/{user}', [LeaveRequestController::class, 'creditsShow'])->name('show');
+            Route::get('/{user}', [LeaveCreditController::class, 'show'])->name('show');
         });
 
     // Form Requests - Leave Requests
     Route::prefix('form-requests/leave-requests')->name('leave-requests.')
         ->middleware('permission:leave.view,leave.create,leave.edit,leave.approve,leave.deny,leave.cancel,leave.delete')
         ->group(function () {
-            // Export routes first (before dynamic {leaveRequest} routes)
-            Route::post('/export/credits', [LeaveRequestController::class, 'exportCredits'])->name('export.credits');
-            Route::get('/export/credits/progress', [LeaveRequestController::class, 'exportCreditsProgress'])->name('export.credits.progress');
-            Route::get('/export/credits/download/{filename}', [LeaveRequestController::class, 'exportCreditsDownload'])->name('export.download')->where('filename', '.*');
-
             Route::get('/', [LeaveRequestController::class, 'index'])->name('index');
             Route::get('/create', [LeaveRequestController::class, 'create'])->name('create');
             Route::get('/calendar', [LeaveRequestController::class, 'calendar'])->name('calendar');

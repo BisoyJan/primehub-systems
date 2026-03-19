@@ -38,7 +38,7 @@ import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { index as creditsIndexRoute } from '@/routes/leave-requests/credits';
 import { show as leaveShowRoute } from '@/routes/leave-requests';
-import { creditsUpdateCarryover, creditsUpdateMonthly, creditsRevertEdit } from '@/actions/App/Http/Controllers/LeaveRequestController';
+import { updateCarryover, updateMonthly, revertEdit } from '@/actions/App/Http/Controllers/LeaveCreditController';
 import { format } from 'date-fns';
 
 interface MonthlyCredit {
@@ -208,7 +208,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
     };
 
     const submitEditCarryover = () => {
-        editCarryoverForm.put(creditsUpdateCarryover({ user: user.id }).url, {
+        editCarryoverForm.put(updateCarryover({ user: user.id }).url, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsEditCarryoverOpen(false);
@@ -237,7 +237,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
 
     const submitEditMonthly = () => {
         if (!editingCredit) return;
-        editMonthlyForm.put(creditsUpdateMonthly({ user: user.id, leaveCredit: editingCredit.id }).url, {
+        editMonthlyForm.put(updateMonthly({ user: user.id, leaveCredit: editingCredit.id }).url, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsEditMonthlyOpen(false);
@@ -260,7 +260,7 @@ export default function Show({ user, year, summary, carryoverSummary, carryoverR
 
     const submitRevert = () => {
         if (!revertEntry) return;
-        revertForm.post(creditsRevertEdit({ user: user.id, activity: revertEntry.id }).url, {
+        revertForm.post(revertEdit({ user: user.id, activity: revertEntry.id }).url, {
             preserveScroll: true,
             onSuccess: () => {
                 setRevertEntry(null);

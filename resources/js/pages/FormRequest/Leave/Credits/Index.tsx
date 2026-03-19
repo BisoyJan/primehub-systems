@@ -68,7 +68,7 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { creditsUpdateCarryover, processCashConversions, convertUserCarryover } from '@/actions/App/Http/Controllers/LeaveRequestController';
+import { updateCarryover, processCashConversions, convertUserCarryover } from '@/actions/App/Http/Controllers/LeaveCreditController';
 
 interface RegularizationStats {
     pending_count: number;
@@ -282,7 +282,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
 
     const submitEditCarryover = () => {
         if (!editingEmployee) return;
-        editCarryoverForm.put(creditsUpdateCarryover({ user: editingEmployee.id }).url, {
+        editCarryoverForm.put(updateCarryover({ user: editingEmployee.id }).url, {
             preserveScroll: true,
             onSuccess: () => {
                 setIsEditCarryoverOpen(false);
@@ -351,7 +351,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
         setExportProgress({ percent: 0, status: 'Starting export...' });
 
         try {
-            const response = await fetch('/form-requests/leave-requests/export/credits', {
+            const response = await fetch('/form-requests/leave-requests/credits/export', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -385,7 +385,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
     const pollExportProgress = async (jobId: string) => {
         const checkProgress = async () => {
             try {
-                const response = await fetch(`/form-requests/leave-requests/export/credits/progress?job_id=${jobId}`);
+                const response = await fetch(`/form-requests/leave-requests/credits/export/progress?job_id=${jobId}`);
                 const progress = await response.json();
 
                 setExportProgress({ percent: progress.percent, status: progress.status });

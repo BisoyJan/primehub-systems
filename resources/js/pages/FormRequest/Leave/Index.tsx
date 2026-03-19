@@ -447,7 +447,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
 
         try {
             // Start export job
-            const response = await fetch('/form-requests/leave-requests/export/credits', {
+            const response = await fetch('/form-requests/leave-requests/credits/export', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -467,7 +467,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
             // Poll for progress
             const pollInterval = setInterval(async () => {
                 try {
-                    const progressResponse = await fetch(`/form-requests/leave-requests/export/credits/progress?job_id=${job_id}`);
+                    const progressResponse = await fetch(`/form-requests/leave-requests/credits/export/progress?job_id=${job_id}`);
                     if (!progressResponse.ok) {
                         throw new Error('Failed to fetch progress');
                     }
