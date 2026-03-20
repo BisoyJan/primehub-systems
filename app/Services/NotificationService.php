@@ -2,8 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Attendance;
+use App\Models\LeaveRequest;
 use App\Models\Notification;
 use App\Models\User;
+use Carbon\Carbon;
 
 class NotificationService
 {
@@ -842,8 +845,8 @@ class NotificationService
      * Called when employee has biometric activity during approved leave.
      *
      * @param  User  $employee  The employee with the leave
-     * @param  \App\Models\LeaveRequest  $leaveRequest  The approved leave request
-     * @param  \Carbon\Carbon  $activityDate  The date with biometric activity
+     * @param  LeaveRequest  $leaveRequest  The approved leave request
+     * @param  Carbon  $activityDate  The date with biometric activity
      * @param  int  $scanCount  Number of biometric scans
      * @param  string  $scanTimes  Comma-separated scan times
      * @param  float  $workDuration  Estimated work duration in hours
@@ -851,16 +854,16 @@ class NotificationService
      */
     public function notifyLeaveAttendanceConflict(
         User $employee,
-        \App\Models\LeaveRequest $leaveRequest,
-        \Carbon\Carbon $activityDate,
+        LeaveRequest $leaveRequest,
+        Carbon $activityDate,
         int $scanCount,
         string $scanTimes,
         float $workDuration,
         bool $isMultiDayLeave
     ): void {
         $leaveType = str_replace('_', ' ', ucfirst($leaveRequest->leave_type));
-        $startDate = \Carbon\Carbon::parse($leaveRequest->start_date)->format('M d, Y');
-        $endDate = \Carbon\Carbon::parse($leaveRequest->end_date)->format('M d, Y');
+        $startDate = Carbon::parse($leaveRequest->start_date)->format('M d, Y');
+        $endDate = Carbon::parse($leaveRequest->end_date)->format('M d, Y');
         $activityDateFormatted = $activityDate->format('M d, Y');
 
         $title = 'Leave Attendance Conflict - Review Required';
@@ -902,7 +905,7 @@ class NotificationService
      * Sent to Super Admin, Admin, and HR when a Team Lead requests undertime approval.
      */
     public function notifyUndertimeApprovalRequest(
-        \App\Models\Attendance $attendance,
+        Attendance $attendance,
         User $requester,
         User $employee
     ): void {
@@ -938,7 +941,7 @@ class NotificationService
      * Sent to the Team Lead who requested and the employee.
      */
     public function notifyUndertimeApprovalDecision(
-        \App\Models\Attendance $attendance,
+        Attendance $attendance,
         User $approver,
         User $employee,
         User $requester,
@@ -1062,6 +1065,58 @@ class NotificationService
             [
                 'session_id' => $sessionId,
                 'coachee_name' => $coacheeName,
+                'session_date' => $sessionDate,
+                'compliance_status' => $complianceStatus,
+                'link' => route('coaching.sessions.show', $sessionId),
+            ]
+        );
+    }
+
+    /**
+     * Notify admins that an agent/TL acknowledged a coaching session (ready for review).
+     */
+    public function notifyAdminsCoachingReadyForReview(string $coacheeName, string $coachName, string $sessionDate, int $sessionId): void
+    {
+        $data = [
+            'session_id' => $sessionId,
+            'coachee_name' => $coacheeName,
+            'coach_name' => $coachName,
+            'session_date' => $sessionDate,
+            'link' => route('coaching.sessions.show', $sessionId),
+        ];
+
+        $this->notifyUsersByRole(
+            'Super Admin',
+            'coaching_ready_for_review',
+            'Coaching Ready for Review',
+            "Coaching for {$coacheeName} by {$coachName} dated {$sessionDate} has been acknowledged and is ready for review.",
+            $data,
+        );
+
+        $this->notifyUsersByRole(
+            'Admin',
+            'coaching_ready_for_review',
+            'Coaching Ready for Review',
+            "Coaching for {$coacheeName} by {$coachName} dated {$sessionDate} has been acknowledged and is ready for review.",
+            $data,
+        );
+    }
+
+    /**
+     * Notify coachee (agent or TL) that their coaching session was reviewed.
+     */
+    public function notifyCoacheeCoachingReviewed(int $coacheeId, string $coachName, string $sessionDate, string $complianceStatus, int $sessionId): Notification
+    {
+        $statusLabel = $complianceStatus === 'Verified' ? 'Verified' : 'Rejected';
+
+        return $this->create(
+            $coacheeId,
+            'coaching_reviewed',
+            "Coaching {$statusLabel}",
+            "Your coaching session with {$coachName} dated {$sessionDate} has been {$statusLabel}.",
+            [
+                'session_id' => $sessionId,
+                'coach_name' => $coachName,
                 'session_date' => $sessionDate,
                 'compliance_status' => $complianceStatus,
                 'link' => route('coaching.sessions.show', $sessionId),

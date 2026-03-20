@@ -5,6 +5,7 @@ namespace Tests\Feature\Controllers\Coaching;
 use App\Models\Campaign;
 use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
+use App\Models\Notification;
 use App\Models\User;
 use App\Services\NotificationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -22,11 +23,14 @@ class CoachingSessionControllerTest extends TestCase
 
         $this->mock(NotificationService::class, function ($mock) {
             $mock->shouldReceive('notifyCoachingSessionCreated')
-                ->andReturn(\Mockery::mock(\App\Models\Notification::class));
+                ->andReturn(\Mockery::mock(Notification::class));
             $mock->shouldReceive('notifyCoachingAcknowledged')
-                ->andReturn(\Mockery::mock(\App\Models\Notification::class));
+                ->andReturn(\Mockery::mock(Notification::class));
+            $mock->shouldReceive('notifyAdminsCoachingReadyForReview');
             $mock->shouldReceive('notifyCoachingReviewed')
-                ->andReturn(\Mockery::mock(\App\Models\Notification::class));
+                ->andReturn(\Mockery::mock(Notification::class));
+            $mock->shouldReceive('notifyCoacheeCoachingReviewed')
+                ->andReturn(\Mockery::mock(Notification::class));
         });
     }
 
@@ -619,6 +623,100 @@ class CoachingSessionControllerTest extends TestCase
             ]);
 
         $response->assertStatus(403);
+    }
+
+    // ─── Notification Tests ─────────────────────────────────────────
+
+    #[Test]
+    public function acknowledge_notifies_admins_for_review(): void
+    {
+        $notificationMock = $this->mock(NotificationService::class);
+        $notificationMock->shouldReceive('notifyCoachingAcknowledged')
+            ->once()
+            ->andReturn(\Mockery::mock(Notification::class));
+        $notificationMock->shouldReceive('notifyAdminsCoachingReadyForReview')
+            ->once();
+
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        $this->actingAs($team['agent'])
+            ->patch(route('coaching.sessions.acknowledge', $session), [
+                'ack_comment' => 'Noted.',
+            ]);
+    }
+
+    #[Test]
+    public function review_verify_notifies_coach_and_coachee(): void
+    {
+        $notificationMock = $this->mock(NotificationService::class);
+        $notificationMock->shouldReceive('notifyCoachingReviewed')
+            ->once()
+            ->andReturn(\Mockery::mock(Notification::class));
+        $notificationMock->shouldReceive('notifyCoacheeCoachingReviewed')
+            ->once()
+            ->andReturn(\Mockery::mock(Notification::class));
+
+        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        // Factory default creates TL as coach — TL should be notified
+        $session = CoachingSession::factory()->acknowledged()->create();
+
+        $this->actingAs($hr)
+            ->patch(route('coaching.sessions.review', $session), [
+                'compliance_status' => 'Verified',
+            ]);
+    }
+
+    #[Test]
+    public function review_reject_notifies_coach_and_coachee(): void
+    {
+        $notificationMock = $this->mock(NotificationService::class);
+        $notificationMock->shouldReceive('notifyCoachingReviewed')
+            ->once()
+            ->andReturn(\Mockery::mock(Notification::class));
+        $notificationMock->shouldReceive('notifyCoacheeCoachingReviewed')
+            ->once()
+            ->andReturn(\Mockery::mock(Notification::class));
+
+        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        $session = CoachingSession::factory()->acknowledged()->create();
+
+        $this->actingAs($hr)
+            ->patch(route('coaching.sessions.review', $session), [
+                'compliance_status' => 'Rejected',
+                'compliance_notes' => 'Needs revision.',
+            ]);
+    }
+
+    #[Test]
+    public function review_does_not_notify_admin_coach_only_coachee(): void
+    {
+        $notificationMock = $this->mock(NotificationService::class);
+        // Coach is admin — should NOT receive notifyCoachingReviewed
+        $notificationMock->shouldReceive('notifyCoachingReviewed')
+            ->never();
+        $notificationMock->shouldReceive('notifyCoacheeCoachingReviewed')
+            ->once()
+            ->andReturn(\Mockery::mock(Notification::class));
+
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $hr = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
+        $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+
+        $session = CoachingSession::factory()->acknowledged()->create([
+            'coach_id' => $admin->id,
+            'coachee_id' => $tl->id,
+        ]);
+
+        $this->actingAs($hr)
+            ->patch(route('coaching.sessions.review', $session), [
+                'compliance_status' => 'Verified',
+            ]);
     }
 
     // ─── Filter Tests ───────────────────────────────────────────────

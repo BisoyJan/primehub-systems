@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Head, Link, usePage, router, useForm } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import {
@@ -10,7 +10,6 @@ import {
     Users,
     Clock,
     ClipboardCheck,
-    UserPlus,
 } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
@@ -50,7 +49,6 @@ import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import {
-    create as sessionsCreate,
     show as sessionsShow,
     review as sessionsReview,
 } from '@/routes/coaching/sessions';
@@ -101,6 +99,7 @@ interface Filters {
 
 interface Props extends InertiaPageProps {
     dashboardData: DashboardData;
+    teamLeadCoachingData: DashboardData;
     queueData: QueueData;
     campaigns: Campaign[];
     teamLeads: User[];
@@ -112,7 +111,7 @@ interface Props extends InertiaPageProps {
 type TabKey = 'overview' | 'unacknowledged' | 'for_review' | 'at_risk';
 
 export default function CoachingAdminIndex() {
-    const { dashboardData, queueData, campaigns, teamLeads, filters: initialFilters, purposes } = usePage<Props>().props;
+    const { dashboardData, teamLeadCoachingData, queueData, campaigns, teamLeads, filters: initialFilters, purposes } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Compliance',
@@ -125,11 +124,20 @@ export default function CoachingAdminIndex() {
     const [campaignId, setCampaignId] = useState(initialFilters.campaign_id || '');
     const [coachId, setCoachId] = useState(initialFilters.coach_id || '');
     const [coachingStatus, setCoachingStatus] = useState(initialFilters.coaching_status || '');
-    const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || '');
+    const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || 'Agent');
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
 
     const reviewForm = useForm({ compliance_status: '' as string, compliance_notes: '' });
+
+    const handleCoacheeRoleChange = (value: string) => {
+        setCoacheeRole(value);
+        if (value === 'Team Lead') {
+            setCoachId('');
+        }
+    };
+
+    const activeData = coacheeRole === 'Team Lead' ? teamLeadCoachingData : dashboardData;
 
     const handleFilter = () => {
         router.get(
@@ -150,10 +158,10 @@ export default function CoachingAdminIndex() {
         setCampaignId('');
         setCoachId('');
         setCoachingStatus('');
-        setCoacheeRole('');
+        setCoacheeRole('Agent');
         setDateFrom('');
         setDateTo('');
-        router.get(coachingDashboard().url);
+        router.get(coachingDashboard().url, { coachee_role: 'Agent' });
     };
 
     const handleReview = (sessionId: number) => {
@@ -167,8 +175,18 @@ export default function CoachingAdminIndex() {
         return `${user.first_name} ${user.last_name}`;
     };
 
+    const groupedAgents = useMemo(() => {
+        const groups: Record<string, AgentRow[]> = {};
+        for (const agent of activeData.agents) {
+            const key = agent.account || 'Unassigned';
+            if (!groups[key]) groups[key] = [];
+            groups[key].push(agent);
+        }
+        return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
+    }, [activeData.agents]);
+
     const tabs: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
-        { key: 'overview', label: 'Overview', icon: Users, count: dashboardData.agents.length },
+        { key: 'overview', label: 'Overview', icon: Users, count: activeData.agents.length },
         { key: 'unacknowledged', label: 'Unacknowledged', icon: Clock, count: queueData.unacknowledged.length },
         { key: 'for_review', label: 'For Review', icon: ClipboardCheck, count: queueData.for_review.length },
         { key: 'at_risk', label: 'At Risk', icon: AlertTriangle, count: queueData.at_risk_agents.length },
@@ -181,20 +199,10 @@ export default function CoachingAdminIndex() {
             <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isLoading} />
 
-                <PageHeader
-                    title="Coaching Compliance Dashboard"
-                    actions={
-                        <Link href={sessionsCreate.url({ query: { coaching_mode: 'direct' } })}>
-                            <Button variant="outline">
-                                <UserPlus className="mr-2 h-4 w-4" />
-                                Coach a Team Lead
-                            </Button>
-                        </Link>
-                    }
-                />
+                <PageHeader title="Coaching Compliance Dashboard" />
 
                 {/* Summary Cards */}
-                <CoachingSummaryCards totalAgents={dashboardData.total_agents} statusCounts={dashboardData.status_counts} />
+                <CoachingSummaryCards totalAgents={activeData.total_agents} statusCounts={activeData.status_counts} />
 
                 {/* Filters */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8">
@@ -208,18 +216,20 @@ export default function CoachingAdminIndex() {
                             ))}
                         </SelectContent>
                     </Select>
-                    <Select value={coachId} onValueChange={setCoachId}>
-                        <SelectTrigger>
-                            <SelectValue placeholder="Team Lead" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {teamLeads.map((tl) => (
-                                <SelectItem key={tl.id} value={String(tl.id)}>
-                                    {tl.first_name} {tl.last_name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    {coacheeRole !== 'Team Lead' && (
+                        <Select value={coachId} onValueChange={setCoachId}>
+                            <SelectTrigger>
+                                <SelectValue placeholder="Team Lead" />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {teamLeads.map((tl) => (
+                                    <SelectItem key={tl.id} value={String(tl.id)}>
+                                        {tl.first_name} {tl.last_name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    )}
                     <Select value={coachingStatus} onValueChange={setCoachingStatus}>
                         <SelectTrigger>
                             <SelectValue placeholder="Coaching Status" />
@@ -232,7 +242,7 @@ export default function CoachingAdminIndex() {
                             <SelectItem value="No Record">No Record</SelectItem>
                         </SelectContent>
                     </Select>
-                    <Select value={coacheeRole} onValueChange={setCoacheeRole}>
+                    <Select value={coacheeRole} onValueChange={handleCoacheeRoleChange}>
                         <SelectTrigger>
                             <SelectValue placeholder="Coachee Role" />
                         </SelectTrigger>
@@ -280,7 +290,7 @@ export default function CoachingAdminIndex() {
                 {activeTab === 'overview' && (
                     <div className="space-y-2">
                         <h3 className="flex items-center gap-2 text-sm font-semibold">
-                            <Users className="h-4 w-4" /> All Agents ({dashboardData.agents.length})
+                            <Users className="h-4 w-4" /> All {coacheeRole === 'Team Lead' ? 'Team Leads' : 'Agents'} ({activeData.agents.length})
                         </h3>
 
                         {/* Desktop Table */}
@@ -290,7 +300,6 @@ export default function CoachingAdminIndex() {
                                     <TableHeader>
                                         <TableRow className="bg-muted/50">
                                             <TableHead>Agent</TableHead>
-                                            <TableHead>Account</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Last Coached</TableHead>
                                             <TableHead>Sessions</TableHead>
@@ -298,32 +307,42 @@ export default function CoachingAdminIndex() {
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {dashboardData.agents.length === 0 ? (
+                                        {activeData.agents.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                                                    No agents found.
+                                                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                                                    No {coacheeRole === 'Team Lead' ? 'team leads' : 'agents'} found.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            dashboardData.agents.map((agent) => (
-                                                <TableRow key={agent.id}>
-                                                    <TableCell className="font-medium">{agent.name}</TableCell>
-                                                    <TableCell>{agent.account}</TableCell>
-                                                    <TableCell>
-                                                        <CoachingStatusBadge status={agent.coaching_status} />
-                                                    </TableCell>
-                                                    <TableCell className="whitespace-nowrap">
-                                                        {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}
-                                                    </TableCell>
-                                                    <TableCell>{agent.total_sessions}</TableCell>
-                                                    <TableCell>
-                                                        {agent.pending_acknowledgements > 0 ? (
-                                                            <span className="font-medium text-amber-600">{agent.pending_acknowledgements}</span>
-                                                        ) : (
-                                                            <span className="text-muted-foreground">0</span>
-                                                        )}
-                                                    </TableCell>
-                                                </TableRow>
+                                            groupedAgents.map(([account, agents]) => (
+                                                <Fragment key={account}>
+                                                    <TableRow className="bg-muted/30">
+                                                        <TableCell colSpan={5} className="py-2">
+                                                            <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                                                {account} ({agents.length})
+                                                            </span>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                    {agents.map((agent) => (
+                                                        <TableRow key={agent.id}>
+                                                            <TableCell className="pl-6 font-medium">{agent.name}</TableCell>
+                                                            <TableCell>
+                                                                <CoachingStatusBadge status={agent.coaching_status} />
+                                                            </TableCell>
+                                                            <TableCell className="whitespace-nowrap">
+                                                                {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}
+                                                            </TableCell>
+                                                            <TableCell>{agent.total_sessions}</TableCell>
+                                                            <TableCell>
+                                                                {agent.pending_acknowledgements > 0 ? (
+                                                                    <span className="font-medium text-amber-600">{agent.pending_acknowledgements}</span>
+                                                                ) : (
+                                                                    <span className="text-muted-foreground">0</span>
+                                                                )}
+                                                            </TableCell>
+                                                        </TableRow>
+                                                    ))}
+                                                </Fragment>
                                             ))
                                         )}
                                     </TableBody>
@@ -332,26 +351,30 @@ export default function CoachingAdminIndex() {
                         </div>
 
                         {/* Mobile Cards */}
-                        <div className="space-y-3 md:hidden">
-                            {dashboardData.agents.length === 0 ? (
-                                <div className="py-8 text-center text-muted-foreground">No agents found.</div>
+                        <div className="space-y-4 md:hidden">
+                            {activeData.agents.length === 0 ? (
+                                <div className="py-8 text-center text-muted-foreground">No {coacheeRole === 'Team Lead' ? 'team leads' : 'agents'} found.</div>
                             ) : (
-                                dashboardData.agents.map((agent) => (
-                                    <div key={agent.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-2">
-                                        <div className="flex items-start justify-between">
-                                            <div>
-                                                <p className="font-medium">{agent.name}</p>
-                                                <p className="text-xs text-muted-foreground">{agent.account}</p>
+                                groupedAgents.map(([account, agents]) => (
+                                    <div key={account} className="space-y-2">
+                                        <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                            {account} ({agents.length})
+                                        </h4>
+                                        {agents.map((agent) => (
+                                            <div key={agent.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-2">
+                                                <div className="flex items-start justify-between">
+                                                    <p className="font-medium">{agent.name}</p>
+                                                    <CoachingStatusBadge status={agent.coaching_status} />
+                                                </div>
+                                                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+                                                    <span>Last: {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}</span>
+                                                    <span>Sessions: {agent.total_sessions}</span>
+                                                    {agent.pending_acknowledgements > 0 && (
+                                                        <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
+                                                    )}
+                                                </div>
                                             </div>
-                                            <CoachingStatusBadge status={agent.coaching_status} />
-                                        </div>
-                                        <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                                            <span>Last: {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}</span>
-                                            <span>Sessions: {agent.total_sessions}</span>
-                                            {agent.pending_acknowledgements > 0 && (
-                                                <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
-                                            )}
-                                        </div>
+                                        ))}
                                     </div>
                                 ))
                             )}
@@ -469,7 +492,7 @@ export default function CoachingAdminIndex() {
                 {activeTab === 'at_risk' && (
                     <div className="space-y-2">
                         <h3 className="flex items-center gap-2 text-sm font-semibold">
-                            <AlertTriangle className="h-4 w-4" /> At-Risk Agents ({queueData.at_risk_agents.length})
+                            <AlertTriangle className="h-4 w-4" /> At-Risk ({queueData.at_risk_agents.length})
                         </h3>
 
                         {/* Desktop Table */}

@@ -472,10 +472,20 @@ class CoachingSessionController extends Controller
 
             // Notify the coach
             $session->load('coachee', 'coach');
+            $sessionDate = $session->session_date->format('Y-m-d');
+
             $this->notificationService->notifyCoachingAcknowledged(
                 $session->coach_id,
                 $session->coachee->name,
-                $session->session_date->format('Y-m-d'),
+                $sessionDate,
+                $session->id,
+            );
+
+            // Notify admins that this session is ready for review
+            $this->notificationService->notifyAdminsCoachingReadyForReview(
+                $session->coachee->name,
+                $session->coach->name,
+                $sessionDate,
                 $session->id,
             );
 
@@ -508,12 +518,25 @@ class CoachingSessionController extends Controller
                 ]);
             });
 
-            // Notify the coach
+            // Notify the coach (if not an admin) and coachee
             $session->load('coachee', 'coach');
-            $this->notificationService->notifyCoachingReviewed(
-                $session->coach_id,
-                $session->coachee->name,
-                $session->session_date->format('Y-m-d'),
+            $sessionDate = $session->session_date->format('Y-m-d');
+
+            // Only notify the coach if they are not an admin role (admins can see review status directly)
+            if (! in_array($session->coach->role, ['Super Admin', 'Admin', 'HR'])) {
+                $this->notificationService->notifyCoachingReviewed(
+                    $session->coach_id,
+                    $session->coachee->name,
+                    $sessionDate,
+                    $session->compliance_status,
+                    $session->id,
+                );
+            }
+
+            $this->notificationService->notifyCoacheeCoachingReviewed(
+                $session->coachee_id,
+                $session->coach->name,
+                $sessionDate,
                 $session->compliance_status,
                 $session->id,
             );
