@@ -2,6 +2,8 @@
 
 namespace Tests\Feature\Controllers\Accounts;
 
+use App\Models\Attendance;
+use App\Models\EmployeeSchedule;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -198,7 +200,7 @@ class AccountControllerTest extends TestCase
     public function test_update_changes_password_when_provided(): void
     {
         $user = User::factory()->create([
-            'password' => Hash::make('OldPassword123!')
+            'password' => Hash::make('OldPassword123!'),
         ]);
 
         $updateData = [
@@ -348,5 +350,86 @@ class AccountControllerTest extends TestCase
 
         $response->assertRedirect()
             ->assertSessionHas('flash.type', 'info');
+    }
+
+    public function test_toggle_active_deactivating_deletes_employee_schedules(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => true,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        $schedules = EmployeeSchedule::factory()->count(3)->create([
+            'user_id' => $user->id,
+        ]);
+
+        $this->assertDatabaseCount('employee_schedules', 3);
+
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $user));
+
+        $response->assertRedirect()
+            ->assertSessionHas('flash.type', 'success');
+
+        $this->assertFalse($user->fresh()->is_active);
+        $this->assertDatabaseCount('employee_schedules', 0);
+    }
+
+    public function test_toggle_active_deactivating_sets_attendance_schedule_to_null(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => true,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+        ]);
+
+        $attendance = Attendance::factory()->create([
+            'user_id' => $user->id,
+            'employee_schedule_id' => $schedule->id,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $user));
+
+        $response->assertRedirect();
+
+        $this->assertNull($attendance->fresh()->employee_schedule_id);
+        $this->assertDatabaseMissing('employee_schedules', ['id' => $schedule->id]);
+    }
+
+    public function test_toggle_active_activating_does_not_affect_schedules(): void
+    {
+        $user = User::factory()->create([
+            'is_active' => false,
+            'hired_date' => now()->subYear(),
+        ]);
+
+        $schedule = EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'is_active' => false,
+        ]);
+
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $user));
+
+        $response->assertRedirect()
+            ->assertSessionHas('flash.type', 'success');
+
+        $this->assertTrue($user->fresh()->is_active);
+        $this->assertDatabaseHas('employee_schedules', ['id' => $schedule->id]);
+    }
+
+    public function test_toggle_active_prevents_toggling_own_account(): void
+    {
+        $response = $this->actingAs($this->adminUser)
+            ->post(route('accounts.toggleActive', $this->adminUser));
+
+        $response->assertRedirect()
+            ->assertSessionHas('flash.type', 'error');
+
+        $this->assertTrue($this->adminUser->fresh()->is_active);
     }
 }

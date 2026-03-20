@@ -560,7 +560,7 @@ class AccountController extends Controller
 
     /**
      * Toggle the active status of a user account.
-     * When deactivating, also deactivates all employee schedules.
+     * When deactivating (resigned), deletes all employee schedules.
      */
     public function toggleActive(User $account)
     {
@@ -576,9 +576,9 @@ class AccountController extends Controller
 
         $newStatus = ! $account->is_active;
 
-        // If deactivating, also deactivate all employee schedules
+        // If deactivating (resigned), delete all employee schedules
         if (! $newStatus) {
-            $account->employeeSchedules()->update(['is_active' => false]);
+            $account->employeeSchedules()->delete();
         }
 
         $account->update(['is_active' => $newStatus]);
@@ -587,7 +587,7 @@ class AccountController extends Controller
         $message = "Employee {$statusText} successfully";
 
         if (! $newStatus) {
-            $message .= '. All schedules have been deactivated.';
+            $message .= '. All employee schedules have been deleted.';
         }
 
         return back()->with('flash', [
