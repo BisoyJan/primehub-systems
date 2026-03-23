@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Http\Requests\MedicationRequestRequest;
 use App\Mail\MedicationRequestStatusUpdated;
 use App\Mail\MedicationRequestSubmitted;
+use App\Models\Campaign;
 use App\Models\MedicationRequest;
 use App\Models\User;
 use App\Services\NotificationService;
@@ -60,6 +61,9 @@ class MedicationRequestController extends Controller
             ->when($request->status, function ($query, $status) {
                 $query->where('status', $status);
             })
+            ->when($request->medication_type, function ($query, $medicationType) {
+                $query->where('medication_type', $medicationType);
+            })
             ->when($campaignIdToFilter, function ($query, $campaignId) {
                 $query->whereHas('user.activeSchedule', function ($q) use ($campaignId) {
                     $q->where('campaign_id', $campaignId);
@@ -68,15 +72,27 @@ class MedicationRequestController extends Controller
             ->latest();
 
         // Get campaigns for filter dropdown
-        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
+
+        $medicationTypes = [
+            'Declogen',
+            'Biogesic',
+            'Mefenamic Acid',
+            'Kremil-S',
+            'Cetirizine',
+            'Saridon',
+            'Diatabs',
+        ];
 
         return Inertia::render('FormRequest/MedicationRequests/Index', [
             'medicationRequests' => $query->paginate(15)->withQueryString(),
             'campaigns' => $campaigns,
+            'medicationTypes' => $medicationTypes,
             'teamLeadCampaignId' => $teamLeadCampaignId,
             'filters' => [
                 'search' => $request->input('search', ''),
                 'status' => $request->input('status', ''),
+                'medication_type' => $request->input('medication_type', ''),
                 'campaign_id' => $campaignFilter,
             ],
         ]);
