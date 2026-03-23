@@ -83,19 +83,39 @@ class LeaveRequestController extends Controller
             $query->forUser($user->id);
         }
 
-        // Filter by status
-        if ($request->filled('status')) {
-            $query->byStatus($request->status);
-        }
-
         // Filter by leave type
         if ($request->filled('type')) {
             $query->byType($request->type);
         }
 
-        // Filter by date range
-        if ($request->filled('start_date') && $request->filled('end_date')) {
-            $query->dateRange($request->start_date, $request->end_date);
+        // Filter by period (upcoming, past, this_month, this_week)
+        if ($request->filled('period')) {
+            $today = now()->toDateString();
+            match ($request->period) {
+                'upcoming' => $query->where('start_date', '>=', $today),
+                'past' => $query->where('end_date', '<', $today),
+                'this_month' => $query->where(function ($q) {
+                    $monthStart = now()->startOfMonth()->toDateString();
+                    $monthEnd = now()->endOfMonth()->toDateString();
+                    $q->whereBetween('start_date', [$monthStart, $monthEnd])
+                        ->orWhereBetween('end_date', [$monthStart, $monthEnd])
+                        ->orWhere(function ($q2) use ($monthStart, $monthEnd) {
+                            $q2->where('start_date', '<=', $monthStart)
+                                ->where('end_date', '>=', $monthEnd);
+                        });
+                }),
+                'this_week' => $query->where(function ($q) {
+                    $weekStart = now()->startOfWeek()->toDateString();
+                    $weekEnd = now()->endOfWeek()->toDateString();
+                    $q->whereBetween('start_date', [$weekStart, $weekEnd])
+                        ->orWhereBetween('end_date', [$weekStart, $weekEnd])
+                        ->orWhere(function ($q2) use ($weekStart, $weekEnd) {
+                            $q2->where('start_date', '<=', $weekStart)
+                                ->where('end_date', '>=', $weekEnd);
+                        });
+                }),
+                default => null,
+            };
         }
 
         // Filter by user (admin only)
@@ -125,6 +145,21 @@ class LeaveRequestController extends Controller
         }
         if ($campaignFilter) {
             $query->where('campaign_department', $campaignFilter);
+        }
+
+        // Compute status counts before applying the status filter
+        $baseQuery = $query->clone();
+        $statusCounts = [
+            'all' => $baseQuery->clone()->count(),
+            'pending' => $baseQuery->clone()->where('status', 'pending')->count(),
+            'approved' => $baseQuery->clone()->where('status', 'approved')->count(),
+            'denied' => $baseQuery->clone()->where('status', 'denied')->count(),
+            'cancelled' => $baseQuery->clone()->where('status', 'cancelled')->count(),
+        ];
+
+        // Filter by status (applied after counts are computed)
+        if ($request->filled('status')) {
+            $query->byStatus($request->status);
         }
 
         $leaveRequests = $query->orderBy('created_at', 'desc')
@@ -164,7 +199,8 @@ class LeaveRequestController extends Controller
 
         return Inertia::render('FormRequest/Leave/Index', [
             'leaveRequests' => $leaveRequests,
-            'filters' => $request->only(['status', 'type', 'start_date', 'end_date', 'user_id', 'employee_name', 'campaign_department']),
+            'filters' => $request->only(['status', 'type', 'period', 'user_id', 'employee_name', 'campaign_department']),
+            'statusCounts' => $statusCounts,
             'campaigns' => $campaigns,
             'allEmployees' => $allEmployees,
             'isAdmin' => $isAdmin,

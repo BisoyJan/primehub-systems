@@ -36,7 +36,7 @@ import {
     PopoverTrigger,
 } from '@/components/ui/popover';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
-import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw, AlertTriangle } from 'lucide-react';
+import { Plus, Eye, Ban, RefreshCw, Filter, Trash2, Pencil, CheckCircle, Play, Pause, Download, ChevronsUpDown, Check, Calendar, FileImage, ExternalLink, ZoomIn, ZoomOut, RotateCcw, AlertTriangle, List, Clock, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
@@ -101,6 +101,16 @@ interface Employee {
     name: string;
 }
 
+type StatusTab = 'all' | 'pending' | 'approved' | 'denied' | 'cancelled';
+
+interface StatusCounts {
+    all: number;
+    pending: number;
+    approved: number;
+    denied: number;
+    cancelled: number;
+}
+
 interface Props {
     leaveRequests: {
         data: LeaveRequest[];
@@ -110,11 +120,11 @@ interface Props {
     filters: {
         status?: string;
         type?: string;
-        start_date?: string;
-        end_date?: string;
+        period?: string;
         employee_name?: string;
         campaign_department?: string;
     };
+    statusCounts: StatusCounts;
     isAdmin: boolean;
     isTeamLead?: boolean;
     hasPendingRequests: boolean;
@@ -129,7 +139,15 @@ interface Props {
     teamLeadCampaignName?: string;
 }
 
-export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [], teamLeadCampaignName }: Props) {
+const statusTabs: { key: StatusTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { key: 'all', label: 'All', icon: List },
+    { key: 'pending', label: 'Pending', icon: Clock },
+    { key: 'approved', label: 'Approved', icon: CheckCircle },
+    { key: 'denied', label: 'Denied', icon: XCircle },
+    { key: 'cancelled', label: 'Cancelled', icon: Ban },
+];
+
+export default function Index({ leaveRequests, filters, statusCounts, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [], teamLeadCampaignName }: Props) {
     // Show employee column for admins and team leads (who can see other users' requests)
     const showEmployeeColumn = isAdmin || isTeamLead;
 
@@ -145,8 +163,9 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
     const isPageLoading = usePageLoading();
     const { can } = usePermission();
 
-    const [filterStatus, setFilterStatus] = useState(filters.status || 'all');
+    const [activeTab, setActiveTab] = useState<StatusTab>((filters.status as StatusTab) || 'all');
     const [filterType, setFilterType] = useState(filters.type || 'all');
+    const [filterPeriod, setFilterPeriod] = useState(filters.period || 'all');
     const [filterEmployeeName, setFilterEmployeeName] = useState(filters.employee_name || '');
     const [filterCampaign, setFilterCampaign] = useState(() => {
         if (filters.campaign_department) return filters.campaign_department;
@@ -202,7 +221,7 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
         ).slice(0, 50);
     }, [allEmployees, employeeSearchQuery]);
 
-    const showClearFilters = filterStatus !== 'all' || filterType !== 'all' || filterEmployeeName !== '' || (filterCampaign && filterCampaign !== 'all');
+    const showClearFilters = activeTab !== 'all' || filterType !== 'all' || filterEmployeeName !== '' || (filterCampaign && filterCampaign !== 'all') || filterPeriod !== 'all';
 
     // Clear employee search query when popover closes
     useEffect(() => {
@@ -211,10 +230,11 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
         }
     }, [showEmployeeSearch]);
 
-    const buildFilterParams = React.useCallback(() => {
+    const buildFilterParams = React.useCallback((overrideStatus?: StatusTab) => {
         const params: Record<string, string> = {};
-        if (filterStatus !== 'all') {
-            params.status = filterStatus;
+        const status = overrideStatus ?? activeTab;
+        if (status !== 'all') {
+            params.status = status;
         }
         if (filterType !== 'all') {
             params.type = filterType;
@@ -225,8 +245,11 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
         if (filterCampaign && filterCampaign !== 'all') {
             params.campaign_department = filterCampaign;
         }
+        if (filterPeriod !== 'all') {
+            params.period = filterPeriod;
+        }
         return params;
-    }, [filterStatus, filterType, filterEmployeeName, filterCampaign]);
+    }, [activeTab, filterType, filterEmployeeName, filterCampaign, filterPeriod]);
 
     const requestWithFilters = (params: Record<string, string>) => {
         router.get(leaveIndexRoute().url, params, {
@@ -261,11 +284,17 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
         return () => clearInterval(interval);
     }, [autoRefreshEnabled, buildFilterParams]);
 
+    const handleTabChange = (tab: StatusTab) => {
+        setActiveTab(tab);
+        requestWithFilters(buildFilterParams(tab));
+    };
+
     const clearFilters = () => {
-        setFilterStatus('all');
+        setActiveTab('all');
         setFilterType('all');
         setFilterEmployeeName('');
         setFilterCampaign('all');
+        setFilterPeriod('all');
         requestWithFilters({});
     };
 
@@ -598,19 +627,6 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                 </Popover>
                             )}
 
-                            <Select value={filterStatus} onValueChange={setFilterStatus}>
-                                <SelectTrigger className="w-full">
-                                    <SelectValue placeholder="All Statuses" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All Statuses</SelectItem>
-                                    <SelectItem value="pending">Pending</SelectItem>
-                                    <SelectItem value="approved">Approved</SelectItem>
-                                    <SelectItem value="denied">Denied</SelectItem>
-                                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                                </SelectContent>
-                            </Select>
-
                             <Select value={filterType} onValueChange={setFilterType}>
                                 <SelectTrigger className="w-full">
                                     <SelectValue placeholder="All Types" />
@@ -637,6 +653,19 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                     {campaigns.map((c) => (
                                         <SelectItem key={c} value={c}>{c}{teamLeadCampaignName === c ? " (Your Campaign)" : ""}</SelectItem>
                                     ))}
+                                </SelectContent>
+                            </Select>
+
+                            <Select value={filterPeriod} onValueChange={setFilterPeriod}>
+                                <SelectTrigger className="w-full">
+                                    <SelectValue placeholder="All Periods" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">All Periods</SelectItem>
+                                    <SelectItem value="upcoming">Upcoming</SelectItem>
+                                    <SelectItem value="this_week">This Week</SelectItem>
+                                    <SelectItem value="this_month">This Month</SelectItem>
+                                    <SelectItem value="past">Past</SelectItem>
                                 </SelectContent>
                             </Select>
                         </div>
@@ -699,6 +728,29 @@ export default function Index({ leaveRequests, filters, isAdmin, isTeamLead, aut
                                 </Link>
                             </Can>
                         </div>
+                    </div>
+
+                    {/* Status Tabs */}
+                    <div className="flex overflow-x-auto gap-1 rounded-lg border bg-muted/30 p-1">
+                        {statusTabs.map(({ key, label, icon: Icon }) => (
+                            <button
+                                key={key}
+                                onClick={() => handleTabChange(key)}
+                                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium whitespace-nowrap shrink-0 transition-colors ${activeTab === key
+                                    ? 'bg-background text-foreground shadow-sm'
+                                    : 'text-muted-foreground hover:text-foreground'
+                                    }`}
+                            >
+                                <Icon className="h-3.5 w-3.5" />
+                                <span className="hidden sm:inline">{label}</span>
+                                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${activeTab === key
+                                    ? 'bg-primary/10 text-primary'
+                                    : 'bg-muted text-muted-foreground'
+                                    }`}>
+                                    {statusCounts[key]}
+                                </span>
+                            </button>
+                        ))}
                     </div>
 
                     <div className="flex justify-between items-center text-sm">
