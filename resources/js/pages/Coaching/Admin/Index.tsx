@@ -262,7 +262,7 @@ export default function CoachingAdminIndex() {
                 <PageHeader title="Coaching Compliance Dashboard" />
 
                 {/* Summary Cards */}
-                <CoachingSummaryCards totalAgents={activeData.total_agents} statusCounts={activeData.status_counts} />
+                <CoachingSummaryCards totalAgents={activeData.total_agents} statusCounts={activeData.status_counts} totalLabel={coacheeRole === 'Team Lead' ? 'Total Team Leads' : 'Total Agents'} />
 
                 {/* Filters */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8">
@@ -364,7 +364,7 @@ export default function CoachingAdminIndex() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-muted/50">
-                                            <TableHead>Agent</TableHead>
+                                            <TableHead>{coacheeRole === 'Team Lead' ? 'Team Lead' : 'Agent'}</TableHead>
                                             <TableHead>Status</TableHead>
                                             <TableHead>Last Coached</TableHead>
                                             <TableHead>Sessions</TableHead>
@@ -587,7 +587,7 @@ export default function CoachingAdminIndex() {
                                 <Table>
                                     <TableHeader>
                                         <TableRow className="bg-muted/50">
-                                            <TableHead>Agent</TableHead>
+                                            <TableHead>{coacheeRole === 'Team Lead' ? 'Team Lead' : 'Agent'}</TableHead>
                                             <TableHead>Account</TableHead>
                                             <TableHead>Status</TableHead>
                                         </TableRow>

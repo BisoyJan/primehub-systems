@@ -4,6 +4,7 @@ import type { CoachingStatusLabel } from '@/types';
 interface CoachingSummaryCardsProps {
     totalAgents: number;
     statusCounts: Record<string, number>;
+    totalLabel?: string;
     className?: string;
 }
 
@@ -15,12 +16,12 @@ const statusConfig: { label: CoachingStatusLabel; key: string; bg: string; text:
     { label: 'No Record', key: 'No Record', bg: 'bg-gray-50 dark:bg-gray-950/20', text: 'text-gray-600 dark:text-gray-400', border: 'border-gray-200 dark:border-gray-700' },
 ];
 
-export function CoachingSummaryCards({ totalAgents, statusCounts, className }: CoachingSummaryCardsProps) {
+export function CoachingSummaryCards({ totalAgents, statusCounts, totalLabel, className }: CoachingSummaryCardsProps) {
     return (
         <div className={cn('grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6', className)}>
             {/* Total Agents card */}
             <div className="rounded-lg border bg-card p-3 shadow-sm">
-                <p className="text-xs text-muted-foreground font-medium">Total Agents</p>
+                <p className="text-xs text-muted-foreground font-medium">{totalLabel ?? 'Total Agents'}</p>
                 <p className="text-2xl font-bold mt-1">{totalAgents}</p>
             </div>
 
