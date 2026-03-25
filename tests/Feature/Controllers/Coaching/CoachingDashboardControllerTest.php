@@ -5,8 +5,10 @@ namespace Tests\Feature\Controllers\Coaching;
 use App\Models\Campaign;
 use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
+use App\Models\Notification;
 use App\Models\User;
 use App\Services\NotificationService;
+use Database\Seeders\CoachingStatusSettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
@@ -22,15 +24,15 @@ class CoachingDashboardControllerTest extends TestCase
 
         $this->mock(NotificationService::class, function ($mock) {
             $mock->shouldReceive('notifyCoachingSessionCreated')
-                ->andReturn(\Mockery::mock(\App\Models\Notification::class));
+                ->andReturn(\Mockery::mock(Notification::class));
             $mock->shouldReceive('notifyCoachingAcknowledged')
-                ->andReturn(\Mockery::mock(\App\Models\Notification::class));
+                ->andReturn(\Mockery::mock(Notification::class));
             $mock->shouldReceive('notifyCoachingReviewed')
-                ->andReturn(\Mockery::mock(\App\Models\Notification::class));
+                ->andReturn(\Mockery::mock(Notification::class));
         });
 
         // Seed default coaching status settings
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
     }
 
     protected function createTeamWithCampaign(): array
@@ -101,6 +103,89 @@ class CoachingDashboardControllerTest extends TestCase
             );
     }
 
+    #[Test]
+    public function team_lead_dashboard_no_longer_includes_personal_coaching_data(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.dashboard'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Dashboard/Index')
+                ->missing('myCoachingData')
+                ->missing('myCoachingSessions')
+            );
+    }
+
+    #[Test]
+    public function team_lead_dashboard_includes_upcoming_follow_ups(): void
+    {
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'session_date' => now()->subDays(30),
+            'follow_up_date' => now()->addDays(2),
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.dashboard'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Dashboard/Index')
+                ->has('upcomingFollowUps')
+                ->has('overdueFollowUps')
+                ->has('upcomingFollowUps.0', fn (Assert $item) => $item
+                    ->has('id')
+                    ->has('agent_name')
+                    ->has('team_lead_name')
+                    ->has('follow_up_date')
+                    ->has('purpose_label')
+                    ->has('session_date')
+                )
+            );
+    }
+
+    #[Test]
+    public function team_lead_dashboard_includes_overdue_follow_ups(): void
+    {
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'session_date' => now()->subDays(30),
+            'follow_up_date' => now()->subDays(3),
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.dashboard'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Dashboard/Index')
+                ->has('overdueFollowUps', 1)
+                ->has('overdueFollowUps.0', fn (Assert $item) => $item
+                    ->has('id')
+                    ->has('agent_name')
+                    ->has('team_lead_name')
+                    ->has('follow_up_date')
+                    ->has('purpose_label')
+                    ->has('session_date')
+                )
+            );
+    }
+
     // ─── Compliance/Admin Dashboard ─────────────────────────────────
 
     #[Test]
@@ -119,6 +204,38 @@ class CoachingDashboardControllerTest extends TestCase
                 ->has('queueData')
                 ->has('campaigns')
                 ->has('teamLeads')
+            );
+    }
+
+    #[Test]
+    public function admin_dashboard_includes_upcoming_follow_ups(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'session_date' => now()->subDays(30),
+            'follow_up_date' => now()->addDays(3),
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.dashboard'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Admin/Index')
+                ->has('upcomingFollowUps')
+                ->has('overdueFollowUps')
+                ->has('upcomingFollowUps.0', fn (Assert $item) => $item
+                    ->has('id')
+                    ->has('agent_name')
+                    ->has('team_lead_name')
+                    ->has('follow_up_date')
+                    ->has('purpose_label')
+                    ->has('session_date')
+                )
             );
     }
 
@@ -253,10 +370,10 @@ class CoachingDashboardControllerTest extends TestCase
         $response->assertStatus(403);
     }
 
-    // ─── TL Personal Coaching Dashboard ─────────────────────────────
+    // ─── TL Personal Coaching Moved to Sessions ─────────────────────
 
     #[Test]
-    public function team_lead_dashboard_includes_personal_coaching_data(): void
+    public function team_lead_dashboard_does_not_include_personal_coaching_data(): void
     {
         $team = $this->createTeamWithCampaign();
 
@@ -273,9 +390,8 @@ class CoachingDashboardControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Coaching/Dashboard/Index')
-                ->has('myCoachingData')
-                ->has('myCoachingSessions')
-                ->where('myCoachingData.total_sessions', 1)
+                ->missing('myCoachingData')
+                ->missing('myCoachingSessions')
             );
     }
 

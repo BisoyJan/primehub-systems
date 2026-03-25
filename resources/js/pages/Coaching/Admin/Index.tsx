@@ -3,8 +3,11 @@ import { Head, Link, usePage, router, useForm } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import {
     AlertTriangle,
+    Calendar as CalendarIcon,
+    CalendarClock,
     Eye,
     Filter,
+    Plus,
     ShieldCheck,
     ShieldX,
     Users,
@@ -17,6 +20,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Calendar } from '@/components/ui/calendar';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
     Select,
     SelectContent,
@@ -49,6 +55,7 @@ import { CoachingSummaryCards } from '@/components/coaching/CoachingSummaryCards
 
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import {
+    create as sessionsCreate,
     show as sessionsShow,
     review as sessionsReview,
 } from '@/routes/coaching/sessions';
@@ -97,10 +104,21 @@ interface Filters {
     date_to?: string;
 }
 
+interface FollowUp {
+    id: number;
+    agent_name: string;
+    team_lead_name: string;
+    follow_up_date: string;
+    purpose_label: string;
+    session_date: string;
+}
+
 interface Props extends InertiaPageProps {
     dashboardData: DashboardData;
     teamLeadCoachingData: DashboardData;
     queueData: QueueData;
+    upcomingFollowUps: FollowUp[];
+    overdueFollowUps: FollowUp[];
     campaigns: Campaign[];
     teamLeads: User[];
     filters: Filters;
@@ -108,10 +126,24 @@ interface Props extends InertiaPageProps {
     purposes: CoachingPurposeLabels;
 }
 
-type TabKey = 'overview' | 'unacknowledged' | 'for_review' | 'at_risk';
+type TabKey = 'overview' | 'unacknowledged' | 'for_review' | 'at_risk' | 'upcoming';
+
+function daysUntil(dateStr: string): number {
+    const now = new Date();
+    now.setHours(0, 0, 0, 0);
+    const target = new Date(dateStr + 'T00:00:00');
+    return Math.ceil((target.getTime() - now.getTime()) / 86400000);
+}
+
+function getUrgencyStyles(days: number) {
+    if (days < 0) return { border: 'border-red-500/50 bg-red-500/5', text: 'text-red-600 dark:text-red-400', label: `${Math.abs(days)}d overdue` };
+    if (days === 0) return { border: 'border-red-500/50 bg-red-500/5', text: 'text-red-600 dark:text-red-400', label: 'Today' };
+    if (days === 1) return { border: 'border-orange-500/50 bg-orange-500/5', text: 'text-orange-600 dark:text-orange-400', label: 'Tomorrow' };
+    return { border: 'border-yellow-500/50 bg-yellow-500/5', text: 'text-yellow-600 dark:text-yellow-400', label: `${days}d away` };
+}
 
 export default function CoachingAdminIndex() {
-    const { dashboardData, teamLeadCoachingData, queueData, campaigns, teamLeads, filters: initialFilters, purposes } = usePage<Props>().props;
+    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, campaigns, teamLeads, filters: initialFilters, purposes } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Compliance',
@@ -130,11 +162,38 @@ export default function CoachingAdminIndex() {
 
     const reviewForm = useForm({ compliance_status: '' as string, compliance_notes: '' });
 
+    const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(undefined);
+
+    const allFollowUps = useMemo(() => [...overdueFollowUps, ...upcomingFollowUps], [overdueFollowUps, upcomingFollowUps]);
+
+    const followUpDates = useMemo(() => {
+        return allFollowUps.map((item) => new Date(item.follow_up_date + 'T00:00:00'));
+    }, [allFollowUps]);
+
+    const selectedDateFollowUps = useMemo(() => {
+        if (!calendarSelectedDate) return allFollowUps;
+        const dateStr = calendarSelectedDate.toISOString().split('T')[0];
+        return allFollowUps.filter((item) => item.follow_up_date === dateStr);
+    }, [calendarSelectedDate, allFollowUps]);
+
     const handleCoacheeRoleChange = (value: string) => {
         setCoacheeRole(value);
+        const newCoachId = value === 'Team Lead' ? '' : coachId;
         if (value === 'Team Lead') {
             setCoachId('');
         }
+        router.get(
+            coachingDashboard().url,
+            {
+                campaign_id: campaignId || undefined,
+                coach_id: newCoachId || undefined,
+                coaching_status: coachingStatus || undefined,
+                coachee_role: value || undefined,
+                date_from: dateFrom || undefined,
+                date_to: dateTo || undefined,
+            },
+            { preserveState: true, preserveScroll: true },
+        );
     };
 
     const activeData = coacheeRole === 'Team Lead' ? teamLeadCoachingData : dashboardData;
@@ -185,11 +244,12 @@ export default function CoachingAdminIndex() {
         return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
     }, [activeData.agents]);
 
-    const tabs: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }>; count?: number }[] = [
+    const tabs: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }>; count?: number; overdueCount?: number }[] = [
         { key: 'overview', label: 'Overview', icon: Users, count: activeData.agents.length },
         { key: 'unacknowledged', label: 'Unacknowledged', icon: Clock, count: queueData.unacknowledged.length },
         { key: 'for_review', label: 'For Review', icon: ClipboardCheck, count: queueData.for_review.length },
         { key: 'at_risk', label: 'At Risk', icon: AlertTriangle, count: queueData.at_risk_agents.length },
+        { key: 'upcoming', label: 'Upcoming', icon: CalendarClock, count: allFollowUps.length, overdueCount: overdueFollowUps.length },
     ];
 
     return (
@@ -263,7 +323,7 @@ export default function CoachingAdminIndex() {
 
                 {/* Tabs */}
                 <div className="flex flex-wrap gap-1 rounded-lg border bg-muted/30 p-1">
-                    {tabs.map(({ key, label, icon: Icon, count }) => (
+                    {tabs.map(({ key, label, icon: Icon, count, overdueCount }) => (
                         <button
                             key={key}
                             onClick={() => setActiveTab(key)}
@@ -281,6 +341,11 @@ export default function CoachingAdminIndex() {
                                     }`}>
                                     {count}
                                 </span>
+                            )}
+                            {(overdueCount ?? 0) > 0 && (
+                                <Badge variant="destructive" className="ml-0.5 px-1 py-0 text-[10px]">
+                                    {overdueCount}
+                                </Badge>
                             )}
                         </button>
                     ))}
@@ -304,12 +369,15 @@ export default function CoachingAdminIndex() {
                                             <TableHead>Last Coached</TableHead>
                                             <TableHead>Sessions</TableHead>
                                             <TableHead>Pending Ack</TableHead>
+                                            {coacheeRole === 'Team Lead' && (
+                                                <TableHead className="text-center">Actions</TableHead>
+                                            )}
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {activeData.agents.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                                                <TableCell colSpan={coacheeRole === 'Team Lead' ? 6 : 5} className="py-8 text-center text-muted-foreground">
                                                     No {coacheeRole === 'Team Lead' ? 'team leads' : 'agents'} found.
                                                 </TableCell>
                                             </TableRow>
@@ -317,7 +385,7 @@ export default function CoachingAdminIndex() {
                                             groupedAgents.map(([account, agents]) => (
                                                 <Fragment key={account}>
                                                     <TableRow className="bg-muted/30">
-                                                        <TableCell colSpan={5} className="py-2">
+                                                        <TableCell colSpan={coacheeRole === 'Team Lead' ? 6 : 5} className="py-2">
                                                             <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                                                                 {account} ({agents.length})
                                                             </span>
@@ -340,6 +408,17 @@ export default function CoachingAdminIndex() {
                                                                     <span className="text-muted-foreground">0</span>
                                                                 )}
                                                             </TableCell>
+                                                            {coacheeRole === 'Team Lead' && (
+                                                                <TableCell>
+                                                                    <div className="flex items-center justify-center">
+                                                                        <Link href={sessionsCreate().url + `?agent_id=${agent.id}&coaching_mode=direct`}>
+                                                                            <Button variant="ghost" size="icon" title={`Coach ${agent.name}`}>
+                                                                                <Plus className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </Link>
+                                                                    </div>
+                                                                </TableCell>
+                                                            )}
                                                         </TableRow>
                                                     ))}
                                                 </Fragment>
@@ -373,6 +452,13 @@ export default function CoachingAdminIndex() {
                                                         <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
                                                     )}
                                                 </div>
+                                                {coacheeRole === 'Team Lead' && (
+                                                    <Link href={sessionsCreate().url + `?agent_id=${agent.id}&coaching_mode=direct`}>
+                                                        <Button size="sm" variant="outline" className="w-full">
+                                                            <Plus className="mr-1.5 h-3.5 w-3.5" /> Coach
+                                                        </Button>
+                                                    </Link>
+                                                )}
                                             </div>
                                         ))}
                                     </div>
@@ -546,6 +632,71 @@ export default function CoachingAdminIndex() {
                             )}
                         </div>
                     </div>
+                )}
+
+                {activeTab === 'upcoming' && (
+                    <Tabs defaultValue="upcoming" className="space-y-4" onValueChange={(v) => { if (v === 'calendar') setCalendarSelectedDate(undefined); }}>
+                        <TabsList className="grid w-full grid-cols-3">
+                            <TabsTrigger value="upcoming" className="flex items-center gap-2">
+                                <CalendarClock className="h-4 w-4" />
+                                <span className="hidden sm:inline">Upcoming</span>
+                                {upcomingFollowUps.length > 0 && (
+                                    <Badge variant="secondary" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                        {upcomingFollowUps.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="overdue" className="flex items-center gap-2">
+                                <AlertTriangle className="h-4 w-4" />
+                                <span className="hidden sm:inline">Overdue</span>
+                                {overdueFollowUps.length > 0 && (
+                                    <Badge variant="destructive" className="ml-0.5 px-1.5 py-0 text-[10px]">
+                                        {overdueFollowUps.length}
+                                    </Badge>
+                                )}
+                            </TabsTrigger>
+                            <TabsTrigger value="calendar" className="flex items-center gap-2">
+                                <CalendarIcon className="h-4 w-4" />
+                                <span className="hidden sm:inline">Calendar</span>
+                            </TabsTrigger>
+                        </TabsList>
+
+                        <TabsContent value="upcoming">
+                            <FollowUpTable items={upcomingFollowUps} emptyMessage="No upcoming follow-ups scheduled." emptyDescription="Follow-up dates are set when creating coaching sessions." />
+                        </TabsContent>
+
+                        <TabsContent value="overdue">
+                            <FollowUpTable items={overdueFollowUps} emptyMessage="No overdue follow-ups." emptyDescription="All follow-ups are on track." />
+                        </TabsContent>
+
+                        <TabsContent value="calendar">
+                            <div className="flex flex-col gap-4 lg:flex-row">
+                                <div className="rounded-lg border bg-card p-2 shadow-sm">
+                                    <Calendar
+                                        mode="single"
+                                        selected={calendarSelectedDate}
+                                        onSelect={setCalendarSelectedDate}
+                                        modifiers={{ hasFollowUp: followUpDates }}
+                                        modifiersClassNames={{ hasFollowUp: 'ring-2 ring-primary/40 ring-offset-1' }}
+                                    />
+                                    <div className="flex items-center gap-4 border-t px-3 pt-2 text-[10px] text-muted-foreground">
+                                        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-primary/40" /> Has follow-up</span>
+                                        {calendarSelectedDate && (
+                                            <button onClick={() => setCalendarSelectedDate(undefined)} className="text-primary hover:underline">Clear selection</button>
+                                        )}
+                                    </div>
+                                </div>
+                                <div className="flex-1">
+                                    <FollowUpTable
+                                        items={selectedDateFollowUps}
+                                        emptyMessage={calendarSelectedDate ? 'No follow-ups on this date.' : 'No follow-ups scheduled.'}
+                                        emptyDescription={calendarSelectedDate ? `${calendarSelectedDate.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}` : undefined}
+                                        compact
+                                    />
+                                </div>
+                            </div>
+                        </TabsContent>
+                    </Tabs>
                 )}
             </div>
         </AppLayout>
@@ -733,5 +884,124 @@ function ReviewDialog({
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+function FollowUpTable({
+    items,
+    emptyMessage,
+    emptyDescription,
+    compact = false,
+}: {
+    items: FollowUp[];
+    emptyMessage: string;
+    emptyDescription?: string;
+    compact?: boolean;
+}) {
+    const perPage = 25;
+    const [page, setPage] = useState(1);
+    const totalPages = Math.ceil(items.length / perPage);
+    const paginated = items.slice((page - 1) * perPage, page * perPage);
+
+    if (items.length === 0) {
+        return (
+            <div className="rounded-lg border border-dashed p-6 text-center">
+                <CalendarClock className="mx-auto h-8 w-8 text-muted-foreground/50" />
+                <p className="mt-2 text-sm text-muted-foreground">{emptyMessage}</p>
+                {emptyDescription && <p className="text-xs text-muted-foreground">{emptyDescription}</p>}
+            </div>
+        );
+    }
+
+    return (
+        <div className="space-y-2">
+            {/* Desktop Table */}
+            <div className="hidden overflow-hidden rounded-md shadow md:block">
+                <div className="overflow-x-auto">
+                    <Table>
+                        <TableHeader>
+                            <TableRow className="bg-muted/50">
+                                <TableHead>Follow-up Date</TableHead>
+                                <TableHead>Coachee</TableHead>
+                                <TableHead>Coach</TableHead>
+                                <TableHead>Purpose</TableHead>
+                                {!compact && <TableHead>Session Date</TableHead>}
+                                <TableHead className="text-center">Actions</TableHead>
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {paginated.map((item) => {
+                                const days = daysUntil(item.follow_up_date);
+                                const s = getUrgencyStyles(days);
+                                return (
+                                    <TableRow key={item.id}>
+                                        <TableCell className="whitespace-nowrap">
+                                            <span>{new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString()}</span>
+                                            <span className={`ml-2 text-xs font-semibold ${s.text}`}>{s.label}</span>
+                                        </TableCell>
+                                        <TableCell className="font-medium">{item.agent_name}</TableCell>
+                                        <TableCell>{item.team_lead_name}</TableCell>
+                                        <TableCell>{item.purpose_label}</TableCell>
+                                        {!compact && (
+                                            <TableCell className="whitespace-nowrap">
+                                                {new Date(item.session_date).toLocaleDateString()}
+                                            </TableCell>
+                                        )}
+                                        <TableCell>
+                                            <div className="flex items-center justify-center">
+                                                <Link href={sessionsShow.url(item.id)}>
+                                                    <Button variant="ghost" size="icon" title="View Session">
+                                                        <Eye className="h-4 w-4" />
+                                                    </Button>
+                                                </Link>
+                                            </div>
+                                        </TableCell>
+                                    </TableRow>
+                                );
+                            })}
+                        </TableBody>
+                    </Table>
+                </div>
+            </div>
+
+            {/* Mobile Cards */}
+            <div className="space-y-2 md:hidden">
+                {paginated.map((item) => {
+                    const days = daysUntil(item.follow_up_date);
+                    const s = getUrgencyStyles(days);
+                    return (
+                        <Link key={item.id} href={sessionsShow.url(item.id)} className={`block rounded-lg border p-3 space-y-1 transition-colors hover:bg-muted/50 ${s.border}`}>
+                            <div className="flex items-start justify-between gap-2">
+                                <p className="text-sm font-medium leading-tight truncate">{item.agent_name}</p>
+                                <span className={`text-xs font-semibold shrink-0 ${s.text}`}>{s.label}</span>
+                            </div>
+                            <p className="text-xs text-muted-foreground truncate">Coach: {item.team_lead_name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{item.purpose_label}</p>
+                            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+                                <span>Follow-up: {new Date(item.follow_up_date + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}</span>
+                                {!compact && <span>Session: {new Date(item.session_date).toLocaleDateString()}</span>}
+                            </div>
+                        </Link>
+                    );
+                })}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between border-t pt-3">
+                    <p className="text-xs text-muted-foreground">
+                        {(page - 1) * perPage + 1}–{Math.min(page * perPage, items.length)} of {items.length}
+                    </p>
+                    <div className="flex gap-2">
+                        <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                            Previous
+                        </Button>
+                        <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                            Next
+                        </Button>
+                    </div>
+                </div>
+            )}
+        </div>
     );
 }

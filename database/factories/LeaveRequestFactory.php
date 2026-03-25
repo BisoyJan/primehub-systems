@@ -7,7 +7,7 @@ use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\LeaveRequest>
+ * @extends Factory<LeaveRequest>
  */
 class LeaveRequestFactory extends Factory
 {
@@ -21,7 +21,7 @@ class LeaveRequestFactory extends Factory
     public function definition(): array
     {
         $startDate = $this->faker->dateTimeBetween('now', '+30 days');
-        $endDate = (clone $startDate)->modify('+' . $this->faker->numberBetween(1, 5) . ' days');
+        $endDate = (clone $startDate)->modify('+'.$this->faker->numberBetween(1, 5).' days');
         $days = $startDate->diff($endDate)->days + 1;
 
         return [
@@ -113,6 +113,29 @@ class LeaveRequestFactory extends Factory
             'hr_approved_by' => $hr?->id ?? User::factory(),
             'hr_approved_at' => now(),
             'hr_review_notes' => 'Approved by HR',
+        ]);
+    }
+
+    /**
+     * Indicate that the leave request requires Team Lead approval.
+     */
+    public function requiresTlApproval(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'requires_tl_approval' => true,
+        ]);
+    }
+
+    /**
+     * Indicate that the leave request has been TL approved.
+     */
+    public function tlApproved(?User $tl = null): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'requires_tl_approval' => true,
+            'tl_approved_by' => $tl?->id ?? User::factory(),
+            'tl_approved_at' => now(),
+            'tl_review_notes' => 'Approved by Team Lead',
         ]);
     }
 

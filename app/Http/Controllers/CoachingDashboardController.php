@@ -97,20 +97,14 @@ class CoachingDashboardController extends Controller
 
         $campaignName = $user->activeSchedule?->campaign?->name ?? 'N/A';
 
-        // TL's own coaching data (sessions where TL is coachee)
-        $myCoachingData = $this->dashboardService->getCoacheeSummary($user->id);
-        $myCoachingSessions = CoachingSession::with(['coach'])
-            ->forCoachee($user->id)
-            ->orderByDesc('session_date')
-            ->limit(10)
-            ->get();
+        $followUpData = $this->dashboardService->getExpandedFollowUps($user);
 
         return Inertia::render('Coaching/Dashboard/Index', [
             'dashboardData' => $dashboardData,
             'recentSessions' => $recentSessions,
             'campaignName' => $campaignName,
-            'myCoachingData' => $myCoachingData,
-            'myCoachingSessions' => $myCoachingSessions,
+            'upcomingFollowUps' => $followUpData['upcoming'],
+            'overdueFollowUps' => $followUpData['overdue'],
             'filters' => $request->only(['coaching_status', 'date_from', 'date_to']),
             'statusColors' => CoachingDashboardService::STATUS_COLORS,
             'purposes' => CoachingSession::PURPOSE_LABELS,
@@ -153,10 +147,14 @@ class CoachingDashboardController extends Controller
             ->orderBy('last_name')
             ->get(['id', 'first_name', 'middle_name', 'last_name']);
 
+        $followUpData = $this->dashboardService->getExpandedFollowUps(auth()->user());
+
         return Inertia::render('Coaching/Admin/Index', [
             'dashboardData' => $dashboardData,
             'teamLeadCoachingData' => $teamLeadCoachingData,
             'queueData' => $queueData,
+            'upcomingFollowUps' => $followUpData['upcoming'],
+            'overdueFollowUps' => $followUpData['overdue'],
             'campaigns' => $campaigns,
             'teamLeads' => $teamLeads,
             'filters' => $request->only(['campaign_id', 'coach_id', 'coaching_status', 'coachee_role', 'date_from', 'date_to']),

@@ -33,6 +33,7 @@ import {
     TableHeader,
     TableRow,
 } from '@/components/ui/table';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
 import { Check, ChevronsUpDown, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
 
@@ -93,6 +94,9 @@ interface Props extends InertiaPageProps {
     isTeamLead: boolean;
     isAgent: boolean;
     teamLeadCampaignId: number | null;
+    activeTab: string | null;
+    pendingAckCount: number | null;
+    pendingReviewCount: number | null;
 }
 
 const purposes: CoachingPurposeLabels = {
@@ -112,6 +116,9 @@ export default function CoachingSessionsIndex() {
         isAdmin,
         isTeamLead,
         isAgent,
+        activeTab,
+        pendingAckCount,
+        pendingReviewCount,
     } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
@@ -156,6 +163,7 @@ export default function CoachingSessionsIndex() {
         router.get(
             sessionsIndex().url,
             {
+                ...((isTeamLead || isAdmin) && activeTab ? { tab: activeTab } : {}),
                 search: search || undefined,
                 ack_status: ackStatus || undefined,
                 compliance_status: complianceStatus || undefined,
@@ -178,7 +186,11 @@ export default function CoachingSessionsIndex() {
         setDateFrom('');
         setDateTo('');
         setCoacheeRole('');
-        router.get(sessionsIndex().url);
+        router.get(sessionsIndex().url, (isTeamLead || isAdmin) && activeTab ? { tab: activeTab } : {});
+    };
+
+    const handleTabChange = (tab: string) => {
+        router.get(sessionsIndex().url, { tab }, { preserveState: false });
     };
 
     const handleDelete = (id: number) => {
@@ -203,6 +215,65 @@ export default function CoachingSessionsIndex() {
                     createLink={can('coaching.create') ? sessionsCreate().url : undefined}
                     createLabel="New Session"
                 />
+
+                {/* Team Lead Tabs */}
+                {isTeamLead && (
+                    <Tabs value={activeTab || 'team'} onValueChange={handleTabChange}>
+                        <TabsList>
+                            <TabsTrigger value="team">Team Sessions</TabsTrigger>
+                            <TabsTrigger value="my">
+                                My Sessions
+                                {(pendingAckCount ?? 0) > 0 && (
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                                        {pendingAckCount}
+                                    </span>
+                                )}
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                )}
+
+                {/* Admin Tabs */}
+                {isAdmin && (
+                    <Tabs value={activeTab || 'all'} onValueChange={handleTabChange}>
+                        <TabsList>
+                            <TabsTrigger value="all">All Sessions</TabsTrigger>
+                            <TabsTrigger value="needs_review">
+                                Needs Review
+                                {(pendingReviewCount ?? 0) > 0 && (
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold leading-none text-white">
+                                        {pendingReviewCount}
+                                    </span>
+                                )}
+                            </TabsTrigger>
+                        </TabsList>
+                    </Tabs>
+                )}
+
+                {/* TL Summary Panel (My Sessions tab) */}
+                {isTeamLead && activeTab === 'my' && agentSummary && (
+                    <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm text-muted-foreground">My Coaching Status:</span>
+                                <CoachingStatusBadge status={agentSummary.coaching_status} size="md" />
+                            </div>
+                            <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+                                <span>
+                                    Last: <strong>{agentSummary.last_coached_date ? new Date(agentSummary.last_coached_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : 'N/A'}</strong>
+                                </span>
+                                <span>
+                                    Sessions: <strong>{agentSummary.total_sessions}</strong>
+                                </span>
+                                {agentSummary.pending_acknowledgements > 0 && (
+                                    <span className="font-medium text-amber-600">
+                                        {agentSummary.pending_acknowledgements} Pending Ack
+                                    </span>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Agent Summary Panel */}
                 {isAgent && agentSummary && (
@@ -232,7 +303,7 @@ export default function CoachingSessionsIndex() {
                 {/* Filters */}
                 <div className="flex flex-col gap-3">
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                        {!isAgent && (
+                        {!isAgent && activeTab !== 'my' && (
                             <Popover open={agentSearchOpen} onOpenChange={setAgentSearchOpen}>
                                 <PopoverTrigger asChild>
                                     <Button
@@ -339,7 +410,7 @@ export default function CoachingSessionsIndex() {
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-                        {(isAdmin || isTeamLead) && (
+                        {(isAdmin || isTeamLead) && activeTab !== 'my' && (
                             <Select value={campaignId} onValueChange={setCampaignId}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="Campaign" />
@@ -398,8 +469,8 @@ export default function CoachingSessionsIndex() {
                             <TableHeader>
                                 <TableRow className="bg-muted/50">
                                     <TableHead>Date</TableHead>
-                                    {!isAgent && <TableHead>Coachee</TableHead>}
-                                    {isAdmin && <TableHead>Coach</TableHead>}
+                                    {!isAgent && activeTab !== 'my' && <TableHead>Coachee</TableHead>}
+                                    {(isAdmin || activeTab === 'my') && <TableHead>Coach</TableHead>}
                                     <TableHead>Purpose</TableHead>
                                     <TableHead>Severity</TableHead>
                                     <TableHead>Ack Status</TableHead>
@@ -420,12 +491,12 @@ export default function CoachingSessionsIndex() {
                                             <TableCell className="whitespace-nowrap">
                                                 {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                                             </TableCell>
-                                            {!isAgent && (
+                                            {!isAgent && activeTab !== 'my' && (
                                                 <TableCell className="font-medium">
                                                     {formatName(session.coachee)}
                                                 </TableCell>
                                             )}
-                                            {isAdmin && <TableCell>{formatName(session.coach)}</TableCell>}
+                                            {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
                                             <TableCell className="max-w-[200px] truncate">
                                                 {purposes[session.purpose] ?? session.purpose}
                                             </TableCell>
@@ -489,8 +560,8 @@ export default function CoachingSessionsIndex() {
                                 key={session.id}
                                 session={session}
                                 purposes={purposes}
-                                showCoachee={!isAgent}
-                                showCoach={isAdmin}
+                                showCoachee={!isAgent && activeTab !== 'my'}
+                                showCoach={isAdmin || activeTab === 'my'}
                             />
                         ))
                     )}

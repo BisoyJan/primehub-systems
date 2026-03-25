@@ -976,18 +976,18 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     #[Test]
-    public function team_lead_sees_admin_coached_sessions_in_index(): void
+    public function team_lead_sees_team_sessions_on_default_tab(): void
     {
         $team = $this->createTeamWithCampaign();
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
-        // Session where TL coaches agent
+        // Session where TL coaches agent — should appear on team tab
         CoachingSession::factory()->create([
             'coachee_id' => $team['agent']->id,
             'coach_id' => $team['teamLead']->id,
         ]);
 
-        // Session where admin coaches TL
+        // Session where admin coaches TL — should NOT appear on team tab
         CoachingSession::factory()->create([
             'coachee_id' => $team['teamLead']->id,
             'coach_id' => $admin->id,
@@ -999,7 +999,128 @@ class CoachingSessionControllerTest extends TestCase
         $response->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+                ->where('activeTab', 'team')
+                ->has('pendingAckCount')
+            );
+    }
+
+    #[Test]
+    public function team_lead_sees_own_sessions_on_my_tab(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        // Session where TL coaches agent — should NOT appear on my tab
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        // Session where admin coaches TL — should appear on my tab
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.index', ['tab' => 'my']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+                ->where('activeTab', 'my')
+                ->where('pendingAckCount', 1)
+                ->has('agentSummary')
+            );
+    }
+
+    #[Test]
+    public function team_lead_pending_ack_count_reflects_unacknowledged(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+            'ack_status' => 'Pending',
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+            'ack_status' => 'Acknowledged',
+        ]);
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+            'ack_status' => 'Pending',
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('pendingAckCount', 2)
+            );
+    }
+
+    #[Test]
+    public function admin_sees_all_sessions_on_default_tab(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        CoachingSession::factory()->count(3)->create();
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 3)
+                ->where('activeTab', 'all')
+                ->has('pendingReviewCount')
+            );
+    }
+
+    #[Test]
+    public function admin_sees_only_for_review_sessions_on_needs_review_tab(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        CoachingSession::factory()->create(['compliance_status' => 'For_Review']);
+        CoachingSession::factory()->create(['compliance_status' => 'Verified']);
+        CoachingSession::factory()->create(['compliance_status' => 'For_Review']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index', ['tab' => 'needs_review']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
                 ->has('sessions.data', 2)
+                ->where('activeTab', 'needs_review')
+                ->where('pendingReviewCount', 2)
+            );
+    }
+
+    #[Test]
+    public function admin_pending_review_count_reflects_for_review_sessions(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        CoachingSession::factory()->create(['compliance_status' => 'For_Review']);
+        CoachingSession::factory()->create(['compliance_status' => 'Awaiting_Agent_Ack']);
+        CoachingSession::factory()->create(['compliance_status' => 'For_Review']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('pendingReviewCount', 2)
             );
     }
 }

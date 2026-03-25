@@ -54,23 +54,32 @@ class CoachingSessionController extends Controller
         if ($isAgent) {
             $query->forCoachee($user->id);
         } elseif ($isTeamLead) {
-            // TL sees sessions they coached + sessions for agents in their campaign + sessions where TL is coachee
-            if ($teamLeadCampaignId) {
-                $query->where(function ($q) use ($user, $teamLeadCampaignId) {
-                    $q->where('coach_id', $user->id)
-                        ->orWhere('coachee_id', $user->id)
-                        ->orWhereHas('coachee.activeSchedule', function ($sq) use ($teamLeadCampaignId) {
-                            $sq->where('campaign_id', $teamLeadCampaignId);
-                        });
-                });
+            $activeTab = $request->input('tab', 'team');
+
+            if ($activeTab === 'my') {
+                // "My Sessions" tab — only sessions where TL is the coachee
+                $query->forCoachee($user->id);
             } else {
-                $query->where(function ($q) use ($user) {
-                    $q->where('coach_id', $user->id)
-                        ->orWhere('coachee_id', $user->id);
-                });
+                // "Team Sessions" tab — sessions TL coached or for agents in their campaign (excluding TL's own)
+                if ($teamLeadCampaignId) {
+                    $query->where('coachee_id', '!=', $user->id)
+                        ->where(function ($q) use ($user, $teamLeadCampaignId) {
+                            $q->where('coach_id', $user->id)
+                                ->orWhereHas('coachee.activeSchedule', function ($sq) use ($teamLeadCampaignId) {
+                                    $sq->where('campaign_id', $teamLeadCampaignId);
+                                });
+                        });
+                } else {
+                    $query->where('coach_id', $user->id);
+                }
+            }
+        } elseif ($isAdmin) {
+            $activeTab = $request->input('tab', 'all');
+
+            if ($activeTab === 'needs_review') {
+                $query->where('compliance_status', 'For_Review');
             }
         }
-        // Admin/HR see all — no filter
 
         // Search filter
         if ($request->filled('search')) {
@@ -151,6 +160,19 @@ class CoachingSessionController extends Controller
             $agentSummary = $this->dashboardService->getCoacheeSummary($user->id);
         }
 
+        // Tab badge counts
+        $pendingAckCount = null;
+        $pendingReviewCount = null;
+        $activeTabValue = null;
+
+        if ($isTeamLead) {
+            $pendingAckCount = CoachingSession::forCoachee($user->id)->where('ack_status', 'Pending')->count();
+            $activeTabValue = $request->input('tab', 'team');
+        } elseif ($isAdmin) {
+            $pendingReviewCount = CoachingSession::where('compliance_status', 'For_Review')->count();
+            $activeTabValue = $request->input('tab', 'all');
+        }
+
         return Inertia::render('Coaching/Sessions/Index', [
             'sessions' => $sessions,
             'agentSummary' => $agentSummary,
@@ -164,6 +186,9 @@ class CoachingSessionController extends Controller
             'isTeamLead' => $isTeamLead,
             'isAgent' => $isAgent,
             'teamLeadCampaignId' => $teamLeadCampaignId,
+            'activeTab' => $activeTabValue,
+            'pendingAckCount' => $pendingAckCount,
+            'pendingReviewCount' => $pendingReviewCount,
         ]);
     }
 
@@ -231,7 +256,7 @@ class CoachingSessionController extends Controller
         $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
 
         // Pre-select agent if provided via query param
-        $selectedAgentId = $request->input('agent_id');
+        $selectedAgentId = $request->input('agent_id') ?? $request->input('coachee_id');
 
         return Inertia::render('Coaching/Sessions/Create', [
             'agents' => $agents,

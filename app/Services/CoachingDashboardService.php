@@ -359,4 +359,60 @@ class CoachingDashboardService
             self::STATUS_NO_RECORD => 0,
         ];
     }
+
+    /**
+     * Get expanded follow-ups for coaching dashboards (30-day window + overdue).
+     *
+     * @return array{upcoming: array, overdue: array}
+     */
+    public function getExpandedFollowUps(User $user): array
+    {
+        $today = Carbon::today();
+        $thirtyDaysFromNow = Carbon::today()->addDays(30);
+
+        $baseQuery = CoachingSession::with(['coachee:id,first_name,last_name', 'coach:id,first_name,last_name'])
+            ->whereNotNull('follow_up_date');
+
+        if ($user->role === 'Team Lead') {
+            $baseQuery->where(function ($q) use ($user) {
+                $q->where('coach_id', $user->id)
+                    ->orWhere('coachee_id', $user->id);
+            });
+        }
+
+        $mapSession = function (CoachingSession $session) {
+            return [
+                'id' => $session->id,
+                'agent_name' => ($session->coachee?->last_name ?? '').', '.($session->coachee?->first_name ?? ''),
+                'team_lead_name' => ($session->coach?->last_name ?? '').', '.($session->coach?->first_name ?? ''),
+                'follow_up_date' => $session->follow_up_date->format('Y-m-d'),
+                'purpose_label' => CoachingSession::PURPOSE_LABELS[$session->purpose] ?? $session->purpose,
+                'session_date' => $session->session_date->format('Y-m-d'),
+            ];
+        };
+
+        // Upcoming: today → 30 days out
+        $upcoming = (clone $baseQuery)
+            ->whereBetween('follow_up_date', [$today, $thirtyDaysFromNow])
+            ->orderBy('follow_up_date')
+            ->get()
+            ->map($mapSession)
+            ->values()
+            ->toArray();
+
+        // Overdue: past follow-up dates (up to 30 days back)
+        $thirtyDaysAgo = Carbon::today()->subDays(30);
+        $overdue = (clone $baseQuery)
+            ->whereBetween('follow_up_date', [$thirtyDaysAgo, $today->copy()->subDay()])
+            ->orderByDesc('follow_up_date')
+            ->get()
+            ->map($mapSession)
+            ->values()
+            ->toArray();
+
+        return [
+            'upcoming' => $upcoming,
+            'overdue' => $overdue,
+        ];
+    }
 }
