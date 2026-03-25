@@ -927,4 +927,79 @@ class CoachingSessionControllerTest extends TestCase
                 ->has('sessions.data', 1)
             );
     }
+
+    // ─── Team Lead as Coachee Tests ─────────────────────────────────
+
+    #[Test]
+    public function team_lead_can_view_session_where_they_are_coachee(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        // Admin coaches the Team Lead directly
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.show', $session));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Show')
+                ->has('session')
+            );
+    }
+
+    #[Test]
+    public function team_lead_can_acknowledge_session_where_they_are_coachee(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->patch(route('coaching.sessions.acknowledge', $session), [
+                'ack_status' => 'Acknowledged',
+            ]);
+
+        $response->assertRedirect();
+        $session->refresh();
+        $this->assertEquals('Acknowledged', $session->ack_status);
+    }
+
+    #[Test]
+    public function team_lead_sees_admin_coached_sessions_in_index(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        // Session where TL coaches agent
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        // Session where admin coaches TL
+        CoachingSession::factory()->create([
+            'coachee_id' => $team['teamLead']->id,
+            'coach_id' => $admin->id,
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.index'));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 2)
+            );
+    }
 }

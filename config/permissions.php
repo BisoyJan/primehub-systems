@@ -224,7 +224,7 @@ return [
             'leave_credits.view_all', 'leave_credits.view_own',
             'it_concerns.view', 'it_concerns.create',
             'medication_requests.view', 'medication_requests.create', 'medication_requests.update',
-            'coaching.view_team', 'coaching.create', 'coaching.edit',
+            'coaching.view_own', 'coaching.view_team', 'coaching.create', 'coaching.edit', 'coaching.acknowledge',
             'notifications.send', 'notifications.send_all',
             'settings.account', 'settings.password',
         ],

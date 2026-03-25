@@ -6,6 +6,7 @@ use App\Models\Attendance;
 use App\Models\AttendancePoint;
 use App\Models\BiometricRecord;
 use App\Models\Campaign;
+use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
 use App\Models\LeaveRequest;
@@ -22,6 +23,7 @@ use App\Policies\AttendancePointPolicy;
 use App\Policies\AttendancePolicy;
 use App\Policies\BiometricRecordPolicy;
 use App\Policies\CampaignPolicy;
+use App\Policies\CoachingSessionPolicy;
 use App\Policies\EmployeeSchedulePolicy;
 use App\Policies\ItConcernPolicy;
 use App\Policies\LeaveRequestPolicy;
@@ -47,6 +49,7 @@ class AuthServiceProvider extends ServiceProvider
         AttendancePoint::class => AttendancePointPolicy::class,
         BiometricRecord::class => BiometricRecordPolicy::class,
         Campaign::class => CampaignPolicy::class,
+        CoachingSession::class => CoachingSessionPolicy::class,
         EmployeeSchedule::class => EmployeeSchedulePolicy::class,
         ItConcern::class => ItConcernPolicy::class,
         LeaveRequest::class => LeaveRequestPolicy::class,
