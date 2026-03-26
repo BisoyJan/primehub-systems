@@ -8,6 +8,7 @@ use App\Models\Campaign;
 use App\Models\CoachingSession;
 use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
+use App\Models\LeaveCredit;
 use App\Models\LeaveRequest;
 use App\Models\MedicationRequest;
 use App\Models\Notification;
@@ -502,7 +503,7 @@ class DashboardService
             ->count();
 
         // Get leave calendar data for the specified month (or current month if not provided)
-        $calendarDate = $leaveCalendarMonth ? \Carbon\Carbon::parse($leaveCalendarMonth) : now();
+        $calendarDate = $leaveCalendarMonth ? Carbon::parse($leaveCalendarMonth) : now();
         $startOfMonth = $calendarDate->copy()->startOfMonth()->toDateString();
         $endOfMonth = $calendarDate->copy()->endOfMonth()->toDateString();
 
@@ -1098,7 +1099,7 @@ class DashboardService
         $year = now()->year;
         $currentMonth = now()->month;
 
-        $monthlyData = \App\Models\LeaveCredit::selectRaw('
+        $monthlyData = LeaveCredit::selectRaw('
                 month,
                 SUM(credits_earned) as total_earned,
                 SUM(credits_used) as total_used
@@ -1146,7 +1147,7 @@ class DashboardService
     {
         $today = $date ?? now()->toDateString();
 
-        $campaigns = \App\Models\Campaign::select('id', 'name')->orderBy('name')->get();
+        $campaigns = Campaign::select('id', 'name')->orderBy('name')->get();
 
         // Bulk-load all active schedules grouped by campaign (was N queries in loop)
         $schedulesByCampaign = EmployeeSchedule::where('is_active', true)
@@ -1215,7 +1216,7 @@ class DashboardService
      */
     public function getPointsByCampaign(): array
     {
-        $campaigns = \App\Models\Campaign::select('id', 'name')->orderBy('name')->get();
+        $campaigns = Campaign::select('id', 'name')->orderBy('name')->get();
 
         $allActivePoints = $this->getActiveAttendancePoints();
 
@@ -1510,9 +1511,9 @@ class DashboardService
         $agentIds = collect();
 
         if ($role === 'Team Lead') {
-            $campaignId = $user->activeSchedule?->campaign_id;
-            if ($campaignId) {
-                $agentIds = EmployeeSchedule::where('campaign_id', $campaignId)
+            $campaignIds = $user->getCampaignIds();
+            if (! empty($campaignIds)) {
+                $agentIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
                     ->where('is_active', true)
                     ->whereHas('user', function ($q) {
                         $q->where('role', 'Agent')

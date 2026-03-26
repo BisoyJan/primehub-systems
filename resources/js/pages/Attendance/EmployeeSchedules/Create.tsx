@@ -51,6 +51,7 @@ interface User {
     id: number;
     name: string;
     email?: string;
+    role?: string;
     hired_date?: string | null;
     has_schedule: boolean;
 }
@@ -174,6 +175,7 @@ export default function EmployeeScheduleCreate() {
     const { data, setData, post, processing, errors } = useForm({
         user_id: isRestrictedRole ? String(currentUser.id) : "",
         campaign_id: null as number | null,
+        campaign_ids: [] as number[],
         site_id: null as number | null,
         shift_type: "night_shift",
         scheduled_time_in: "22:00",
@@ -261,6 +263,20 @@ export default function EmployeeScheduleCreate() {
 
     // Get selected user for display
     const selectedUser = data.user_id ? users.find(user => user.id === Number(data.user_id)) : undefined;
+
+    // Check if the selected user is a Team Lead (for multi-campaign assignment)
+    const isSelectedUserTeamLead = isRestrictedRole
+        ? currentUser.role === 'Team Lead'
+        : selectedUser?.role === 'Team Lead';
+
+    // Toggle campaign in the campaign_ids array
+    const toggleCampaignId = (campaignId: number) => {
+        if (data.campaign_ids.includes(campaignId)) {
+            setData("campaign_ids", data.campaign_ids.filter(id => id !== campaignId));
+        } else {
+            setData("campaign_ids", [...data.campaign_ids, campaignId]);
+        }
+    };
 
     // Get campaign and site names for confirmation dialog
     const selectedCampaign = data.campaign_id ? campaigns.find(c => c.id === data.campaign_id) : null;
@@ -508,6 +524,36 @@ export default function EmployeeScheduleCreate() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Managed Campaigns (Team Lead multi-select) */}
+                                {isSelectedUserTeamLead && (
+                                    <div className="space-y-2">
+                                        <Label>Managed Campaigns</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Select the campaigns this Team Lead will manage. This determines which agents they can coach and view.
+                                        </p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-md border p-3">
+                                            {campaigns.map(campaign => (
+                                                <div key={campaign.id} className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id={`campaign-${campaign.id}`}
+                                                        checked={data.campaign_ids.includes(campaign.id)}
+                                                        onCheckedChange={() => toggleCampaignId(campaign.id)}
+                                                    />
+                                                    <Label
+                                                        htmlFor={`campaign-${campaign.id}`}
+                                                        className="text-sm font-normal cursor-pointer"
+                                                    >
+                                                        {campaign.name}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {errors.campaign_ids && (
+                                            <p className="text-sm text-red-500">{errors.campaign_ids}</p>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Shift Type */}
                                 <div className="space-y-2">

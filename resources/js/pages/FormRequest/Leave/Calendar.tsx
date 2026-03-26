@@ -40,7 +40,7 @@ interface Campaign {
 interface PageProps {
     leaves: Leave[];
     campaigns: Campaign[] | null;
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     filters: {
         month: string;
         campaign_id: string | null;
@@ -75,7 +75,7 @@ const leaveTypeColors: Record<string, string> = {
 };
 
 export default function LeaveCalendar() {
-    const { leaves, campaigns, teamLeadCampaignId, filters, isRestrictedRole } = usePage<PageProps>().props;
+    const { leaves, campaigns, teamLeadCampaignIds, filters, isRestrictedRole } = usePage<PageProps>().props;
     const [hoveredLeaveId, setHoveredLeaveId] = useState<number | null>(null);
 
     const { title, breadcrumbs } = usePageMeta({
@@ -277,7 +277,7 @@ export default function LeaveCalendar() {
                                             <SelectItem value="all">All Campaigns</SelectItem>
                                             {campaigns.map((campaign) => (
                                                 <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                    {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                                    {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

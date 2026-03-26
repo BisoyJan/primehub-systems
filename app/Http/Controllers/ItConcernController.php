@@ -2,10 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Requests\ItConcernRequest;
+use App\Models\Campaign;
 use App\Models\ItConcern;
 use App\Models\Site;
 use App\Models\User;
-use App\Http\Requests\ItConcernRequest;
 use App\Services\NotificationService;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -18,6 +19,7 @@ class ItConcernController extends Controller
     {
         $this->notificationService = $notificationService;
     }
+
     /**
      * Display a listing of IT concerns.
      */
@@ -28,19 +30,16 @@ class ItConcernController extends Controller
         $user = auth()->user();
         $campaignFilter = $request->input('campaign_id', '');
 
-        // Detect Team Lead's campaign for auto-filter
-        $teamLeadCampaignId = null;
+        // Detect Team Lead's campaigns for auto-filter
+        $teamLeadCampaignIds = [];
         if ($user->role === 'Team Lead') {
-            $activeSchedule = $user->activeSchedule;
-            if ($activeSchedule && $activeSchedule->campaign_id) {
-                $teamLeadCampaignId = $activeSchedule->campaign_id;
-            }
+            $teamLeadCampaignIds = $user->getCampaignIds();
         }
 
         // Auto-filter campaign for Team Leads when no campaign is specified
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (!$campaignIdToFilter && $teamLeadCampaignId) {
-            $campaignIdToFilter = $teamLeadCampaignId;
+        if (! $campaignIdToFilter && ! empty($teamLeadCampaignIds)) {
+            $campaignIdToFilter = $teamLeadCampaignIds[0];
         }
 
         $query = ItConcern::with(['user.activeSchedule.campaign', 'site', 'resolvedBy']);
@@ -62,7 +61,7 @@ class ItConcernController extends Controller
             $search = $request->search;
             $query->where(function ($q) use ($search) {
                 $q->where('station_number', 'like', "%{$search}%")
-                  ->orWhere('description', 'like', "%{$search}%");
+                    ->orWhere('description', 'like', "%{$search}%");
             });
         }
 
@@ -95,13 +94,13 @@ class ItConcernController extends Controller
             ->withQueryString();
 
         $sites = Site::orderBy('name')->get();
-        $campaigns = \App\Models\Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('FormRequest/ItConcerns/Index', [
             'concerns' => $concerns,
             'sites' => $sites,
             'campaigns' => $campaigns,
-            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'filters' => [
                 'search' => $request->input('search', ''),
                 'site_id' => $request->input('site_id', ''),
@@ -144,7 +143,7 @@ class ItConcernController extends Controller
         $validated = $request->validated();
 
         // If user_id is provided (filing for someone else), use it; otherwise default to authenticated user
-        if (!isset($validated['user_id']) || empty($validated['user_id'])) {
+        if (! isset($validated['user_id']) || empty($validated['user_id'])) {
             $validated['user_id'] = auth()->id();
         }
 
@@ -211,7 +210,7 @@ class ItConcernController extends Controller
                 $validated['resolved_at'] = now();
             }
             // Auto-fill resolved_by if user is IT role and not already set
-            if (auth()->user()->role === 'IT' || auth()->user()->role === 'Super Admin' && !$itConcern->resolved_by) {
+            if (auth()->user()->role === 'IT' || auth()->user()->role === 'Super Admin' && ! $itConcern->resolved_by) {
                 $validated['resolved_by'] = auth()->id();
             }
         }
@@ -325,7 +324,7 @@ class ItConcernController extends Controller
         if ($data['status'] === 'resolved' && $itConcern->status !== 'resolved') {
             $data['resolved_at'] = now();
             // Auto-fill resolved_by if user is IT role and not already set
-            if ((auth()->user()->role === 'IT' || auth()->user()->role === 'Super Admin') && !$itConcern->resolved_by) {
+            if ((auth()->user()->role === 'IT' || auth()->user()->role === 'Super Admin') && ! $itConcern->resolved_by) {
                 $data['resolved_by'] = auth()->id();
             }
         }
@@ -358,7 +357,7 @@ class ItConcernController extends Controller
             abort(403, 'You can only cancel your own IT concerns.');
         }
 
-        if (!in_array($itConcern->status, ['pending', 'in_progress'])) {
+        if (! in_array($itConcern->status, ['pending', 'in_progress'])) {
             return redirect()->back()
                 ->with('flash', ['message' => 'Only pending or in-progress concerns can be cancelled.', 'type' => 'error']);
         }

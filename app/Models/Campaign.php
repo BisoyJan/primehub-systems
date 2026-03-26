@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Builder;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Campaign extends Model
 {
@@ -25,7 +25,7 @@ class Campaign extends Model
     // Scope for search functionality
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
-        if (!$search) {
+        if (! $search) {
             return $query;
         }
 
@@ -36,5 +36,11 @@ class Campaign extends Model
     public function stations()
     {
         return $this->hasMany(Station::class);
+    }
+
+    // Relationship to team leads (many-to-many)
+    public function teamLeads()
+    {
+        return $this->belongsToMany(User::class)->withTimestamps();
     }
 }

@@ -83,7 +83,7 @@ interface PageProps extends SharedData {
     concerns: ConcernPayload;
     sites: Site[];
     campaigns?: Campaign[];
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     filters?: {
         search?: string;
         site_id?: string;
@@ -158,7 +158,7 @@ const getPriorityBadge = (priority: string) => {
 };
 
 export default function ItConcernsIndex() {
-    const { concerns, sites, campaigns = [], teamLeadCampaignId, filters, auth } = usePage<PageProps>().props;
+    const { concerns, sites, campaigns = [], teamLeadCampaignIds, filters, auth } = usePage<PageProps>().props;
     const concernData = {
         data: concerns?.data ?? [],
         links: concerns?.links ?? [],
@@ -190,7 +190,7 @@ export default function ItConcernsIndex() {
     const [priorityFilter, setPriorityFilter] = useState(appliedFilters.priority || "all");
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
-        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return "all";
     });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -470,7 +470,7 @@ export default function ItConcernsIndex() {
                                     <SelectItem value="all">All Campaigns</SelectItem>
                                     {campaigns.map((campaign) => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

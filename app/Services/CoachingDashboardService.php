@@ -130,10 +130,10 @@ class CoachingDashboardService
      */
     public function getTeamLeadDashboardData(User $teamLead, ?array $filters = null): array
     {
-        // Get agents in the team lead's campaign
-        $campaignId = $teamLead->activeSchedule?->campaign_id;
+        // Get agents in the team lead's campaigns
+        $campaignIds = $teamLead->getCampaignIds();
 
-        if (! $campaignId) {
+        if (empty($campaignIds)) {
             return [
                 'total_agents' => 0,
                 'status_counts' => $this->emptyStatusCounts(),
@@ -141,7 +141,7 @@ class CoachingDashboardService
             ];
         }
 
-        $agentIds = EmployeeSchedule::where('campaign_id', $campaignId)
+        $agentIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
             ->where('is_active', true)
             ->whereHas('user', function ($q) {
                 $q->where('role', 'Agent')

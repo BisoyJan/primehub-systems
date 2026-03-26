@@ -48,13 +48,10 @@ class LeaveCreditController extends Controller
             abort(403, 'Unauthorized action.');
         }
 
-        // Determine Team Lead's campaign (if applicable)
-        $teamLeadCampaignId = null;
+        // Determine Team Lead's campaigns (if applicable)
+        $teamLeadCampaignIds = [];
         if ($user->role === 'Team Lead') {
-            $activeSchedule = $user->activeSchedule;
-            if ($activeSchedule && $activeSchedule->campaign_id) {
-                $teamLeadCampaignId = $activeSchedule->campaign_id;
-            }
+            $teamLeadCampaignIds = $user->getCampaignIds();
         }
 
         $year = (int) $request->input('year', now()->year);
@@ -112,8 +109,8 @@ class LeaveCreditController extends Controller
 
         // Apply campaign filter - auto-filter for Team Leads
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (! $campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
-            $campaignIdToFilter = $teamLeadCampaignId;
+        if (! $campaignIdToFilter && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
+            $campaignIdToFilter = $teamLeadCampaignIds[0];
         }
         if ($campaignIdToFilter) {
             $query->whereHas('activeSchedule', function ($q) use ($campaignIdToFilter) {
@@ -278,7 +275,7 @@ class LeaveCreditController extends Controller
             'creditsData' => $creditsData,
             'allEmployees' => $allEmployees,
             'campaigns' => $campaigns,
-            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'filters' => [
                 'year' => (int) $year,
                 'search' => $search,

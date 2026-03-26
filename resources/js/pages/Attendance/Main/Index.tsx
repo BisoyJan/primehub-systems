@@ -139,7 +139,7 @@ interface PageProps extends SharedData {
     users?: User[];
     sites?: Site[];
     campaigns?: Campaign[];
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     filters?: {
         search?: string;
         status?: string;
@@ -164,7 +164,7 @@ const DEFAULT_META: Meta = {
 // formatDateTime, formatDate, formatTime are now imported from @/lib/utils
 
 export default function AttendanceIndex() {
-    const { attendances, users = [], sites = [], campaigns = [], teamLeadCampaignId, filters, auth } = usePage<PageProps>().props;
+    const { attendances, users = [], sites = [], campaigns = [], teamLeadCampaignIds, filters, auth } = usePage<PageProps>().props;
 
     // Ensure we have proper data structure
     const attendanceData = {
@@ -198,7 +198,7 @@ export default function AttendanceIndex() {
     const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
         const fromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
         if (fromFilter.length > 0) return fromFilter;
-        if (isTeamLead && teamLeadCampaignId) return [teamLeadCampaignId.toString()];
+        if (isTeamLead && teamLeadCampaignIds?.length) return teamLeadCampaignIds.map(String);
         return [];
     });
     // Multi-select state for status
@@ -286,8 +286,8 @@ export default function AttendanceIndex() {
         const campaignFromFilter = parseMultiSelectParam(appliedFilters.campaign_id);
         if (campaignFromFilter.length > 0) {
             setSelectedCampaignIds(campaignFromFilter);
-        } else if (isTeamLead && teamLeadCampaignId) {
-            setSelectedCampaignIds([teamLeadCampaignId.toString()]);
+        } else if (isTeamLead && teamLeadCampaignIds?.length) {
+            setSelectedCampaignIds(teamLeadCampaignIds.map(String));
         } else {
             setSelectedCampaignIds([]);
         }
@@ -297,7 +297,7 @@ export default function AttendanceIndex() {
         setNeedsVerification(appliedFilters.needs_verification || false);
         setVerifiedFilter(appliedFilters.verified_status || "all");
         // Don't clear selections when filters change
-    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification, appliedFilters.verified_status, isTeamLead, teamLeadCampaignId]);
+    }, [appliedFilters.user_id, appliedFilters.site_id, appliedFilters.campaign_id, appliedFilters.status, appliedFilters.start_date, appliedFilters.end_date, appliedFilters.needs_verification, appliedFilters.verified_status, isTeamLead, teamLeadCampaignIds]);
 
     const userId = auth.user?.id;
     // Roles that should only see their own attendance records
@@ -589,7 +589,7 @@ export default function AttendanceIndex() {
                                     <Label>Campaign</Label>
                                     <MultiSelectFilter
                                         options={campaigns.map(c => ({
-                                            label: c.name + (isTeamLead && teamLeadCampaignId === c.id ? ' (Your Campaign)' : ''),
+                                            label: c.name + (isTeamLead && teamLeadCampaignIds?.includes(c.id) ? ' (Your Campaign)' : ''),
                                             value: c.id.toString()
                                         }))}
                                         value={selectedCampaignIds}

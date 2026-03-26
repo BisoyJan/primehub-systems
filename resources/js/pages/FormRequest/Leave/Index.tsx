@@ -136,7 +136,7 @@ interface Props {
     };
     campaigns?: string[];
     allEmployees?: Employee[];
-    teamLeadCampaignName?: string;
+    teamLeadCampaignNames?: string[];
 }
 
 const statusTabs: { key: StatusTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
@@ -147,7 +147,7 @@ const statusTabs: { key: StatusTab; label: string; icon: React.ComponentType<{ c
     { key: 'cancelled', label: 'Cancelled', icon: Ban },
 ];
 
-export default function Index({ leaveRequests, filters, statusCounts, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [], teamLeadCampaignName }: Props) {
+export default function Index({ leaveRequests, filters, statusCounts, isAdmin, isTeamLead, auth, campaigns = [], allEmployees = [], teamLeadCampaignNames }: Props) {
     // Show employee column for admins and team leads (who can see other users' requests)
     const showEmployeeColumn = isAdmin || isTeamLead;
 
@@ -169,7 +169,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const [filterEmployeeName, setFilterEmployeeName] = useState(filters.employee_name || '');
     const [filterCampaign, setFilterCampaign] = useState(() => {
         if (filters.campaign_department) return filters.campaign_department;
-        if (teamLeadCampaignName) return teamLeadCampaignName;
+        if (teamLeadCampaignNames?.length) return teamLeadCampaignNames[0];
         return 'all';
     });
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
@@ -651,7 +651,7 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
                                     {campaigns.map((c) => (
-                                        <SelectItem key={c} value={c}>{c}{teamLeadCampaignName === c ? " (Your Campaign)" : ""}</SelectItem>
+                                        <SelectItem key={c} value={c}>{c}{teamLeadCampaignNames?.includes(c) ? " (Your Campaign)" : ""}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>

@@ -93,7 +93,7 @@ interface Props extends InertiaPageProps {
     isAdmin: boolean;
     isTeamLead: boolean;
     isAgent: boolean;
-    teamLeadCampaignId: number | null;
+    teamLeadCampaignIds: number[];
     activeTab: string | null;
     pendingAckCount: number | null;
     pendingReviewCount: number | null;

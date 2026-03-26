@@ -106,7 +106,7 @@ interface Props {
     employees: Employee[];
     sites: Site[];
     campaigns: Campaign[];
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     selectedDate: string;
     dayName: string;
     filters: {
@@ -320,7 +320,7 @@ const calculateSuggestedStatus = (
     return { status, secondaryStatus, tardyMinutes, undertimeMinutes, overtimeMinutes, reason, isPartial, violations };
 };
 
-export default function DailyRoster({ employees, sites, campaigns, teamLeadCampaignId, selectedDate, dayName, filters }: Props) {
+export default function DailyRoster({ employees, sites, campaigns, teamLeadCampaignIds, selectedDate, dayName, filters }: Props) {
     useFlashMessage();
     const isPageLoading = usePageLoading();
     const { can } = usePermission();
@@ -329,8 +329,8 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const canApproveUndertime = can('attendance.approve_undertime');
     const canRequestUndertimeApproval = can('attendance.request_undertime_approval');
 
-    // Detect if user is a Team Lead (teamLeadCampaignId will be set if they are)
-    const isTeamLead = !!teamLeadCampaignId;
+    // Detect if user is a Team Lead (teamLeadCampaignIds will be set if they are)
+    const isTeamLead = !!teamLeadCampaignIds?.length;
 
     // Undertime approval state
     const [isRequestingUndertimeApproval, setIsRequestingUndertimeApproval] = useState(false);
@@ -362,7 +362,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     // Auto-select Team Lead's campaign if no filter is applied
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (filters.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignId) return String(teamLeadCampaignId);
+        if (teamLeadCampaignIds?.length) return String(teamLeadCampaignIds[0]);
         return 'all';
     });
     const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
@@ -598,8 +598,8 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const handleClearFilters = () => {
         setSiteFilter('all');
         // For Team Leads, reset to their campaign instead of 'all'
-        if (teamLeadCampaignId) {
-            setCampaignFilter(String(teamLeadCampaignId));
+        if (teamLeadCampaignIds?.length) {
+            setCampaignFilter(String(teamLeadCampaignIds[0]));
         } else {
             setCampaignFilter('all');
         }
@@ -727,7 +727,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                 <SelectItem value="all">All Campaigns</SelectItem>
                                 {campaigns.map((campaign) => (
                                     <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}{isTeamLead && teamLeadCampaignId === campaign.id ? ' (Your Campaign)' : ''}
+                                        {campaign.name}{isTeamLead && teamLeadCampaignIds?.includes(campaign.id) ? ' (Your Campaign)' : ''}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

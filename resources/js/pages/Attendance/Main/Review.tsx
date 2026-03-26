@@ -138,7 +138,7 @@ interface PageProps extends SharedData {
     employees?: User[];
     sites?: Site[];
     campaigns?: Campaign[];
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     verifyAttendanceId?: number;
     filters?: {
         search?: string;
@@ -335,7 +335,7 @@ const calculateSuggestedStatus = (
 };
 
 export default function AttendanceReview() {
-    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignId, verifyAttendanceId, filters, auth, leaveConflictCount, partiallyVerifiedCount, statusCounts = {}, verificationCounts } = usePage<PageProps>().props;
+    const { attendances, employees, sites = [], campaigns = [], teamLeadCampaignIds, verifyAttendanceId, filters, auth, leaveConflictCount, partiallyVerifiedCount, statusCounts = {}, verificationCounts } = usePage<PageProps>().props;
     const attendanceData = {
         data: attendances?.data ?? [],
         links: attendances?.links ?? [],
@@ -351,7 +351,7 @@ export default function AttendanceReview() {
     const [selectedCampaignIds, setSelectedCampaignIds] = useState<string[]>(() => {
         const fromFilter = parseMultiSelectParam(filters?.campaign_id);
         if (fromFilter.length > 0) return fromFilter;
-        if (isTeamLead && teamLeadCampaignId) return [teamLeadCampaignId.toString()];
+        if (isTeamLead && teamLeadCampaignIds?.length) return teamLeadCampaignIds.map(String);
         return [];
     });
     const [selectedSiteId, setSelectedSiteId] = useState(filters?.site_id || "");
@@ -568,8 +568,8 @@ export default function AttendanceReview() {
         setSelectedSiteId("");
         setSelectedStatuses([]);
         // For Team Leads, reset to their campaign instead of empty
-        if (isTeamLead && teamLeadCampaignId) {
-            setSelectedCampaignIds([teamLeadCampaignId.toString()]);
+        if (isTeamLead && teamLeadCampaignIds?.length) {
+            setSelectedCampaignIds(teamLeadCampaignIds.map(String));
         } else {
             setSelectedCampaignIds([]);
         }
@@ -1013,7 +1013,7 @@ export default function AttendanceReview() {
                                     <Label>Campaign</Label>
                                     <MultiSelectFilter
                                         options={campaigns.map(c => ({
-                                            label: c.name + (isTeamLead && teamLeadCampaignId === c.id ? ' (Your Campaign)' : ''),
+                                            label: c.name + (isTeamLead && teamLeadCampaignIds?.includes(c.id) ? ' (Your Campaign)' : ''),
                                             value: c.id.toString()
                                         }))}
                                         value={selectedCampaignIds}

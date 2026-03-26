@@ -185,7 +185,7 @@ interface PageProps extends SharedData {
     campaigns?: Campaign[];
     stats?: Stats;
     filters?: Filters;
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     [key: string]: unknown;
 }
 
@@ -229,7 +229,7 @@ const getPointTypeBadge = (type: string) => {
     );
 };
 
-export default function AttendancePointsIndex({ points, users, campaigns, stats, filters, auth, teamLeadCampaignId }: PageProps) {
+export default function AttendancePointsIndex({ points, users, campaigns, stats, filters, auth, teamLeadCampaignIds }: PageProps) {
     useFlashMessage();
     const { title, breadcrumbs } = usePageMeta({
         title: defaultTitle,
@@ -246,7 +246,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
         if (filters?.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return "";
     });
     const [selectedPointType, setSelectedPointType] = useState(filters?.point_type || "");
@@ -1243,7 +1243,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                     <SelectItem value="all">All Campaigns</SelectItem>
                                     {campaigns?.map(campaign => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

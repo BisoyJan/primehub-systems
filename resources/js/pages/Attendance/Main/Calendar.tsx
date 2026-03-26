@@ -76,7 +76,7 @@ interface PageProps extends SharedData {
     users: User[];
     selectedUser?: User | null;
     campaigns?: Array<{ id: number; name: string }>;
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     month: number;
     year: number;
     verificationFilter: string;
@@ -116,7 +116,7 @@ const statusLabels: Record<string, string> = {
 // formatTime is now imported from @/lib/utils
 
 export default function AttendanceCalendar() {
-    const { attendances, users, selectedUser, campaigns = [], teamLeadCampaignId, month, year, verificationFilter: initialVerificationFilter, campaignFilter: initialCampaignFilter } = usePage<PageProps>().props;
+    const { attendances, users, selectedUser, campaigns = [], teamLeadCampaignIds, month, year, verificationFilter: initialVerificationFilter, campaignFilter: initialCampaignFilter } = usePage<PageProps>().props;
 
     useFlashMessage();
     const { can } = usePermission();
@@ -136,7 +136,7 @@ export default function AttendanceCalendar() {
     const [verificationFilter, setVerificationFilter] = useState(initialVerificationFilter || 'all');
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (initialCampaignFilter) return initialCampaignFilter;
-        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return 'all';
     });
 
@@ -296,7 +296,7 @@ export default function AttendanceCalendar() {
                                         <SelectItem value="all">All Campaigns</SelectItem>
                                         {campaigns.map(campaign => (
                                             <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                                {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

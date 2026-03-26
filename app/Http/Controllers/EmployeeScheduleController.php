@@ -19,13 +19,10 @@ class EmployeeScheduleController extends Controller
     {
         $user = auth()->user();
 
-        // Determine Team Lead's campaign (if applicable)
-        $teamLeadCampaignId = null;
+        // Determine Team Lead's campaigns (if applicable)
+        $teamLeadCampaignIds = [];
         if ($user->role === 'Team Lead') {
-            $activeSchedule = $user->activeSchedule;
-            if ($activeSchedule && $activeSchedule->campaign_id) {
-                $teamLeadCampaignId = $activeSchedule->campaign_id;
-            }
+            $teamLeadCampaignIds = $user->getCampaignIds();
         }
 
         $query = EmployeeSchedule::with(['user', 'campaign', 'site']);
@@ -52,15 +49,14 @@ class EmployeeScheduleController extends Controller
 
         // Campaign filter - auto-filter for Team Leads
         $campaignIdToFilter = ($request->has('campaign_id') && $request->campaign_id !== 'all') ? $request->campaign_id : null;
-        if (! $campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
-            $campaignIdToFilter = $teamLeadCampaignId;
-        }
-        if ($campaignIdToFilter) {
+        if (! $campaignIdToFilter && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
+            $query->whereIn('campaign_id', $teamLeadCampaignIds);
+        } elseif ($campaignIdToFilter) {
             $query->where('campaign_id', $campaignIdToFilter);
         }
 
         if ($request->has('is_active') && $request->is_active !== 'all') {
-            $query->where('is_active', $request->is_active);
+            $query->where('employee_schedules.is_active', $request->is_active);
         }
 
         if ($request->has('active_only') && $request->active_only) {
@@ -142,7 +138,7 @@ class EmployeeScheduleController extends Controller
             'campaigns' => $campaigns,
             'sites' => $sites,
             'roles' => $roles,
-            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'usersWithoutSchedules' => $usersWithoutSchedules,
             'usersWithInactiveSchedules' => $usersWithInactiveSchedules,
             'usersWithMultipleSchedules' => $usersWithMultipleSchedules,
@@ -168,6 +164,7 @@ class EmployeeScheduleController extends Controller
                     'id' => $user->id,
                     'name' => $user->name,
                     'email' => $user->email,
+                    'role' => $user->role,
                     'hired_date' => $user->hired_date?->format('Y-m-d'),
                     'has_schedule' => $user->employee_schedules_count > 0,
                 ];
@@ -217,9 +214,14 @@ class EmployeeScheduleController extends Controller
         if ($isRestrictedRole) {
             $rules['campaign_id'] = 'required|exists:campaigns,id';
             $rules['site_id'] = 'required|exists:sites,id';
+            // Team Leads can also optionally provide multiple campaign_ids for the pivot
+            $rules['campaign_ids'] = 'nullable|array';
+            $rules['campaign_ids.*'] = 'exists:campaigns,id';
         } else {
             $rules['campaign_id'] = 'nullable|exists:campaigns,id';
             $rules['site_id'] = 'nullable|exists:sites,id';
+            $rules['campaign_ids'] = 'nullable|array';
+            $rules['campaign_ids.*'] = 'exists:campaigns,id';
         }
 
         $validated = $request->validate($rules);
@@ -254,6 +256,12 @@ class EmployeeScheduleController extends Controller
 
         $schedule = EmployeeSchedule::create($validated);
 
+        // Sync campaign_user pivot for Team Leads
+        $targetUser = User::find($validated['user_id']);
+        if ($targetUser && $targetUser->role === 'Team Lead' && ! empty($validated['campaign_ids'])) {
+            $targetUser->campaigns()->syncWithoutDetaching($validated['campaign_ids']);
+        }
+
         // If first-time setup for Agent/Team Lead, redirect to dashboard
         if ($isFirstTimeSetup) {
             return redirect()->route('dashboard')
@@ -284,12 +292,19 @@ class EmployeeScheduleController extends Controller
         $scheduleData['effective_date'] = $employeeSchedule->effective_date?->format('Y-m-d');
         $scheduleData['end_date'] = $employeeSchedule->end_date?->format('Y-m-d');
 
+        // Get the schedule owner's currently assigned campaign IDs (for TL multi-campaign)
+        $scheduleOwner = $employeeSchedule->user;
+        $userCampaignIds = $scheduleOwner?->role === 'Team Lead'
+            ? $scheduleOwner->getCampaignIds()
+            : [];
+
         return Inertia::render('Attendance/EmployeeSchedules/Edit', [
             'schedule' => $scheduleData,
             'users' => $users,
             'campaigns' => $campaigns,
             'sites' => $sites,
             'canEditEffectiveDate' => $canEditEffectiveDate,
+            'userCampaignIds' => $userCampaignIds,
         ]);
     }
 
@@ -303,6 +318,8 @@ class EmployeeScheduleController extends Controller
 
         $rules = [
             'campaign_id' => 'nullable|exists:campaigns,id',
+            'campaign_ids' => 'nullable|array',
+            'campaign_ids.*' => 'exists:campaigns,id',
             'site_id' => 'nullable|exists:sites,id',
             'shift_type' => 'required|in:graveyard_shift,night_shift,morning_shift,afternoon_shift,utility_24h',
             'scheduled_time_in' => 'required|date_format:H:i',
@@ -351,6 +368,12 @@ class EmployeeScheduleController extends Controller
         }
 
         $employeeSchedule->update($validated);
+
+        // Sync campaign_user pivot for Team Leads
+        $scheduleOwner = $employeeSchedule->user;
+        if ($scheduleOwner && $scheduleOwner->role === 'Team Lead' && isset($validated['campaign_ids'])) {
+            $scheduleOwner->campaigns()->sync($validated['campaign_ids']);
+        }
 
         return redirect()->route('employee-schedules.index')
             ->with('flash', ['message' => 'Employee schedule updated successfully', 'type' => 'success']);

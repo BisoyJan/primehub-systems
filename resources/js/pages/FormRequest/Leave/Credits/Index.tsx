@@ -162,7 +162,7 @@ interface Props {
     };
     allEmployees: Employee[];
     campaigns: Campaign[];
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     filters: {
         year: number;
         search: string;
@@ -201,7 +201,7 @@ interface MismatchScanResult {
     users: MismatchUser[];
 }
 
-export default function Index({ creditsData, allEmployees, campaigns = [], teamLeadCampaignId, filters, availableYears, canEdit = false }: Props) {
+export default function Index({ creditsData, allEmployees, campaigns = [], teamLeadCampaignIds, filters, availableYears, canEdit = false }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Leave Credits',
         breadcrumbs: [
@@ -220,7 +220,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
     const [eligibilityFilter, setEligibilityFilter] = useState(filters.eligibility || 'all');
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (filters.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return 'all';
     });
 
@@ -852,7 +852,7 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                     <SelectItem value="all">All Campaigns</SelectItem>
                                     {campaigns.map(campaign => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

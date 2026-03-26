@@ -75,10 +75,10 @@ interface Props {
     };
     medicationTypes: string[];
     campaigns?: Campaign[];
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
 }
 
-export default function Index({ medicationRequests, filters, medicationTypes = [], campaigns = [], teamLeadCampaignId }: Props) {
+export default function Index({ medicationRequests, filters, medicationTypes = [], campaigns = [], teamLeadCampaignIds }: Props) {
     const { title, breadcrumbs } = usePageMeta({
         title: 'Medication Requests',
         breadcrumbs: [
@@ -95,7 +95,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const [medicationType, setMedicationType] = useState(filters.medication_type || 'all');
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (filters.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return 'all';
     });
     const [localLoading, setLocalLoading] = useState(false);
@@ -277,7 +277,7 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                     <SelectItem value="all">All Campaigns</SelectItem>
                                     {campaigns.map(campaign => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

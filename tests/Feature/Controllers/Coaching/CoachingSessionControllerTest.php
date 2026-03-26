@@ -47,6 +47,8 @@ class CoachingSessionControllerTest extends TestCase
             'campaign_id' => $campaign->id,
             'is_active' => true,
         ]);
+        // Sync campaign_user pivot for multi-campaign support
+        $teamLead->campaigns()->sync([$campaign->id]);
 
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         EmployeeSchedule::factory()->create([

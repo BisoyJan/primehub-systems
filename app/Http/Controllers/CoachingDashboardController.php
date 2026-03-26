@@ -95,7 +95,11 @@ class CoachingDashboardController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        $campaignName = $user->activeSchedule?->campaign?->name ?? 'N/A';
+        $campaignNames = $user->campaigns()
+            ->orderBy('name')
+            ->pluck('name')
+            ->toArray();
+        $campaignName = ! empty($campaignNames) ? implode(', ', $campaignNames) : ($user->activeSchedule?->campaign?->name ?? 'N/A');
 
         $followUpData = $this->dashboardService->getExpandedFollowUps($user);
 

@@ -61,14 +61,13 @@ class LeaveRequestController extends Controller
         $isAdminRole = $user->role === 'Admin';
         $isHr = $user->role === 'HR';
 
-        // Determine Team Lead's campaign (if applicable)
-        $teamLeadCampaignId = null;
-        $teamLeadCampaignName = null;
+        // Determine Team Lead's campaigns (if applicable)
+        $teamLeadCampaignIds = [];
+        $teamLeadCampaignNames = [];
         if ($isTeamLead) {
-            $activeSchedule = $user->activeSchedule;
-            if ($activeSchedule && $activeSchedule->campaign_id) {
-                $teamLeadCampaignId = $activeSchedule->campaign_id;
-                $teamLeadCampaignName = $activeSchedule->campaign?->name;
+            $teamLeadCampaignIds = $user->getCampaignIds();
+            if (! empty($teamLeadCampaignIds)) {
+                $teamLeadCampaignNames = Campaign::whereIn('id', $teamLeadCampaignIds)->pluck('name')->toArray();
             }
         }
 
@@ -145,8 +144,8 @@ class LeaveRequestController extends Controller
 
         // Filter by campaign/department - auto-filter for Team Leads
         $campaignFilter = $request->filled('campaign_department') ? $request->campaign_department : null;
-        if (! $campaignFilter && $isTeamLead && $teamLeadCampaignName) {
-            $campaignFilter = $teamLeadCampaignName;
+        if (! $campaignFilter && $isTeamLead && ! empty($teamLeadCampaignNames)) {
+            $campaignFilter = $teamLeadCampaignNames[0];
         }
         if ($campaignFilter) {
             $query->where('campaign_department', $campaignFilter);
@@ -249,7 +248,7 @@ class LeaveRequestController extends Controller
             'allEmployees' => $allEmployees,
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
-            'teamLeadCampaignName' => $teamLeadCampaignName,
+            'teamLeadCampaignNames' => $teamLeadCampaignNames,
             'hasPendingRequests' => $hasPendingRequests,
         ]);
     }
@@ -264,13 +263,10 @@ class LeaveRequestController extends Controller
         $user = auth()->user();
         $isRestrictedRole = in_array($user->role, ['Agent', 'Utility']);
 
-        // Detect Team Lead's campaign for auto-filter
-        $teamLeadCampaignId = null;
+        // Detect Team Lead's campaigns for auto-filter
+        $teamLeadCampaignIds = [];
         if ($user->role === 'Team Lead') {
-            $activeSchedule = $user->activeSchedule;
-            if ($activeSchedule && $activeSchedule->campaign_id) {
-                $teamLeadCampaignId = $activeSchedule->campaign_id;
-            }
+            $teamLeadCampaignIds = $user->getCampaignIds();
         }
 
         // Get filters
@@ -281,8 +277,8 @@ class LeaveRequestController extends Controller
         $viewMode = $request->input('view_mode', 'single'); // 'single' or 'multi'
 
         // Auto-filter campaign for Team Leads when no campaign is specified
-        if (! $campaignId && $teamLeadCampaignId) {
-            $campaignId = $teamLeadCampaignId;
+        if (! $campaignId && ! empty($teamLeadCampaignIds)) {
+            $campaignId = $teamLeadCampaignIds[0];
         }
 
         // Parse month to get date range
@@ -367,7 +363,7 @@ class LeaveRequestController extends Controller
         return Inertia::render('FormRequest/Leave/Calendar', [
             'leaves' => $leaves,
             'campaigns' => $campaigns,
-            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'filters' => [
                 'month' => $month,
                 'campaign_id' => $campaignId,
@@ -399,10 +395,10 @@ class LeaveRequestController extends Controller
 
             // Team Leads can only file for agents in their campaign
             if ($isTeamLead) {
-                $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+                $teamLeadCampaignIds = $user->getCampaignIds();
                 $targetCampaignId = $targetUser->activeSchedule?->campaign_id;
 
-                if (! $teamLeadCampaignId || $targetCampaignId !== $teamLeadCampaignId || $targetUser->role !== 'Agent') {
+                if (empty($teamLeadCampaignIds) || ! in_array($targetCampaignId, $teamLeadCampaignIds) || $targetUser->role !== 'Agent') {
                     abort(403, 'You can only file leave requests for agents in your campaign.');
                 }
             }
@@ -474,8 +470,8 @@ class LeaveRequestController extends Controller
                     ];
                 });
         } elseif ($isTeamLead) {
-            // Team Leads can file for themselves + agents in their campaign
-            $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+            // Team Leads can file for themselves + agents in their campaigns
+            $teamLeadCampaignIds = $user->getCampaignIds();
 
             // Always include the Team Lead themselves first
             $selfEntry = collect([[
@@ -484,12 +480,12 @@ class LeaveRequestController extends Controller
                 'email' => $user->email,
             ]]);
 
-            if ($teamLeadCampaignId) {
+            if (! empty($teamLeadCampaignIds)) {
                 $agents = User::select('id', 'first_name', 'middle_name', 'last_name', 'email')
                     ->where('role', 'Agent')
                     ->where('is_approved', true)
-                    ->whereHas('activeSchedule', function ($query) use ($teamLeadCampaignId) {
-                        $query->where('campaign_id', $teamLeadCampaignId);
+                    ->whereHas('activeSchedule', function ($query) use ($teamLeadCampaignIds) {
+                        $query->whereIn('campaign_id', $teamLeadCampaignIds);
                     })
                     ->orderBy('first_name')
                     ->orderBy('last_name')
@@ -564,10 +560,10 @@ class LeaveRequestController extends Controller
 
             // Team Leads can only file for agents in their campaign
             if ($user->role === 'Team Lead') {
-                $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+                $teamLeadCampaignIds = $user->getCampaignIds();
                 $targetCampaignId = $targetUser->activeSchedule?->campaign_id;
 
-                if (! $teamLeadCampaignId || $targetCampaignId !== $teamLeadCampaignId || $targetUser->role !== 'Agent') {
+                if (empty($teamLeadCampaignIds) || ! in_array($targetCampaignId, $teamLeadCampaignIds) || $targetUser->role !== 'Agent') {
                     return back()->withErrors(['error' => 'You can only file leave requests for agents in your campaign.'])->withInput();
                 }
             }

@@ -36,19 +36,16 @@ class MedicationRequestController extends Controller
         $user = auth()->user();
         $campaignFilter = $request->input('campaign_id', '');
 
-        // Detect Team Lead's campaign for auto-filter
-        $teamLeadCampaignId = null;
+        // Detect Team Lead's campaigns for auto-filter
+        $teamLeadCampaignIds = [];
         if ($user->role === 'Team Lead') {
-            $activeSchedule = $user->activeSchedule;
-            if ($activeSchedule && $activeSchedule->campaign_id) {
-                $teamLeadCampaignId = $activeSchedule->campaign_id;
-            }
+            $teamLeadCampaignIds = $user->getCampaignIds();
         }
 
         // Auto-filter for Team Leads when no campaign is specified
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (! $campaignIdToFilter && $teamLeadCampaignId) {
-            $campaignIdToFilter = $teamLeadCampaignId;
+        if (! $campaignIdToFilter && ! empty($teamLeadCampaignIds)) {
+            $campaignIdToFilter = $teamLeadCampaignIds[0];
         }
 
         $query = MedicationRequest::with(['user.activeSchedule.campaign', 'user.activeSchedule.site', 'approvedBy'])
@@ -88,7 +85,7 @@ class MedicationRequestController extends Controller
             'medicationRequests' => $query->paginate(15)->withQueryString(),
             'campaigns' => $campaigns,
             'medicationTypes' => $medicationTypes,
-            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'filters' => [
                 'search' => $request->input('search', ''),
                 'status' => $request->input('status', ''),

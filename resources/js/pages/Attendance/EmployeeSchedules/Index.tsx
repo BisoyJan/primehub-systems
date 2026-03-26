@@ -101,7 +101,7 @@ interface PageProps extends SharedData {
     usersWithoutSchedules: Array<{ id: number; first_name: string; last_name: string }>;
     usersWithInactiveSchedules: Array<{ id: number; first_name: string; last_name: string }>;
     usersWithMultipleSchedules: Array<{ id: number; first_name: string; last_name: string; schedule_count: number }>;
-    teamLeadCampaignId?: number;
+    teamLeadCampaignIds?: number[];
     filters?: {
         search?: string;
         user_id?: string;
@@ -155,7 +155,7 @@ const groupSchedulesByUser = (schedules: Schedule[]) => {
 };
 
 export default function EmployeeSchedulesIndex() {
-    const { schedules, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [], teamLeadCampaignId } = usePage<PageProps>().props;
+    const { schedules, users, campaigns = [], roles = [], filters, usersWithoutSchedules = [], usersWithInactiveSchedules = [], usersWithMultipleSchedules = [], teamLeadCampaignIds } = usePage<PageProps>().props;
     const scheduleData = {
         data: schedules?.data ?? [],
         links: schedules?.links ?? [],
@@ -190,7 +190,7 @@ export default function EmployeeSchedulesIndex() {
     const [roleFilter, setRoleFilter] = useState(appliedFilters.role || "all");
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
-        if (teamLeadCampaignId) return teamLeadCampaignId.toString();
+        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return "all";
     });
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
@@ -531,7 +531,7 @@ export default function EmployeeSchedulesIndex() {
                                 <SelectItem value="all">All Campaigns</SelectItem>
                                 {campaigns.map(campaign => (
                                     <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}{teamLeadCampaignId === campaign.id ? " (Your Campaign)" : ""}
+                                        {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

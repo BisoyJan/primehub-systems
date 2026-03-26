@@ -41,8 +41,8 @@ class AttendancePointController extends Controller
 
         $user = auth()->user();
 
-        // Determine Team Lead's campaign (if applicable)
-        $teamLeadCampaignId = $this->getTeamLeadCampaignId($user);
+        // Determine Team Lead's campaigns (if applicable)
+        $teamLeadCampaignIds = $this->getTeamLeadCampaignIds($user);
 
         // Redirect restricted roles to their own show page
         $restrictedRoles = ['Agent', 'IT', 'Utility'];
@@ -50,7 +50,7 @@ class AttendancePointController extends Controller
             return redirect()->route('attendance-points.show', ['user' => auth()->id()]);
         }
 
-        $query = $this->buildIndexQuery($request, $user, $teamLeadCampaignId);
+        $query = $this->buildIndexQuery($request, $user, $teamLeadCampaignIds);
         $points = $query->paginate(25)->appends($request->except('page'));
 
         $users = User::orderBy('first_name')->get();
@@ -64,7 +64,7 @@ class AttendancePointController extends Controller
             'users' => $users,
             'campaigns' => $campaigns,
             'stats' => $stats,
-            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'filters' => $this->buildFiltersArray($request),
         ]);
     }
@@ -560,23 +560,21 @@ class AttendancePointController extends Controller
     // ========== Private Helper Methods ==========
 
     /**
-     * Get team lead's campaign ID if applicable.
+     * Get team lead's campaign IDs if applicable.
      */
-    private function getTeamLeadCampaignId($user): ?int
+    private function getTeamLeadCampaignIds($user): array
     {
         if ($user->role !== 'Team Lead') {
-            return null;
+            return [];
         }
 
-        $activeSchedule = $user->activeSchedule;
-
-        return $activeSchedule?->campaign_id;
+        return $user->getCampaignIds();
     }
 
     /**
      * Build the query for the index page.
      */
-    private function buildIndexQuery(Request $request, $user, ?int $teamLeadCampaignId)
+    private function buildIndexQuery(Request $request, $user, array $teamLeadCampaignIds)
     {
         $query = AttendancePoint::with(['user', 'attendance', 'excusedBy', 'createdBy'])
             ->orderBy('shift_date', 'desc');
@@ -597,11 +595,11 @@ class AttendancePointController extends Controller
             ? $request->campaign_id
             : null;
 
-        if (! $campaignIdToFilter && $user->role === 'Team Lead' && $teamLeadCampaignId) {
-            $campaignIdToFilter = $teamLeadCampaignId;
-        }
-
-        if ($campaignIdToFilter) {
+        if (! $campaignIdToFilter && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
+            $query->whereHas('user.activeSchedule', function ($q) use ($teamLeadCampaignIds) {
+                $q->whereIn('campaign_id', $teamLeadCampaignIds);
+            });
+        } elseif ($campaignIdToFilter) {
             $query->whereHas('user.activeSchedule', function ($q) use ($campaignIdToFilter) {
                 $q->where('campaign_id', $campaignIdToFilter);
             });

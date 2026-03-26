@@ -42,10 +42,10 @@ class CoachingSessionController extends Controller
         $isTeamLead = $user->role === 'Team Lead';
         $isAgent = $user->role === 'Agent';
 
-        // Detect Team Lead's campaign for auto-filter
-        $teamLeadCampaignId = null;
+        // Detect Team Lead's campaigns for auto-filter
+        $teamLeadCampaignIds = [];
         if ($isTeamLead) {
-            $teamLeadCampaignId = $user->activeSchedule?->campaign_id;
+            $teamLeadCampaignIds = $user->getCampaignIds();
         }
 
         $query = CoachingSession::with(['coachee', 'coach', 'complianceReviewer']);
@@ -60,13 +60,13 @@ class CoachingSessionController extends Controller
                 // "My Sessions" tab — only sessions where TL is the coachee
                 $query->forCoachee($user->id);
             } else {
-                // "Team Sessions" tab — sessions TL coached or for agents in their campaign (excluding TL's own)
-                if ($teamLeadCampaignId) {
+                // "Team Sessions" tab — sessions TL coached or for agents in their campaigns (excluding TL's own)
+                if (! empty($teamLeadCampaignIds)) {
                     $query->where('coachee_id', '!=', $user->id)
-                        ->where(function ($q) use ($user, $teamLeadCampaignId) {
+                        ->where(function ($q) use ($user, $teamLeadCampaignIds) {
                             $q->where('coach_id', $user->id)
-                                ->orWhereHas('coachee.activeSchedule', function ($sq) use ($teamLeadCampaignId) {
-                                    $sq->where('campaign_id', $teamLeadCampaignId);
+                                ->orWhereHas('coachee.activeSchedule', function ($sq) use ($teamLeadCampaignIds) {
+                                    $sq->whereIn('campaign_id', $teamLeadCampaignIds);
                                 });
                         });
                 } else {
@@ -136,8 +136,8 @@ class CoachingSessionController extends Controller
                 ->orderBy('first_name')
                 ->orderBy('last_name')
                 ->get(['id', 'first_name', 'middle_name', 'last_name', 'role']);
-        } elseif ($isTeamLead && $teamLeadCampaignId) {
-            $agentIds = EmployeeSchedule::where('campaign_id', $teamLeadCampaignId)
+        } elseif ($isTeamLead && ! empty($teamLeadCampaignIds)) {
+            $agentIds = EmployeeSchedule::whereIn('campaign_id', $teamLeadCampaignIds)
                 ->where('is_active', true)
                 ->whereHas('user', function ($q) {
                     $q->where('role', 'Agent')
@@ -185,7 +185,7 @@ class CoachingSessionController extends Controller
             'isAdmin' => $isAdmin,
             'isTeamLead' => $isTeamLead,
             'isAgent' => $isAgent,
-            'teamLeadCampaignId' => $teamLeadCampaignId,
+            'teamLeadCampaignIds' => $teamLeadCampaignIds,
             'activeTab' => $activeTabValue,
             'pendingAckCount' => $pendingAckCount,
             'pendingReviewCount' => $pendingReviewCount,
@@ -231,10 +231,10 @@ class CoachingSessionController extends Controller
             // Coachable team leads (for direct coaching mode)
             $coachableTeamLeads = $teamLeads;
         } else {
-            // Team Lead: agents in their campaign only
-            $campaignId = $user->activeSchedule?->campaign_id;
-            if ($campaignId) {
-                $agentIds = EmployeeSchedule::where('campaign_id', $campaignId)
+            // Team Lead: agents in their campaigns only
+            $campaignIds = $user->getCampaignIds();
+            if (! empty($campaignIds)) {
+                $agentIds = EmployeeSchedule::whereIn('campaign_id', $campaignIds)
                     ->where('is_active', true)
                     ->whereHas('user', function ($q) {
                         $q->where('role', 'Agent')

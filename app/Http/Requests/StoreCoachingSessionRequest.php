@@ -170,18 +170,20 @@ class StoreCoachingSessionRequest extends FormRequest
                     return;
                 }
 
-                // Get coach's active campaign
-                $coachSchedule = EmployeeSchedule::where('user_id', $coachId)
-                    ->where('is_active', true)
-                    ->first();
-
-                if (! $coachSchedule?->campaign_id) {
+                // Get coach's campaign IDs (supports multi-campaign TLs)
+                $coach = User::find($coachId);
+                if (! $coach) {
                     return;
                 }
 
-                // Check if coachee has an active schedule in the same campaign
+                $coachCampaignIds = $coach->getCampaignIds();
+                if (empty($coachCampaignIds)) {
+                    return;
+                }
+
+                // Check if coachee has an active schedule in any of the coach's campaigns
                 $coacheeInCampaign = EmployeeSchedule::where('user_id', $coacheeId)
-                    ->where('campaign_id', $coachSchedule->campaign_id)
+                    ->whereIn('campaign_id', $coachCampaignIds)
                     ->where('is_active', true)
                     ->exists();
 

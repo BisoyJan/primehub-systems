@@ -41,10 +41,10 @@ class LeaveRequestPolicy
             return true;
         }
 
-        // Team Leads can view leave requests from their campaign
+        // Team Leads can view leave requests from their campaigns
         if ($user->role === 'Team Lead') {
-            $teamLeadCampaign = $user->activeSchedule?->campaign;
-            if ($teamLeadCampaign && $leaveRequest->campaign_department === $teamLeadCampaign->name) {
+            $teamLeadCampaignNames = $user->campaigns->pluck('name')->toArray();
+            if (! empty($teamLeadCampaignNames) && in_array($leaveRequest->campaign_department, $teamLeadCampaignNames)) {
                 return true;
             }
         }

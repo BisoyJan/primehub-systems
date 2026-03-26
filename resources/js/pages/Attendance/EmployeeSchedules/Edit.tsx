@@ -38,6 +38,7 @@ interface User {
     id: number;
     name: string;
     email?: string;
+    role?: string;
 }
 
 interface Campaign {
@@ -71,6 +72,7 @@ interface PageProps {
     campaigns: Campaign[];
     sites: Site[];
     canEditEffectiveDate: boolean;
+    userCampaignIds: number[];
     auth: {
         user: object;
     };
@@ -144,7 +146,7 @@ const getShiftTimeWarning = (shiftType: string, timeIn: string, timeOut: string)
 };
 
 export default function EmployeeScheduleEdit() {
-    const { schedule, users, campaigns, sites, canEditEffectiveDate } = usePage<PageProps>().props;
+    const { schedule, users, campaigns, sites, canEditEffectiveDate, userCampaignIds } = usePage<PageProps>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: "Edit Employee Schedule",
@@ -159,6 +161,7 @@ export default function EmployeeScheduleEdit() {
 
     const { data, setData, put, processing, errors } = useForm({
         campaign_id: schedule.campaign_id || null,
+        campaign_ids: userCampaignIds || [],
         site_id: schedule.site_id || null,
         shift_type: schedule.shift_type,
         scheduled_time_in: schedule.scheduled_time_in,
@@ -207,6 +210,18 @@ export default function EmployeeScheduleEdit() {
     };
 
     const selectedUser = users.find(u => u.id === schedule.user_id);
+
+    // Check if the schedule owner is a Team Lead (for multi-campaign assignment)
+    const isScheduleOwnerTeamLead = selectedUser?.role === 'Team Lead';
+
+    // Toggle campaign in the campaign_ids array
+    const toggleCampaignId = (campaignId: number) => {
+        if (data.campaign_ids.includes(campaignId)) {
+            setData("campaign_ids", data.campaign_ids.filter(id => id !== campaignId));
+        } else {
+            setData("campaign_ids", [...data.campaign_ids, campaignId]);
+        }
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -342,6 +357,36 @@ export default function EmployeeScheduleEdit() {
                                         )}
                                     </div>
                                 </div>
+
+                                {/* Managed Campaigns (Team Lead multi-select) */}
+                                {isScheduleOwnerTeamLead && (
+                                    <div className="space-y-2">
+                                        <Label>Managed Campaigns</Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            Select the campaigns this Team Lead will manage. This determines which agents they can coach and view.
+                                        </p>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 rounded-md border p-3">
+                                            {campaigns.map(campaign => (
+                                                <div key={campaign.id} className="flex items-center space-x-2">
+                                                    <Checkbox
+                                                        id={`campaign-${campaign.id}`}
+                                                        checked={data.campaign_ids.includes(campaign.id)}
+                                                        onCheckedChange={() => toggleCampaignId(campaign.id)}
+                                                    />
+                                                    <Label
+                                                        htmlFor={`campaign-${campaign.id}`}
+                                                        className="text-sm font-normal cursor-pointer"
+                                                    >
+                                                        {campaign.name}
+                                                    </Label>
+                                                </div>
+                                            ))}
+                                        </div>
+                                        {errors.campaign_ids && (
+                                            <p className="text-sm text-red-500">{errors.campaign_ids}</p>
+                                        )}
+                                    </div>
+                                )}
 
                                 {/* Shift Type */}
                                 <div className="space-y-2">

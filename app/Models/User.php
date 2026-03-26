@@ -167,6 +167,41 @@ class User extends Authenticatable
     }
 
     /**
+     * Get the campaigns managed by this user (Team Leads).
+     */
+    public function campaigns()
+    {
+        return $this->belongsToMany(Campaign::class)->withTimestamps();
+    }
+
+    /**
+     * Get campaign IDs this user has access to.
+     *
+     * Team Leads: from campaign_user pivot table.
+     * Others: from their active employee schedule.
+     *
+     * @return array<int>
+     */
+    public function getCampaignIds(): array
+    {
+        if ($this->role === 'Team Lead') {
+            return $this->campaigns()->pluck('campaigns.id')->toArray();
+        }
+
+        $campaignId = $this->activeSchedule?->campaign_id;
+
+        return $campaignId ? [(int) $campaignId] : [];
+    }
+
+    /**
+     * Check if user belongs to a specific campaign.
+     */
+    public function belongsToCampaign(int $campaignId): bool
+    {
+        return in_array($campaignId, $this->getCampaignIds());
+    }
+
+    /**
      * Get the employee schedules for the user.
      */
     public function employeeSchedules()
