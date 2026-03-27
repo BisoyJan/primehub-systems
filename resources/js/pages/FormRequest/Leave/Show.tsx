@@ -2168,175 +2168,120 @@ export default function Show({
                         </DialogDescription>
                     </DialogHeader>
                     <div className="overflow-y-auto flex-1 space-y-4 pr-1">
-                    <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
-                        <Shield className="h-4 w-4 text-purple-600" />
-                        <AlertDescription className="text-purple-800 dark:text-purple-200">
-                            This will override any pending approvals from Team Lead, Admin, or HR.
-                        </AlertDescription>
-                    </Alert>
-                    {/* Credit Preview for VL in Force Approve */}
-                    {creditPreview && isVl && (
-                        <>
-                            {creditPreview.partial_credit && (
-                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                        <strong>Partial VL credits.</strong> Only {creditPreview.credits_to_deduct} day(s) can be credited.
-                                        {creditPreview.upto_days ? ` ${creditPreview.upto_days} day(s) will be converted to UPTO.` : ''}
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-                            {creditPreview.convert_to_upto && (
-                                <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
-                                    <AlertTriangle className="h-4 w-4 text-red-600" />
-                                    <AlertDescription className="text-red-800 dark:text-red-200">
-                                        <strong>No VL credits available.</strong> All days will be marked as UPTO (Unpaid Time Off).
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-                            {creditPreview.should_deduct && !creditPreview.partial_credit && !creditPreview.convert_to_upto && (
-                                <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                    <AlertDescription className="text-green-800 dark:text-green-200">
-                                        Full VL credits available ({creditPreview.credits_to_deduct} day(s)).
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-                        </>
-                    )}
-                    {/* Credit Preview for SL in Force Approve */}
-                    {creditPreview && isSl && (
-                        <>
-                            {creditPreview.should_deduct && (
-                                <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                    <AlertDescription className="text-green-800 dark:text-green-200">
-                                        Full SL credits available ({creditPreview.credits_to_deduct} day(s)).
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-                        </>
-                    )}
-                    {/* SPL Credit Coverage Preview in Force Approve */}
-                    {isSpl && splCreditsSummary && splCoverage && (
-                        <div className="space-y-2">
-                            {splCoverage.allCovered ? (
-                                <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
-                                    <CheckCircle className="h-4 w-4 text-green-600" />
-                                    <AlertDescription className="text-green-800 dark:text-green-200">
-                                        <strong>SPL Credits:</strong> {splCoverage.balance.toFixed(2)} available — sufficient for all {workDays.length} day(s) ({splCoverage.creditsNeeded.toFixed(2)} credits needed).
-                                        {' '}Credits will be assigned chronologically (earliest first).
-                                    </AlertDescription>
-                                </Alert>
-                            ) : splCoverage.noCoverage ? (
-                                <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
-                                    <XCircle className="h-4 w-4 text-red-600" />
-                                    <AlertDescription className="text-red-800 dark:text-red-200">
-                                        <strong>No SPL credits available.</strong> Balance is {splCoverage.balance.toFixed(2)} — cannot approve any dates.
-                                    </AlertDescription>
-                                </Alert>
-                            ) : (
-                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                        <strong>Insufficient SPL Credits:</strong> {splCoverage.balance.toFixed(2)} of {splCoverage.creditsNeeded.toFixed(2)} needed.
-                                        {' '}{splCoverage.coveredDates.length} day(s) will be credited, {splCoverage.uncoveredDates.length} day(s) will be automatically denied.
-                                    </AlertDescription>
-                                </Alert>
-                            )}
-                            <div className="border rounded-md p-3 space-y-2 text-sm">
-                                <p className="text-xs text-muted-foreground mb-2">Toggle each day between whole day (1 credit) and half-day (0.5 credit).</p>
-                                {[...splCoverage.coveredDates, ...splCoverage.uncoveredDates].sort().map(dateStr => {
-                                    const isCovered = splCoverage.coveredDates.includes(dateStr);
-                                    const isDeniedByPartial = forceApprovePartialMode && forceApproveSelectedDates.length > 0 && !forceApproveSelectedDates.includes(dateStr);
-                                    const isHalf = splCoverage.halfDayMap.get(dateStr) ?? false;
-                                    const isAutoHalf = splCoverage.autoHalfDays.has(dateStr);
-                                    const showToggle = isCovered && !isDeniedByPartial;
-                                    return (
-                                        <div key={dateStr} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isDeniedByPartial ? 'bg-red-50/50 border-red-200 opacity-60 dark:bg-red-950/20 dark:border-red-800' : isHalf ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800' : isCovered ? 'bg-card border-border' : 'bg-muted/50 border-border opacity-60'}`}>
-                                            {isDeniedByPartial ? (
-                                                <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                            ) : isCovered ? (
-                                                <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                                            ) : (
-                                                <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
-                                            )}
-                                            <span className={`flex-1 ${(!isCovered || isDeniedByPartial) ? 'text-muted-foreground' : ''}`}>{format(parseISO(dateStr), 'EEE, MMM d, yyyy')}</span>
-                                            {isDeniedByPartial ? (
-                                                <Badge variant="destructive" className="text-[10px] px-1 py-0">Denied</Badge>
-                                            ) : isCovered ? (
-                                                <Badge className="text-[10px] px-1 py-0 bg-green-600 text-white">Credited ({isHalf ? '0.5' : '1.0'})</Badge>
-                                            ) : (
-                                                <Badge variant="destructive" className="text-[10px] px-1 py-0">Auto-Denied</Badge>
-                                            )}
-                                            {isAutoHalf && !isDeniedByPartial && (
-                                                <Badge variant="outline" className="text-[10px] px-1 py-0 border-violet-300 text-violet-700 dark:text-violet-300">Auto</Badge>
-                                            )}
-                                            {showToggle && (
-                                                <div className="flex items-center gap-1.5 ml-auto">
-                                                    <span className={`text-[11px] ${isHalf ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
-                                                        {isHalf ? 'Half' : 'Whole'}
-                                                    </span>
-                                                    <Switch
-                                                        checked={isHalf}
-                                                        onCheckedChange={(checked) => setSplHalfDayOverrides(prev => ({ ...prev, [dateStr]: checked }))}
-                                                    />
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
-                    <div className="space-y-4">
-                        {/* Partial Approval Toggle */}
-                        {workDays.length > 1 && (
-                            <div className="flex items-center space-x-2">
-                                <Checkbox
-                                    id="forceApprovePartialMode"
-                                    checked={forceApprovePartialMode}
-                                    onCheckedChange={(checked) => {
-                                        setForceApprovePartialMode(checked === true);
-                                        if (!checked) {
-                                            setForceApproveSelectedDates([]);
-                                            forceApproveForm.setData('denied_dates', []);
-                                            forceApproveForm.setData('denial_reason', '');
-                                        }
-                                    }}
-                                />
-                                <label htmlFor="forceApprovePartialMode" className="text-sm font-medium cursor-pointer">
-                                    Partial Approval (deny some dates)
-                                </label>
-                            </div>
+                        <Alert className="border-purple-200 bg-purple-50 dark:border-purple-800 dark:bg-purple-950">
+                            <Shield className="h-4 w-4 text-purple-600" />
+                            <AlertDescription className="text-purple-800 dark:text-purple-200">
+                                This will override any pending approvals from Team Lead, Admin, or HR.
+                            </AlertDescription>
+                        </Alert>
+                        {/* Credit Preview for VL in Force Approve */}
+                        {creditPreview && isVl && (
+                            <>
+                                {creditPreview.partial_credit && (
+                                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                            <strong>Partial VL credits.</strong> Only {creditPreview.credits_to_deduct} day(s) can be credited.
+                                            {creditPreview.upto_days ? ` ${creditPreview.upto_days} day(s) will be converted to UPTO.` : ''}
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                {creditPreview.convert_to_upto && (
+                                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                                        <AlertDescription className="text-red-800 dark:text-red-200">
+                                            <strong>No VL credits available.</strong> All days will be marked as UPTO (Unpaid Time Off).
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                {creditPreview.should_deduct && !creditPreview.partial_credit && !creditPreview.convert_to_upto && (
+                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <AlertDescription className="text-green-800 dark:text-green-200">
+                                            Full VL credits available ({creditPreview.credits_to_deduct} day(s)).
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                            </>
                         )}
-
-                        {/* Date Selection for Partial Approval */}
-                        {forceApprovePartialMode && workDays.length > 1 && (
-                            <div>
-                                <Label className="text-sm font-medium mb-2 block">
-                                    Select dates to APPROVE ({forceApproveSelectedDates.length} of {workDays.length} selected)
-                                </Label>
-                                <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
-                                    {workDays.map((date) => {
-                                        const dateStr = format(date, 'yyyy-MM-dd');
-                                        const isSelected = forceApproveSelectedDates.includes(dateStr);
+                        {/* Credit Preview for SL in Force Approve */}
+                        {creditPreview && isSl && (
+                            <>
+                                {creditPreview.should_deduct && (
+                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <AlertDescription className="text-green-800 dark:text-green-200">
+                                            Full SL credits available ({creditPreview.credits_to_deduct} day(s)).
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                            </>
+                        )}
+                        {/* SPL Credit Coverage Preview in Force Approve */}
+                        {isSpl && splCreditsSummary && splCoverage && (
+                            <div className="space-y-2">
+                                {splCoverage.allCovered ? (
+                                    <Alert className="border-green-200 bg-green-50 dark:border-green-800 dark:bg-green-950">
+                                        <CheckCircle className="h-4 w-4 text-green-600" />
+                                        <AlertDescription className="text-green-800 dark:text-green-200">
+                                            <strong>SPL Credits:</strong> {splCoverage.balance.toFixed(2)} available — sufficient for all {workDays.length} day(s) ({splCoverage.creditsNeeded.toFixed(2)} credits needed).
+                                            {' '}Credits will be assigned chronologically (earliest first).
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : splCoverage.noCoverage ? (
+                                    <Alert className="border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-950">
+                                        <XCircle className="h-4 w-4 text-red-600" />
+                                        <AlertDescription className="text-red-800 dark:text-red-200">
+                                            <strong>No SPL credits available.</strong> Balance is {splCoverage.balance.toFixed(2)} — cannot approve any dates.
+                                        </AlertDescription>
+                                    </Alert>
+                                ) : (
+                                    <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                        <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                        <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                            <strong>Insufficient SPL Credits:</strong> {splCoverage.balance.toFixed(2)} of {splCoverage.creditsNeeded.toFixed(2)} needed.
+                                            {' '}{splCoverage.coveredDates.length} day(s) will be credited, {splCoverage.uncoveredDates.length} day(s) will be automatically denied.
+                                        </AlertDescription>
+                                    </Alert>
+                                )}
+                                <div className="border rounded-md p-3 space-y-2 text-sm">
+                                    <p className="text-xs text-muted-foreground mb-2">Toggle each day between whole day (1 credit) and half-day (0.5 credit).</p>
+                                    {[...splCoverage.coveredDates, ...splCoverage.uncoveredDates].sort().map(dateStr => {
+                                        const isCovered = splCoverage.coveredDates.includes(dateStr);
+                                        const isDeniedByPartial = forceApprovePartialMode && forceApproveSelectedDates.length > 0 && !forceApproveSelectedDates.includes(dateStr);
+                                        const isHalf = splCoverage.halfDayMap.get(dateStr) ?? false;
+                                        const isAutoHalf = splCoverage.autoHalfDays.has(dateStr);
+                                        const showToggle = isCovered && !isDeniedByPartial;
                                         return (
-                                            <div
-                                                key={dateStr}
-                                                className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800' : 'hover:bg-muted'}`}
-                                                onClick={() => toggleForceApproveDate(dateStr)}
-                                            >
-                                                <Checkbox
-                                                    checked={isSelected}
-                                                    onCheckedChange={() => toggleForceApproveDate(dateStr)}
-                                                />
-                                                <span className="font-medium text-sm">{format(date, 'EEE, MMM d, yyyy')}</span>
-                                                {isSelected && (
-                                                    <Badge className="text-xs bg-green-600 text-white ml-auto">Approve</Badge>
+                                            <div key={dateStr} className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${isDeniedByPartial ? 'bg-red-50/50 border-red-200 opacity-60 dark:bg-red-950/20 dark:border-red-800' : isHalf ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800' : isCovered ? 'bg-card border-border' : 'bg-muted/50 border-border opacity-60'}`}>
+                                                {isDeniedByPartial ? (
+                                                    <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
+                                                ) : isCovered ? (
+                                                    <CheckCircle className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                                ) : (
+                                                    <XCircle className="h-3.5 w-3.5 text-red-500 shrink-0" />
                                                 )}
-                                                {!isSelected && (
-                                                    <Badge variant="destructive" className="text-xs ml-auto">Deny</Badge>
+                                                <span className={`flex-1 ${(!isCovered || isDeniedByPartial) ? 'text-muted-foreground' : ''}`}>{format(parseISO(dateStr), 'EEE, MMM d, yyyy')}</span>
+                                                {isDeniedByPartial ? (
+                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0">Denied</Badge>
+                                                ) : isCovered ? (
+                                                    <Badge className="text-[10px] px-1 py-0 bg-green-600 text-white">Credited ({isHalf ? '0.5' : '1.0'})</Badge>
+                                                ) : (
+                                                    <Badge variant="destructive" className="text-[10px] px-1 py-0">Auto-Denied</Badge>
+                                                )}
+                                                {isAutoHalf && !isDeniedByPartial && (
+                                                    <Badge variant="outline" className="text-[10px] px-1 py-0 border-violet-300 text-violet-700 dark:text-violet-300">Auto</Badge>
+                                                )}
+                                                {showToggle && (
+                                                    <div className="flex items-center gap-1.5 ml-auto">
+                                                        <span className={`text-[11px] ${isHalf ? 'text-violet-600 font-medium dark:text-violet-400' : 'text-muted-foreground'}`}>
+                                                            {isHalf ? 'Half' : 'Whole'}
+                                                        </span>
+                                                        <Switch
+                                                            checked={isHalf}
+                                                            onCheckedChange={(checked) => setSplHalfDayOverrides(prev => ({ ...prev, [dateStr]: checked }))}
+                                                        />
+                                                    </div>
                                                 )}
                                             </div>
                                         );
@@ -2344,87 +2289,142 @@ export default function Show({
                                 </div>
                             </div>
                         )}
+                        <div className="space-y-4">
+                            {/* Partial Approval Toggle */}
+                            {workDays.length > 1 && (
+                                <div className="flex items-center space-x-2">
+                                    <Checkbox
+                                        id="forceApprovePartialMode"
+                                        checked={forceApprovePartialMode}
+                                        onCheckedChange={(checked) => {
+                                            setForceApprovePartialMode(checked === true);
+                                            if (!checked) {
+                                                setForceApproveSelectedDates([]);
+                                                forceApproveForm.setData('denied_dates', []);
+                                                forceApproveForm.setData('denial_reason', '');
+                                            }
+                                        }}
+                                    />
+                                    <label htmlFor="forceApprovePartialMode" className="text-sm font-medium cursor-pointer">
+                                        Partial Approval (deny some dates)
+                                    </label>
+                                </div>
+                            )}
 
-                        {/* Denial Reason for Partial Approval */}
-                        {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
+                            {/* Date Selection for Partial Approval */}
+                            {forceApprovePartialMode && workDays.length > 1 && (
+                                <div>
+                                    <Label className="text-sm font-medium mb-2 block">
+                                        Select dates to APPROVE ({forceApproveSelectedDates.length} of {workDays.length} selected)
+                                    </Label>
+                                    <div className="border rounded-md p-3 max-h-48 overflow-y-auto space-y-2">
+                                        {workDays.map((date) => {
+                                            const dateStr = format(date, 'yyyy-MM-dd');
+                                            const isSelected = forceApproveSelectedDates.includes(dateStr);
+                                            return (
+                                                <div
+                                                    key={dateStr}
+                                                    className={`flex items-center space-x-3 p-2 rounded cursor-pointer transition-colors ${isSelected ? 'bg-green-50 border border-green-200 dark:bg-green-950 dark:border-green-800' : 'hover:bg-muted'}`}
+                                                    onClick={() => toggleForceApproveDate(dateStr)}
+                                                >
+                                                    <Checkbox
+                                                        checked={isSelected}
+                                                        onCheckedChange={() => toggleForceApproveDate(dateStr)}
+                                                    />
+                                                    <span className="font-medium text-sm">{format(date, 'EEE, MMM d, yyyy')}</span>
+                                                    {isSelected && (
+                                                        <Badge className="text-xs bg-green-600 text-white ml-auto">Approve</Badge>
+                                                    )}
+                                                    {!isSelected && (
+                                                        <Badge variant="destructive" className="text-xs ml-auto">Deny</Badge>
+                                                    )}
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Denial Reason for Partial Approval */}
+                            {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
+                                <div>
+                                    <label className="text-sm font-medium">
+                                        Reason for Denying {workDays.length - forceApproveSelectedDates.length} Date(s) <span className="text-red-500">*</span>
+                                    </label>
+                                    <Textarea
+                                        value={forceApproveForm.data.denial_reason}
+                                        onChange={(e) => forceApproveForm.setData('denial_reason', e.target.value)}
+                                        placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
+                                        rows={2}
+                                    />
+                                    {forceApproveForm.errors.denial_reason && (
+                                        <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.denial_reason}</p>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* SL/VL Per-Day Status Assignment */}
+                            {hasDayStatuses && (
+                                <div className="space-y-2">
+                                    <Label className="text-sm font-medium">Assign Per-Day Status</Label>
+                                    <p className="text-xs text-muted-foreground">
+                                        Set the status for each day of this leave. Only &quot;{isVl ? 'VL' : 'SL'} Credited&quot; days use leave credits.
+                                        {creditPreview && (
+                                            <span className="font-medium"> Available {isVl ? 'VL' : 'SL'} credits: {creditPreview.credits_to_deduct ?? 0} day(s).</span>
+                                        )}
+                                    </p>
+                                    {preStoredAttribution && (
+                                        <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
+                                            <Info className="h-4 w-4 text-blue-600" />
+                                            <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
+                                                {preStoredAttribution}. You can review and edit before approving.
+                                            </AlertDescription>
+                                        </Alert>
+                                    )}
+                                    <DayStatusAssignment
+                                        dayStatuses={forceApprovePartialMode && forceApproveSlDayStatuses.length > 0
+                                            ? forceApproveSlDayStatuses
+                                            : forceApproveSlDayStatuses.length > 0
+                                                ? forceApproveSlDayStatuses
+                                                : forceApproveAllSlDayStatuses}
+                                        onChange={setForceApproveSlDayStatuses}
+                                        creditPreviewInfo={
+                                            creditPreview
+                                                ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
+                                                : null
+                                        }
+                                        statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
+                                        creditLabel={isVl ? 'VL' : 'SL'}
+                                        onCreditValidation={setForceApproveDayStatusInvalid}
+                                    />
+                                </div>
+                            )}
+
                             <div>
                                 <label className="text-sm font-medium">
-                                    Reason for Denying {workDays.length - forceApproveSelectedDates.length} Date(s) <span className="text-red-500">*</span>
+                                    Review Notes <span className="text-red-500">*</span>
                                 </label>
                                 <Textarea
-                                    value={forceApproveForm.data.denial_reason}
-                                    onChange={(e) => forceApproveForm.setData('denial_reason', e.target.value)}
-                                    placeholder="Why are some dates being denied? (required, minimum 10 characters)..."
-                                    rows={2}
+                                    value={forceApproveForm.data.review_notes}
+                                    onChange={(e) => forceApproveForm.setData('review_notes', e.target.value)}
+                                    placeholder="Add comments for the force approval (required, minimum 10 characters)..."
+                                    rows={3}
                                 />
-                                {forceApproveForm.errors.denial_reason && (
-                                    <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.denial_reason}</p>
+                                {forceApproveForm.errors.review_notes && (
+                                    <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.review_notes}</p>
                                 )}
                             </div>
-                        )}
 
-                        {/* SL/VL Per-Day Status Assignment */}
-                        {hasDayStatuses && (
-                            <div className="space-y-2">
-                                <Label className="text-sm font-medium">Assign Per-Day Status</Label>
-                                <p className="text-xs text-muted-foreground">
-                                    Set the status for each day of this leave. Only &quot;{isVl ? 'VL' : 'SL'} Credited&quot; days use leave credits.
-                                    {creditPreview && (
-                                        <span className="font-medium"> Available {isVl ? 'VL' : 'SL'} credits: {creditPreview.credits_to_deduct ?? 0} day(s).</span>
-                                    )}
-                                </p>
-                                {preStoredAttribution && (
-                                    <Alert className="border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                                        <Info className="h-4 w-4 text-blue-600" />
-                                        <AlertDescription className="text-blue-800 dark:text-blue-200 text-xs">
-                                            {preStoredAttribution}. You can review and edit before approving.
-                                        </AlertDescription>
-                                    </Alert>
-                                )}
-                                <DayStatusAssignment
-                                    dayStatuses={forceApprovePartialMode && forceApproveSlDayStatuses.length > 0
-                                        ? forceApproveSlDayStatuses
-                                        : forceApproveSlDayStatuses.length > 0
-                                            ? forceApproveSlDayStatuses
-                                            : forceApproveAllSlDayStatuses}
-                                    onChange={setForceApproveSlDayStatuses}
-                                    creditPreviewInfo={
-                                        creditPreview
-                                            ? { availableCredits: Math.floor(creditPreview.credits_to_deduct ?? 0) }
-                                            : null
-                                    }
-                                    statusOptions={isVl ? [...VL_STATUS_OPTIONS] : undefined}
-                                    creditLabel={isVl ? 'VL' : 'SL'}
-                                    onCreditValidation={setForceApproveDayStatusInvalid}
-                                />
-                            </div>
-                        )}
-
-                        <div>
-                            <label className="text-sm font-medium">
-                                Review Notes <span className="text-red-500">*</span>
-                            </label>
-                            <Textarea
-                                value={forceApproveForm.data.review_notes}
-                                onChange={(e) => forceApproveForm.setData('review_notes', e.target.value)}
-                                placeholder="Add comments for the force approval (required, minimum 10 characters)..."
-                                rows={3}
-                            />
-                            {forceApproveForm.errors.review_notes && (
-                                <p className="text-sm text-red-500 mt-1">{forceApproveForm.errors.review_notes}</p>
+                            {/* Summary for Partial Approval */}
+                            {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
+                                <Alert className="bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800">
+                                    <AlertTriangle className="h-4 w-4 text-orange-600" />
+                                    <AlertDescription className="text-orange-800 dark:text-orange-200">
+                                        <p> {forceApproveSelectedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - forceApproveSelectedDates.length} day(s) will be <strong>denied</strong>. </p>
+                                    </AlertDescription>
+                                </Alert>
                             )}
                         </div>
-
-                        {/* Summary for Partial Approval */}
-                        {forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length && (
-                            <Alert className="bg-orange-50 border-orange-200 dark:bg-orange-950 dark:border-orange-800">
-                                <AlertTriangle className="h-4 w-4 text-orange-600" />
-                                <AlertDescription className="text-orange-800 dark:text-orange-200">
-                                    <p> {forceApproveSelectedDates.length} day(s) will be <strong>approved</strong>, {workDays.length - forceApproveSelectedDates.length} day(s) will be <strong>denied</strong>. </p>
-                                </AlertDescription>
-                            </Alert>
-                        )}
-                    </div>
                     </div>
                     <DialogFooter>
                         <Button variant="outline" onClick={() => {
@@ -2608,12 +2608,12 @@ export default function Show({
                                 </div>
                                 {/* Image Container */}
                                 <div className="overflow-auto max-h-[60vh] rounded-lg bg-muted/30">
-                                    <div className="min-w-full min-h-full flex justify-center items-start p-4">
+                                    <div className="min-w-full min-h-full flex items-start p-4">
                                         {leaveRequest.medical_cert_path && (
                                             <img
                                                 src={leaveMedicalCertRoute(leaveRequest.id).url}
                                                 alt={leaveRequest.leave_type === 'SL' ? 'Medical Certificate' : leaveRequest.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}
-                                                className="object-contain rounded-lg border transition-transform duration-200 origin-top"
+                                                className="object-contain rounded-lg border transition-transform duration-200 origin-top-left"
                                                 style={{ transform: `scale(${medicalCertZoom / 100})` }}
                                             />
                                         )}

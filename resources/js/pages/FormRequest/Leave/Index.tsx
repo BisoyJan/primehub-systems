@@ -1234,12 +1234,12 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                     </div>
                                     {/* Image Container */}
                                     <div className="overflow-auto max-h-[60vh] rounded-lg bg-muted/30">
-                                        <div className="min-w-full min-h-full flex justify-center items-start p-4">
+                                        <div className="min-w-full min-h-full flex items-start p-4">
                                             {selectedMedicalCertLeaveId && (
                                                 <img
                                                     src={leaveMedicalCertRoute(selectedMedicalCertLeaveId).url}
                                                     alt={docLabel}
-                                                    className="object-contain rounded-lg shadow-lg transition-transform duration-200 origin-top"
+                                                    className="object-contain rounded-lg shadow-lg transition-transform duration-200 origin-top-left"
                                                     style={{ transform: `scale(${medicalCertZoom / 100})` }}
                                                 />
                                             )}
