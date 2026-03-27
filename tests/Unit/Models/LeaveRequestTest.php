@@ -280,7 +280,7 @@ class LeaveRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_attendance_points_check_for_bl(): void
+    public function it_does_not_require_attendance_points_check_for_bl(): void
     {
         $user = User::factory()->create();
         $leaveRequest = LeaveRequest::factory()->create([
@@ -288,7 +288,7 @@ class LeaveRequestTest extends TestCase
             'leave_type' => 'BL',
         ]);
 
-        $this->assertTrue($leaveRequest->requiresAttendancePointsCheck());
+        $this->assertFalse($leaveRequest->requiresAttendancePointsCheck());
     }
 
     #[Test]
@@ -316,7 +316,7 @@ class LeaveRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_two_week_notice_for_bl(): void
+    public function it_does_not_require_two_week_notice_for_bl(): void
     {
         $user = User::factory()->create();
         $leaveRequest = LeaveRequest::factory()->create([
@@ -324,7 +324,7 @@ class LeaveRequestTest extends TestCase
             'leave_type' => 'BL',
         ]);
 
-        $this->assertTrue($leaveRequest->requiresTwoWeekNotice());
+        $this->assertFalse($leaveRequest->requiresTwoWeekNotice());
     }
 
     #[Test]
@@ -352,7 +352,7 @@ class LeaveRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_thirty_day_absence_check_for_bl(): void
+    public function it_does_not_require_thirty_day_absence_check_for_bl(): void
     {
         $user = User::factory()->create();
         $leaveRequest = LeaveRequest::factory()->create([
@@ -360,7 +360,7 @@ class LeaveRequestTest extends TestCase
             'leave_type' => 'BL',
         ]);
 
-        $this->assertTrue($leaveRequest->requiresThirtyDayAbsenceCheck());
+        $this->assertFalse($leaveRequest->requiresThirtyDayAbsenceCheck());
     }
 
     #[Test]
@@ -466,7 +466,7 @@ class LeaveRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_does_not_allow_owner_cancelling_fully_approved_request(): void
+    public function it_allows_owner_cancelling_fully_approved_future_request(): void
     {
         $user = User::factory()->create();
         $leaveRequest = LeaveRequest::factory()->create([
@@ -476,7 +476,7 @@ class LeaveRequestTest extends TestCase
             'start_date' => now()->addDays(5),
         ]);
 
-        $this->assertFalse($leaveRequest->canBeCancelled());
+        $this->assertTrue($leaveRequest->canBeCancelled());
     }
 
     #[Test]

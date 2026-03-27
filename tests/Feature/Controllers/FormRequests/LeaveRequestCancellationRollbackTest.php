@@ -741,6 +741,7 @@ class LeaveRequestCancellationRollbackTest extends TestCase
             'reviewed_by' => $this->admin->id,
             'reviewed_at' => now(),
             'credits_deducted' => 1,
+            'credits_year' => now()->year,
         ]);
 
         // Existing attendance modified by approval
@@ -760,11 +761,10 @@ class LeaveRequestCancellationRollbackTest extends TestCase
             'vacation_leave_balance' => 5,
             'sick_leave_balance' => 5,
             'credits_earned' => 1.25,
-            'credits_balance' => 5,
+            'credits_used' => 1,
+            'credits_balance' => 4,
             'accrued_at' => now(),
         ]);
-
-        $originalBalance = $leaveCredit->vacation_leave_balance;
 
         $response = $this->actingAs($this->admin)->delete(
             route('leave-requests.destroy', $leaveRequest)
@@ -775,16 +775,16 @@ class LeaveRequestCancellationRollbackTest extends TestCase
         // Leave request should be deleted
         $this->assertDatabaseMissing('leave_requests', ['id' => $leaveRequest->id]);
 
-        // Attendance should NOT be reverted (delete does not rollback status)
-        // But leave_request_id is set to null by FK constraint (onDelete set null)
+        // Destroy DOES rollback attendance for approved leaves
         $attendance->refresh();
-        $this->assertEquals('on_leave', $attendance->status);
-        $this->assertEquals('on_time', $attendance->pre_leave_status);
+        $this->assertEquals('on_time', $attendance->status);
+        $this->assertNull($attendance->pre_leave_status);
         $this->assertNull($attendance->leave_request_id);
 
-        // Leave credits should NOT be restored (delete does not restore credits)
+        // Destroy DOES restore credits for approved leaves with credits_deducted + credits_year
         $leaveCredit->refresh();
-        $this->assertEquals($originalBalance, $leaveCredit->vacation_leave_balance);
+        $this->assertEquals(0, $leaveCredit->credits_used);
+        $this->assertEquals(5, $leaveCredit->credits_balance);
     }
 
     // ────────────────────────────────────────────────

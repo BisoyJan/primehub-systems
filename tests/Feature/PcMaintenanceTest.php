@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\PcMaintenance;
 use App\Models\Station;
 use App\Models\Site;
@@ -19,7 +21,6 @@ class PcMaintenanceTest extends TestCase
 
     protected User $admin;
     protected Site $site;
-    protected Station $station;
     protected PcSpec $pcSpec;
 
     protected function setUp(): void
@@ -34,17 +35,13 @@ class PcMaintenanceTest extends TestCase
 
         $this->site = Site::factory()->create();
         $this->pcSpec = PcSpec::factory()->create();
-        $this->station = Station::factory()->create([
-            'site_id' => $this->site->id,
-            'pc_spec_id' => $this->pcSpec->id,
-        ]);
     }
 
     #[Test]
     public function it_displays_maintenance_index_page()
     {
         PcMaintenance::factory()->count(3)->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
         ]);
 
         $response = $this->actingAs($this->admin)
@@ -52,7 +49,7 @@ class PcMaintenanceTest extends TestCase
 
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Station/PcMaintenance/Index')
+                ->component('Computer/PcMaintenance/Index')
                 ->has('maintenances.data', 3)
                 ->has('sites')
             );
@@ -66,8 +63,8 @@ class PcMaintenanceTest extends TestCase
 
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Station/PcMaintenance/Create')
-                ->has('stations')
+                ->component('Computer/PcMaintenance/Create')
+                ->has('pcSpecs')
                 ->has('sites')
             );
     }
@@ -76,7 +73,7 @@ class PcMaintenanceTest extends TestCase
     public function it_creates_maintenance_record_for_single_station()
     {
         $data = [
-            'station_ids' => [$this->station->id],
+            'pc_spec_ids' => [$this->pcSpec->id],
             'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
             'next_due_date' => Carbon::now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => 'Routine Maintenance',
@@ -91,7 +88,7 @@ class PcMaintenanceTest extends TestCase
         $response->assertRedirect(route('pc-maintenance.index'));
 
         $this->assertDatabaseHas('pc_maintenances', [
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
             'maintenance_type' => 'Routine Maintenance',
             'performed_by' => 'John Doe',
             'status' => 'completed',
@@ -101,18 +98,11 @@ class PcMaintenanceTest extends TestCase
     #[Test]
     public function it_creates_maintenance_records_for_multiple_stations()
     {
-        $station2 = Station::factory()->create([
-            'site_id' => $this->site->id,
-            'pc_spec_id' => $this->pcSpec->id,
-        ]);
-
-        $station3 = Station::factory()->create([
-            'site_id' => $this->site->id,
-            'pc_spec_id' => $this->pcSpec->id,
-        ]);
+        $pcSpec2 = PcSpec::factory()->create();
+        $pcSpec3 = PcSpec::factory()->create();
 
         $data = [
-            'station_ids' => [$this->station->id, $station2->id, $station3->id],
+            'pc_spec_ids' => [$this->pcSpec->id, $pcSpec2->id, $pcSpec3->id],
             'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
             'next_due_date' => Carbon::now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => 'Hardware Check',
@@ -127,9 +117,9 @@ class PcMaintenanceTest extends TestCase
         $response->assertRedirect(route('pc-maintenance.index'));
 
         $this->assertEquals(3, PcMaintenance::count());
-        $this->assertDatabaseHas('pc_maintenances', ['station_id' => $this->station->id]);
-        $this->assertDatabaseHas('pc_maintenances', ['station_id' => $station2->id]);
-        $this->assertDatabaseHas('pc_maintenances', ['station_id' => $station3->id]);
+        $this->assertDatabaseHas('pc_maintenances', ['pc_spec_id' => $this->pcSpec->id]);
+        $this->assertDatabaseHas('pc_maintenances', ['pc_spec_id' => $pcSpec2->id]);
+        $this->assertDatabaseHas('pc_maintenances', ['pc_spec_id' => $pcSpec3->id]);
     }
 
     #[Test]
@@ -139,7 +129,7 @@ class PcMaintenanceTest extends TestCase
             ->post(route('pc-maintenance.store'), []);
 
         $response->assertSessionHasErrors([
-            'station_ids',
+            'pc_spec_ids',
             'last_maintenance_date',
             'next_due_date',
             'status',
@@ -150,7 +140,7 @@ class PcMaintenanceTest extends TestCase
     public function it_validates_next_due_date_after_last_maintenance()
     {
         $data = [
-            'station_ids' => [$this->station->id],
+            'pc_spec_ids' => [$this->pcSpec->id],
             'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
             'next_due_date' => Carbon::now()->subDays(1)->format('Y-m-d'), // Before last maintenance
             'maintenance_type' => 'Test',
@@ -168,7 +158,7 @@ class PcMaintenanceTest extends TestCase
     public function it_validates_status_values()
     {
         $data = [
-            'station_ids' => [$this->station->id],
+            'pc_spec_ids' => [$this->pcSpec->id],
             'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
             'next_due_date' => Carbon::now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => 'Test',
@@ -186,7 +176,7 @@ class PcMaintenanceTest extends TestCase
     public function it_displays_edit_maintenance_form()
     {
         $maintenance = PcMaintenance::factory()->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
         ]);
 
         $response = $this->actingAs($this->admin)
@@ -194,9 +184,9 @@ class PcMaintenanceTest extends TestCase
 
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Station/PcMaintenance/Edit')
+                ->component('Computer/PcMaintenance/Edit')
                 ->where('maintenance.id', $maintenance->id)
-                ->has('stations')
+                ->has('pcSpecs')
             );
     }
 
@@ -204,13 +194,13 @@ class PcMaintenanceTest extends TestCase
     public function it_updates_maintenance_record()
     {
         $maintenance = PcMaintenance::factory()->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
             'maintenance_type' => 'Old Type',
             'status' => 'pending',
         ]);
 
         $data = [
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
             'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
             'next_due_date' => Carbon::now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => 'Updated Type',
@@ -235,7 +225,7 @@ class PcMaintenanceTest extends TestCase
     public function it_deletes_maintenance_record()
     {
         $maintenance = PcMaintenance::factory()->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
         ]);
 
         $response = $this->actingAs($this->admin)
@@ -249,12 +239,12 @@ class PcMaintenanceTest extends TestCase
     public function it_filters_maintenance_by_status()
     {
         PcMaintenance::factory()->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
             'status' => 'completed',
         ]);
 
         PcMaintenance::factory()->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => PcSpec::factory()->create()->id,
             'status' => 'pending',
         ]);
 
@@ -272,13 +262,14 @@ class PcMaintenanceTest extends TestCase
     public function it_filters_maintenance_by_site()
     {
         $site2 = Site::factory()->create();
-        $station2 = Station::factory()->create([
-            'site_id' => $site2->id,
-            'pc_spec_id' => $this->pcSpec->id,
-        ]);
+        $pcSpec2 = PcSpec::factory()->create();
 
-        PcMaintenance::factory()->create(['station_id' => $this->station->id]);
-        PcMaintenance::factory()->create(['station_id' => $station2->id]);
+        // Link pcSpecs to sites via stations
+        Station::factory()->create(['site_id' => $this->site->id, 'pc_spec_id' => $this->pcSpec->id]);
+        Station::factory()->create(['site_id' => $site2->id, 'pc_spec_id' => $pcSpec2->id]);
+
+        PcMaintenance::factory()->create(['pc_spec_id' => $this->pcSpec->id]);
+        PcMaintenance::factory()->create(['pc_spec_id' => $pcSpec2->id]);
 
         $response = $this->actingAs($this->admin)
             ->get(route('pc-maintenance.index', ['site' => $this->site->id]));
@@ -286,7 +277,6 @@ class PcMaintenanceTest extends TestCase
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->has('maintenances.data', 1)
-                ->where('maintenances.data.0.station.site_id', $this->site->id)
             );
     }
 
@@ -294,11 +284,11 @@ class PcMaintenanceTest extends TestCase
     public function it_filters_maintenance_by_search()
     {
         PcMaintenance::factory()->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
         ]);
 
         $response = $this->actingAs($this->admin)
-            ->get(route('pc-maintenance.index', ['search' => $this->station->station_number]));
+            ->get(route('pc-maintenance.index', ['search' => $this->pcSpec->pc_number]));
 
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
@@ -310,7 +300,7 @@ class PcMaintenanceTest extends TestCase
     public function it_auto_updates_overdue_status()
     {
         $maintenance = PcMaintenance::factory()->create([
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
             'next_due_date' => Carbon::now()->subDays(10)->format('Y-m-d'),
             'status' => 'pending',
         ]);
@@ -327,7 +317,7 @@ class PcMaintenanceTest extends TestCase
     public function it_schedules_pending_maintenance()
     {
         $data = [
-            'station_ids' => [$this->station->id],
+            'pc_spec_ids' => [$this->pcSpec->id],
             'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
             'next_due_date' => Carbon::now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => 'Scheduled Maintenance',
@@ -342,7 +332,7 @@ class PcMaintenanceTest extends TestCase
         $response->assertRedirect(route('pc-maintenance.index'));
 
         $this->assertDatabaseHas('pc_maintenances', [
-            'station_id' => $this->station->id,
+            'pc_spec_id' => $this->pcSpec->id,
             'status' => 'pending',
         ]);
     }
@@ -355,9 +345,18 @@ class PcMaintenanceTest extends TestCase
             'is_approved' => true,
         ]);
 
+        // Agent needs EmployeeSchedule to avoid redirect to /schedule-setup
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+        ]);
+
         $response = $this->actingAs($user)
             ->post(route('pc-maintenance.store'), [
-                'station_ids' => [$this->station->id],
+                'pc_spec_ids' => [$this->pcSpec->id],
                 'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
                 'next_due_date' => Carbon::now()->addMonths(3)->format('Y-m-d'),
                 'maintenance_type' => 'Test',

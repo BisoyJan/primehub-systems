@@ -176,7 +176,6 @@ class GenerateAllPcSpecQRCodesZipTest extends TestCase
             'pc_number' => 'PC-META',
             'manufacturer' => 'Dell',
             'model' => 'OptiPlex',
-            'form_factor' => 'Tower',
             'memory_type' => 'DDR4',
         ]);
 

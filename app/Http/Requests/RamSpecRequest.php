@@ -27,6 +27,7 @@ class RamSpecRequest extends FormRequest
             'capacity_gb' => ['required', 'integer', 'min:1'],
             'type' => ['required', 'string', 'max:255'],
             'speed' => ['required', 'integer', 'min:1'],
+            'form_factor' => ['required', 'string', 'max:255'],
         ];
 
         // Include stock_quantity only on create

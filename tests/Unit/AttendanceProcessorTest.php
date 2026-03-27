@@ -36,29 +36,28 @@ class AttendanceProcessorTest extends TestCase
         $testCases = [
             [-10, 15, 'on_time'],  // 10 minutes early
             [0, 15, 'on_time'],    // exactly on time
-            [1, 15, 'on_time'],    // 1 minute late (below 15 min threshold)
-            [10, 15, 'on_time'],   // 10 minutes late (below 15 min threshold)
-            [14, 15, 'on_time'],   // 14 minutes late (below 15 min threshold)
-            [15, 15, 'tardy'],     // 15 minutes late (meets tardy threshold, within grace)
+            [1, 15, 'tardy'],      // 1 minute late (>= 1 min is tardy)
+            [10, 15, 'tardy'],     // 10 minutes late (>= 1 min, within grace)
+            [14, 15, 'tardy'],     // 14 minutes late (>= 1 min, within grace)
+            [15, 15, 'tardy'],     // 15 minutes late (within grace)
             [16, 15, 'half_day_absence'], // beyond grace period
             [120, 15, 'half_day_absence'], // way beyond grace period
 
-            // Test with grace period of 10 minutes (shorter than tardy threshold)
-            // If grace is 10 mins, anyone 15+ mins late exceeds grace AND meets tardy threshold
-            [5, 10, 'on_time'],    // 5 minutes late (below 15 min threshold)
-            [10, 10, 'on_time'],   // 10 minutes late (at grace limit, below 15 min threshold)
-            [15, 10, 'half_day_absence'], // 15 mins = tardy threshold BUT exceeds 10 min grace = half day
+            // Test with grace period of 10 minutes
+            [5, 10, 'tardy'],      // 5 minutes late (>= 1 min, within grace)
+            [10, 10, 'tardy'],     // 10 minutes late (at grace limit)
+            [15, 10, 'half_day_absence'], // beyond grace
             [20, 10, 'half_day_absence'], // beyond grace
 
-            // Test with grace period of 20 minutes (longer than tardy threshold)
-            [14, 20, 'on_time'],   // 14 minutes late (below 15 min threshold)
-            [15, 20, 'tardy'],     // 15 minutes late (meets tardy threshold, within 20 min grace)
+            // Test with grace period of 20 minutes
+            [14, 20, 'tardy'],     // 14 minutes late (>= 1 min, within grace)
+            [15, 20, 'tardy'],     // 15 minutes late (within 20 min grace)
             [18, 20, 'tardy'],     // 18 minutes late (within 20 min grace)
             [20, 20, 'tardy'],     // 20 minutes late (exactly at grace period)
             [21, 20, 'half_day_absence'], // beyond grace period
 
             // Test with grace period of 30 minutes
-            [15, 30, 'tardy'],     // 15 mins (tardy threshold, well within grace)
+            [15, 30, 'tardy'],     // 15 mins (within grace)
             [25, 30, 'tardy'],     // 25 mins (within grace)
             [30, 30, 'tardy'],     // 30 mins (exactly at grace)
             [31, 30, 'half_day_absence'], // beyond grace
@@ -313,11 +312,11 @@ class AttendanceProcessorTest extends TestCase
 
         $grouped = $this->invokeMethod($this->processor, 'groupRecordsByShiftDate', [$records, $user]);
 
-        // Both should be grouped to Nov 5 shift (graveyard is same-day shift)
-        $this->assertArrayHasKey('2025-11-05', $grouped);
-        $this->assertCount(2, $grouped['2025-11-05']);
-        $this->assertEquals('00:02:00', $grouped['2025-11-05']->first()['datetime']->format('H:i:s'));
-        $this->assertEquals('09:03:00', $grouped['2025-11-05']->last()['datetime']->format('H:i:s'));
+        // Both should be grouped to Nov 4 shift (graveyard assigns to previous work day)
+        $this->assertArrayHasKey('2025-11-04', $grouped);
+        $this->assertCount(2, $grouped['2025-11-04']);
+        $this->assertEquals('00:02:00', $grouped['2025-11-04']->first()['datetime']->format('H:i:s'));
+        $this->assertEquals('09:03:00', $grouped['2025-11-04']->last()['datetime']->format('H:i:s'));
     }
 
     #[Test]
@@ -436,6 +435,7 @@ class AttendanceProcessorTest extends TestCase
         $schedule = EmployeeSchedule::factory()->create([
             'user_id' => $user->id,
             'site_id' => $site->id,
+            'shift_type' => 'morning_shift',
             'scheduled_time_in' => '09:00:00',
             'scheduled_time_out' => '18:00:00',
             'work_days' => ['tuesday'],
@@ -730,7 +730,7 @@ class AttendanceProcessorTest extends TestCase
 
         $shiftDate = Carbon::parse('2025-11-05'); // Tuesday
         $records = collect([
-            ['datetime' => Carbon::parse('2025-11-05 08:00:00')], // Only TIME OUT (morning)
+            ['datetime' => Carbon::parse('2025-11-06 08:00:00')], // Only TIME OUT (morning, next calendar day)
         ]);
 
         $this->invokeMethod($this->processor, 'processAttendance', [

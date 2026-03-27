@@ -16,7 +16,7 @@ class SessionTest extends TestCase
     public function session_is_created_on_successful_login(): void
     {
         $user = User::factory()->create([
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => bcrypt('password123'),
             'is_approved' => true,
         ]);
@@ -24,7 +24,7 @@ class SessionTest extends TestCase
         $this->assertFalse(Session::has('_token'));
 
         $response = $this->post(route('login.store'), [
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => 'password123',
         ]);
 
@@ -36,7 +36,7 @@ class SessionTest extends TestCase
     public function session_is_regenerated_on_login(): void
     {
         $user = User::factory()->create([
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => bcrypt('password123'),
             'is_approved' => true,
         ]);
@@ -47,7 +47,7 @@ class SessionTest extends TestCase
 
         // Login should regenerate session
         $this->post(route('login.store'), [
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => 'password123',
         ]);
 
@@ -90,13 +90,14 @@ class SessionTest extends TestCase
     public function authenticated_session_persists_across_requests(): void
     {
         $user = User::factory()->create([
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => bcrypt('password123'),
             'is_approved' => true,
+            'role' => 'Admin',
         ]);
 
         $this->post(route('login.store'), [
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => 'password123',
         ]);
 
@@ -129,14 +130,14 @@ class SessionTest extends TestCase
     public function concurrent_sessions_can_be_managed(): void
     {
         $user = User::factory()->create([
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => bcrypt('password123'),
             'is_approved' => true,
         ]);
 
         // First session
         $this->post(route('login.store'), [
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => 'password123',
         ]);
         $firstSessionId = Session::getId();
@@ -146,7 +147,7 @@ class SessionTest extends TestCase
 
         // Second session (new login)
         $this->post(route('login.store'), [
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => 'password123',
         ]);
         $secondSessionId = Session::getId();

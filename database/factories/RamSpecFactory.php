@@ -39,6 +39,7 @@ class RamSpecFactory extends Factory
             'capacity_gb' => $capacity_gb,
             'type'       => $type,
             'speed'      =>  $speed,
+            'form_factor' => $this->faker->randomElement(['DIMM', 'SO-DIMM']),
         ];
     }
 }

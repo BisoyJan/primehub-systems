@@ -6,6 +6,7 @@ use App\Models\User;
 use App\Models\Site;
 use App\Models\BiometricRecord;
 use App\Models\Attendance;
+use App\Models\EmployeeSchedule;
 use App\Services\BiometricAnomalyDetector;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -246,9 +247,11 @@ class AttendanceAnomalyTest extends TestCase
             'is_approved' => true,
         ]);
 
-        $response = $this->actingAs($agent)
-            ->get('/biometric-anomalies');
+        // Agent needs a schedule to bypass EnsureUserHasSchedule middleware
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id]);
 
-        $response->assertForbidden();
+        $this->actingAs($agent)
+            ->get('/biometric-anomalies')
+            ->assertForbidden();
     }
 }

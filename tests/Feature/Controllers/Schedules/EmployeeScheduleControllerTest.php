@@ -397,7 +397,7 @@ class EmployeeScheduleControllerTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Attendance/EmployeeSchedules/Index')
                 ->has('schedules.data', 2) // Both schedules should be visible
-                ->where('filters.show_resigned', true)
+                ->where('filters.show_resigned', '1')
             );
     }
 

@@ -69,7 +69,7 @@ class InertiaPagePropsTest extends TestCase
     #[Test]
     public function it_shares_flash_messages_from_session(): void
     {
-        $user = User::factory()->create(['is_approved' => true]);
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
         $response = $this->actingAs($user)
             ->withSession([
@@ -88,7 +88,7 @@ class InertiaPagePropsTest extends TestCase
     #[Test]
     public function it_shares_error_flash_message(): void
     {
-        $user = User::factory()->create(['is_approved' => true]);
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
         $response = $this->actingAs($user)
             ->withSession([
@@ -118,7 +118,7 @@ class InertiaPagePropsTest extends TestCase
     #[Test]
     public function it_shares_inspirational_quote(): void
     {
-        $user = User::factory()->create(['is_approved' => true]);
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
         $response = $this->actingAs($user)->get('/dashboard');
 
@@ -134,7 +134,7 @@ class InertiaPagePropsTest extends TestCase
     #[Test]
     public function it_shares_sidebar_open_state_default_true(): void
     {
-        $user = User::factory()->create(['is_approved' => true]);
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
         $response = $this->actingAs($user)->get('/dashboard');
 
@@ -146,7 +146,7 @@ class InertiaPagePropsTest extends TestCase
     #[Test]
     public function it_shares_sidebar_open_state_from_cookie(): void
     {
-        $user = User::factory()->create(['is_approved' => true]);
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
         $response = $this->actingAs($user)
             ->withCookie('sidebar_state', 'false')
@@ -160,7 +160,7 @@ class InertiaPagePropsTest extends TestCase
     #[Test]
     public function it_renders_correct_page_component_for_dashboard(): void
     {
-        $user = User::factory()->create(['is_approved' => true]);
+        $user = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
         $response = $this->actingAs($user)->get('/dashboard');
 

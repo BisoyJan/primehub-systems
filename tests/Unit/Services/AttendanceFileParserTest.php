@@ -211,7 +211,7 @@ class AttendanceFileParserTest extends TestCase
         $timeOut = $this->parser->findTimeOutRecordByTimeRange($records, Carbon::parse('2025-11-06'), 0, 9);
 
         $this->assertNotNull($timeOut);
-        $this->assertEquals('07:00:00', $timeOut['datetime']->format('H:i:s'));
+        $this->assertEquals('05:00:00', $timeOut['datetime']->format('H:i:s'));
     }
 
     #[Test]

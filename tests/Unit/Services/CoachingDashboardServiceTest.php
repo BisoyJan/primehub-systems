@@ -212,6 +212,7 @@ class CoachingDashboardServiceTest extends TestCase
         $campaign = Campaign::factory()->create();
 
         $teamLead = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $teamLead->campaigns()->attach($campaign->id);
         EmployeeSchedule::factory()->create([
             'user_id' => $teamLead->id,
             'campaign_id' => $campaign->id,

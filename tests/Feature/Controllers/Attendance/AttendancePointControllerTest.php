@@ -6,6 +6,7 @@ use Tests\TestCase;
 use App\Models\User;
 use App\Models\Attendance;
 use App\Models\AttendancePoint;
+use App\Models\EmployeeSchedule;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -194,6 +195,7 @@ class AttendancePointControllerTest extends TestCase
             'is_approved' => true,
             'approved_at' => now(),
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $regularUser->id]);
         $point = AttendancePoint::factory()->tardy()->create();
 
         $response = $this->actingAs($regularUser)->post(route('attendance-points.excuse', $point), [
@@ -211,6 +213,7 @@ class AttendancePointControllerTest extends TestCase
             'is_approved' => true,
             'approved_at' => now(),
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $regularUser->id]);
         $point = AttendancePoint::factory()->tardy()->excused($this->admin, 'Previous excuse')->create();
 
         $response = $this->actingAs($regularUser)->post(route('attendance-points.unexcuse', $point));
@@ -226,7 +229,8 @@ class AttendancePointControllerTest extends TestCase
             'is_approved' => true,
             'approved_at' => now(),
         ]);
-        
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
+
         // Create points within the current month so they are returned by the date range filter
         AttendancePoint::factory()->tardy()->for($user)->count(2)->create([
             'shift_date' => Carbon::now()->startOfMonth()->addDays(5),
@@ -252,6 +256,7 @@ class AttendancePointControllerTest extends TestCase
             'is_approved' => true,
             'approved_at' => now(),
         ]); // Non-admin role
+        EmployeeSchedule::factory()->create(['user_id' => $user1->id]);
         $user2 = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
@@ -285,11 +290,10 @@ class AttendancePointControllerTest extends TestCase
 
         AttendancePoint::factory()->tardy()->for($targetUser)->count(3)->create();
 
-        $response = $this->actingAs($this->admin)->get(route('attendance-points.export-excel', $targetUser));
+        $response = $this->actingAs($this->admin)->postJson(route('attendance-points.start-export-excel', $targetUser));
 
         $response->assertStatus(200);
-        $response->assertDownload();
-        $this->assertStringContainsString('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $response->headers->get('Content-Type'));
+        $response->assertJsonStructure(['jobId']);
     }
 
     #[Test]
@@ -345,6 +349,7 @@ class AttendancePointControllerTest extends TestCase
             'is_approved' => true,
             'approved_at' => now(),
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $restrictedUser->id]);
 
         $response = $this->actingAs($restrictedUser)->get(route('attendance-points.index'));
 
@@ -386,11 +391,10 @@ class AttendancePointControllerTest extends TestCase
     {
         AttendancePoint::factory()->count(5)->create();
 
-        $response = $this->actingAs($this->admin)->get(route('attendance-points.export-all'));
+        $response = $this->actingAs($this->admin)->postJson(route('attendance-points.start-export-all-excel'));
 
         $response->assertStatus(200);
-        $response->assertDownload();
-        $this->assertStringContainsString('text/csv', $response->headers->get('Content-Type'));
+        $response->assertJsonStructure(['jobId']);
     }
 
     #[Test]
@@ -398,10 +402,9 @@ class AttendancePointControllerTest extends TestCase
     {
         AttendancePoint::factory()->count(5)->create();
 
-        $response = $this->actingAs($this->admin)->get(route('attendance-points.export-all-excel'));
+        $response = $this->actingAs($this->admin)->postJson(route('attendance-points.start-export-all-excel'));
 
         $response->assertStatus(200);
-        $response->assertDownload();
-        $this->assertStringContainsString('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $response->headers->get('Content-Type'));
+        $response->assertJsonStructure(['jobId']);
     }
 }

@@ -1056,7 +1056,7 @@ class DashboardServiceTest extends TestCase
         CoachingSession::factory()->create([
             'coachee_id' => $agent->id,
             'coach_id' => $tl->id,
-            'session_date' => now()->subDays(10),
+            'session_date' => now()->subDays(20),
             'follow_up_date' => now()->addDays(3),
         ]);
 
@@ -1064,7 +1064,7 @@ class DashboardServiceTest extends TestCase
         CoachingSession::factory()->create([
             'coachee_id' => $agent->id,
             'coach_id' => $tl->id,
-            'session_date' => now()->subDays(20),
+            'session_date' => now()->subDays(25),
             'follow_up_date' => now()->addDays(10),
         ]);
 
@@ -1137,7 +1137,7 @@ class DashboardServiceTest extends TestCase
         CoachingSession::factory()->create([
             'coachee_id' => $agent->id,
             'coach_id' => $tl->id,
-            'session_date' => now()->subDays(5),
+            'session_date' => now()->subDays(20),
             'follow_up_date' => now()->addDays(2),
         ]);
 
@@ -1146,7 +1146,7 @@ class DashboardServiceTest extends TestCase
         CoachingSession::factory()->create([
             'coachee_id' => $agent->id,
             'coach_id' => $otherTl->id,
-            'session_date' => now()->subDays(3),
+            'session_date' => now()->subDays(18),
             'follow_up_date' => now()->addDays(1),
         ]);
 

@@ -2,9 +2,10 @@
 
 namespace Tests\Feature;
 
+use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\PcSpec;
 use App\Models\Site;
-use App\Models\Campaign;
 use App\Models\User;
 use App\Jobs\GenerateAllPcSpecQRCodesZip;
 use App\Jobs\GenerateSelectedPcSpecQRCodesZip;
@@ -229,6 +230,15 @@ class PcQRCodeGenerationTest extends TestCase
         $user = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
+        ]);
+
+        // Agent needs EmployeeSchedule to avoid redirect to /schedule-setup
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
         ]);
 
         $response = $this->actingAs($user)

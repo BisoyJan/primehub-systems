@@ -97,7 +97,6 @@ class RamSpecRequestTest extends TestCase
         $this->assertArrayHasKey('type', $errors);
         $this->assertArrayHasKey('speed', $errors);
         $this->assertArrayHasKey('form_factor', $errors);
-        $this->assertArrayHasKey('voltage', $errors);
     }
 
     #[Test]
@@ -145,28 +144,6 @@ class RamSpecRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_voltage_to_be_greater_than_zero(): void
-    {
-        $request = RamSpecRequest::create('/test', 'POST');
-
-        $data = [
-            'manufacturer' => 'Corsair',
-            'model' => 'Vengeance LPX',
-            'capacity_gb' => 8,
-            'type' => 'DDR4',
-            'speed' => 3200,
-            'form_factor' => 'DIMM',
-            'voltage' => -1,
-            'stock_quantity' => 50,
-        ];
-
-        $validator = Validator::make($data, $request->rules());
-
-        $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('voltage', $validator->errors()->toArray());
-    }
-
-    #[Test]
     public function it_accepts_decimal_voltages(): void
     {
         $request = RamSpecRequest::create('/test', 'POST');
@@ -195,7 +172,6 @@ class RamSpecRequestTest extends TestCase
         $attributes = $request->attributes();
 
         $this->assertEquals('capacity', $attributes['capacity_gb']);
-        $this->assertEquals('form factor', $attributes['form_factor']);
         $this->assertEquals('initial stock quantity', $attributes['stock_quantity']);
     }
 
@@ -208,6 +184,5 @@ class RamSpecRequestTest extends TestCase
 
         $this->assertStringContainsString('at least 1 GB', $messages['capacity_gb.min']);
         $this->assertStringContainsString('at least 1 MHz', $messages['speed.min']);
-        $this->assertStringContainsString('greater than 0', $messages['voltage.min']);
     }
 }

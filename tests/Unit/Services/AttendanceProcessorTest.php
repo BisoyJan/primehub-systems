@@ -148,7 +148,7 @@ class AttendanceProcessorTest extends TestCase
     #[Test]
     public function it_determines_time_in_status_on_time(): void
     {
-        $tardyMinutes = 5; // 5 minutes late
+        $tardyMinutes = 0; // Not late at all
         $gracePeriod = 15;
 
         $status = $this->callProtectedMethod($this->processor, 'determineTimeInStatus', [$tardyMinutes, $gracePeriod]);

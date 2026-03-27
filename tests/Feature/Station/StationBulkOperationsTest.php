@@ -3,6 +3,7 @@
 namespace Tests\Feature\Station;
 
 use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\PcSpec;
 use App\Models\Site;
 use App\Models\Station;
@@ -245,6 +246,14 @@ class StationBulkOperationsTest extends TestCase
         $user = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
+        ]);
+
+        // Create schedule for user (required by EnsureUserHasSchedule middleware)
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => Site::factory()->create()->id,
+            'campaign_id' => Campaign::factory()->create()->id,
+            'is_active' => true,
         ]);
 
         $response = $this->actingAs($user)->post(route('stations.bulk'), [

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Auth;
 
+use App\Models\EmployeeSchedule;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -65,6 +66,7 @@ class PermissionTest extends TestCase
             'is_approved' => true,
             'role' => 'Agent',
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->get(route('accounts.index'));
 
@@ -91,6 +93,7 @@ class PermissionTest extends TestCase
             'is_approved' => true,
             'role' => 'Agent',
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->get(route('activity-logs.index'));
 
@@ -118,6 +121,7 @@ class PermissionTest extends TestCase
             'is_approved' => true,
             'role' => 'Agent',
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
 
         // Test various protected routes
         $protectedRoutes = [
@@ -160,11 +164,12 @@ class PermissionTest extends TestCase
             'is_approved' => true,
             'role' => 'Agent',
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->post(route('accounts.store'), [
             'first_name' => 'Test',
             'last_name' => 'User',
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'role' => 'Agent',

@@ -4,6 +4,7 @@ namespace Tests\Feature\Controllers\FormRequests;
 
 use App\Mail\MedicationRequestStatusUpdated;
 use App\Mail\MedicationRequestSubmitted;
+use App\Models\EmployeeSchedule;
 use App\Models\MedicationRequest;
 use App\Models\User;
 use App\Services\NotificationService;
@@ -36,6 +37,7 @@ class MedicationRequestControllerTest extends TestCase
     public function it_displays_medication_requests_index()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
         $request = MedicationRequest::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->get(route('medication-requests.index'));
@@ -52,6 +54,7 @@ class MedicationRequestControllerTest extends TestCase
     public function it_displays_create_form()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->get(route('medication-requests.create'));
 
@@ -68,6 +71,7 @@ class MedicationRequestControllerTest extends TestCase
     {
         Mail::fake();
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
 
         $data = [
             'medication_type' => 'Biogesic',
@@ -116,6 +120,7 @@ class MedicationRequestControllerTest extends TestCase
     public function it_allows_user_to_delete_pending_request()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
         $request = MedicationRequest::factory()->create(['user_id' => $user->id, 'status' => 'pending']);
 
         $response = $this->actingAs($user)->delete(route('medication-requests.destroy', $request));

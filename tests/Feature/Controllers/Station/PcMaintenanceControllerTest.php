@@ -3,7 +3,7 @@
 namespace Tests\Feature\Controllers\Station;
 
 use App\Models\PcMaintenance;
-use App\Models\Station;
+use App\Models\PcSpec;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -30,17 +30,17 @@ class PcMaintenanceControllerTest extends TestCase
         $this->get(route('pc-maintenance.index'))
             ->assertStatus(200)
             ->assertInertia(fn (Assert $page) => $page
-                ->component('Station/PcMaintenance/Index')
+                ->component('Computer/PcMaintenance/Index')
                 ->has('maintenances.data', 3)
             );
     }
 
     public function test_store_creates_maintenance_record()
     {
-        $station = Station::factory()->create();
+        $pcSpec = PcSpec::factory()->create();
 
         $data = [
-            'station_ids' => [$station->id],
+            'pc_spec_ids' => [$pcSpec->id],
             'last_maintenance_date' => Carbon::yesterday()->format('Y-m-d'),
             'next_due_date' => Carbon::tomorrow()->format('Y-m-d'),
             'maintenance_type' => 'Cleaning',
@@ -54,7 +54,7 @@ class PcMaintenanceControllerTest extends TestCase
             ->assertSessionHas('success');
 
         $this->assertDatabaseHas('pc_maintenances', [
-            'station_id' => $station->id,
+            'pc_spec_id' => $pcSpec->id,
             'maintenance_type' => 'Cleaning',
         ]);
     }
@@ -64,7 +64,7 @@ class PcMaintenanceControllerTest extends TestCase
         $maintenance = PcMaintenance::factory()->create();
 
         $data = [
-            'station_id' => $maintenance->station_id,
+            'pc_spec_id' => $maintenance->pc_spec_id,
             'last_maintenance_date' => Carbon::now()->format('Y-m-d'),
             'next_due_date' => Carbon::now()->addMonth()->format('Y-m-d'),
             'maintenance_type' => 'Repair',

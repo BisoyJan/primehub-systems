@@ -46,6 +46,7 @@ class LeaveRequestAuthorizationTest extends TestCase
     public function agent_can_access_their_own_leave_request()
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id]);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $agent->id]);
 
         $response = $this->actingAs($agent)->get(route('leave-requests.show', $leaveRequest));
@@ -57,7 +58,9 @@ class LeaveRequestAuthorizationTest extends TestCase
     public function agent_cannot_access_other_users_leave_request()
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id]);
         $otherUser = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $otherUser->id]);
         $leaveRequest = LeaveRequest::factory()->create(['user_id' => $otherUser->id]);
 
         $response = $this->actingAs($agent)->get(route('leave-requests.show', $leaveRequest));
@@ -121,6 +124,8 @@ class LeaveRequestAuthorizationTest extends TestCase
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
             'status' => 'approved',
+            'start_date' => now()->subDays(10)->toDateString(),
+            'end_date' => now()->subDays(5)->toDateString(),
         ]);
 
         $response = $this->actingAs($agent)
@@ -136,6 +141,7 @@ class LeaveRequestAuthorizationTest extends TestCase
     public function agent_cannot_approve_leave_requests()
     {
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $agent->id]);
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $agent->id,
             'status' => 'pending',

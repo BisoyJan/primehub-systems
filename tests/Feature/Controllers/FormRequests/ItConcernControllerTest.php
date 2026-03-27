@@ -3,6 +3,7 @@
 namespace Tests\Feature\Controllers\FormRequests;
 
 use Tests\TestCase;
+use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Models\ItConcern;
 use App\Models\Site;
@@ -51,6 +52,7 @@ class ItConcernControllerTest extends TestCase
     public function it_displays_create_form()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
 
         $response = $this->actingAs($user)->get(route('it-concerns.create'));
 
@@ -65,6 +67,7 @@ class ItConcernControllerTest extends TestCase
     public function it_stores_new_it_concern()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
         $site = Site::factory()->create();
 
         $data = [
@@ -90,6 +93,7 @@ class ItConcernControllerTest extends TestCase
     public function it_shows_it_concern_details()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
         $site = Site::factory()->create();
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
@@ -109,6 +113,7 @@ class ItConcernControllerTest extends TestCase
     public function it_allows_agent_to_edit_own_concern()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
         $site = Site::factory()->create();
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,
@@ -216,6 +221,7 @@ class ItConcernControllerTest extends TestCase
     public function it_allows_agent_to_delete_own_concern()
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create(['user_id' => $user->id]);
         $site = Site::factory()->create();
         $concern = ItConcern::factory()->create([
             'user_id' => $user->id,

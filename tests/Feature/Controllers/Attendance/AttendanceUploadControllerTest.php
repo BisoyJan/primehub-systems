@@ -3,6 +3,7 @@
 namespace Tests\Feature\Controllers\Attendance;
 
 use App\Models\AttendanceUpload;
+use App\Models\EmployeeSchedule;
 use App\Models\Site;
 use App\Models\User;
 use PHPUnit\Framework\Attributes\Test;
@@ -32,6 +33,7 @@ class AttendanceUploadControllerTest extends TestCase
             'is_approved' => true,
             'approved_at' => now(),
         ]);
+        EmployeeSchedule::factory()->create(['user_id' => $this->agent->id]);
     }
 
     #[Test]
@@ -74,23 +76,23 @@ class AttendanceUploadControllerTest extends TestCase
     }
 
     #[Test]
-    public function it_allows_agents_to_view_uploads_index()
+    public function it_denies_agents_from_viewing_uploads_index()
     {
         AttendanceUpload::factory()->count(1)->create();
 
         $response = $this->actingAs($this->agent)->get(route('attendance-uploads.index'));
 
-        $response->assertStatus(200);
+        $response->assertStatus(403);
     }
 
     #[Test]
-    public function it_allows_agents_to_view_upload_details()
+    public function it_denies_agents_from_viewing_upload_details()
     {
         $upload = AttendanceUpload::factory()->create();
 
         $response = $this->actingAs($this->agent)->get(route('attendance-uploads.show', $upload));
 
-        $response->assertStatus(200);
+        $response->assertStatus(403);
     }
 
     #[Test]

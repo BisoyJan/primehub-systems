@@ -2,6 +2,9 @@
 
 namespace Tests\Feature\Inertia;
 
+use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
@@ -94,6 +97,14 @@ class InertiaNavigationTest extends TestCase
     {
         // Create a regular user without admin privileges
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
+
+        // Create schedule for user (required by EnsureUserHasSchedule middleware)
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => Site::factory()->create()->id,
+            'campaign_id' => Campaign::factory()->create()->id,
+            'is_active' => true,
+        ]);
 
         // Try to access admin-only page
         $response = $this->actingAs($user)->get(route('accounts.index'));

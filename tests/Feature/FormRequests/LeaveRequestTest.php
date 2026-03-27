@@ -225,10 +225,25 @@ class LeaveRequestTest extends TestCase
 
         foreach ($nonCreditedTypes as $index => $type) {
             // Create a new employee for each leave type to avoid pending request check
-            $employee = User::factory()->create([
+            $employeeData = [
                 'role' => 'Agent',
                 'is_approved' => true,
                 'hired_date' => Carbon::now()->subMonths(7),
+            ];
+
+            // SPL requires solo parent status
+            if ($type === 'SPL') {
+                $employeeData['is_solo_parent'] = true;
+            }
+
+            $employee = User::factory()->create($employeeData);
+
+            // Create schedule for employee (required by EnsureUserHasSchedule middleware)
+            EmployeeSchedule::factory()->create([
+                'user_id' => $employee->id,
+                'site_id' => Site::factory()->create()->id,
+                'campaign_id' => Campaign::factory()->create()->id,
+                'is_active' => true,
             ]);
 
             LeaveCredit::factory()->create([
@@ -393,13 +408,13 @@ class LeaveRequestTest extends TestCase
     #[Test]
     public function employee_cannot_cancel_approved_request_due_to_policy()
     {
-        // The policy only allows canceling 'pending' requests
-        // Even though the model's canBeCancelled() allows approved future requests
+        // The policy blocks cancellation of approved leaves with past end dates
+        // to prevent rolling back deducted leave credits
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $this->employee->id,
             'leave_type' => 'VL',
-            'start_date' => Carbon::now()->addDays(10),
-            'end_date' => Carbon::now()->addDays(12),
+            'start_date' => Carbon::now()->subDays(10),
+            'end_date' => Carbon::now()->subDays(5),
             'status' => 'approved',
             'credits_deducted' => 3.0,
             'credits_year' => Carbon::now()->year,
@@ -410,7 +425,7 @@ class LeaveRequestTest extends TestCase
                 'cancellation_reason' => 'Trying to cancel approved leave.',
             ]);
 
-        // Policy denies cancel on non-pending requests
+        // Policy denies cancel on approved leaves with past end dates
         $response->assertForbidden();
 
         $leaveRequest->refresh();
@@ -488,6 +503,14 @@ class LeaveRequestTest extends TestCase
             'is_approved' => true,
         ]);
 
+        // Create schedule for regularUser (required by EnsureUserHasSchedule middleware)
+        EmployeeSchedule::factory()->create([
+            'user_id' => $regularUser->id,
+            'site_id' => Site::factory()->create()->id,
+            'campaign_id' => Campaign::factory()->create()->id,
+            'is_active' => true,
+        ]);
+
         $leaveRequest = LeaveRequest::factory()->create([
             'status' => 'pending',
         ]);
@@ -542,7 +565,7 @@ class LeaveRequestTest extends TestCase
 
         $leaveRequest = LeaveRequest::factory()->create([
             'user_id' => $this->employee->id,
-            'leave_type' => 'SPL', // Solo Parent Leave (non-credited)
+            'leave_type' => 'LOA', // LOA is truly non-credited (no credit deduction at all)
             'days_requested' => 5.0,
             'status' => 'pending',
         ]);
@@ -550,13 +573,13 @@ class LeaveRequestTest extends TestCase
         // Admin approves first
         $this->actingAs($this->admin)
             ->post(route('leave-requests.approve', $leaveRequest), [
-                'review_notes' => 'Approved SPL request.',
+                'review_notes' => 'Approved LOA request.',
             ]);
 
         // HR completes dual approval
         $this->actingAs($hr)
             ->post(route('leave-requests.approve', $leaveRequest), [
-                'review_notes' => 'HR approves SPL.',
+                'review_notes' => 'HR approves LOA.',
             ]);
 
         $leaveRequest->refresh();

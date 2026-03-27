@@ -46,6 +46,8 @@ class TeamLeadLeaveFilingTest extends TestCase
             'campaign_id' => $this->campaign->id,
             'is_active' => true,
         ]);
+        // Team Lead campaigns are tracked via pivot table, not just EmployeeSchedule
+        $this->teamLead->campaigns()->attach($this->campaign->id);
 
         // Create Agent in the same campaign
         $this->agent = User::factory()->create([

@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Tests\Unit\Requests;
 
 use App\Http\Requests\PcMaintenanceRequest;
-use App\Models\Campaign;
-use App\Models\Site;
-use App\Models\Station;
+use App\Models\PcSpec;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Validator;
 use PHPUnit\Framework\Attributes\Test;
@@ -28,17 +26,12 @@ class PcMaintenanceRequestTest extends TestCase
     #[Test]
     public function it_validates_with_complete_create_data(): void
     {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-        $stations = Station::factory()->count(3)->create([
-            'site_id' => $site->id,
-            'campaign_id' => $campaign->id,
-        ]);
+        $pcSpecs = PcSpec::factory()->count(3)->create();
 
         $request = PcMaintenanceRequest::create('/test', 'POST');
 
         $data = [
-            'station_ids' => $stations->pluck('id')->toArray(),
+            'pc_spec_ids' => $pcSpecs->pluck('id')->toArray(),
             'last_maintenance_date' => now()->format('Y-m-d'),
             'next_due_date' => now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => 'Preventive',
@@ -66,16 +59,16 @@ class PcMaintenanceRequestTest extends TestCase
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('station_ids', $validator->errors()->toArray());
+        $this->assertArrayHasKey('pc_spec_ids', $validator->errors()->toArray());
     }
 
     #[Test]
-    public function it_requires_at_least_one_station_id_on_create(): void
+    public function it_requires_at_least_one_pc_spec_id_on_create(): void
     {
         $request = PcMaintenanceRequest::create('/test', 'POST');
 
         $data = [
-            'station_ids' => [],
+            'pc_spec_ids' => [],
             'last_maintenance_date' => now()->format('Y-m-d'),
             'next_due_date' => now()->addMonths(3)->format('Y-m-d'),
             'status' => 'completed',
@@ -84,11 +77,11 @@ class PcMaintenanceRequestTest extends TestCase
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('station_ids', $validator->errors()->toArray());
+        $this->assertArrayHasKey('pc_spec_ids', $validator->errors()->toArray());
     }
 
     #[Test]
-    public function it_requires_station_id_on_update(): void
+    public function it_requires_pc_spec_id_on_update(): void
     {
         $request = PcMaintenanceRequest::create('/test', 'PUT');
 
@@ -101,22 +94,17 @@ class PcMaintenanceRequestTest extends TestCase
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('station_id', $validator->errors()->toArray());
+        $this->assertArrayHasKey('pc_spec_id', $validator->errors()->toArray());
     }
 
     #[Test]
     public function it_validates_with_complete_update_data(): void
     {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-        $station = Station::factory()->create([
-            'site_id' => $site->id,
-            'campaign_id' => $campaign->id,
-        ]);
+        $pcSpec = PcSpec::factory()->create();
         $request = PcMaintenanceRequest::create('/test', 'PUT');
 
         $data = [
-            'station_id' => $station->id,
+            'pc_spec_id' => $pcSpec->id,
             'last_maintenance_date' => now()->format('Y-m-d'),
             'next_due_date' => now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => 'Corrective',
@@ -133,16 +121,11 @@ class PcMaintenanceRequestTest extends TestCase
     #[Test]
     public function it_requires_next_due_date_after_last_maintenance(): void
     {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-        $station = Station::factory()->create([
-            'site_id' => $site->id,
-            'campaign_id' => $campaign->id,
-        ]);
+        $pcSpec = PcSpec::factory()->create();
         $request = PcMaintenanceRequest::create('/test', 'PUT');
 
         $data = [
-            'station_id' => $station->id,
+            'pc_spec_id' => $pcSpec->id,
             'last_maintenance_date' => now()->format('Y-m-d'),
             'next_due_date' => now()->subDays(1)->format('Y-m-d'),
             'status' => 'completed',
@@ -157,16 +140,11 @@ class PcMaintenanceRequestTest extends TestCase
     #[Test]
     public function it_only_accepts_valid_status_values(): void
     {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-        $station = Station::factory()->create([
-            'site_id' => $site->id,
-            'campaign_id' => $campaign->id,
-        ]);
+        $pcSpec = PcSpec::factory()->create();
         $request = PcMaintenanceRequest::create('/test', 'PUT');
 
         $data = [
-            'station_id' => $station->id,
+            'pc_spec_id' => $pcSpec->id,
             'last_maintenance_date' => now()->format('Y-m-d'),
             'next_due_date' => now()->addMonths(3)->format('Y-m-d'),
             'status' => 'invalid',
@@ -181,18 +159,13 @@ class PcMaintenanceRequestTest extends TestCase
     #[Test]
     public function it_accepts_all_valid_status_values(): void
     {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-        $station = Station::factory()->create([
-            'site_id' => $site->id,
-            'campaign_id' => $campaign->id,
-        ]);
+        $pcSpec = PcSpec::factory()->create();
         $request = PcMaintenanceRequest::create('/test', 'PUT');
         $validStatuses = ['completed', 'pending', 'overdue'];
 
         foreach ($validStatuses as $status) {
             $data = [
-                'station_id' => $station->id,
+                'pc_spec_id' => $pcSpec->id,
                 'last_maintenance_date' => now()->format('Y-m-d'),
                 'next_due_date' => now()->addMonths(3)->format('Y-m-d'),
                 'status' => $status,
@@ -207,16 +180,11 @@ class PcMaintenanceRequestTest extends TestCase
     #[Test]
     public function it_allows_nullable_optional_fields(): void
     {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-        $station = Station::factory()->create([
-            'site_id' => $site->id,
-            'campaign_id' => $campaign->id,
-        ]);
+        $pcSpec = PcSpec::factory()->create();
         $request = PcMaintenanceRequest::create('/test', 'PUT');
 
         $data = [
-            'station_id' => $station->id,
+            'pc_spec_id' => $pcSpec->id,
             'last_maintenance_date' => now()->format('Y-m-d'),
             'next_due_date' => now()->addMonths(3)->format('Y-m-d'),
             'maintenance_type' => null,
@@ -233,16 +201,11 @@ class PcMaintenanceRequestTest extends TestCase
     #[Test]
     public function it_limits_notes_to_1000_characters(): void
     {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-        $station = Station::factory()->create([
-            'site_id' => $site->id,
-            'campaign_id' => $campaign->id,
-        ]);
+        $pcSpec = PcSpec::factory()->create();
         $request = PcMaintenanceRequest::create('/test', 'PUT');
 
         $data = [
-            'station_id' => $station->id,
+            'pc_spec_id' => $pcSpec->id,
             'last_maintenance_date' => now()->format('Y-m-d'),
             'next_due_date' => now()->addMonths(3)->format('Y-m-d'),
             'notes' => str_repeat('a', 1001),
@@ -262,8 +225,9 @@ class PcMaintenanceRequestTest extends TestCase
 
         $attributes = $request->attributes();
 
-        $this->assertEquals('stations', $attributes['station_ids']);
-        $this->assertEquals('station', $attributes['station_ids.*']);
+        $this->assertEquals('PC specs', $attributes['pc_spec_ids']);
+        $this->assertEquals('PC spec', $attributes['pc_spec_ids.*']);
+        $this->assertEquals('PC spec', $attributes['pc_spec_id']);
         $this->assertEquals('last maintenance date', $attributes['last_maintenance_date']);
         $this->assertEquals('next due date', $attributes['next_due_date']);
         $this->assertEquals('maintenance type', $attributes['maintenance_type']);
@@ -278,7 +242,7 @@ class PcMaintenanceRequestTest extends TestCase
         $messages = $request->messages();
 
         $this->assertStringContainsString('after the last maintenance date', $messages['next_due_date.after']);
-        $this->assertStringContainsString('at least one station', $messages['station_ids.min']);
+        $this->assertStringContainsString('at least one PC', $messages['pc_spec_ids.min']);
         $this->assertStringContainsString('completed, pending, or overdue', $messages['status.in']);
     }
 }

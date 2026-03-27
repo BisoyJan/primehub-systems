@@ -22,6 +22,7 @@ class RamSpecTest extends TestCase
             'capacity_gb' => 16,
             'type' => 'DDR4',
             'speed' => 3200,
+            'form_factor' => 'DIMM',
         ]);
 
         $this->assertEquals('Kingston', $ramSpec->manufacturer);

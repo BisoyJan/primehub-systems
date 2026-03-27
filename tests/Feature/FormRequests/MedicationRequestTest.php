@@ -2,7 +2,10 @@
 
 namespace Tests\Feature\FormRequests;
 
+use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\MedicationRequest;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -28,6 +31,16 @@ class MedicationRequestTest extends TestCase
         $this->employee = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
+        ]);
+
+        // Create schedule for employee (required by EnsureUserHasSchedule middleware)
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $this->employee->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+            'is_active' => true,
         ]);
 
         // Admin role has medication_requests permissions
@@ -375,6 +388,14 @@ class MedicationRequestTest extends TestCase
         $regularUser = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
+        ]);
+
+        // Create schedule for regularUser (required by EnsureUserHasSchedule middleware)
+        EmployeeSchedule::factory()->create([
+            'user_id' => $regularUser->id,
+            'site_id' => Site::factory()->create()->id,
+            'campaign_id' => Campaign::factory()->create()->id,
+            'is_active' => true,
         ]);
 
         $medicationRequest = MedicationRequest::factory()->create([

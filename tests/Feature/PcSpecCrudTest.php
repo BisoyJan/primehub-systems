@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\PcSpec;
-use App\Models\RamSpec;
+use App\Models\Campaign;
 use App\Models\DiskSpec;
+use App\Models\EmployeeSchedule;
+use App\Models\PcSpec;
 use App\Models\ProcessorSpec;
+use App\Models\RamSpec;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -43,7 +46,6 @@ class PcSpecCrudTest extends TestCase
 
         $this->disk = DiskSpec::factory()->create([
             'capacity_gb' => 512,
-            'interface' => 'NVMe',
         ]);
         $this->disk->stock()->create(['quantity' => 10]);
 
@@ -309,6 +311,15 @@ class PcSpecCrudTest extends TestCase
             'is_approved' => true,
         ]);
 
+        // Agent needs EmployeeSchedule to avoid redirect to /schedule-setup
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+        ]);
+
         $response = $this->actingAs($user)
             ->post(route('pcspecs.store'), [
                 'manufacturer' => 'ASUS',
@@ -330,6 +341,15 @@ class PcSpecCrudTest extends TestCase
         $user = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
+        ]);
+
+        // Agent needs EmployeeSchedule to avoid redirect to /schedule-setup
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
         ]);
 
         $response = $this->actingAs($user)

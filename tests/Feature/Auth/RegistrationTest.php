@@ -22,7 +22,7 @@ class RegistrationTest extends TestCase
             'first_name' => 'Test',
             'middle_name' => 'M',
             'last_name' => 'User',
-            'email' => 'test@example.com',
+            'email' => 'test@primehubmail.com',
             'password' => 'password123',
             'password_confirmation' => 'password123',
         ]);

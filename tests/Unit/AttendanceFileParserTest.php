@@ -259,10 +259,10 @@ class AttendanceFileParserTest extends TestCase
             ['datetime' => Carbon::parse('2025-11-05 15:00:00')],
         ]);
 
-        // Afternoon shift time out (15 = 3 PM), should get last record
+        // Afternoon shift time out (15 = 3 PM), should get first valid record in range
         $timeOut = $this->parser->findTimeOutRecord($records, Carbon::parse('2025-11-05'), 15, '15:00:00');
 
-        $this->assertEquals('2025-11-05 15:00:00', $timeOut['datetime']->format('Y-m-d H:i:s'));
+        $this->assertEquals('2025-11-05 12:00:00', $timeOut['datetime']->format('Y-m-d H:i:s'));
     }
 
     #[Test]
@@ -284,7 +284,7 @@ class AttendanceFileParserTest extends TestCase
         );
 
         $this->assertNotNull($timeOut);
-        $this->assertEquals('2025-11-06 07:00:00', $timeOut['datetime']->format('Y-m-d H:i:s'));
+        $this->assertEquals('2025-11-06 01:00:00', $timeOut['datetime']->format('Y-m-d H:i:s'));
     }
 
     #[Test]

@@ -48,7 +48,7 @@ class AttendanceDashboardTest extends TestCase
     public function attendance_index_page_can_be_accessed(): void
     {
         $this->actingAs($this->admin)
-            ->get('/attendance')
+            ->get('/attendance/records')
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Attendance/Main/Index')
@@ -70,7 +70,7 @@ class AttendanceDashboardTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin)
-            ->get('/attendance?date_from=2025-11-05&date_to=2025-11-05')
+            ->get('/attendance/records?date_from=2025-11-05&date_to=2025-11-05')
             ->assertOk();
 
         // Should only return attendance for 2025-11-05
@@ -94,7 +94,7 @@ class AttendanceDashboardTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin)
-            ->get('/attendance?user_id=' . $this->employee1->id)
+            ->get('/attendance/records?user_id=' . $this->employee1->id)
             ->assertOk();
 
         $response->assertInertia(fn ($page) => $page
@@ -131,7 +131,7 @@ class AttendanceDashboardTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin)
-            ->get('/attendance?site_id=' . $this->site->id)
+            ->get('/attendance/records?site_id=' . $this->site->id)
             ->assertOk();
 
         $response->assertInertia(fn ($page) => $page
@@ -154,7 +154,7 @@ class AttendanceDashboardTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin)
-            ->get('/attendance?admin_verified=0')
+            ->get('/attendance/records?admin_verified=0')
             ->assertOk();
 
         $response->assertInertia(fn ($page) => $page
@@ -294,7 +294,7 @@ class AttendanceDashboardTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin)
-            ->get('/attendance?search=John')
+            ->get('/attendance/records?search=John')
             ->assertOk();
 
         $response->assertInertia(fn ($page) => $page
@@ -310,7 +310,7 @@ class AttendanceDashboardTest extends TestCase
         ]);
 
         $response = $this->actingAs($this->admin)
-            ->get('/attendance')
+            ->get('/attendance/records')
             ->assertOk();
 
         $response->assertInertia(fn ($page) => $page

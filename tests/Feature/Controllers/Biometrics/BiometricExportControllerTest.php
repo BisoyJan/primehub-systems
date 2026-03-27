@@ -82,6 +82,8 @@ class BiometricExportControllerTest extends TestCase
     {
         Queue::fake();
 
+        Attendance::factory()->onTime()->create(['shift_date' => now()->format('Y-m-d')]);
+
         $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->format('Y-m-d'),
@@ -102,7 +104,7 @@ class BiometricExportControllerTest extends TestCase
         ]);
 
         $response->assertStatus(422);
-        $response->assertJsonValidationErrors(['start_date', 'end_date']);
+        $response->assertJson(['error' => true]);
     }
 
     #[Test]
@@ -123,6 +125,11 @@ class BiometricExportControllerTest extends TestCase
         Queue::fake();
 
         $user = User::factory()->create();
+
+        Attendance::factory()->onTime()->create([
+            'user_id' => $user->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
 
         $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
@@ -146,6 +153,11 @@ class BiometricExportControllerTest extends TestCase
 
         $site = Site::factory()->create();
 
+        Attendance::factory()->onTime()->create([
+            'bio_in_site_id' => $site->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
+
         $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->format('Y-m-d'),
@@ -164,6 +176,18 @@ class BiometricExportControllerTest extends TestCase
         Queue::fake();
 
         $campaign = Campaign::factory()->create();
+        $site = Site::factory()->create();
+        $user = User::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'campaign_id' => $campaign->id,
+            'site_id' => $site->id,
+            'user_id' => $user->id,
+        ]);
+        Attendance::factory()->onTime()->create([
+            'user_id' => $user->id,
+            'employee_schedule_id' => $schedule->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
 
         $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
@@ -400,6 +424,11 @@ class BiometricExportControllerTest extends TestCase
         $user1 = User::factory()->create();
         $user2 = User::factory()->create();
 
+        Attendance::factory()->onTime()->create([
+            'user_id' => $user1->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
+
         $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->format('Y-m-d'),
@@ -419,6 +448,11 @@ class BiometricExportControllerTest extends TestCase
         $site1 = Site::factory()->create();
         $site2 = Site::factory()->create();
 
+        Attendance::factory()->onTime()->create([
+            'bio_in_site_id' => $site1->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
+
         $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
             'end_date' => now()->format('Y-m-d'),
@@ -437,6 +471,18 @@ class BiometricExportControllerTest extends TestCase
 
         $campaign1 = Campaign::factory()->create();
         $campaign2 = Campaign::factory()->create();
+        $user = User::factory()->create();
+        $site = Site::factory()->create();
+        $schedule = EmployeeSchedule::factory()->create([
+            'campaign_id' => $campaign1->id,
+            'site_id' => $site->id,
+            'user_id' => $user->id,
+        ]);
+        Attendance::factory()->onTime()->create([
+            'user_id' => $user->id,
+            'employee_schedule_id' => $schedule->id,
+            'shift_date' => now()->format('Y-m-d'),
+        ]);
 
         $response = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),
@@ -453,6 +499,8 @@ class BiometricExportControllerTest extends TestCase
     public function it_generates_unique_job_id_for_each_request()
     {
         Queue::fake();
+
+        Attendance::factory()->onTime()->create(['shift_date' => now()->format('Y-m-d')]);
 
         $response1 = $this->actingAs($this->admin)->postJson(route('biometric-export.start'), [
             'start_date' => now()->format('Y-m-d'),

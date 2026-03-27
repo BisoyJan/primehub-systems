@@ -91,7 +91,7 @@ class AccountControllerTest extends TestCase
             'first_name' => 'Jane',
             'middle_name' => 'M',
             'last_name' => 'Smith',
-            'email' => 'jane.smith@example.com',
+            'email' => 'jane.smith@primehubmail.com',
             'password' => 'Password123!',
             'password_confirmation' => 'Password123!',
             'role' => 'Agent',
@@ -107,12 +107,12 @@ class AccountControllerTest extends TestCase
         $this->assertDatabaseHas('users', [
             'first_name' => 'Jane',
             'last_name' => 'Smith',
-            'email' => 'jane.smith@example.com',
+            'email' => 'jane.smith@primehubmail.com',
             'role' => 'Agent',
             'is_approved' => true,
         ]);
 
-        $user = User::where('email', 'jane.smith@example.com')->first();
+        $user = User::where('email', 'jane.smith@primehubmail.com')->first();
         $this->assertNotNull($user->approved_at);
         $this->assertTrue(Hash::check('Password123!', $user->password));
     }
@@ -173,6 +173,7 @@ class AccountControllerTest extends TestCase
         $user = User::factory()->create([
             'first_name' => 'Old',
             'role' => 'Agent',
+            'email' => 'old.user@primehubmail.com',
         ]);
 
         $updateData = [
@@ -201,6 +202,7 @@ class AccountControllerTest extends TestCase
     {
         $user = User::factory()->create([
             'password' => Hash::make('OldPassword123!'),
+            'email' => 'changepw.user@primehubmail.com',
         ]);
 
         $updateData = [
@@ -254,7 +256,8 @@ class AccountControllerTest extends TestCase
         $response->assertRedirect()
             ->assertSessionHas('flash.type', 'success');
 
-        $this->assertDatabaseMissing('users', ['id' => $user->id]);
+        $this->assertDatabaseHas('users', ['id' => $user->id]);
+        $this->assertNotNull($user->fresh()->deleted_at);
     }
 
     public function test_destroy_prevents_deleting_own_account(): void

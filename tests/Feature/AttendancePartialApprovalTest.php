@@ -420,7 +420,7 @@ class AttendancePartialApprovalTest extends TestCase
             'is_partially_verified' => false,
         ]);
 
-        $response = $this->actingAs($this->admin)->get('/attendance/review?verified=partially_verified');
+        $response = $this->actingAs($this->admin)->get('/attendance/review?verified=partially_verified&date_from=2026-02-05&date_to=2026-02-06');
 
         $response->assertOk();
         $response->assertInertia(fn ($page) => $page

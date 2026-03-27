@@ -21,7 +21,7 @@ class AuthenticationTest extends TestCase
 
     public function test_users_can_authenticate_using_the_login_screen()
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['email' => 'user@primehubmail.com']);
 
         $response = $this->post(route('login.store'), [
             'email' => $user->email,
@@ -43,7 +43,7 @@ class AuthenticationTest extends TestCase
             'confirmPassword' => true,
         ]);
 
-        $user = User::factory()->create();
+        $user = User::factory()->create(['email' => 'user@primehubmail.com']);
 
         $user->forceFill([
             'two_factor_secret' => encrypt('test-secret'),
@@ -85,7 +85,7 @@ class AuthenticationTest extends TestCase
 
     public function test_users_are_rate_limited()
     {
-        $user = User::factory()->create();
+        $user = User::factory()->create(['email' => 'ratelimit@primehubmail.com']);
 
         RateLimiter::increment(implode('|', [$user->email, '127.0.0.1']), amount: 10);
 

@@ -371,8 +371,8 @@ class LeaveRequestControllerTest extends TestCase
             'leave_type' => 'VL',
             'days_requested' => 5,
             'has_partial_denial' => false,
-            'start_date' => now()->addDays(5),
-            'end_date' => now()->addDays(9),
+            'start_date' => now()->subDays(10),
+            'end_date' => now()->subDays(5),
         ]);
 
         $response = $this->actingAs($user)->post(route('leave-requests.cancel', $leaveRequest));

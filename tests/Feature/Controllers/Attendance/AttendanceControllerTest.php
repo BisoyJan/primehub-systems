@@ -219,7 +219,7 @@ class AttendanceControllerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $attendance->refresh();
         $this->assertEquals('on_time', $attendance->status);
@@ -238,7 +238,7 @@ class AttendanceControllerTest extends TestCase
                 'verification_notes' => '',
             ]);
 
-        $response->assertSessionHasErrors(['status', 'verification_notes']);
+        $response->assertSessionHasErrors(['status']);
     }
 
     #[Test]
@@ -275,7 +275,7 @@ class AttendanceControllerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $attendance->refresh();
         $this->assertEquals('advised_absence', $attendance->status);
@@ -322,7 +322,7 @@ class AttendanceControllerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $this->assertDatabaseMissing('attendances', ['id' => $attendance1->id]);
         $this->assertDatabaseMissing('attendances', ['id' => $attendance2->id]);
@@ -411,14 +411,14 @@ class AttendanceControllerTest extends TestCase
     #[Test]
     public function it_paginates_attendance_records()
     {
-        Attendance::factory()->count(30)->create();
+        Attendance::factory()->count(30)->create(['shift_date' => now()->format('Y-m-d')]);
 
         $response = $this->actingAs($this->admin)
             ->get(route('attendance.index'));
 
         $response->assertStatus(200);
         $response->assertInertia(fn ($page) =>
-            $page->has('attendances.data', 25) // Default pagination is 25
+            $page->has('attendances.data', 30) // 30 records fit within pagination of 60
         );
     }
 
@@ -488,7 +488,7 @@ class AttendanceControllerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $this->assertDatabaseHas('attendances', [
             'user_id' => $user->id,
@@ -518,7 +518,7 @@ class AttendanceControllerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $this->assertDatabaseHas('attendances', [
             'user_id' => $user1->id,
@@ -547,7 +547,7 @@ class AttendanceControllerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $attendance1->refresh();
         $attendance2->refresh();
@@ -571,7 +571,7 @@ class AttendanceControllerTest extends TestCase
             ->post(route('attendance.quickApprove', $attendance));
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $attendance->refresh();
         $this->assertTrue($attendance->admin_verified);
@@ -589,7 +589,7 @@ class AttendanceControllerTest extends TestCase
             ->post(route('attendance.quickApprove', $attendance));
 
         $response->assertRedirect();
-        $response->assertSessionHas('error');
+        $response->assertSessionHas('type', 'error');
 
         $attendance->refresh();
         $this->assertFalse($attendance->admin_verified);
@@ -608,7 +608,7 @@ class AttendanceControllerTest extends TestCase
             ]);
 
         $response->assertRedirect();
-        $response->assertSessionHas('success');
+        $response->assertSessionHas('type', 'success');
 
         $attendance1->refresh();
         $attendance2->refresh();

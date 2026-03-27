@@ -18,6 +18,7 @@ class NotificationControllerTest extends TestCase
     {
         parent::setUp();
         $this->user = User::factory()->create([
+            'role' => 'Admin',
             'is_approved' => true,
         ]);
     }

@@ -5,6 +5,7 @@ namespace Tests\Feature\Station;
 use App\Models\User;
 use App\Models\Site;
 use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\Station;
 use App\Models\PcSpec;
 use App\Models\PcTransfer;
@@ -352,6 +353,14 @@ class StationTransferTest extends TestCase
         $agent = User::factory()->create([
             'role' => 'Agent',
             'is_approved' => true,
+        ]);
+
+        // Create schedule for agent (required by EnsureUserHasSchedule middleware)
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agent->id,
+            'site_id' => Site::factory()->create()->id,
+            'campaign_id' => Campaign::factory()->create()->id,
+            'is_active' => true,
         ]);
 
         $site = Site::factory()->create();

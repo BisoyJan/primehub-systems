@@ -199,9 +199,8 @@ class AttendanceProcessingTest extends TestCase
         ]);
 
         // Morning shift is 06:00-15:00, so:
-        // - Time in: 08:00 is earliest valid time in (08:00 < 08:30)
-        // - Time out: 17:00 is closer to scheduled 15:00 than 17:30
-        //   (|17:00 - 15:00| = 2 hours vs |17:30 - 15:00| = 2.5 hours)
+        // - Time in: 08:00 is the earliest scan (first)
+        // - Time out: 17:30 is the latest scan (last)
         $content = "No\tDevNo\tUserId\tName\tMode\tDateTime\n" .
                    "1\t1\t10\tDoe John\tFP\t2025-11-05  08:00:00\n" .
                    "2\t1\t10\tDoe John\tFP\t2025-11-05  08:30:00\n" .
@@ -223,8 +222,8 @@ class AttendanceProcessingTest extends TestCase
         if ($attendance) {
             // Earliest time in is recorded
             $this->assertEquals('08:00:00', Carbon::parse($attendance->actual_time_in)->format('H:i:s'));
-            // Best match to scheduled out time (17:00 is closer to 15:00 than 17:30)
-            $this->assertEquals('17:00:00', Carbon::parse($attendance->actual_time_out)->format('H:i:s'));
+            // Latest scan is used as time out
+            $this->assertEquals('17:30:00', Carbon::parse($attendance->actual_time_out)->format('H:i:s'));
         }
     }
 

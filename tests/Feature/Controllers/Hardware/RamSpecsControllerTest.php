@@ -59,7 +59,6 @@ class RamSpecsControllerTest extends TestCase
             'type' => 'DDR4',
             'speed' => 3200,
             'form_factor' => 'DIMM',
-            'voltage' => 1.35,
             'stock_quantity' => 10,
         ];
 

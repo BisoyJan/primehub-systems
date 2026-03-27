@@ -35,6 +35,7 @@ class AttendancePointModelTest extends TestCase
             'excused_at',
             'excuse_reason',
             'expires_at',
+            'gbro_expires_at',
             'expiration_type',
             'is_expired',
             'expired_at',

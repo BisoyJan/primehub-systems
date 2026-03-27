@@ -2,10 +2,13 @@
 
 namespace Tests\Feature;
 
-use App\Models\RamSpec;
+use App\Models\Campaign;
 use App\Models\DiskSpec;
-use App\Models\ProcessorSpec;
+use App\Models\EmployeeSchedule;
 use App\Models\MonitorSpec;
+use App\Models\ProcessorSpec;
+use App\Models\RamSpec;
+use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -69,6 +72,7 @@ class ComponentSpecsTest extends TestCase
             'capacity_gb' => 16,
             'type' => 'DDR4',
             'speed' => 3200, // Must be integer, not string
+            'form_factor' => 'DIMM', // Required field
             'stock_quantity' => 10, // Required field
         ];
 
@@ -100,6 +104,7 @@ class ComponentSpecsTest extends TestCase
                 'capacity_gb' => 16,
                 'type' => $ramSpec->type,
                 'speed' => $ramSpec->speed,
+                'form_factor' => $ramSpec->form_factor,
             ]);
 
         $response->assertRedirect(route('ramspecs.index'));
@@ -376,6 +381,15 @@ class ComponentSpecsTest extends TestCase
             'is_approved' => true,
         ]);
 
+        // Agent needs EmployeeSchedule to avoid redirect to /schedule-setup
+        $site = Site::factory()->create();
+        $campaign = Campaign::factory()->create();
+        EmployeeSchedule::factory()->create([
+            'user_id' => $user->id,
+            'site_id' => $site->id,
+            'campaign_id' => $campaign->id,
+        ]);
+
         // Test RAM
         $response = $this->actingAs($user)
             ->post(route('ramspecs.store'), [
@@ -384,6 +398,7 @@ class ComponentSpecsTest extends TestCase
                 'capacity_gb' => 16,
                 'type' => 'DDR4',
                 'speed' => 3200,
+                'form_factor' => 'DIMM',
                 'stock_quantity' => 1,
             ]);
         $response->assertForbidden();

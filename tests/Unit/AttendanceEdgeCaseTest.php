@@ -45,6 +45,7 @@ class AttendanceEdgeCaseTest extends TestCase
             'scheduled_time_in' => '08:00:00',
             'scheduled_time_out' => '17:00:00',
             'grace_period_minutes' => 15,
+            'effective_date' => '2025-01-01',
         ]);
 
         // Create biometric file content with extreme scans
@@ -101,6 +102,7 @@ class AttendanceEdgeCaseTest extends TestCase
             'scheduled_time_in' => '08:00:00',
             'scheduled_time_out' => '17:00:00',
             'grace_period_minutes' => 15,
+            'effective_date' => '2025-01-01',
         ]);
 
         // Create biometric file content with normal scans

@@ -215,7 +215,7 @@ class YearEndLeaveCreditsReminderTest extends TestCase
         ]);
 
         $this->artisan('leave:year-end-reminder')
-            ->expectsOutputToContain('💡 Reminder: Credits do NOT carry over to the next year.')
+            ->expectsOutputToContain('💡 Reminder: Credits do NOT carry over to the next year for leave applications.')
             ->expectsOutputToContain('💡 Employees should use their remaining credits before December 31.')
             ->assertExitCode(0);
     }

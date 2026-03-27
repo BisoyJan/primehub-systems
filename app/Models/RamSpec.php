@@ -26,6 +26,7 @@ class RamSpec extends Model
         'capacity_gb',
         'type',
         'speed',
+        'form_factor',
     ];
 
     protected function casts(): array

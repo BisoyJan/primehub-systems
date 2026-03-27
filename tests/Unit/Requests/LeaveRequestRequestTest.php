@@ -100,14 +100,15 @@ class LeaveRequestRequestTest extends TestCase
     public function it_requires_start_date_not_in_past(): void
     {
         $data = [
-            'leave_type' => 'VL',
-            'start_date' => now()->subDays(5)->format('Y-m-d'),
+            'leave_type' => 'SL',
+            'start_date' => now()->subMonths(2)->format('Y-m-d'),
             'end_date' => now()->addDays(7)->format('Y-m-d'),
             'reason' => 'Test reason for leave',
             'campaign_department' => 'Campaign A',
         ];
 
         $request = new LeaveRequestRequest();
+        $request->merge($data);
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
@@ -222,7 +223,7 @@ class LeaveRequestRequestTest extends TestCase
         $messages = $request->messages();
 
         $this->assertStringContainsString('select a leave type', $messages['leave_type.required']);
-        $this->assertStringContainsString('cannot be in the past', $messages['start_date.after_or_equal']);
+        $this->assertStringContainsString('outside the allowed range', $messages['start_date.after_or_equal']);
         $this->assertStringContainsString('on or after the start date', $messages['end_date.after_or_equal']);
         $this->assertStringContainsString('at least 10 characters', $messages['reason.min']);
         $this->assertStringContainsString('cannot exceed 1000 characters', $messages['reason.max']);
