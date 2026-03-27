@@ -86,13 +86,13 @@ export default defineConfig({
     },
     server: {
         host: process.env.VITE_HOST || '0.0.0.0', // Allow external connections for ngrok
-        port: 5174,
+        port: 5175,
         strictPort: true,
         hmr: {
             // Use ngrok URL for HMR if provided, otherwise use host
             host: process.env.VITE_HMR_HOST || (process.env.VITE_HOST || 'localhost'),
             protocol: process.env.VITE_HMR_PROTOCOL || 'ws',
-            port: process.env.VITE_HMR_PORT ? parseInt(process.env.VITE_HMR_PORT) : 5174,
+            port: process.env.VITE_HMR_PORT ? parseInt(process.env.VITE_HMR_PORT) : 5175,
         },
         // Optimize file watching
         watch: {

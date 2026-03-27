@@ -246,7 +246,6 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     const [userSearchQuery, setUserSearchQuery] = useState("");
     const [selectedCampaignId, setSelectedCampaignId] = useState(() => {
         if (filters?.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return "";
     });
     const [selectedPointType, setSelectedPointType] = useState(filters?.point_type || "");
@@ -1241,9 +1240,9 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
-                                    {campaigns?.map(campaign => (
+                                    {(teamLeadCampaignIds?.length ? campaigns?.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns)?.map(campaign => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
+                                            {campaign.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

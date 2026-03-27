@@ -34,6 +34,7 @@ class LeaveRequestIndexSortingTest extends TestCase
             'campaign_id' => $campaign->id,
             'is_active' => true,
         ]);
+        $tl->campaigns()->attach($campaign);
 
         return [$tl, $campaign];
     }

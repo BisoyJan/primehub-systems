@@ -329,9 +329,6 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const canApproveUndertime = can('attendance.approve_undertime');
     const canRequestUndertimeApproval = can('attendance.request_undertime_approval');
 
-    // Detect if user is a Team Lead (teamLeadCampaignIds will be set if they are)
-    const isTeamLead = !!teamLeadCampaignIds?.length;
-
     // Undertime approval state
     const [isRequestingUndertimeApproval, setIsRequestingUndertimeApproval] = useState(false);
     const [isApprovingUndertime, setIsApprovingUndertime] = useState(false);
@@ -362,7 +359,6 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     // Auto-select Team Lead's campaign if no filter is applied
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (filters.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignIds?.length) return String(teamLeadCampaignIds[0]);
         return 'all';
     });
     const [statusFilter, setStatusFilter] = useState(filters.status || 'all');
@@ -597,12 +593,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
 
     const handleClearFilters = () => {
         setSiteFilter('all');
-        // For Team Leads, reset to their campaign instead of 'all'
-        if (teamLeadCampaignIds?.length) {
-            setCampaignFilter(String(teamLeadCampaignIds[0]));
-        } else {
-            setCampaignFilter('all');
-        }
+        setCampaignFilter('all');
         setStatusFilter('all');
         setSearchQuery('');
         setSelectedEmployeeId('');
@@ -725,9 +716,9 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Campaigns</SelectItem>
-                                {campaigns.map((campaign) => (
+                                {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map((campaign) => (
                                     <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}{isTeamLead && teamLeadCampaignIds?.includes(campaign.id) ? ' (Your Campaign)' : ''}
+                                        {campaign.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

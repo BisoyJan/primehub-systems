@@ -190,7 +190,6 @@ export default function EmployeeSchedulesIndex() {
     const [roleFilter, setRoleFilter] = useState(appliedFilters.role || "all");
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
-        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return "all";
     });
     const [statusFilter, setStatusFilter] = useState(appliedFilters.is_active || "all");
@@ -529,9 +528,9 @@ export default function EmployeeSchedulesIndex() {
                             </SelectTrigger>
                             <SelectContent>
                                 <SelectItem value="all">All Campaigns</SelectItem>
-                                {campaigns.map(campaign => (
+                                {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => (
                                     <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                        {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
+                                        {campaign.name}
                                     </SelectItem>
                                 ))}
                             </SelectContent>

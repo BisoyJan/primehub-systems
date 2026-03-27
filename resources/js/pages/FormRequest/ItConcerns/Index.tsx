@@ -190,7 +190,6 @@ export default function ItConcernsIndex() {
     const [priorityFilter, setPriorityFilter] = useState(appliedFilters.priority || "all");
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (appliedFilters.campaign_id) return appliedFilters.campaign_id;
-        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return "all";
     });
     const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
@@ -468,9 +467,9 @@ export default function ItConcernsIndex() {
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
-                                    {campaigns.map((campaign) => (
+                                    {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map((campaign) => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
+                                            {campaign.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

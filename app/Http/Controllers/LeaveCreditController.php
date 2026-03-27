@@ -109,12 +109,13 @@ class LeaveCreditController extends Controller
 
         // Apply campaign filter - auto-filter for Team Leads
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (! $campaignIdToFilter && $user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
-            $campaignIdToFilter = $teamLeadCampaignIds[0];
-        }
         if ($campaignIdToFilter) {
             $query->whereHas('activeSchedule', function ($q) use ($campaignIdToFilter) {
                 $q->where('campaign_id', $campaignIdToFilter);
+            });
+        } elseif ($user->role === 'Team Lead' && ! empty($teamLeadCampaignIds)) {
+            $query->whereHas('activeSchedule', function ($q) use ($teamLeadCampaignIds) {
+                $q->whereIn('campaign_id', $teamLeadCampaignIds);
             });
         }
 

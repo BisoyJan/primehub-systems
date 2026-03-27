@@ -220,7 +220,6 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
     const [eligibilityFilter, setEligibilityFilter] = useState(filters.eligibility || 'all');
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (filters.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return 'all';
     });
 
@@ -850,9 +849,9 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
-                                    {campaigns.map(campaign => (
+                                    {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
+                                            {campaign.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

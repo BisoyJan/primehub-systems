@@ -1012,8 +1012,8 @@ export default function AttendanceReview() {
                                 <div className="space-y-2">
                                     <Label>Campaign</Label>
                                     <MultiSelectFilter
-                                        options={campaigns.map(c => ({
-                                            label: c.name + (isTeamLead && teamLeadCampaignIds?.includes(c.id) ? ' (Your Campaign)' : ''),
+                                        options={(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(c => ({
+                                            label: c.name,
                                             value: c.id.toString()
                                         }))}
                                         value={selectedCampaignIds}

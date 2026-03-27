@@ -136,7 +136,6 @@ export default function AttendanceCalendar() {
     const [verificationFilter, setVerificationFilter] = useState(initialVerificationFilter || 'all');
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (initialCampaignFilter) return initialCampaignFilter;
-        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return 'all';
     });
 
@@ -294,9 +293,9 @@ export default function AttendanceCalendar() {
                                     </SelectTrigger>
                                     <SelectContent>
                                         <SelectItem value="all">All Campaigns</SelectItem>
-                                        {campaigns.map(campaign => (
+                                        {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => (
                                             <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
+                                                {campaign.name}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>

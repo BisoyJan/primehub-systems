@@ -38,9 +38,6 @@ class ItConcernController extends Controller
 
         // Auto-filter campaign for Team Leads when no campaign is specified
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (! $campaignIdToFilter && ! empty($teamLeadCampaignIds)) {
-            $campaignIdToFilter = $teamLeadCampaignIds[0];
-        }
 
         $query = ItConcern::with(['user.activeSchedule.campaign', 'site', 'resolvedBy']);
 
@@ -53,6 +50,10 @@ class ItConcernController extends Controller
         if ($campaignIdToFilter) {
             $query->whereHas('user.activeSchedule', function ($q) use ($campaignIdToFilter) {
                 $q->where('campaign_id', $campaignIdToFilter);
+            });
+        } elseif (! empty($teamLeadCampaignIds)) {
+            $query->whereHas('user.activeSchedule', function ($q) use ($teamLeadCampaignIds) {
+                $q->whereIn('campaign_id', $teamLeadCampaignIds);
             });
         }
 

@@ -44,9 +44,6 @@ class MedicationRequestController extends Controller
 
         // Auto-filter for Team Leads when no campaign is specified
         $campaignIdToFilter = $campaignFilter ?: null;
-        if (! $campaignIdToFilter && ! empty($teamLeadCampaignIds)) {
-            $campaignIdToFilter = $teamLeadCampaignIds[0];
-        }
 
         $query = MedicationRequest::with(['user.activeSchedule.campaign', 'user.activeSchedule.site', 'approvedBy'])
             ->when($request->search, function ($query, $search) {
@@ -64,6 +61,11 @@ class MedicationRequestController extends Controller
             ->when($campaignIdToFilter, function ($query, $campaignId) {
                 $query->whereHas('user.activeSchedule', function ($q) use ($campaignId) {
                     $q->where('campaign_id', $campaignId);
+                });
+            })
+            ->when(! $campaignIdToFilter && ! empty($teamLeadCampaignIds), function ($query) use ($teamLeadCampaignIds) {
+                $query->whereHas('user.activeSchedule', function ($q) use ($teamLeadCampaignIds) {
+                    $q->whereIn('campaign_id', $teamLeadCampaignIds);
                 });
             })
             ->latest();

@@ -76,12 +76,15 @@ class LeaveRequestController extends Controller
         // Admins see all requests
         if ($isAdmin) {
             // No filter - see all
-        } elseif ($isTeamLead) {
-            // Team Leads see their own requests + all agent requests that require TL approval
-            $query->where(function ($q) use ($user) {
+        } elseif ($isTeamLead && ! empty($teamLeadCampaignNames)) {
+            // Team Leads see their own requests + requests from agents in their campaigns
+            $query->where(function ($q) use ($user, $teamLeadCampaignNames) {
                 $q->where('user_id', $user->id) // Own requests
-                    ->orWhere('requires_tl_approval', true); // All agent requests needing TL approval
+                    ->orWhereIn('campaign_department', $teamLeadCampaignNames); // Requests from their campaigns
             });
+        } elseif ($isTeamLead) {
+            // Team Lead with no campaigns assigned - only see own requests
+            $query->forUser($user->id);
         } else {
             // Regular employees see only their own
             $query->forUser($user->id);
@@ -144,11 +147,10 @@ class LeaveRequestController extends Controller
 
         // Filter by campaign/department - auto-filter for Team Leads
         $campaignFilter = $request->filled('campaign_department') ? $request->campaign_department : null;
-        if (! $campaignFilter && $isTeamLead && ! empty($teamLeadCampaignNames)) {
-            $campaignFilter = $teamLeadCampaignNames[0];
-        }
         if ($campaignFilter) {
             $query->where('campaign_department', $campaignFilter);
+        } elseif ($isTeamLead && ! empty($teamLeadCampaignNames)) {
+            $query->whereIn('campaign_department', $teamLeadCampaignNames);
         }
 
         // Compute status counts before applying the status filter
@@ -277,9 +279,7 @@ class LeaveRequestController extends Controller
         $viewMode = $request->input('view_mode', 'single'); // 'single' or 'multi'
 
         // Auto-filter campaign for Team Leads when no campaign is specified
-        if (! $campaignId && ! empty($teamLeadCampaignIds)) {
-            $campaignId = $teamLeadCampaignIds[0];
-        }
+        // When no campaign is selected, we leave $campaignId null and use whereIn below
 
         // Parse month to get date range
         $calendarDate = Carbon::parse($month.'-01');
@@ -323,9 +323,15 @@ class LeaveRequestController extends Controller
                 });
             }
         } elseif ($campaignId) {
-            // Admin filter by campaign
+            // Filter by specific campaign
             $query->whereHas('user.employeeSchedules', function ($q) use ($campaignId) {
                 $q->where('campaign_id', $campaignId)
+                    ->where('is_active', true);
+            });
+        } elseif (! empty($teamLeadCampaignIds)) {
+            // Team Lead with no campaign selected - show all their campaigns
+            $query->whereHas('user.employeeSchedules', function ($q) use ($teamLeadCampaignIds) {
+                $q->whereIn('campaign_id', $teamLeadCampaignIds)
                     ->where('is_active', true);
             });
         }

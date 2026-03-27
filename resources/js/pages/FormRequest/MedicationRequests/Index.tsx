@@ -95,7 +95,6 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
     const [medicationType, setMedicationType] = useState(filters.medication_type || 'all');
     const [campaignFilter, setCampaignFilter] = useState(() => {
         if (filters.campaign_id) return filters.campaign_id;
-        if (teamLeadCampaignIds?.length) return teamLeadCampaignIds[0].toString();
         return 'all';
     });
     const [localLoading, setLocalLoading] = useState(false);
@@ -275,9 +274,9 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
-                                    {campaigns.map(campaign => (
+                                    {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map(campaign => (
                                         <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                            {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
+                                            {campaign.name}
                                         </SelectItem>
                                     ))}
                                 </SelectContent>

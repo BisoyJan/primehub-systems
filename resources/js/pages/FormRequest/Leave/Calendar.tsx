@@ -275,9 +275,9 @@ export default function LeaveCalendar() {
                                         </SelectTrigger>
                                         <SelectContent>
                                             <SelectItem value="all">All Campaigns</SelectItem>
-                                            {campaigns.map((campaign) => (
+                                            {(teamLeadCampaignIds?.length ? campaigns.filter(c => teamLeadCampaignIds.includes(c.id)) : campaigns).map((campaign) => (
                                                 <SelectItem key={campaign.id} value={String(campaign.id)}>
-                                                    {campaign.name}{teamLeadCampaignIds?.includes(campaign.id) ? " (Your Campaign)" : ""}
+                                                    {campaign.name}
                                                 </SelectItem>
                                             ))}
                                         </SelectContent>

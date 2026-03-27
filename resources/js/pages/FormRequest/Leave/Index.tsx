@@ -169,7 +169,6 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     const [filterEmployeeName, setFilterEmployeeName] = useState(filters.employee_name || '');
     const [filterCampaign, setFilterCampaign] = useState(() => {
         if (filters.campaign_department) return filters.campaign_department;
-        if (teamLeadCampaignNames?.length) return teamLeadCampaignNames[0];
         return 'all';
     });
     const [employeeSearchQuery, setEmployeeSearchQuery] = useState('');
@@ -650,8 +649,8 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                                 </SelectTrigger>
                                 <SelectContent>
                                     <SelectItem value="all">All Campaigns</SelectItem>
-                                    {campaigns.map((c) => (
-                                        <SelectItem key={c} value={c}>{c}{teamLeadCampaignNames?.includes(c) ? " (Your Campaign)" : ""}</SelectItem>
+                                    {(teamLeadCampaignNames?.length ? campaigns.filter(c => teamLeadCampaignNames.includes(c)) : campaigns).map((c) => (
+                                        <SelectItem key={c} value={c}>{c}</SelectItem>
                                     ))}
                                 </SelectContent>
                             </Select>
