@@ -329,6 +329,9 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const canApproveUndertime = can('attendance.approve_undertime');
     const canRequestUndertimeApproval = can('attendance.request_undertime_approval');
 
+    // Detect if user is a Team Lead (teamLeadCampaignIds will be set if they are)
+    const isTeamLead = !!teamLeadCampaignIds?.length;
+
     // Undertime approval state
     const [isRequestingUndertimeApproval, setIsRequestingUndertimeApproval] = useState(false);
     const [isApprovingUndertime, setIsApprovingUndertime] = useState(false);
@@ -789,7 +792,7 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                 <TableHead className="w-[12%]">Shift</TableHead>
                                 <TableHead className="w-[18%]">Schedule</TableHead>
                                 <TableHead className="w-[15%]">Status</TableHead>
-                                <TableHead className="w-[15%] text-right pr-4">Actions</TableHead>
+                                {!isTeamLead && <TableHead className="w-[15%] text-right pr-4">Actions</TableHead>}
                             </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -849,46 +852,48 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                             </Badge>
                                         )}
                                     </TableCell>
-                                    <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1">
-                                            {employee.on_leave && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="h-8 px-2"
-                                                    onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
-                                                >
-                                                    <ExternalLink className="h-4 w-4 mr-1" />
-                                                    Review
-                                                </Button>
-                                            )}
-                                            {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
-                                                <Button
-                                                    size="sm"
-                                                    className="h-8"
-                                                    onClick={() => handleGenerateClick(employee)}
-                                                >
-                                                    Generate
-                                                </Button>
-                                            )}
-                                            {!employee.on_leave && employee.existing_attendance && employee.schedule && (
-                                                <Button
-                                                    size="sm"
-                                                    variant="ghost"
-                                                    className="h-8 px-2"
-                                                    onClick={() => handleEditClick(employee)}
-                                                >
-                                                    <Pencil className="h-4 w-4 mr-1" />
-                                                    Edit
-                                                </Button>
-                                            )}
-                                        </div>
-                                    </TableCell>
+                                    {!isTeamLead && (
+                                        <TableCell className="text-right">
+                                            <div className="flex items-center justify-end gap-1">
+                                                {employee.on_leave && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 px-2"
+                                                        onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
+                                                    >
+                                                        <ExternalLink className="h-4 w-4 mr-1" />
+                                                        Review
+                                                    </Button>
+                                                )}
+                                                {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
+                                                    <Button
+                                                        size="sm"
+                                                        className="h-8"
+                                                        onClick={() => handleGenerateClick(employee)}
+                                                    >
+                                                        Generate
+                                                    </Button>
+                                                )}
+                                                {!employee.on_leave && employee.existing_attendance && employee.schedule && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="ghost"
+                                                        className="h-8 px-2"
+                                                        onClick={() => handleEditClick(employee)}
+                                                    >
+                                                        <Pencil className="h-4 w-4 mr-1" />
+                                                        Edit
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </TableCell>
+                                    )}
                                 </TableRow>
                             ))}
                             {employees.length === 0 && (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                                    <TableCell colSpan={isTeamLead ? 5 : 6} className="h-24 text-center text-muted-foreground">
                                         No employees expected to work today
                                     </TableCell>
                                 </TableRow>
@@ -945,39 +950,41 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
                                 </div>
                             )}
 
-                            <div className="pt-2 border-t flex gap-2">
-                                {employee.on_leave && (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="flex-1"
-                                        onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
-                                    >
-                                        <ExternalLink className="h-4 w-4 mr-1" />
-                                        Review in New Tab
-                                    </Button>
-                                )}
-                                {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
-                                    <Button
-                                        size="sm"
-                                        className="flex-1"
-                                        onClick={() => handleGenerateClick(employee)}
-                                    >
-                                        Generate Attendance
-                                    </Button>
-                                )}
-                                {!employee.on_leave && employee.existing_attendance && employee.schedule && (
-                                    <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="flex-1"
-                                        onClick={() => handleEditClick(employee)}
-                                    >
-                                        <Pencil className="h-4 w-4 mr-1" />
-                                        Edit Record
-                                    </Button>
-                                )}
-                            </div>
+                            {!isTeamLead && (
+                                <div className="pt-2 border-t flex gap-2">
+                                    {employee.on_leave && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex-1"
+                                            onClick={() => window.open(`/attendance/review?date_from=${selectedDate}&date_to=${selectedDate}&user_id=${employee.id}`, '_blank')}
+                                        >
+                                            <ExternalLink className="h-4 w-4 mr-1" />
+                                            Review in New Tab
+                                        </Button>
+                                    )}
+                                    {!employee.on_leave && !employee.existing_attendance && employee.schedule && (
+                                        <Button
+                                            size="sm"
+                                            className="flex-1"
+                                            onClick={() => handleGenerateClick(employee)}
+                                        >
+                                            Generate Attendance
+                                        </Button>
+                                    )}
+                                    {!employee.on_leave && employee.existing_attendance && employee.schedule && (
+                                        <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex-1"
+                                            onClick={() => handleEditClick(employee)}
+                                        >
+                                            <Pencil className="h-4 w-4 mr-1" />
+                                            Edit Record
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     ))}
 

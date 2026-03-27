@@ -212,7 +212,9 @@ class LeaveRequestController extends Controller
             ->withQueryString();
 
         // Get list of campaigns/departments for filters (unique names from campaigns table)
-        $campaigns = Campaign::orderBy('name')->pluck('name')->toArray();
+        $campaigns = ! empty($teamLeadCampaignNames)
+            ? $teamLeadCampaignNames
+            : Campaign::orderBy('name')->pluck('name')->toArray();
 
         // Get all employees who have leave requests (for admin/TL employee search dropdown)
         $allEmployees = [];
@@ -220,11 +222,13 @@ class LeaveRequestController extends Controller
             $employeeQuery = User::whereHas('leaveRequests');
 
             // Team Leads only see employees whose requests they can view
-            if ($isTeamLead) {
-                $employeeQuery->where(function ($q) use ($user) {
+            if ($isTeamLead && ! empty($teamLeadCampaignNames)) {
+                $employeeQuery->where(function ($q) use ($user, $teamLeadCampaignNames) {
                     $q->where('id', $user->id)
-                        ->orWhereHas('leaveRequests', fn ($lq) => $lq->where('requires_tl_approval', true));
+                        ->orWhereHas('leaveRequests', fn ($lq) => $lq->whereIn('campaign_department', $teamLeadCampaignNames));
                 });
+            } elseif ($isTeamLead) {
+                $employeeQuery->where('id', $user->id);
             }
 
             $allEmployees = $employeeQuery
@@ -363,7 +367,9 @@ class LeaveRequestController extends Controller
         // Get campaigns for filter (only for non-restricted roles)
         $campaigns = null;
         if (! $isRestrictedRole) {
-            $campaigns = Campaign::select('id', 'name')->orderBy('name')->get();
+            $campaigns = ! empty($teamLeadCampaignIds)
+                ? Campaign::whereIn('id', $teamLeadCampaignIds)->select('id', 'name')->orderBy('name')->get()
+                : Campaign::select('id', 'name')->orderBy('name')->get();
         }
 
         return Inertia::render('FormRequest/Leave/Calendar', [

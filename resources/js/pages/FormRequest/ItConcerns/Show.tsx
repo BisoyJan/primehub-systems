@@ -353,7 +353,7 @@ export default function Show() {
 
                                     <div className="mt-4">
                                         <Label htmlFor="resolution_notes" className="text-foreground">
-                                            Resolution Notes {status === 'resolved' && <span className="text-red-500">*</span>}
+                                            Resolution Notes
                                         </Label>
                                         <Textarea
                                             id="resolution_notes"
@@ -371,7 +371,6 @@ export default function Show() {
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                                 onClick={confirmUpdate}
-                                disabled={status === 'resolved' && !resolutionNotes.trim()}
                             >
                                 Update
                             </AlertDialogAction>

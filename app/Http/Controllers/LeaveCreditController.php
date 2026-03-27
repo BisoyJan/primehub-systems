@@ -270,7 +270,9 @@ class LeaveCreditController extends Controller
             ]);
 
         // Get campaigns for filter dropdown
-        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = ! empty($teamLeadCampaignIds)
+            ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
+            : Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('FormRequest/Leave/Credits/Index', [
             'creditsData' => $creditsData,

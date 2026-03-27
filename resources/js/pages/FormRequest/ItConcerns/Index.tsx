@@ -159,6 +159,7 @@ const getPriorityBadge = (priority: string) => {
 
 export default function ItConcernsIndex() {
     const { concerns, sites, campaigns = [], teamLeadCampaignIds, filters, auth } = usePage<PageProps>().props;
+    const isTeamLead = !!teamLeadCampaignIds?.length;
     const concernData = {
         data: concerns?.data ?? [],
         links: concerns?.links ?? [],
@@ -530,7 +531,7 @@ export default function ItConcernsIndex() {
                                     <TableHead>Description</TableHead>
                                     <TableHead>Status</TableHead>
                                     <TableHead>Resolved By</TableHead>
-                                    <TableHead>Actions</TableHead>
+                                    {!isTeamLead && <TableHead>Actions</TableHead>}
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
@@ -547,67 +548,69 @@ export default function ItConcernsIndex() {
                                         </TableCell>
                                         <TableCell>{getStatusBadge(concern.status)}</TableCell>
                                         <TableCell className="text-sm">{concern.resolved_by?.name || '-'}</TableCell>
-                                        <TableCell>
-                                            <div className="flex gap-2">
-                                                {/* Resolve Button - IT/Admin */}
-                                                <Can permission="it_concerns.resolve">
-                                                    {concern.status !== 'resolved' && (
+                                        {!isTeamLead && (
+                                            <TableCell>
+                                                <div className="flex gap-2">
+                                                    {/* Resolve Button - IT/Admin */}
+                                                    <Can permission="it_concerns.resolve">
+                                                        {concern.status !== 'resolved' && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                onClick={() => handleResolve(concern)}
+                                                                title="Resolve Concern"
+                                                                className="text-green-600 hover:text-green-700 border-green-300"
+                                                            >
+                                                                <CheckCircle className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </Can>
+
+                                                    {/* Edit Button - Global permission OR Owner (pending/in_progress) */}
+                                                    {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
                                                         <Button
                                                             variant="outline"
                                                             size="icon"
-                                                            onClick={() => handleResolve(concern)}
-                                                            title="Resolve Concern"
-                                                            className="text-green-600 hover:text-green-700 border-green-300"
+                                                            onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                                            title="Edit Concern"
                                                         >
-                                                            <CheckCircle className="h-4 w-4" />
+                                                            <Edit className="h-4 w-4" />
                                                         </Button>
                                                     )}
-                                                </Can>
 
-                                                {/* Edit Button - Global permission OR Owner (pending/in_progress) */}
-                                                {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon"
-                                                        onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
-                                                        title="Edit Concern"
-                                                    >
-                                                        <Edit className="h-4 w-4" />
-                                                    </Button>
-                                                )}
+                                                    {/* Cancel Button - Owner (pending/in_progress) */}
+                                                    {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            onClick={() => handleCancel(concern)}
+                                                            title="Cancel Request"
+                                                            className="text-orange-600 hover:text-orange-700 border-orange-300"
+                                                        >
+                                                            <XCircle className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
 
-                                                {/* Cancel Button - Owner (pending/in_progress) */}
-                                                {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon"
-                                                        onClick={() => handleCancel(concern)}
-                                                        title="Cancel Request"
-                                                        className="text-orange-600 hover:text-orange-700 border-orange-300"
-                                                    >
-                                                        <XCircle className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-
-                                                {/* Delete Button - Global permission OR Owner (pending) */}
-                                                {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
-                                                    <Button
-                                                        variant="outline"
-                                                        size="icon"
-                                                        onClick={() => handleDelete(concern.id)}
-                                                        title="Delete Concern"
-                                                        className="text-red-600 hover:text-red-700 border-red-300"
-                                                    >
-                                                        <Trash2 className="h-4 w-4" />
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </TableCell>
+                                                    {/* Delete Button - Global permission OR Owner (pending) */}
+                                                    {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            onClick={() => handleDelete(concern.id)}
+                                                            title="Delete Concern"
+                                                            className="text-red-600 hover:text-red-700 border-red-300"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        )}
                                     </TableRow>
                                 ))}
                                 {concernData.data.length === 0 && !loading && (
                                     <TableRow>
-                                        <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={isTeamLead ? 9 : 10} className="h-24 text-center text-muted-foreground">
                                             No IT concerns found
                                         </TableCell>
                                     </TableRow>
@@ -652,56 +655,58 @@ export default function ItConcernsIndex() {
                                 </div>
                             </div>
 
-                            <div className="flex gap-2 pt-2 border-t">
-                                <Can permission="it_concerns.resolve">
-                                    {concern.status !== 'resolved' && (
+                            {!isTeamLead && (
+                                <div className="flex gap-2 pt-2 border-t">
+                                    <Can permission="it_concerns.resolve">
+                                        {concern.status !== 'resolved' && (
+                                            <Button
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() => handleResolve(concern)}
+                                            >
+                                                <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
+                                                Resolve
+                                            </Button>
+                                        )}
+                                    </Can>
+
+                                    {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
                                         <Button
                                             variant="outline"
                                             size="sm"
-                                            onClick={() => handleResolve(concern)}
+                                            className="flex-1"
+                                            onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
                                         >
-                                            <CheckCircle className="mr-2 h-4 w-4 text-green-500" />
-                                            Resolve
+                                            <Edit className="mr-2 h-4 w-4" />
+                                            Edit
                                         </Button>
                                     )}
-                                </Can>
 
-                                {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex-1"
-                                        onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
-                                    >
-                                        <Edit className="mr-2 h-4 w-4" />
-                                        Edit
-                                    </Button>
-                                )}
+                                    {/* Cancel Button - Owner (pending/in_progress) */}
+                                    {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleCancel(concern)}
+                                        >
+                                            <XCircle className="mr-2 h-4 w-4 text-orange-500" />
+                                            Cancel
+                                        </Button>
+                                    )}
 
-                                {/* Cancel Button - Owner (pending/in_progress) */}
-                                {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleCancel(concern)}
-                                    >
-                                        <XCircle className="mr-2 h-4 w-4 text-orange-500" />
-                                        Cancel
-                                    </Button>
-                                )}
-
-                                {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleDelete(concern.id)}
-                                        className="text-red-600 hover:text-red-700 border-red-300"
-                                    >
-                                        <Trash2 className="mr-2 h-4 w-4" />
-                                        Delete
-                                    </Button>
-                                )}
-                            </div>
+                                    {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() => handleDelete(concern.id)}
+                                            className="text-red-600 hover:text-red-700 border-red-300"
+                                        >
+                                            <Trash2 className="mr-2 h-4 w-4" />
+                                            Delete
+                                        </Button>
+                                    )}
+                                </div>
+                            )}
                         </div>
                     ))}
 
@@ -788,7 +793,7 @@ export default function ItConcernsIndex() {
 
                                         <div className="mt-4">
                                             <Label htmlFor="resolution_notes" className="text-foreground">
-                                                Resolution Notes <span className="text-red-500">*</span>
+                                                Resolution Notes
                                             </Label>
                                             <Textarea
                                                 id="resolution_notes"
@@ -807,7 +812,6 @@ export default function ItConcernsIndex() {
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
                             <AlertDialogAction
                                 onClick={confirmResolve}
-                                disabled={!resolutionNotes.trim()}
                             >
                                 Update IT Concern
                             </AlertDialogAction>

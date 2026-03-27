@@ -71,7 +71,9 @@ class MedicationRequestController extends Controller
             ->latest();
 
         // Get campaigns for filter dropdown
-        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = ! empty($teamLeadCampaignIds)
+            ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
+            : Campaign::orderBy('name')->get(['id', 'name']);
 
         $medicationTypes = [
             'Declogen',
