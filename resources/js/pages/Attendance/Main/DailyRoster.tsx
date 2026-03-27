@@ -329,6 +329,9 @@ export default function DailyRoster({ employees, sites, campaigns, teamLeadCampa
     const canApproveUndertime = can('attendance.approve_undertime');
     const canRequestUndertimeApproval = can('attendance.request_undertime_approval');
 
+    // Detect if user is a Team Lead (teamLeadCampaignIds will be set if they are)
+    const isTeamLead = !!teamLeadCampaignIds?.length;
+
     // Undertime approval state
     const [isRequestingUndertimeApproval, setIsRequestingUndertimeApproval] = useState(false);
     const [isApprovingUndertime, setIsApprovingUndertime] = useState(false);

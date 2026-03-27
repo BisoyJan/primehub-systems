@@ -373,7 +373,9 @@ class AttendanceController extends Controller
         $sites = Site::orderBy('name')->get(['id', 'name']);
 
         // Get all campaigns for campaign filter dropdown
-        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = ! empty($teamLeadCampaignIds)
+            ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
+            : Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Attendance/Main/Index', [
             'attendances' => $attendances,
@@ -488,7 +490,9 @@ class AttendanceController extends Controller
         }
 
         // Get campaigns for filter dropdown
-        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = ! empty($teamLeadCampaignIds)
+            ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
+            : Campaign::orderBy('name')->get(['id', 'name']);
 
         return Inertia::render('Attendance/Main/Calendar', [
             'attendances' => (object) $attendances, // Cast to object so it's treated as associative array in JS
@@ -1673,7 +1677,9 @@ class AttendanceController extends Controller
         $sites = Site::orderBy('name')->get(['id', 'name']);
 
         // Get all campaigns for campaign filter dropdown
-        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = ! empty($teamLeadCampaignIds)
+            ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
+            : Campaign::orderBy('name')->get(['id', 'name']);
 
         // Build a base query with shared filters (date, employee, site, campaign, team lead)
         // Used for status summary counts so they reflect the same filter context
@@ -2676,7 +2682,9 @@ class AttendanceController extends Controller
 
         // Get sites and campaigns for filter
         $sites = Site::orderBy('name')->get(['id', 'name']);
-        $campaigns = Campaign::orderBy('name')->get(['id', 'name']);
+        $campaigns = ! empty($teamLeadCampaignIds)
+            ? Campaign::whereIn('id', $teamLeadCampaignIds)->orderBy('name')->get(['id', 'name'])
+            : Campaign::orderBy('name')->get(['id', 'name']);
 
         // Filter by site if provided
         if ($request->filled('site_id')) {
