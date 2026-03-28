@@ -47,6 +47,13 @@ Schedule::command('activitylog:clean')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Clean old notifications (read: 90 days, unread: 180 days) - runs daily at 1:50 AM
+// Priority: MEDIUM - Keeps notifications table from growing unbounded
+Schedule::command('notifications:clean --force')
+    ->dailyAt('01:50')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // ============================================================================
 // LEAVE CREDIT PROCESSING (2:00 AM - 2:10 AM)
 // ============================================================================
@@ -67,7 +74,7 @@ Schedule::command('leave:accrue-credits')
 
 // Process year-end leave credit carryovers - runs on January 1st at 2:10 AM
 // Carries over up to 4 unused credits for conversion and leave application
-Schedule::command('leave:process-carryover --year=' . (date('Y') - 1))
+Schedule::command('leave:process-carryover --year='.(date('Y') - 1))
     ->yearlyOn(1, 1, '02:10')
     ->withoutOverlapping()
     ->onOneServer();
@@ -91,8 +98,15 @@ Schedule::command('form-request:check-expiry --days=7')
     ->onOneServer();
 
 // Check activity log expiry and notify admins - runs daily at 2:25 AM
-// Priority: LOW - Quick check and notification only
-Schedule::command('activitylog:check-expiry --days=7 --retention=122')
+// Priority: LOW - Quick check and notification only (reads retention from config/activitylog.php)
+Schedule::command('activitylog:check-expiry --days=7')
     ->dailyAt('02:25')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Check notification retention expiry and notify admins - runs daily at 2:30 AM
+// Priority: LOW - Quick check and notification only
+Schedule::command('notifications:check-expiry --days=7')
+    ->dailyAt('02:30')
     ->withoutOverlapping()
     ->onOneServer();

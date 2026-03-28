@@ -16,7 +16,7 @@ class CheckActivityLogExpiry extends Command
      */
     protected $signature = 'activitylog:check-expiry
                             {--days=7 : Days before data deletion to send notification}
-                            {--retention=90 : Days to retain activity logs}';
+                            {--retention= : Days to retain activity logs (defaults to config value)}';
 
     /**
      * The console command description.
@@ -39,7 +39,7 @@ class CheckActivityLogExpiry extends Command
     public function handle(): int
     {
         $warningDays = (int) $this->option('days');
-        $retentionDays = (int) $this->option('retention');
+        $retentionDays = (int) ($this->option('retention') ?? config('activitylog.delete_records_older_than_days', 122));
 
         $this->info("Checking for activity logs expiring within {$warningDays} days...");
 
@@ -50,11 +50,12 @@ class CheckActivityLogExpiry extends Command
         // Find records that will be deleted in the next X days
         $expiringCount = Activity::whereBetween('created_at', [
             $cutoffDate,
-            $warningCutoffDate
+            $warningCutoffDate,
         ])->count();
 
         if ($expiringCount === 0) {
             $this->info('No activity logs are expiring soon. No notifications sent.');
+
             return self::SUCCESS;
         }
 
@@ -69,6 +70,7 @@ class CheckActivityLogExpiry extends Command
         $this->sendExpiryNotifications($expiringCount, $warningDays, $retentionDays, $oldestDate, $newestDate);
 
         $this->info('Expiry notifications sent to Admin and Super Admin.');
+
         return self::SUCCESS;
     }
 
