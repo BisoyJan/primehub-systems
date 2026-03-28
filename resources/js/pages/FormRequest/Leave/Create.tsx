@@ -19,7 +19,8 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, Eye, Users, Info, Lightbulb, ArrowRight } from 'lucide-react';
+import { AlertCircle, Calendar, CreditCard, Check, ChevronsUpDown, AlertTriangle, Upload, X, FileImage, Eye, Users, Info, Lightbulb, ArrowRight, ChevronDown } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Switch } from '@/components/ui/switch';
@@ -102,7 +103,6 @@ interface Props {
     canFileForOthers: boolean;
     employees: Employee[];
     selectedEmployeeId: number;
-    canOverrideShortNotice: boolean;
     existingLeaveRequests: ExistingLeaveRequest[];
 }
 
@@ -121,7 +121,6 @@ export default function Create({
     canFileForOthers = false,
     employees,
     selectedEmployeeId,
-    canOverrideShortNotice = false,
     existingLeaveRequests = [],
 }: Props) {
     const { data, setData, post, processing, errors, progress } = useForm({
@@ -133,7 +132,6 @@ export default function Create({
         campaign_department: selectedCampaign || '',
         medical_cert_submitted: false,
         medical_cert_file: null as File | null,
-        short_notice_override: false,
         spl_day_settings: [] as { date: string; is_half_day: boolean }[],
     });
 
@@ -147,10 +145,8 @@ export default function Create({
     const [absenceWindowInfo, setAbsenceWindowInfo] = useState<string | null>(null);
 
     const [calculatedDays, setCalculatedDays] = useState<number>(0);
-    const [validationWarnings, setValidationWarnings] = useState<string[]>([]);
-    const [creditError, setCreditError] = useState<string | null>(null);
-    const [vlCreditWarning, setVlCreditWarning] = useState<string | null>(null);
-    const [shortNoticeWarning, setShortNoticeWarning] = useState<string | null>(null);
+    const [validationWarnings, setValidationWarnings] = useState<React.ReactNode[]>([]);
+    const [vlCreditWarning, setVlCreditWarning] = useState<React.ReactNode>(null);
     const [weekendError, setWeekendError] = useState<{ start: string | null; end: string | null }>({ start: null, end: null });
     const [slCreditInfo, setSlCreditInfo] = useState<string | null>(null);
     const [futureCredits, setFutureCredits] = useState<number>(0);
@@ -417,50 +413,23 @@ export default function Create({
 
     // Real-time validation warnings
     useEffect(() => {
-        const warnings: string[] = [];
-        let shortNotice: string | null = null;
+        const warnings: React.ReactNode[] = [];
 
-        // Check eligibility (skip for SL/BL - BL doesn't consume credits, SL handles at approval)
-        // Check if user will be eligible BY the selected start date (not current date)
-        if (!creditsSummary.is_eligible && data.leave_type === 'VL') {
-            const eligibilityDateStr = creditsSummary.eligibility_date
-                ? format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')
-                : 'N/A';
-
-            // Check if user will be eligible by the start date
-            if (data.start_date && creditsSummary.eligibility_date) {
-                const startDate = parseISO(data.start_date);
-                const eligibilityDate = parseISO(creditsSummary.eligibility_date);
-                // Only show warning if start date is BEFORE eligibility date
-                if (startDate < eligibilityDate) {
-                    warnings.push(
-                        `You will not be eligible by the leave start date. Eligible on ${eligibilityDateStr}.`
-                    );
-                }
-                // If start date is on or after eligibility date, user will be eligible - no warning needed
-            } else if (!data.start_date) {
-                // No start date selected yet, show general eligibility info
-                warnings.push(
-                    `You are not currently eligible for leave credits. Eligible on ${eligibilityDateStr}. Select a start date on or after this date.`
-                );
-            }
-        }
+        // Eligibility info is already shown in the "Not Eligible Yet" alert above the form
+        // No need to duplicate it in validation warnings
 
         //NOTE: SL is intentionally excluded from the eligibility warning since users can still submit and it will be handled at approval time with potential UPTO conversion. BL is included in the eligibility warning since it's a non-credited leave type and eligibility is a hard requirement.
         // Check 2-week notice (only for VL,UPTO not SL/BL/ML as they are unpredictable)
-        // Track separately for override capability
+        // Short notice override is handled at approval time on the Show page
         if (data.start_date && ['VL', 'UPTO'].includes(data.leave_type)) {
             const start = parseISO(data.start_date);
             start.setHours(0, 0, 0, 0);
             const twoWeeks = new Date(twoWeeksFromNow);
             twoWeeks.setHours(0, 0, 0, 0);
             if (start.getTime() < twoWeeks.getTime()) {
-                const warningMsg = `Leave must be requested at least 2 weeks in advance. Earliest date: ${format(twoWeeks, 'MMMM d, yyyy')}`;
-                // Only add to warnings if not overridden
-                if (!data.short_notice_override) {
-                    warnings.push(warningMsg);
-                }
-                shortNotice = warningMsg;
+                warnings.push(
+                    <>Leave must be requested at least 2 weeks in advance. Earliest date: <strong>{format(twoWeeks, 'MMMM d, yyyy')}</strong>. Admin can override this during approval.</>
+                );
             }
         }
 
@@ -481,14 +450,13 @@ export default function Create({
         // Check leave credits balance for VL (informational warning only — does not block submission)
         // SL handles insufficient credits at approval time (SL→UPTO conversion)
         // BL does not consume credits (non-credited leave type)
-        const newCreditError: string | null = null;
-        let newVlCreditWarning: string | null = null;
+        let newVlCreditWarning: React.ReactNode = null;
         if (data.leave_type === 'VL' && calculatedDays > 0) {
             // Calculate projected credits inline to avoid stale state from concurrent useEffect
             const projectedCredits = data.start_date ? calculateFutureCredits(data.start_date) : 0;
             const availableBalance = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + projectedCredits);
             if (availableBalance < calculatedDays) {
-                newVlCreditWarning = `Insufficient VL credits. Available: ${availableBalance.toFixed(2)} day(s)${projectedCredits > 0 ? ` (includes ${projectedCredits.toFixed(2)} future credits)` : ''}, Requested: ${calculatedDays} day(s). Some days may be converted to UPTO (Unpaid Time Off) upon approval.`;
+                newVlCreditWarning = <>Insufficient VL credits. Available: <strong>{availableBalance.toFixed(2)} day(s)</strong>{projectedCredits > 0 ? <> (includes {projectedCredits.toFixed(2)} future credits)</> : ''}, Requested: <strong>{calculatedDays} day(s)</strong>. Some days may be converted to UPTO (Unpaid Time Off) upon approval.</>;
             }
         }
 
@@ -511,7 +479,7 @@ export default function Create({
                     const endStr = format(existingEnd, 'MMM d, yyyy');
                     const status = existing.status.charAt(0).toUpperCase() + existing.status.slice(1);
                     warnings.push(
-                        `Selected dates overlap with an existing ${status} ${existing.leave_type} request (${startStr} to ${endStr}).`
+                        <>Selected dates overlap with an existing <strong>{status} {existing.leave_type}</strong> request (<strong>{startStr}</strong> to <strong>{endStr}</strong>).</>
                     );
                     break; // Only show one overlap warning
                 }
@@ -519,14 +487,11 @@ export default function Create({
         }
 
         setValidationWarnings(warnings);
-        setCreditError(newCreditError);
         setVlCreditWarning(newVlCreditWarning);
-        setShortNoticeWarning(shortNotice);
     }, [
         data.leave_type,
         data.start_date,
         data.end_date,
-        data.short_notice_override,
         creditsSummary,
         attendancePoints,
         hasRecentAbsence,
@@ -871,227 +836,263 @@ export default function Create({
                     </p>
                 </div>
 
-                {/* Leave Credits Summary - Only show for leave types that use credits */}
+                {/* Leave Credits Summary - Compact with progress bar */}
                 {requiresCredits && creditsSummary.is_eligible && (
                     <Card className="mb-6">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2">
-                                <CreditCard className="h-5 w-5" />
-                                Leave Credits Balance
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-base">
+                                <CreditCard className="h-4 w-4" />
+                                Leave Credits
+                                <span className="text-sm font-normal text-muted-foreground">
+                                    Year {creditsSummary.year}
+                                </span>
                             </CardTitle>
-                            <CardDescription>
-                                Year {creditsSummary.year} • Credits reset annually and do not carry over
-                            </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Total Balance</p>
-                                    <p className="text-2xl font-bold">{creditsSummary.balance.toFixed(2)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Pending Requests</p>
-                                    <p className="text-2xl font-bold text-yellow-600">
-                                        {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
-                                    </p>
-                                </div>
-                                {futureCredits > 0 && (
-                                    <div>
-                                        <p className="text-sm text-muted-foreground">Future Credits</p>
-                                        <p className="text-2xl font-bold text-purple-600">
-                                            +{futureCredits.toFixed(2)}
-                                        </p>
-                                    </div>
-                                )}
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Available</p>
-                                    <p className="text-2xl font-bold text-blue-600">
-                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + futureCredits).toFixed(2)}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">This Request</p>
-                                    <p className="text-2xl font-bold text-orange-600">
-                                        {requiresCredits && calculatedDays > 0 ? `-${calculatedDays}` : '0'}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">After Submit</p>
-                                    <p className="text-2xl font-bold text-green-600">
-                                        {Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + futureCredits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
-                                    </p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Monthly Rate</p>
-                                    <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
-                                </div>
-                            </div>
-                            {/* Info about projected credits - only show when applying for future months */}
-                            {futureCredits > 0 && (
-                                <div className="mt-4 p-3 bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 rounded-md">
-                                    <div className="flex items-start gap-2">
-                                        <Info className="h-4 w-4 text-purple-600 mt-0.5 shrink-0" />
-                                        <p className="text-sm text-purple-800 dark:text-purple-200">
-                                            <strong>Future Credits Applied:</strong> Since your leave starts in a future month, {futureCredits.toFixed(2)} credits will accrue before your leave date ({creditsSummary.monthly_rate} per month). These are included in your available balance.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
+                            {(() => {
+                                const available = Math.max(0, creditsSummary.balance - creditsSummary.pending_credits + futureCredits);
+                                const afterSubmit = Math.max(0, available - (requiresCredits ? calculatedDays : 0));
+                                const total = creditsSummary.balance + futureCredits;
+                                const usedPercent = total > 0 ? Math.min(100, ((total - available) / total) * 100) : 0;
+                                const requestPercent = total > 0 ? Math.min(100 - usedPercent, (calculatedDays / total) * 100) : 0;
+
+                                return (
+                                    <>
+                                        {/* Progress bar visualization */}
+                                        <div className="mb-3">
+                                            <div className="flex justify-between text-sm mb-1.5">
+                                                <span className="font-medium">
+                                                    {available.toFixed(2)} available
+                                                    {calculatedDays > 0 && <span className="text-orange-600"> → {afterSubmit.toFixed(2)} after this request</span>}
+                                                </span>
+                                                <span className="text-muted-foreground">of {total.toFixed(2)} total</span>
+                                            </div>
+                                            <div className="h-2.5 rounded-full bg-muted overflow-hidden flex">
+                                                {usedPercent > 0 && (
+                                                    <div
+                                                        className="h-full bg-gray-400 dark:bg-gray-600 transition-all"
+                                                        style={{ width: `${usedPercent}%` }}
+                                                    />
+                                                )}
+                                                {requestPercent > 0 && (
+                                                    <div
+                                                        className="h-full bg-orange-400 dark:bg-orange-500 transition-all"
+                                                        style={{ width: `${requestPercent}%` }}
+                                                    />
+                                                )}
+                                            </div>
+                                            <div className="flex gap-4 mt-1.5 text-xs text-muted-foreground">
+                                                <span className="flex items-center gap-1">
+                                                    <span className="inline-block h-2 w-2 rounded-full bg-gray-400" /> Used/Pending
+                                                </span>
+                                                {calculatedDays > 0 && (
+                                                    <span className="flex items-center gap-1">
+                                                        <span className="inline-block h-2 w-2 rounded-full bg-orange-400" /> This request ({calculatedDays}d)
+                                                    </span>
+                                                )}
+                                                <span className="flex items-center gap-1">
+                                                    <span className="inline-block h-2 w-2 rounded-full bg-muted border" /> Available
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Compact details row */}
+                                        <Collapsible>
+                                            <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                                                <ChevronDown className="h-3 w-3 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                                                View breakdown
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="mt-3">
+                                                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground">Balance</p>
+                                                        <p className="font-semibold">{creditsSummary.balance.toFixed(2)}</p>
+                                                    </div>
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground">Pending</p>
+                                                        <p className="font-semibold text-yellow-600">
+                                                            {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
+                                                        </p>
+                                                    </div>
+                                                    {futureCredits > 0 && (
+                                                        <div>
+                                                            <p className="text-xs text-muted-foreground">Future Credits</p>
+                                                            <p className="font-semibold text-purple-600">+{futureCredits.toFixed(2)}</p>
+                                                        </div>
+                                                    )}
+                                                    <div>
+                                                        <p className="text-xs text-muted-foreground">Monthly Rate</p>
+                                                        <p className="font-semibold">{creditsSummary.monthly_rate}</p>
+                                                    </div>
+                                                </div>
+                                                {futureCredits > 0 && (
+                                                    <p className="mt-2 text-xs text-purple-700 dark:text-purple-300">
+                                                        <Info className="h-3 w-3 inline mr-1" />
+                                                        {futureCredits.toFixed(2)} credits will accrue before your leave date ({creditsSummary.monthly_rate}/month).
+                                                    </p>
+                                                )}
+                                            </CollapsibleContent>
+                                        </Collapsible>
+                                    </>
+                                );
+                            })()}
                         </CardContent>
                     </Card>
                 )}
 
                 {requiresCredits && !creditsSummary.is_eligible && (
                     <>
-                        {/* Show projected balance when user will be eligible by start date */}
+                        {/* Projected balance — compact with progress bar */}
                         {willBeEligibleByStartDate() && data.start_date ? (
                             <Card className="mb-6 border-green-200 dark:border-green-800">
-                                <CardHeader>
-                                    <CardTitle className="flex items-center gap-2 text-green-700 dark:text-green-400">
-                                        <CreditCard className="h-5 w-5" />
-                                        Projected Leave Credits Balance
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="flex items-center gap-2 text-base text-green-700 dark:text-green-400">
+                                        <CreditCard className="h-4 w-4" />
+                                        Projected Leave Credits
+                                        <span className="text-sm font-normal text-muted-foreground">
+                                            as of {format(parseISO(data.start_date), 'MMM d, yyyy')}
+                                        </span>
                                     </CardTitle>
-                                    <CardDescription>
-                                        Projected balance as of {format(parseISO(data.start_date), 'MMMM d, yyyy')} (when you will be eligible)
-                                    </CardDescription>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Projected Balance</p>
-                                            <p className="text-2xl font-bold text-green-600">{getProjectedBalance().toFixed(2)}</p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Pending Requests</p>
-                                            <p className="text-2xl font-bold text-yellow-600">
-                                                {creditsSummary.pending_credits > 0 ? `-${creditsSummary.pending_credits.toFixed(2)}` : '0'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">This Request</p>
-                                            <p className="text-2xl font-bold text-orange-600">
-                                                {requiresCredits && calculatedDays > 0 ? `-${calculatedDays}` : '0'}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">After Submit</p>
-                                            <p className="text-2xl font-bold text-blue-600">
-                                                {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits - (requiresCredits ? calculatedDays : 0)).toFixed(2)}
-                                            </p>
-                                        </div>
-                                        <div>
-                                            <p className="text-sm text-muted-foreground">Monthly Rate</p>
-                                            <p className="text-2xl font-bold">{creditsSummary.monthly_rate}</p>
-                                        </div>
-                                    </div>
-                                    <div className="mt-4 p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
-                                        <div className="flex items-start gap-2">
-                                            <Info className="h-4 w-4 text-green-600 mt-0.5 shrink-0" />
-                                            <div className="text-sm text-green-800 dark:text-green-200">
-                                                <p>
-                                                    <strong>Future Eligibility:</strong> You are not yet eligible (eligible on{' '}
-                                                    {format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}), but since your leave starts after this date,
-                                                    you will have {getProjectedBalance().toFixed(2)} credits available by then.
-                                                    {creditsSummary.pending_credits > 0 && (
-                                                        <> After subtracting {creditsSummary.pending_credits.toFixed(2)} pending credits, you'll have {Math.max(0, getProjectedBalance() - creditsSummary.pending_credits).toFixed(2)} available.</>)}
-                                                </p>
-                                                {creditsSummary.pending_regularization_credits?.is_pending && (
-                                                    <p className="mt-1 text-xs">
-                                                        <strong>Breakdown:</strong>{' '}
-                                                        {creditsSummary.pending_regularization_credits.credits.toFixed(2)} credits from {creditsSummary.pending_regularization_credits.year} (probation period, {creditsSummary.pending_regularization_credits.months_accrued} months accrued)
-                                                        {(() => {
-                                                            const startDate = parseISO(data.start_date);
-                                                            const eligibilityDate = parseISO(creditsSummary.eligibility_date!);
-                                                            const monthsAfterReg = (startDate.getFullYear() - eligibilityDate.getFullYear()) * 12 + (startDate.getMonth() - eligibilityDate.getMonth());
-                                                            const postRegCredits = Math.max(0, monthsAfterReg) * creditsSummary.monthly_rate;
-                                                            return postRegCredits > 0 ? ` + ${postRegCredits.toFixed(2)} credits from ${creditsSummary.year} (${monthsAfterReg} months after regularization)` : '';
-                                                        })()}
-                                                    </p>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
+                                    {(() => {
+                                        const projected = getProjectedBalance();
+                                        const available = Math.max(0, projected - creditsSummary.pending_credits);
+                                        const afterSubmit = Math.max(0, available - (requiresCredits ? calculatedDays : 0));
+                                        const usedPercent = projected > 0 ? Math.min(100, (creditsSummary.pending_credits / projected) * 100) : 0;
+                                        const requestPercent = projected > 0 ? Math.min(100 - usedPercent, (calculatedDays / projected) * 100) : 0;
+
+                                        return (
+                                            <>
+                                                <div className="mb-3">
+                                                    <div className="flex justify-between text-sm mb-1.5">
+                                                        <span className="font-medium">
+                                                            {available.toFixed(2)} available
+                                                            {calculatedDays > 0 && <span className="text-orange-600"> → {afterSubmit.toFixed(2)} after this request</span>}
+                                                        </span>
+                                                        <span className="text-muted-foreground">of {projected.toFixed(2)} projected</span>
+                                                    </div>
+                                                    <div className="h-2.5 rounded-full bg-muted overflow-hidden flex">
+                                                        {usedPercent > 0 && (
+                                                            <div className="h-full bg-gray-400 dark:bg-gray-600 transition-all" style={{ width: `${usedPercent}%` }} />
+                                                        )}
+                                                        {requestPercent > 0 && (
+                                                            <div className="h-full bg-orange-400 dark:bg-orange-500 transition-all" style={{ width: `${requestPercent}%` }} />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <Collapsible>
+                                                    <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground">
+                                                        <ChevronDown className="h-3 w-3 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                                                        View eligibility details
+                                                    </CollapsibleTrigger>
+                                                    <CollapsibleContent className="mt-3">
+                                                        <div className="p-3 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+                                                            <div className="text-sm text-green-800 dark:text-green-200">
+                                                                <p>
+                                                                    <strong>Future Eligibility:</strong> Eligible on{' '}
+                                                                    {format(parseISO(creditsSummary.eligibility_date!), 'MMMM d, yyyy')}.
+                                                                    You will have {projected.toFixed(2)} credits available by your leave date.
+                                                                    {creditsSummary.pending_credits > 0 && (
+                                                                        <> After subtracting {creditsSummary.pending_credits.toFixed(2)} pending, you'll have {available.toFixed(2)} available.</>
+                                                                    )}
+                                                                </p>
+                                                                {creditsSummary.pending_regularization_credits?.is_pending && (
+                                                                    <p className="mt-1 text-xs">
+                                                                        <strong>Breakdown:</strong>{' '}
+                                                                        {creditsSummary.pending_regularization_credits.credits.toFixed(2)} from {creditsSummary.pending_regularization_credits.year} ({creditsSummary.pending_regularization_credits.months_accrued} months accrued)
+                                                                        {(() => {
+                                                                            const startDate = parseISO(data.start_date);
+                                                                            const eligibilityDate = parseISO(creditsSummary.eligibility_date!);
+                                                                            const monthsAfterReg = (startDate.getFullYear() - eligibilityDate.getFullYear()) * 12 + (startDate.getMonth() - eligibilityDate.getMonth());
+                                                                            const postRegCredits = Math.max(0, monthsAfterReg) * creditsSummary.monthly_rate;
+                                                                            return postRegCredits > 0 ? ` + ${postRegCredits.toFixed(2)} from ${creditsSummary.year} (${monthsAfterReg} months after regularization)` : '';
+                                                                        })()}
+                                                                    </p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </CollapsibleContent>
+                                                </Collapsible>
+                                            </>
+                                        );
+                                    })()}
                                 </CardContent>
                             </Card>
-                        ) : (
-                            <Alert className="mb-6">
-                                <AlertCircle className="h-4 w-4" />
-                                <AlertTitle>Not Eligible Yet</AlertTitle>
-                                <AlertDescription>
-                                    {creditsSummary.eligibility_date ? (
-                                        <>
-                                            You will be eligible to use leave credits on{' '}
-                                            <strong className="text-orange-600 dark:text-orange-400">
-                                                {format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')}
-                                            </strong>
-                                            . {data.start_date ? (
-                                                <>Your selected leave date is before eligibility. Select a date on or after your eligibility date to use credits.</>
-                                            ) : (
-                                                <>Select a leave start date on or after this date to see your projected balance.</>
-                                            )}
-                                            {' '}You can still apply for non-credited leave types (SPL, LOA, LDV).
-                                        </>
-                                    ) : (
-                                        <>
-                                            Eligibility date not set. Please contact HR to update your hire date. You can still
-                                            apply for non-credited leave types (SPL, LOA, LDV).
-                                        </>
-                                    )}
-                                </AlertDescription>
-                            </Alert>
-                        )}
+                        ) : null}
                     </>
                 )}
 
-                {/* SPL Credits Balance - Show when SPL is selected */}
+                {/* SPL Credits Balance — compact with progress bar */}
                 {data.leave_type === 'SPL' && splCreditsSummary && (
                     <Card className="mb-6 border-violet-200 dark:border-violet-800">
-                        <CardHeader>
-                            <CardTitle className="flex items-center gap-2 text-violet-700 dark:text-violet-400">
-                                <CreditCard className="h-5 w-5" />
+                        <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-base text-violet-700 dark:text-violet-400">
+                                <CreditCard className="h-4 w-4" />
                                 Solo Parent Leave Credits
+                                <span className="text-sm font-normal text-muted-foreground">
+                                    {splCreditsSummary.year} • {splCreditsSummary.total} days/yr
+                                </span>
                             </CardTitle>
-                            <CardDescription>
-                                Year {splCreditsSummary.year} • {splCreditsSummary.total} days per year (lump-sum, no carryover)
-                            </CardDescription>
                         </CardHeader>
                         <CardContent>
-                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Total Credits</p>
-                                    <p className="text-2xl font-bold">{splCreditsSummary.total.toFixed(2)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Credits Used</p>
-                                    <p className="text-2xl font-bold text-orange-600">{splCreditsSummary.used.toFixed(2)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">Available</p>
-                                    <p className="text-2xl font-bold text-blue-600">{splCreditsSummary.balance.toFixed(2)}</p>
-                                </div>
-                                <div>
-                                    <p className="text-sm text-muted-foreground">This Request</p>
-                                    <p className="text-2xl font-bold text-violet-600">
-                                        {data.spl_day_settings.length > 0
-                                            ? `-${data.spl_day_settings.reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0).toFixed(1)}`
-                                            : '0'}
-                                    </p>
-                                </div>
-                            </div>
-                            {data.spl_day_settings.length > 0 && (() => {
+                            {(() => {
                                 const requestedCredits = data.spl_day_settings.reduce((sum, d) => sum + (d.is_half_day ? 0.5 : 1), 0);
-                                if (requestedCredits > splCreditsSummary.balance) {
-                                    return (
-                                        <Alert className="mt-4 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                                            <AlertTriangle className="h-4 w-4 text-amber-600" />
-                                            <AlertDescription className="text-amber-800 dark:text-amber-200">
-                                                Requesting {requestedCredits.toFixed(1)} credits but only {splCreditsSummary.balance.toFixed(2)} available.
-                                                Days exceeding your balance will be marked as absent (no credit deduction, no attendance excuse).
-                                            </AlertDescription>
-                                        </Alert>
-                                    );
-                                }
-                                return null;
+                                const afterSubmit = Math.max(0, splCreditsSummary.balance - requestedCredits);
+                                const usedPercent = splCreditsSummary.total > 0 ? Math.min(100, (splCreditsSummary.used / splCreditsSummary.total) * 100) : 0;
+                                const requestPercent = splCreditsSummary.total > 0 ? Math.min(100 - usedPercent, (requestedCredits / splCreditsSummary.total) * 100) : 0;
+                                const isInsufficient = requestedCredits > 0 && requestedCredits > splCreditsSummary.balance;
+
+                                return (
+                                    <>
+                                        <div className="mb-3">
+                                            <div className="flex justify-between text-sm mb-1.5">
+                                                <span className="font-medium">
+                                                    {splCreditsSummary.balance.toFixed(2)} available
+                                                    {requestedCredits > 0 && <span className="text-violet-600"> → {afterSubmit.toFixed(2)} after this request</span>}
+                                                </span>
+                                                <span className="text-muted-foreground">of {splCreditsSummary.total.toFixed(0)} total</span>
+                                            </div>
+                                            <div className="h-2.5 rounded-full bg-muted overflow-hidden flex">
+                                                {usedPercent > 0 && (
+                                                    <div className="h-full bg-gray-400 dark:bg-gray-600 transition-all" style={{ width: `${usedPercent}%` }} />
+                                                )}
+                                                {requestPercent > 0 && (
+                                                    <div className={`h-full transition-all ${isInsufficient ? 'bg-red-400 dark:bg-red-500' : 'bg-violet-400 dark:bg-violet-500'}`} style={{ width: `${requestPercent}%` }} />
+                                                )}
+                                            </div>
+                                        </div>
+                                        {isInsufficient && (
+                                            <p className="text-xs text-amber-700 dark:text-amber-300 mt-2">
+                                                Requesting {requestedCredits.toFixed(1)} but only {splCreditsSummary.balance.toFixed(2)} available — excess days will be marked absent.
+                                            </p>
+                                        )}
+                                        <Collapsible>
+                                            <CollapsibleTrigger className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground mt-1">
+                                                <ChevronDown className="h-3 w-3 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                                                View breakdown
+                                            </CollapsibleTrigger>
+                                            <CollapsibleContent className="mt-2 grid grid-cols-4 gap-3 text-center text-sm">
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs">Total</p>
+                                                    <p className="font-semibold">{splCreditsSummary.total.toFixed(2)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs">Used</p>
+                                                    <p className="font-semibold text-gray-600">{splCreditsSummary.used.toFixed(2)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs">Available</p>
+                                                    <p className="font-semibold text-blue-600">{splCreditsSummary.balance.toFixed(2)}</p>
+                                                </div>
+                                                <div>
+                                                    <p className="text-muted-foreground text-xs">This Request</p>
+                                                    <p className="font-semibold text-violet-600">{requestedCredits > 0 ? `-${requestedCredits.toFixed(1)}` : '0'}</p>
+                                                </div>
+                                            </CollapsibleContent>
+                                        </Collapsible>
+                                    </>
+                                );
                             })()}
                         </CardContent>
                     </Card>
@@ -1180,218 +1181,6 @@ export default function Create({
                             </Accordion>
                         </CardContent>
                     </Card>
-                )}
-
-                {/* Credit Error - Blocks Submission (non-VL credits) */}
-                {creditError && (
-                    <Alert className="mb-6 border-red-300 bg-red-50 text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
-                        <AlertCircle className="h-4 w-4" />
-                        <AlertTitle className="text-red-800 dark:text-red-200">Insufficient Leave Credits</AlertTitle>
-                        <AlertDescription className="text-red-700 dark:text-red-300">
-                            <p>{creditError}</p>
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* VL Credit Warning - Informational, does not block submission */}
-                {vlCreditWarning && (
-                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <AlertTitle className="text-amber-800 dark:text-amber-200">Insufficient VL Credits</AlertTitle>
-                        <AlertDescription className="text-amber-700 dark:text-amber-300">
-                            <p>{vlCreditWarning}</p>
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Validation Warnings */}
-                {validationWarnings.length > 0 && (
-                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <AlertTitle className="text-amber-800 dark:text-amber-200">Informational Warnings</AlertTitle>
-                        <AlertDescription className="text-amber-700 dark:text-amber-300">
-                            <p className="mb-2 text-sm">You may still submit this request. Reviewers will see this information when making approval decisions.</p>
-                            <ul className="list-disc list-inside space-y-1">
-                                {validationWarnings.map((warning, idx) => (
-                                    <li key={idx}>{warning}</li>
-                                ))}
-                            </ul>
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Short Notice Override Option (Admin/Super Admin Only) */}
-                {canOverrideShortNotice && shortNoticeWarning && !data.short_notice_override && (
-                    <Alert className="mb-6 border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
-                        <AlertTriangle className="h-4 w-4 text-amber-600" />
-                        <AlertTitle className="text-amber-800 dark:text-amber-200">Short Notice Leave Request</AlertTitle>
-                        <AlertDescription className="text-amber-700 dark:text-amber-300">
-                            <p className="mb-3">{shortNoticeWarning}</p>
-                            <p className="mb-3 text-sm">As Admin/Super Admin, you can override this requirement.</p>
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="border-amber-500 text-amber-700 hover:bg-amber-100 dark:border-amber-600 dark:text-amber-300 dark:hover:bg-amber-900"
-                                onClick={() => setData('short_notice_override', true)}
-                            >
-                                Override 2-Week Notice Requirement
-                            </Button>
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Short Notice Override Active */}
-                {data.short_notice_override && (
-                    <Alert className="mb-6 border-blue-200 bg-blue-50 dark:border-blue-800 dark:bg-blue-950">
-                        <Check className="h-4 w-4 text-blue-600" />
-                        <AlertTitle className="text-blue-800 dark:text-blue-200">Short Notice Override Active</AlertTitle>
-                        <AlertDescription className="text-blue-700 dark:text-blue-300">
-                            <p className="mb-2">The 2-week advance notice requirement has been overridden by Admin.</p>
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 p-0 h-auto"
-                                onClick={() => setData('short_notice_override', false)}
-                            >
-                                Remove Override
-                            </Button>
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* 30-Day Absence Window Warning (VL only) */}
-                {absenceWindowInfo && (
-                    <Alert className="mb-6 border-orange-200 bg-orange-50 dark:border-orange-800 dark:bg-orange-950">
-                        <Info className="h-4 w-4 text-orange-600" />
-                        <AlertTitle className="text-orange-800 dark:text-orange-200">30-Day Absence Window Notice</AlertTitle>
-                        <AlertDescription className="text-orange-700 dark:text-orange-300">
-                            {absenceWindowInfo}
-                        </AlertDescription>
-                    </Alert>
-                )}
-
-                {/* Campaign Conflicts Warning (VL and UPTO) */}
-                {campaignConflicts.length > 0 && (
-                    <>
-                        <Alert className="mb-6 border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950">
-                            <Users className="h-4 w-4 text-yellow-600" />
-                            <AlertTitle className="text-yellow-800 dark:text-yellow-200 flex items-center gap-2">
-                                <span>Campaign Leave Conflicts</span>
-                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
-                                    {campaignConflicts.length}
-                                </Badge>
-                            </AlertTitle>
-                            <AlertDescription className="text-yellow-700 dark:text-yellow-300">
-                                <p className="mb-3 text-sm">
-                                    The following employees from your campaign have already applied for leave during the selected dates. You may still submit your request, but be aware of potential scheduling conflicts.
-                                </p>
-                                <div className="space-y-2 w-full max-w-3xl mx-auto">
-                                    {campaignConflicts.map((conflict) => (
-                                        <div key={conflict.id} className="grid grid-cols-1 sm:grid-cols-[minmax(180px,1fr)_auto_minmax(160px,1fr)] items-center gap-x-6 gap-y-2 text-sm bg-yellow-100 dark:bg-yellow-900/50 p-3 rounded-md border border-yellow-200 dark:border-yellow-800/50 transition-colors hover:bg-yellow-200/50 dark:hover:bg-yellow-900/70">
-                                            <div className="flex items-center gap-3 justify-self-center sm:justify-self-start">
-                                                <span className="font-semibold text-yellow-900 dark:text-yellow-100">{conflict.user_name}</span>
-                                                <Badge variant="outline" className="text-[10px] px-1.5 h-5 text-yellow-700 dark:text-yellow-300 border-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/30">
-                                                    {conflict.leave_type}
-                                                </Badge>
-                                            </div>
-
-                                            <div className="flex items-center gap-2 justify-self-center sm:justify-self-center">
-                                                <Calendar className="h-3.5 w-3.5 text-yellow-500" />
-                                                <span className="text-yellow-800 dark:text-yellow-200 font-medium whitespace-nowrap">
-                                                    {format(parseISO(conflict.start_date), 'MMM d')} - {format(parseISO(conflict.end_date), 'MMM d, yyyy')}
-                                                </span>
-                                            </div>
-
-                                            <div className="flex items-center gap-3 justify-self-center sm:justify-self-end">
-                                                <Badge
-                                                    variant="outline"
-                                                    className={`text-[10px] px-1.5 h-5 capitalize ${conflict.status === 'approved'
-                                                        ? 'text-green-700 border-green-400 dark:text-green-400 bg-green-50/50 dark:bg-green-900/20'
-                                                        : 'text-orange-700 border-orange-400 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-900/20'
-                                                        }`}
-                                                >
-                                                    {conflict.status}
-                                                </Badge>
-                                                <span className="text-xs text-yellow-600 dark:text-yellow-400 italic whitespace-nowrap">
-                                                    Requested: {format(parseISO(conflict.created_at), 'MMM d, yyyy')}
-                                                </span>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            </AlertDescription>
-                        </Alert>
-
-                        {/* Date Suggestions */}
-                        {suggestedDates.length > 0 && (
-                            <div className="mb-6 p-4 bg-green-50 dark:bg-green-950/50 rounded-lg border border-green-200 dark:border-green-800">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <Lightbulb className="h-4 w-4 text-green-600" />
-                                    <span className="font-semibold text-green-800 dark:text-green-200 text-sm">Suggested Alternative Dates</span>
-                                </div>
-                                <p className="text-xs text-green-700 dark:text-green-300 mb-3">
-                                    These dates have fewer or no conflicts with employees in <span className="font-medium">{data.campaign_department}</span>:
-                                </p>
-                                <div className="space-y-2">
-                                    {[...suggestedDates].sort((a, b) => a.conflicts - b.conflicts).map((suggestion, index) => (
-                                        <div
-                                            key={index}
-                                            className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 bg-white dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 transition-colors"
-                                        >
-                                            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-                                                <div className="flex items-center gap-2">
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={`text-xs shrink-0 ${suggestion.conflicts === 0
-                                                            ? 'bg-green-100 text-green-700 border-green-400 dark:bg-green-900 dark:text-green-300 dark:border-green-600'
-                                                            : 'bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-900 dark:text-yellow-300 dark:border-yellow-600'
-                                                            }`}
-                                                    >
-                                                        {suggestion.conflicts === 0 ? (
-                                                            <span className="flex items-center gap-1">
-                                                                <Check className="h-3 w-3" />
-                                                                No conflicts
-                                                            </span>
-                                                        ) : (
-                                                            `${suggestion.conflicts} conflict${suggestion.conflicts !== 1 ? 's' : ''}`
-                                                        )}
-                                                    </Badge>
-                                                    <span className="text-xs text-muted-foreground">•</span>
-                                                    <span className="text-xs text-green-600 dark:text-green-400 whitespace-nowrap">
-                                                        {suggestion.label}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-1.5 text-sm">
-                                                    <Calendar className="h-3.5 w-3.5 text-green-600 shrink-0" />
-                                                    <span className="font-medium text-green-800 dark:text-green-200 whitespace-nowrap">
-                                                        {format(parseISO(suggestion.start_date), 'MMM d')} - {format(parseISO(suggestion.end_date), 'MMM d, yyyy')}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                className="text-xs h-8 px-3 border-green-400 text-green-700 hover:bg-green-100 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-900 w-full sm:w-auto"
-                                                onClick={() => {
-                                                    setData('start_date', suggestion.start_date);
-                                                    setData('end_date', suggestion.end_date);
-                                                    toast.success('Dates updated', {
-                                                        description: `Changed to ${format(parseISO(suggestion.start_date), 'MMM d')} - ${format(parseISO(suggestion.end_date), 'MMM d, yyyy')}`,
-                                                    });
-                                                }}
-                                            >
-                                                Use these dates
-                                                <ArrowRight className="h-3 w-3 ml-1" />
-                                            </Button>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </>
                 )}
 
                 {/* Leave Request Form */}
@@ -1508,6 +1297,118 @@ export default function Create({
                                             : '○ Does not deduct from leave credits'}
                                     </p>
                                 )}
+                                {/* Consolidated Leave Type Notices */}
+                                {(() => {
+                                    const showReminder = ['VL', 'UPTO', 'LOA', 'ML'].includes(data.leave_type);
+                                    const showNotEligible = requiresCredits && !creditsSummary.is_eligible && !willBeEligibleByStartDate();
+                                    const showVlCredit = !!vlCreditWarning;
+                                    const showWarnings = validationWarnings.length > 0;
+                                    const totalNotices = [showReminder, showNotEligible, showVlCredit, showWarnings].filter(Boolean).length;
+
+                                    if (totalNotices === 0) return null;
+
+                                    // Determine highest severity for the consolidated alert border
+                                    const hasWarning = showNotEligible || showVlCredit || showWarnings;
+
+                                    return (
+                                        <Alert className={hasWarning
+                                            ? "border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950"
+                                            : "border-muted bg-muted/50"
+                                        }>
+                                            <AlertTriangle className={`h-4 w-4 ${hasWarning ? 'text-amber-600' : 'text-muted-foreground'}`} />
+                                            <AlertTitle className={`flex items-center gap-2 ${hasWarning ? 'text-amber-800 dark:text-amber-200' : 'text-foreground'}`}>
+                                                {hasWarning ? 'Notices & Warnings' : 'Reminder'}
+                                                {totalNotices > 1 && (
+                                                    <Badge variant="secondary" className="text-xs">
+                                                        {totalNotices}
+                                                    </Badge>
+                                                )}
+                                            </AlertTitle>
+                                            <AlertDescription>
+                                                <div className="space-y-3 mt-1">
+                                                    {/* Reminder - soft notice */}
+                                                    {showReminder && (
+                                                        <div className={`text-sm ${hasWarning ? 'text-amber-700 dark:text-amber-300' : 'text-muted-foreground'}`}>
+                                                            <ul className="list-disc space-y-1 ml-4">
+                                                                <li>Inform your <strong>clients</strong> at least <strong>two weeks in advance</strong> before applying for leave.</li>
+                                                                <li>Notify your <strong>Team Lead (TL)</strong> or <strong>Admins</strong> of your planned leave prior to filing.</li>
+                                                            </ul>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Not Eligible Yet - amber warning */}
+                                                    {showNotEligible && (
+                                                        <>
+                                                            {showReminder && <hr className="border-amber-200 dark:border-amber-700" />}
+                                                            <div className="text-sm text-amber-700 dark:text-amber-300">
+                                                                <p className="font-medium mb-1">Not Eligible Yet</p>
+                                                                <p>
+                                                                    {creditsSummary.eligibility_date ? (
+                                                                        <>
+                                                                            You will be eligible to use leave credits on <strong>{format(parseISO(creditsSummary.eligibility_date), 'MMMM d, yyyy')}</strong>.
+                                                                            {' '}{data.start_date
+                                                                                ? 'Your selected leave date is before eligibility. Select a date on or after your eligibility date to use credits.'
+                                                                                : 'Select a leave start date on or after this date to see your projected balance.'
+                                                                            }
+                                                                            {' '}You can still apply for non-credited leave types (SPL, LOA, LDV).
+                                                                        </>
+                                                                    ) : (
+                                                                        <>Eligibility date not set. Please contact HR to update your hire date. You can still apply for non-credited leave types (SPL, LOA, LDV).</>
+                                                                    )}
+                                                                </p>
+                                                            </div>
+                                                        </>
+                                                    )}
+
+                                                    {/* Insufficient VL Credits - amber warning */}
+                                                    {showVlCredit && (
+                                                        <>
+                                                            {(showReminder || showNotEligible) && <hr className="border-amber-200 dark:border-amber-700" />}
+                                                            <div className="text-sm text-amber-700 dark:text-amber-300">
+                                                                <p className="font-medium mb-1">Insufficient VL Credits</p>
+                                                                <p>{vlCreditWarning}</p>
+                                                            </div>
+                                                        </>
+                                                    )}
+
+                                                    {/* Informational Warnings - collapsible when multiple */}
+                                                    {showWarnings && (
+                                                        <>
+                                                            {(showReminder || showNotEligible || showVlCredit) && <hr className="border-amber-200 dark:border-amber-700" />}
+                                                            <div className="text-sm text-amber-700 dark:text-amber-300">
+                                                                {validationWarnings.length <= 2 ? (
+                                                                    <>
+                                                                        <p className="text-xs mb-1">You may still submit — reviewers will see these warnings.</p>
+                                                                        <ul className="list-disc ml-4 space-y-1">
+                                                                            {validationWarnings.map((warning, idx) => (
+                                                                                <li key={idx}>{warning}</li>
+                                                                            ))}
+                                                                        </ul>
+                                                                    </>
+                                                                ) : (
+                                                                    <Collapsible>
+                                                                        <CollapsibleTrigger className="flex items-center gap-1.5 text-amber-800 dark:text-amber-200 font-medium hover:underline">
+                                                                            <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                                                                            {validationWarnings.length} warnings — click to expand
+                                                                        </CollapsibleTrigger>
+                                                                        <CollapsibleContent className="mt-2">
+                                                                            <p className="text-xs mb-1">You may still submit — reviewers will see these warnings.</p>
+                                                                            <ul className="list-disc ml-4 space-y-1">
+                                                                                {validationWarnings.map((warning, idx) => (
+                                                                                    <li key={idx}>{warning}</li>
+                                                                                ))}
+                                                                            </ul>
+                                                                        </CollapsibleContent>
+                                                                    </Collapsible>
+                                                                )}
+                                                            </div>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </AlertDescription>
+                                        </Alert>
+                                    );
+                                })()}
                             </div>
 
                             {/* Date Range */}
@@ -1572,6 +1473,146 @@ export default function Create({
                                 </div>
                             </div>
 
+                            {/* Date-Related Warnings — positioned near the date fields that trigger them */}
+
+                            {/* 30-Day Absence Window Notice (VL only) — muted severity tier */}
+                            {absenceWindowInfo && (
+                                <Alert className="border-muted bg-muted/50">
+                                    <Info className="h-4 w-4 text-muted-foreground" />
+                                    <AlertTitle className="text-muted-foreground">30-Day Absence Window Notice</AlertTitle>
+                                    <AlertDescription className="text-muted-foreground">
+                                        {absenceWindowInfo}
+                                    </AlertDescription>
+                                </Alert>
+                            )}
+
+                            {/* Campaign Conflicts Warning (VL and UPTO) — collapsed by default */}
+                            {campaignConflicts.length > 0 && (
+                                <Collapsible>
+                                    <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-800 dark:bg-yellow-950">
+                                        <Users className="h-4 w-4 text-yellow-600" />
+                                        <AlertTitle className="text-yellow-800 dark:text-yellow-200">
+                                            <CollapsibleTrigger className="flex items-center gap-2 hover:underline w-full">
+                                                <span>Campaign Leave Conflicts</span>
+                                                <Badge variant="secondary" className="bg-yellow-100 text-yellow-700">
+                                                    {campaignConflicts.length}
+                                                </Badge>
+                                                <ChevronDown className="h-3.5 w-3.5 ml-auto transition-transform duration-200 [[data-state=open]>&]:rotate-180" />
+                                            </CollapsibleTrigger>
+                                        </AlertTitle>
+                                        <AlertDescription className="text-yellow-700 dark:text-yellow-300">
+                                            <p className="text-sm">
+                                                {campaignConflicts.length} teammate{campaignConflicts.length !== 1 ? 's' : ''} on leave during your selected dates. You may still submit.
+                                            </p>
+                                            <CollapsibleContent className="mt-3">
+                                                <div className="space-y-2 w-full max-w-3xl mx-auto">
+                                                    {campaignConflicts.map((conflict) => (
+                                                        <div key={conflict.id} className="grid grid-cols-1 sm:grid-cols-[minmax(180px,1fr)_auto_minmax(160px,1fr)] items-center gap-x-6 gap-y-2 text-sm bg-yellow-100 dark:bg-yellow-900/50 p-3 rounded-md border border-yellow-200 dark:border-yellow-800/50 transition-colors hover:bg-yellow-200/50 dark:hover:bg-yellow-900/70">
+                                                            <div className="flex items-center gap-3 justify-self-center sm:justify-self-start">
+                                                                <span className="font-semibold text-yellow-900 dark:text-yellow-100">{conflict.user_name}</span>
+                                                                <Badge variant="outline" className="text-[10px] px-1.5 h-5 text-yellow-700 dark:text-yellow-300 border-yellow-400 bg-yellow-50/50 dark:bg-yellow-900/30">
+                                                                    {conflict.leave_type}
+                                                                </Badge>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-2 justify-self-center sm:justify-self-center">
+                                                                <Calendar className="h-3.5 w-3.5 text-yellow-500" />
+                                                                <span className="text-yellow-800 dark:text-yellow-200 font-medium whitespace-nowrap">
+                                                                    {format(parseISO(conflict.start_date), 'MMM d')} - {format(parseISO(conflict.end_date), 'MMM d, yyyy')}
+                                                                </span>
+                                                            </div>
+
+                                                            <div className="flex items-center gap-3 justify-self-center sm:justify-self-end">
+                                                                <Badge
+                                                                    variant="outline"
+                                                                    className={`text-[10px] px-1.5 h-5 capitalize ${conflict.status === 'approved'
+                                                                        ? 'text-green-700 border-green-400 dark:text-green-400 bg-green-50/50 dark:bg-green-900/20'
+                                                                        : 'text-orange-700 border-orange-400 dark:text-orange-400 bg-orange-50/50 dark:bg-orange-900/20'
+                                                                        }`}
+                                                                >
+                                                                    {conflict.status}
+                                                                </Badge>
+                                                                <span className="text-xs text-yellow-600 dark:text-yellow-400 italic whitespace-nowrap">
+                                                                    Requested: {format(parseISO(conflict.created_at), 'MMM d, yyyy')}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </CollapsibleContent>
+                                        </AlertDescription>
+                                    </Alert>
+                                </Collapsible>
+                            )}
+
+                            {/* Date Suggestions - shown below campaign conflicts */}
+                            {campaignConflicts.length > 0 && suggestedDates.length > 0 && (
+                                <div className="p-4 bg-green-50 dark:bg-green-950/50 rounded-lg border border-green-200 dark:border-green-800">
+                                    <div className="flex items-center gap-2 mb-2">
+                                        <Lightbulb className="h-4 w-4 text-green-600" />
+                                        <span className="font-semibold text-green-800 dark:text-green-200 text-sm">Suggested Alternative Dates</span>
+                                    </div>
+                                    <p className="text-xs text-green-700 dark:text-green-300 mb-3">
+                                        These dates have fewer or no conflicts with employees in <span className="font-medium">{data.campaign_department}</span>:
+                                    </p>
+                                    <div className="space-y-2">
+                                        {[...suggestedDates].sort((a, b) => a.conflicts - b.conflicts).map((suggestion, index) => (
+                                            <div
+                                                key={index}
+                                                className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 p-3 bg-white dark:bg-green-900/30 rounded-lg border border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 transition-colors"
+                                            >
+                                                <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                                                    <div className="flex items-center gap-2">
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={`text-xs shrink-0 ${suggestion.conflicts === 0
+                                                                ? 'bg-green-100 text-green-700 border-green-400 dark:bg-green-900 dark:text-green-300 dark:border-green-600'
+                                                                : 'bg-yellow-100 text-yellow-700 border-yellow-400 dark:bg-yellow-900 dark:text-yellow-300 dark:border-yellow-600'
+                                                                }`}
+                                                        >
+                                                            {suggestion.conflicts === 0 ? (
+                                                                <span className="flex items-center gap-1">
+                                                                    <Check className="h-3 w-3" />
+                                                                    No conflicts
+                                                                </span>
+                                                            ) : (
+                                                                `${suggestion.conflicts} conflict${suggestion.conflicts !== 1 ? 's' : ''}`
+                                                            )}
+                                                        </Badge>
+                                                        <span className="text-xs text-muted-foreground">•</span>
+                                                        <span className="text-xs text-green-600 dark:text-green-400 whitespace-nowrap">
+                                                            {suggestion.label}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-1.5 text-sm">
+                                                        <Calendar className="h-3.5 w-3.5 text-green-600 shrink-0" />
+                                                        <span className="font-medium text-green-800 dark:text-green-200 whitespace-nowrap">
+                                                            {format(parseISO(suggestion.start_date), 'MMM d')} - {format(parseISO(suggestion.end_date), 'MMM d, yyyy')}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="text-xs h-8 px-3 border-green-400 text-green-700 hover:bg-green-100 dark:border-green-600 dark:text-green-300 dark:hover:bg-green-900 w-full sm:w-auto"
+                                                    onClick={() => {
+                                                        setData('start_date', suggestion.start_date);
+                                                        setData('end_date', suggestion.end_date);
+                                                        toast.success('Dates updated', {
+                                                            description: `Changed to ${format(parseISO(suggestion.start_date), 'MMM d')} - ${format(parseISO(suggestion.end_date), 'MMM d, yyyy')}`,
+                                                        });
+                                                    }}
+                                                >
+                                                    Use these dates
+                                                    <ArrowRight className="h-3 w-3 ml-1" />
+                                                </Button>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {/* Calculated Days Display */}
                             {calculatedDays > 0 && (
                                 <Alert>
@@ -1598,11 +1639,10 @@ export default function Create({
                                         {data.spl_day_settings.map((daySetting, index) => (
                                             <div
                                                 key={daySetting.date}
-                                                className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${
-                                                    daySetting.is_half_day
-                                                        ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800'
-                                                        : 'bg-card'
-                                                }`}
+                                                className={`flex items-center justify-between p-3 border rounded-lg transition-colors ${daySetting.is_half_day
+                                                    ? 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800'
+                                                    : 'bg-card'
+                                                    }`}
                                             >
                                                 <div className="flex items-center gap-2">
                                                     <Calendar className="h-4 w-4 text-muted-foreground" />

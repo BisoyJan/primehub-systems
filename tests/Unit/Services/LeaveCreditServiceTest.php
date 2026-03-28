@@ -228,7 +228,7 @@ class LeaveCreditServiceTest extends TestCase
     }
 
     #[Test]
-    public function it_validates_two_week_advance_notice(): void
+    public function it_allows_short_notice_vl_requests(): void
     {
         $user = User::factory()->create([
             'hired_date' => Carbon::now()->subYears(1), // Eligible
@@ -240,8 +240,8 @@ class LeaveCreditServiceTest extends TestCase
             'end_date' => Carbon::now()->addDays(9)->format('Y-m-d'),
         ]);
 
-        $this->assertFalse($result['valid']);
-        $this->assertStringContainsString('2 weeks in advance', $result['errors'][0]);
+        // Short notice is now informational only — admin overrides during approval
+        $this->assertTrue($result['valid']);
     }
 
     #[Test]

@@ -1134,15 +1134,9 @@ class LeaveCreditService
         }
 
         // Check 2-week advance notice for VL only (SL/BL are unpredictable)
-        // Skip this check if short notice override is enabled
-        // Use filed_at (the original request creation date) if provided, otherwise use now()
-        if ($leaveType === 'VL' && ! $shortNoticeOverride) {
-            $filedAt = isset($data['filed_at']) ? Carbon::parse($data['filed_at']) : now();
-            $twoWeeksFromFiled = $filedAt->copy()->addWeeks(2)->startOfDay();
-            if ($startDate->startOfDay()->lt($twoWeeksFromFiled)) {
-                $errors[] = "Leave requests must be submitted at least 2 weeks in advance. Earliest date you can apply for is {$twoWeeksFromFiled->format('F j, Y')}.";
-            }
-        }
+        // NOTE: Short notice is now informational only (shown as warning on Create/Edit page)
+        // Admins can override the 2-week requirement during approval on the Show page
+        // The rule is NOT enforced as a blocking validation anymore
 
         // Validate SL date constraints (3 weeks back to 1 month ahead)
         if ($leaveType === 'SL') {

@@ -155,9 +155,13 @@ class LeaveRequestController extends Controller
 
         // Compute status counts before applying the status filter
         $baseQuery = $query->clone();
+        $upcomingThreshold = now()->addDays(3)->toDateString();
+        $todayDate = now()->toDateString();
         $statusCounts = [
             'all' => $baseQuery->clone()->count(),
             'pending' => $baseQuery->clone()->where('status', 'pending')->count(),
+            'upcoming' => $baseQuery->clone()->where('status', 'pending')
+                ->whereBetween('start_date', [$todayDate, $upcomingThreshold])->count(),
             'approved' => $baseQuery->clone()->where('status', 'approved')->count(),
             'denied' => $baseQuery->clone()->where('status', 'denied')->count(),
             'cancelled' => $baseQuery->clone()->where('status', 'cancelled')->count(),
@@ -165,7 +169,12 @@ class LeaveRequestController extends Controller
 
         // Filter by status (applied after counts are computed)
         if ($request->filled('status')) {
-            $query->byStatus($request->status);
+            if ($request->status === 'upcoming') {
+                $query->where('status', 'pending')
+                    ->whereBetween('start_date', [$todayDate, $upcomingThreshold]);
+            } else {
+                $query->byStatus($request->status);
+            }
         }
 
         // Role-aware priority sorting:
@@ -642,18 +651,10 @@ class LeaveRequestController extends Controller
         $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
 
         // Check if short notice override is requested (Admin/Super Admin only)
-        $shortNoticeOverride = false;
-        $shortNoticeOverrideBy = null;
-        if ($request->boolean('short_notice_override') && in_array($user->role, ['Super Admin', 'Admin'])) {
-            $shortNoticeOverride = true;
-            $shortNoticeOverrideBy = $user->id;
-        }
-
         // Prepare data for validation
         $validationData = array_merge($request->validated(), [
             'days_requested' => $daysRequested,
             'credits_year' => now()->year,
-            'short_notice_override' => $shortNoticeOverride,
         ]);
 
         // Validate business rules
@@ -711,10 +712,6 @@ class LeaveRequestController extends Controller
                 'attendance_points_at_request' => $attendancePoints,
                 'requires_tl_approval' => $requiresTlApproval,
                 'credits_year' => now()->year,
-                // Short notice override tracking
-                'short_notice_override' => $shortNoticeOverride,
-                'short_notice_override_by' => $shortNoticeOverrideBy,
-                'short_notice_override_at' => $shortNoticeOverride ? now() : null,
             ]);
 
             // For SPL: create per-day records at submission time with is_half_day setting
@@ -828,7 +825,7 @@ class LeaveRequestController extends Controller
         $isAdmin = in_array($user->role, ['Super Admin', 'Admin', 'HR']);
         $isTeamLead = $user->role === 'Team Lead';
 
-        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'deniedDates.denier', 'days.assigner']);
+        $leaveRequest->load(['user', 'reviewer', 'adminApprover', 'hrApprover', 'tlApprover', 'shortNoticeOverrider', 'deniedDates.denier', 'days.assigner']);
 
         // Check if current user has already approved
         $hasUserApproved = false;
@@ -1052,6 +1049,8 @@ class LeaveRequestController extends Controller
             'splCreditsSummary' => $splCreditsSummary,
             'leaveRequestDays' => $leaveRequestDays,
             'suggestedDayStatuses' => $suggestedDayStatuses,
+            'isShortNotice' => in_array($leaveRequest->leave_type, ['VL', 'UPTO']) && $leaveRequest->start_date->lt($leaveRequest->created_at->copy()->addWeeks(2)),
+            'canOverrideShortNotice' => in_array($user->role, ['Super Admin', 'Admin']),
         ]);
     }
 
@@ -1286,19 +1285,12 @@ class LeaveRequestController extends Controller
         // Get current attendance points
         $attendancePoints = $leaveCreditService->getAttendancePoints($targetUser);
 
-        // Check if short notice override is requested (Admin/Super Admin only)
-        $shortNoticeOverride = false;
-        if ($request->boolean('short_notice_override') && $isAdmin) {
-            $shortNoticeOverride = true;
-        }
-
         // Prepare data for validation
         // Use the leave request's created_at as the filing date for 2-week notice calculation
         // Use the leave request's existing credits_year to preserve the original credit pool
         $validationData = array_merge($request->validated(), [
             'days_requested' => $daysRequested,
             'credits_year' => $leaveRequest->credits_year ?? now()->year,
-            'short_notice_override' => $shortNoticeOverride,
             'filed_at' => $leaveRequest->created_at,
         ]);
 
@@ -1334,13 +1326,6 @@ class LeaveRequestController extends Controller
                 'medical_cert_path' => $medicalCertPath,
                 'attendance_points_at_request' => $attendancePoints,
             ];
-
-            // Track short notice override if applied
-            if ($shortNoticeOverride && ! $leaveRequest->short_notice_override) {
-                $updateData['short_notice_override'] = true;
-                $updateData['short_notice_override_by'] = $user->id;
-                $updateData['short_notice_override_at'] = now();
-            }
 
             $leaveRequest->update($updateData);
 
@@ -1741,6 +1726,15 @@ class LeaveRequestController extends Controller
             $leaveRequest->update($updateData);
             $leaveRequest->refresh();
 
+            // Handle short notice override during approval
+            if ($request->boolean('short_notice_override') && in_array($user->role, ['Super Admin', 'Admin'])) {
+                $leaveRequest->update([
+                    'short_notice_override' => true,
+                    'short_notice_override_by' => $user->id,
+                    'short_notice_override_at' => now(),
+                ]);
+            }
+
             // For SL/VL: pre-store day statuses when admin provides them (before full approval)
             if (in_array($leaveRequest->leave_type, ['SL', 'VL']) && $request->has('day_statuses') && $request->input('day_statuses')) {
                 $dayStatusesInput = $request->input('day_statuses');
@@ -2070,6 +2064,15 @@ class LeaveRequestController extends Controller
                 'reviewed_at' => now(),
                 'review_notes' => $validated['review_notes'],
             ]);
+
+            // Handle short notice override during force approval
+            if ($request->boolean('short_notice_override')) {
+                $leaveRequest->update([
+                    'short_notice_override' => true,
+                    'short_notice_override_by' => $user->id,
+                    'short_notice_override_at' => now(),
+                ]);
+            }
 
             // If TL approval was required but not done, mark it as approved too
             if ($leaveRequest->requiresTlApproval() && ! $leaveRequest->isTlApproved()) {
@@ -2445,6 +2448,13 @@ class LeaveRequestController extends Controller
 
             // Check if this completes the dual approval
             $leaveRequest->fill($updateData);
+
+            // Handle short notice override during partial approval
+            if ($request->boolean('short_notice_override') && in_array($user->role, ['Super Admin', 'Admin'])) {
+                $leaveRequest->short_notice_override = true;
+                $leaveRequest->short_notice_override_by = $user->id;
+                $leaveRequest->short_notice_override_at = now();
+            }
 
             // Check if both Admin and HR have approved (and TL if required)
             $adminApproved = $leaveRequest->admin_approved_by !== null;

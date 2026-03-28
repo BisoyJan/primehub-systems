@@ -165,6 +165,8 @@ interface Props {
     splCreditsSummary?: { total: number; used: number; balance: number; year: number } | null;
     leaveRequestDays?: LeaveRequestDayRecord[] | null;
     suggestedDayStatuses?: SuggestedDayStatus[] | null;
+    isShortNotice?: boolean;
+    canOverrideShortNotice?: boolean;
 }
 
 interface EarlierConflict {
@@ -195,6 +197,8 @@ export default function Show({
     splCreditsSummary = null,
     leaveRequestDays = null,
     suggestedDayStatuses = null,
+    isShortNotice = false,
+    canOverrideShortNotice = false,
 }: Props) {
     const [showApproveDialog, setShowApproveDialog] = useState(false);
     const [showDenyDialog, setShowDenyDialog] = useState(false);
@@ -217,6 +221,7 @@ export default function Show({
     const [showForceApproveDialog, setShowForceApproveDialog] = useState(false);
     const [showTLDenyDialog, setShowTLDenyDialog] = useState(false);
     const [showAdminCancelDialog, setShowAdminCancelDialog] = useState(false);
+    const [shortNoticeOverride, setShortNoticeOverride] = useState(false);
     const [showAdjustForWorkDialog, setShowAdjustForWorkDialog] = useState(false);
     const [selectedApprovedDates, setSelectedApprovedDates] = useState<string[]>([]);
     const [showAttendancePointsDialog, setShowAttendancePointsDialog] = useState(false);
@@ -326,6 +331,7 @@ export default function Show({
             review_notes: string;
             day_statuses?: Array<{ date: string; status: string; notes?: string; is_half_day?: boolean }>;
             spl_half_day_overrides?: Record<string, boolean>;
+            short_notice_override?: boolean;
         } = {
             review_notes: approveForm.data.review_notes,
         };
@@ -341,6 +347,11 @@ export default function Show({
         // Include SPL half-day overrides if any were changed
         if (isSpl && Object.keys(splHalfDayOverrides).length > 0) {
             submitData.spl_half_day_overrides = splHalfDayOverrides;
+        }
+
+        // Include short notice override if toggled
+        if (shortNoticeOverride) {
+            submitData.short_notice_override = true;
         }
 
         router.post(leaveApproveRoute(leaveRequest.id).url, submitData, {
@@ -423,11 +434,17 @@ export default function Show({
             denial_reason: string;
             day_statuses?: Array<{ date: string; status: string; notes?: string }>;
             spl_half_day_overrides?: Record<string, boolean>;
+            short_notice_override?: boolean;
         } = {
             review_notes: forceApproveForm.data.review_notes,
             denied_dates: [],
             denial_reason: forceApproveForm.data.denial_reason
         };
+
+        // Include short notice override if toggled
+        if (shortNoticeOverride) {
+            submitData.short_notice_override = true;
+        }
 
         // If partial mode is enabled and dates are selected, calculate denied dates
         if (forceApprovePartialMode && forceApproveSelectedDates.length > 0 && forceApproveSelectedDates.length < workDays.length) {
@@ -702,11 +719,17 @@ export default function Show({
             denial_reason: string;
             review_notes: string;
             day_statuses?: Array<{ date: string; status: string; notes?: string; is_half_day?: boolean }>;
+            short_notice_override?: boolean;
         } = {
             denied_dates: deniedDates,
             denial_reason: partialDenyForm.data.denial_reason,
             review_notes: partialDenyForm.data.review_notes,
         };
+
+        // Include short notice override if toggled
+        if (shortNoticeOverride) {
+            submitData.short_notice_override = true;
+        }
 
         // Include SL/VL per-day statuses for approved dates only
         if (hasDayStatuses && partialDenySlDayStatuses.length > 0) {
@@ -1267,6 +1290,19 @@ export default function Show({
                             </Alert>
                         )}
 
+                        {/* Short Notice Warning (not yet overridden) */}
+                        {isShortNotice && !leaveRequest.short_notice_override && (
+                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <strong>Short Notice Request:</strong> This leave was filed less than 2 weeks in advance.
+                                    {canOverrideShortNotice && leaveRequest.status === 'pending' && (
+                                        <span className="text-xs opacity-80"> You can override this in the Approve dialog.</span>
+                                    )}
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
                         {/* Date Modification History */}
                         {(leaveRequest.original_start_date && leaveRequest.original_end_date) || leaveRequest.date_modification_reason ? (
                             <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
@@ -1719,6 +1755,25 @@ export default function Show({
                             </>
                         )}
 
+                        {/* Short Notice Override Toggle */}
+                        {isShortNotice && canOverrideShortNotice && !leaveRequest.short_notice_override && (
+                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <strong>Short Notice Request</strong>
+                                            <p className="text-xs mt-0.5 opacity-80">This leave was filed less than 2 weeks in advance. Toggle to override the notice requirement.</p>
+                                        </div>
+                                        <Switch
+                                            checked={shortNoticeOverride}
+                                            onCheckedChange={setShortNoticeOverride}
+                                        />
+                                    </div>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
                         <div>
                             <label className="text-sm font-medium">
                                 Review Notes <span className="text-red-500">*</span>
@@ -1877,6 +1932,25 @@ export default function Show({
                                 <p className="text-sm text-red-500 mt-1">{partialDenyForm.errors.denial_reason}</p>
                             )}
                         </div>
+                        {/* Short Notice Override Toggle */}
+                        {isShortNotice && canOverrideShortNotice && !leaveRequest.short_notice_override && (
+                            <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                    <div className="flex items-center justify-between gap-3">
+                                        <div>
+                                            <strong>Short Notice Request</strong>
+                                            <p className="text-xs mt-0.5 opacity-80">This leave was filed less than 2 weeks in advance. Toggle to override the notice requirement.</p>
+                                        </div>
+                                        <Switch
+                                            checked={shortNoticeOverride}
+                                            onCheckedChange={setShortNoticeOverride}
+                                        />
+                                    </div>
+                                </AlertDescription>
+                            </Alert>
+                        )}
+
                         <div>
                             <Label className="text-sm font-medium">Additional Notes (Optional)</Label>
                             <Textarea
@@ -2398,6 +2472,25 @@ export default function Show({
                                         onCreditValidation={setForceApproveDayStatusInvalid}
                                     />
                                 </div>
+                            )}
+
+                            {/* Short Notice Override Toggle */}
+                            {isShortNotice && canOverrideShortNotice && !leaveRequest.short_notice_override && (
+                                <Alert className="border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-950">
+                                    <AlertTriangle className="h-4 w-4 text-amber-600" />
+                                    <AlertDescription className="text-amber-800 dark:text-amber-200">
+                                        <div className="flex items-center justify-between gap-3">
+                                            <div>
+                                                <strong>Short Notice Request</strong>
+                                                <p className="text-xs mt-0.5 opacity-80">This leave was filed less than 2 weeks in advance. Toggle to override the notice requirement.</p>
+                                            </div>
+                                            <Switch
+                                                checked={shortNoticeOverride}
+                                                onCheckedChange={setShortNoticeOverride}
+                                            />
+                                        </div>
+                                    </AlertDescription>
+                                </Alert>
                             )}
 
                             <div>

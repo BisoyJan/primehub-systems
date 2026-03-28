@@ -101,11 +101,12 @@ interface Employee {
     name: string;
 }
 
-type StatusTab = 'all' | 'pending' | 'approved' | 'denied' | 'cancelled';
+type StatusTab = 'all' | 'pending' | 'upcoming' | 'approved' | 'denied' | 'cancelled';
 
 interface StatusCounts {
     all: number;
     pending: number;
+    upcoming: number;
     approved: number;
     denied: number;
     cancelled: number;
@@ -141,6 +142,7 @@ interface Props {
 
 const statusTabs: { key: StatusTab; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
     { key: 'all', label: 'All', icon: List },
+    { key: 'upcoming', label: 'Upcoming', icon: Calendar },
     { key: 'pending', label: 'Pending', icon: Clock },
     { key: 'approved', label: 'Approved', icon: CheckCircle },
     { key: 'denied', label: 'Denied', icon: XCircle },
@@ -742,9 +744,11 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
                             >
                                 <Icon className="h-3.5 w-3.5" />
                                 <span className="hidden sm:inline">{label}</span>
-                                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${activeTab === key
-                                    ? 'bg-primary/10 text-primary'
-                                    : 'bg-muted text-muted-foreground'
+                                <span className={`ml-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${key === 'upcoming'
+                                    ? 'bg-red-500 text-white'
+                                    : activeTab === key
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'bg-muted text-muted-foreground'
                                     }`}>
                                     {statusCounts[key]}
                                 </span>
