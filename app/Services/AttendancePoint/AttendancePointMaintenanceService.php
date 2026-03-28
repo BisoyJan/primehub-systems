@@ -23,37 +23,105 @@ class AttendancePointMaintenanceService
      */
     public function getManagementStats(): array
     {
-        $duplicatesCount = DB::table('attendance_points')
+        // Duplicates
+        $duplicateRows = DB::table('attendance_points')
             ->select('user_id', 'shift_date', 'point_type', DB::raw('COUNT(*) as count'))
             ->groupBy('user_id', 'shift_date', 'point_type')
             ->having('count', '>', 1)
-            ->get()
-            ->sum(fn ($row) => $row->count - 1);
+            ->get();
 
-        $pendingExpirationsCount = AttendancePoint::where('is_expired', false)
+        $duplicatesCount = $duplicateRows->sum(fn ($row) => $row->count - 1);
+
+        $duplicateUserIds = $duplicateRows->pluck('user_id')->unique()->values()->all();
+        $duplicateUsers = [];
+        if (! empty($duplicateUserIds)) {
+            $users = User::whereIn('id', $duplicateUserIds)->get()->keyBy('id');
+            $duplicateUsers = $duplicateRows->groupBy('user_id')->map(function ($rows, $userId) use ($users) {
+                $user = $users->get($userId);
+
+                return [
+                    'user_id' => $userId,
+                    'name' => $user ? $user->last_name.', '.$user->first_name : 'Unknown',
+                    'records' => $rows->map(fn ($r) => [
+                        'shift_date' => $r->shift_date instanceof Carbon ? $r->shift_date->format('Y-m-d') : (is_string($r->shift_date) ? substr($r->shift_date, 0, 10) : $r->shift_date),
+                        'point_type' => $r->point_type,
+                        'count' => $r->count,
+                    ])->values()->all(),
+                ];
+            })->values()->all();
+        }
+
+        // Pending expirations
+        $pendingExpirations = AttendancePoint::where('is_expired', false)
             ->where('is_excused', false)
             ->whereNotNull('expires_at')
             ->where('expires_at', '<=', now())
-            ->count();
+            ->with('user:id,first_name,last_name')
+            ->get();
 
+        $pendingExpirationsCount = $pendingExpirations->count();
+
+        $pendingExpirationUsers = $pendingExpirations->groupBy('user_id')->map(function ($points, $userId) {
+            $user = $points->first()->user;
+
+            return [
+                'user_id' => $userId,
+                'name' => $user ? $user->last_name.', '.$user->first_name : 'Unknown',
+                'records' => $points->map(fn ($p) => [
+                    'shift_date' => $p->shift_date instanceof Carbon ? $p->shift_date->format('Y-m-d') : (is_string($p->shift_date) ? substr($p->shift_date, 0, 10) : $p->shift_date),
+                    'point_type' => $p->point_type,
+                    'points' => $p->points,
+                    'expires_at' => $p->expires_at?->format('Y-m-d'),
+                ])->values()->all(),
+            ];
+        })->values()->all();
+
+        // Expired
         $expiredCount = AttendancePoint::where('is_expired', true)
             ->where('is_excused', false)
             ->count();
 
-        $missingPointsCount = Attendance::where('admin_verified', true)
+        // Missing points - check both by attendance_id link AND by user_id + shift_date
+        // Manual points (e.g., from leave approvals) have attendance_id=NULL but still cover the date
+        $missingAttendances = Attendance::where('admin_verified', true)
             ->whereIn('status', ['ncns', 'advised_absence', 'half_day_absence', 'tardy', 'undertime', 'undertime_more_than_hour'])
             ->whereNotExists(function ($query) {
                 $query->select(DB::raw(1))
                     ->from('attendance_points')
-                    ->whereColumn('attendance_points.attendance_id', 'attendances.id');
+                    ->where(function ($q) {
+                        $q->whereColumn('attendance_points.attendance_id', 'attendances.id')
+                            ->orWhere(function ($q2) {
+                                $q2->whereColumn('attendance_points.user_id', 'attendances.user_id')
+                                    ->whereColumn('attendance_points.shift_date', 'attendances.shift_date');
+                            });
+                    });
             })
-            ->count();
+            ->with('user:id,first_name,last_name')
+            ->get();
+
+        $missingPointsCount = $missingAttendances->count();
+
+        $missingPointsUsers = $missingAttendances->groupBy('user_id')->map(function ($attendances, $userId) {
+            $user = $attendances->first()->user;
+
+            return [
+                'user_id' => $userId,
+                'name' => $user ? $user->last_name.', '.$user->first_name : 'Unknown',
+                'records' => $attendances->map(fn ($a) => [
+                    'shift_date' => $a->shift_date instanceof Carbon ? $a->shift_date->format('Y-m-d') : $a->shift_date,
+                    'status' => $a->status,
+                ])->values()->all(),
+            ];
+        })->values()->all();
 
         return [
             'duplicates_count' => $duplicatesCount,
             'pending_expirations_count' => $pendingExpirationsCount,
             'expired_count' => $expiredCount,
             'missing_points_count' => $missingPointsCount,
+            'duplicate_users' => $duplicateUsers,
+            'pending_expiration_users' => $pendingExpirationUsers,
+            'missing_points_users' => $missingPointsUsers,
         ];
     }
 

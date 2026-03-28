@@ -52,7 +52,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import PaginationNav, { PaginationLink } from "@/components/pagination-nav";
-import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff } from "lucide-react";
+import { AlertCircle, TrendingUp, Users, Eye, Award, RefreshCw, CheckCircle, XCircle, FileText, Download, Check, ChevronsUpDown, Search, Plus, Pencil, Trash2, Loader2, Play, Pause, Settings, RotateCcw, AlertTriangle, ClipboardList, BellOff, ChevronDown, ChevronRight } from "lucide-react";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
 import {
     index as attendancePointsIndex,
@@ -308,9 +308,13 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         pending_expirations_count: number;
         expired_count: number;
         missing_points_count: number;
+        duplicate_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; count: number }[] }[];
+        pending_expiration_users: { user_id: number; name: string; records: { shift_date: string; point_type: string; points: number; expires_at: string }[] }[];
+        missing_points_users: { user_id: number; name: string; records: { shift_date: string; status: string }[] }[];
     } | null>(null);
     const [isLoadingStats, setIsLoadingStats] = useState(false);
     const [isManagementAction, setIsManagementAction] = useState(false);
+    const [expandedStatSections, setExpandedStatSections] = useState<Record<string, boolean>>({});
     const [confirmAction, setConfirmAction] = useState<'remove-duplicates' | 'expire-all' | 'reset-expired' | 'regenerate' | 'cleanup' | 'initialize-gbro-dates' | 'fix-gbro-dates' | 'recalculate-gbro' | null>(null);
 
     // Management filters for regenerate and reset-expired
@@ -583,21 +587,38 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
     // Management Handlers
     const fetchManagementStats = async () => {
         setIsLoadingStats(true);
+        setManagementStats(null);
         try {
-            const response = await fetch(managementRoutes.stats().url, {
+            const statsUrl = managementRoutes.stats().url;
+            const response = await fetch(statsUrl, {
                 method: 'GET',
                 headers: {
-                    'Content-Type': 'application/json',
                     'Accept': 'application/json',
                     'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
                     'X-Requested-With': 'XMLHttpRequest',
                 },
                 credentials: 'same-origin',
             });
+
+            if (!response.ok) {
+                const errorText = await response.text().catch(() => '');
+                let errorMessage = `Failed to fetch management stats (HTTP ${response.status})`;
+                try {
+                    const errorData = JSON.parse(errorText);
+                    if (errorData?.message) errorMessage = errorData.message;
+                } catch {
+                    if (errorText.length < 200) errorMessage += `: ${errorText}`;
+                }
+                console.error('Management stats error:', { status: response.status, url: statsUrl, errorText: errorText.substring(0, 500) });
+                toast.error(errorMessage);
+                return;
+            }
+
             const data = await response.json();
             setManagementStats(data);
-        } catch {
-            toast.error('Failed to fetch management stats');
+        } catch (err) {
+            console.error('Management stats fetch exception:', err);
+            toast.error(`Failed to fetch management stats: ${err instanceof Error ? err.message : 'Unknown error'}`);
         } finally {
             setIsLoadingStats(false);
         }
@@ -611,6 +632,7 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
         setMgmtUserId('');
         setMgmtUserIds([]);
         setExpirationType('both');
+        setExpandedStatSections({});
         fetchManagementStats();
     };
 
@@ -2708,49 +2730,136 @@ export default function AttendancePointsIndex({ points, users, campaigns, stats,
                             </div>
                         ) : managementStats ? (
                             <div className="grid gap-3">
-                                <div className="flex items-center justify-between p-3 border rounded-lg">
-                                    <div className="flex items-center gap-3">
-                                        <RefreshCw className="h-5 w-5 text-green-600" />
-                                        <div>
-                                            <p className="font-medium">Missing Points</p>
-                                            <p className="text-sm text-muted-foreground">
-                                                Verified records without points
-                                            </p>
+                                {/* Missing Points */}
+                                <div className="border rounded-lg">
+                                    <button
+                                        type="button"
+                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
+                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, missing: !prev.missing }))}
+                                        disabled={managementStats.missing_points_count === 0}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <RefreshCw className="h-5 w-5 text-green-600" />
+                                            <div className="text-left">
+                                                <p className="font-medium">Missing Points</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Verified records without points
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <Badge variant={managementStats.missing_points_count > 0 ? "destructive" : "secondary"}>
-                                        {managementStats.missing_points_count}
-                                    </Badge>
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant={managementStats.missing_points_count > 0 ? "destructive" : "secondary"}>
+                                                {managementStats.missing_points_count}
+                                            </Badge>
+                                            {managementStats.missing_points_count > 0 && (
+                                                expandedStatSections.missing ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                            )}
+                                        </div>
+                                    </button>
+                                    {expandedStatSections.missing && managementStats.missing_points_users.length > 0 && (
+                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
+                                            {managementStats.missing_points_users.map((u) => (
+                                                <div key={u.user_id} className="text-sm">
+                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {u.records.map((r, i) => (
+                                                            <Badge key={i} variant="outline" className="text-xs capitalize">
+                                                                {r.shift_date} · {r.status.replace(/_/g, ' ')}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="flex items-center justify-between p-3 border rounded-lg">
-                                    <div className="flex items-center gap-3">
-                                        <Trash2 className="h-5 w-5 text-yellow-600" />
-                                        <div>
-                                            <p className="font-medium">Duplicate Points</p>
-                                            <p className="text-sm text-muted-foreground">
-                                                Same user, date, and type entries
-                                            </p>
+                                {/* Duplicate Points */}
+                                <div className="border rounded-lg">
+                                    <button
+                                        type="button"
+                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
+                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, duplicates: !prev.duplicates }))}
+                                        disabled={managementStats.duplicates_count === 0}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <Trash2 className="h-5 w-5 text-yellow-600" />
+                                            <div className="text-left">
+                                                <p className="font-medium">Duplicate Points</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Same user, date, and type entries
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <Badge variant={managementStats.duplicates_count > 0 ? "destructive" : "secondary"}>
-                                        {managementStats.duplicates_count}
-                                    </Badge>
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant={managementStats.duplicates_count > 0 ? "destructive" : "secondary"}>
+                                                {managementStats.duplicates_count}
+                                            </Badge>
+                                            {managementStats.duplicates_count > 0 && (
+                                                expandedStatSections.duplicates ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                            )}
+                                        </div>
+                                    </button>
+                                    {expandedStatSections.duplicates && managementStats.duplicate_users.length > 0 && (
+                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
+                                            {managementStats.duplicate_users.map((u) => (
+                                                <div key={u.user_id} className="text-sm">
+                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {u.records.map((r, i) => (
+                                                            <Badge key={i} variant="outline" className="text-xs capitalize">
+                                                                {r.shift_date} · {r.point_type.replace(/_/g, ' ')} · ×{r.count}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
-                                <div className="flex items-center justify-between p-3 border rounded-lg">
-                                    <div className="flex items-center gap-3">
-                                        <AlertTriangle className="h-5 w-5 text-orange-600" />
-                                        <div>
-                                            <p className="font-medium">Pending Expirations</p>
-                                            <p className="text-sm text-muted-foreground">
-                                                Should be expired but not marked
-                                            </p>
+                                {/* Pending Expirations */}
+                                <div className="border rounded-lg">
+                                    <button
+                                        type="button"
+                                        className="flex items-center justify-between w-full p-3 hover:bg-muted/50 transition-colors"
+                                        onClick={() => setExpandedStatSections(prev => ({ ...prev, pending: !prev.pending }))}
+                                        disabled={managementStats.pending_expirations_count === 0}
+                                    >
+                                        <div className="flex items-center gap-3">
+                                            <AlertTriangle className="h-5 w-5 text-orange-600" />
+                                            <div className="text-left">
+                                                <p className="font-medium">Pending Expirations</p>
+                                                <p className="text-sm text-muted-foreground">
+                                                    Should be expired but not marked
+                                                </p>
+                                            </div>
                                         </div>
-                                    </div>
-                                    <Badge variant={managementStats.pending_expirations_count > 0 ? "destructive" : "secondary"}>
-                                        {managementStats.pending_expirations_count}
-                                    </Badge>
+                                        <div className="flex items-center gap-2">
+                                            <Badge variant={managementStats.pending_expirations_count > 0 ? "destructive" : "secondary"}>
+                                                {managementStats.pending_expirations_count}
+                                            </Badge>
+                                            {managementStats.pending_expirations_count > 0 && (
+                                                expandedStatSections.pending ? <ChevronDown className="h-4 w-4 text-muted-foreground" /> : <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                                            )}
+                                        </div>
+                                    </button>
+                                    {expandedStatSections.pending && managementStats.pending_expiration_users.length > 0 && (
+                                        <div className="border-t px-3 pb-3 pt-2 space-y-2 max-h-48 overflow-y-auto">
+                                            {managementStats.pending_expiration_users.map((u) => (
+                                                <div key={u.user_id} className="text-sm">
+                                                    <p className="font-medium">{u.name} <span className="text-muted-foreground font-normal">({u.records.length})</span></p>
+                                                    <div className="flex flex-wrap gap-1 mt-1">
+                                                        {u.records.map((r, i) => (
+                                                            <Badge key={i} variant="outline" className="text-xs capitalize">
+                                                                {r.shift_date} · {r.point_type.replace(/_/g, ' ')} · exp {r.expires_at}
+                                                            </Badge>
+                                                        ))}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex items-center justify-between p-3 border rounded-lg">

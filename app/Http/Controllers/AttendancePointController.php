@@ -409,7 +409,16 @@ class AttendancePointController extends Controller
     {
         $this->authorize('viewAny', AttendancePoint::class);
 
-        return response()->json($this->maintenanceService->getManagementStats());
+        try {
+            return response()->json($this->maintenanceService->getManagementStats());
+        } catch (\Exception $e) {
+            Log::error('AttendancePointController managementStats Error: '.$e->getMessage());
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to load management statistics.',
+            ], 500);
+        }
     }
 
     /**

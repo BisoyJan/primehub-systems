@@ -37,7 +37,7 @@ interface NavItemConfig {
     title: string;
     href: string | { url: string } | (() => string);
     icon: LucideIcon;
-    permission?: string | string[];
+    permission?: string | readonly string[];
     badge?: number;
 }
 
@@ -290,10 +290,10 @@ export function AppSidebar() {
                 // If no permission specified, show the item (e.g., Dashboard)
                 if (!item.permission) return true;
                 // Check if user has any of the required permissions (array) or a single permission
-                if (Array.isArray(item.permission)) {
-                    return canAny(item.permission);
+                if (typeof item.permission === 'string') {
+                    return can(item.permission);
                 }
-                return can(item.permission);
+                return canAny([...item.permission]);
             })
             .map(item => {
                 const href = typeof item.href === 'string'
@@ -359,7 +359,7 @@ export function AppSidebar() {
                 </SidebarMenu>
             </SidebarHeader>
 
-            <SidebarContent className="!overflow-y-auto min-h-0">
+            <SidebarContent className="overflow-y-auto! min-h-0">
                 <NavGroup
                     groupId="main"
                     label={filteredNavigation.main.label}
