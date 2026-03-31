@@ -24,8 +24,10 @@ import { index as medicationRequestsIndex } from '@/routes/medication-requests'
 import { index as attendanceToolsIndex } from '@/routes/attendance-tools'
 import { dashboard as coachingDashboard } from '@/routes/coaching'
 import { index as coachingSessionsIndex } from '@/routes/coaching/sessions'
+import { index as breakTimerIndex, dashboard as breakDashboard, reports as breakReports } from '@/routes/break-timer'
+import { index as breakPoliciesIndex } from '@/routes/break-timer/policies'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -219,6 +221,35 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                 },
             ],
         },
+        breakTimer: {
+            label: 'Break Timer',
+            items: [
+                {
+                    title: 'Timer',
+                    href: breakTimerIndex.url(),
+                    icon: Timer,
+                    permission: 'break_timer.view',
+                },
+                {
+                    title: 'Dashboard',
+                    href: breakDashboard.url(),
+                    icon: Coffee,
+                    permission: 'break_timer.dashboard',
+                },
+                {
+                    title: 'Reports',
+                    href: breakReports.url(),
+                    icon: BarChart3,
+                    permission: 'break_timer.reports',
+                },
+                {
+                    title: 'Policies',
+                    href: breakPoliciesIndex.url(),
+                    icon: Settings,
+                    permission: 'break_timer.manage_policy',
+                },
+            ],
+        },
         account: {
             label: 'Account Management',
             items: [
@@ -336,6 +367,10 @@ export function AppSidebar() {
             label: navigationConfig.requests.label,
             items: filterItemsByPermission(navigationConfig.requests.items),
         },
+        breakTimer: {
+            label: navigationConfig.breakTimer.label,
+            items: filterItemsByPermission(navigationConfig.breakTimer.items),
+        },
         account: {
             label: navigationConfig.account.label,
             items: filterItemsByPermission(navigationConfig.account.items),
@@ -400,6 +435,13 @@ export function AppSidebar() {
                     label={filteredNavigation.requests.label}
                     items={filteredNavigation.requests.items}
                     isOpen={isCollapsed || openGroups.includes('requests')}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="breakTimer"
+                    label={filteredNavigation.breakTimer.label}
+                    items={filteredNavigation.breakTimer.items}
+                    isOpen={isCollapsed || openGroups.includes('breakTimer')}
                     onToggle={handleGroupToggle}
                 />
                 <NavGroup

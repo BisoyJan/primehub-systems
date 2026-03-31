@@ -11,6 +11,9 @@ use App\Http\Controllers\BiometricExportController;
 use App\Http\Controllers\BiometricRecordController;
 use App\Http\Controllers\BiometricReprocessingController;
 use App\Http\Controllers\BiometricRetentionPolicyController;
+use App\Http\Controllers\BreakDashboardController;
+use App\Http\Controllers\BreakPolicyController;
+use App\Http\Controllers\BreakTimerController;
 use App\Http\Controllers\CoachingDashboardController;
 use App\Http\Controllers\CoachingSessionController;
 use App\Http\Controllers\DashboardController;
@@ -507,6 +510,69 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         // Wildcard routes last
         Route::post('/{notification}/read', [NotificationController::class, 'markAsRead'])->name('mark-as-read');
         Route::delete('/{notification}', [NotificationController::class, 'destroy'])->name('destroy');
+    });
+
+    // Break Timer
+    Route::prefix('break-timer')->name('break-timer.')->group(function () {
+        Route::get('/', [BreakTimerController::class, 'index'])
+            ->middleware('permission:break_timer.view')
+            ->name('index');
+        Route::post('/start', [BreakTimerController::class, 'start'])
+            ->middleware('permission:break_timer.use')
+            ->name('start');
+        Route::post('/{breakSession}/pause', [BreakTimerController::class, 'pause'])
+            ->middleware('permission:break_timer.use')
+            ->name('pause');
+        Route::post('/{breakSession}/resume', [BreakTimerController::class, 'resume'])
+            ->middleware('permission:break_timer.use')
+            ->name('resume');
+        Route::post('/{breakSession}/end', [BreakTimerController::class, 'end'])
+            ->middleware('permission:break_timer.use')
+            ->name('end');
+        Route::post('/reset', [BreakTimerController::class, 'reset'])
+            ->middleware('permission:break_timer.reset')
+            ->name('reset');
+        Route::get('/status', [BreakTimerController::class, 'status'])
+            ->middleware('permission:break_timer.view')
+            ->name('status');
+
+        // Dashboard (supervisor view)
+        Route::get('/dashboard', [BreakDashboardController::class, 'index'])
+            ->middleware('permission:break_timer.dashboard')
+            ->name('dashboard');
+
+        // Reports
+        Route::get('/reports', [BreakDashboardController::class, 'reports'])
+            ->middleware('permission:break_timer.reports')
+            ->name('reports');
+
+        // Reports export
+        Route::post('/reports/export/start', [BreakDashboardController::class, 'startExport'])
+            ->middleware('permission:break_timer.reports')
+            ->name('reports.export.start');
+        Route::get('/reports/export/progress/{jobId}', [BreakDashboardController::class, 'exportProgress'])
+            ->middleware('permission:break_timer.reports')
+            ->name('reports.export.progress');
+        Route::get('/reports/export/download/{jobId}', [BreakDashboardController::class, 'downloadExport'])
+            ->middleware('permission:break_timer.reports')
+            ->name('reports.export.download');
+
+        // Policy management
+        Route::get('/policies', [BreakPolicyController::class, 'index'])
+            ->middleware('permission:break_timer.manage_policy')
+            ->name('policies.index');
+        Route::post('/policies', [BreakPolicyController::class, 'store'])
+            ->middleware('permission:break_timer.manage_policy')
+            ->name('policies.store');
+        Route::put('/policies/{breakPolicy}', [BreakPolicyController::class, 'update'])
+            ->middleware('permission:break_timer.manage_policy')
+            ->name('policies.update');
+        Route::delete('/policies/{breakPolicy}', [BreakPolicyController::class, 'destroy'])
+            ->middleware('permission:break_timer.manage_policy')
+            ->name('policies.destroy');
+        Route::post('/policies/{breakPolicy}/toggle', [BreakPolicyController::class, 'toggle'])
+            ->middleware('permission:break_timer.manage_policy')
+            ->name('policies.toggle');
     });
 });
 

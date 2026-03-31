@@ -1163,4 +1163,25 @@ class NotificationService
             ]
         );
     }
+
+    /**
+     * Notify a user that their break session ended with overage.
+     */
+    public function notifyBreakOverage(User|int $user, string $breakType, int $overageSeconds, string $date): Notification
+    {
+        $typeText = ucfirst(str_replace('_', ' ', $breakType));
+        $minutes = round($overageSeconds / 60, 1);
+
+        return $this->create(
+            $user,
+            'break_overage',
+            'Break Overage',
+            "Your {$typeText} on {$date} exceeded the allowed duration by {$minutes} minute(s).",
+            [
+                'break_type' => $breakType,
+                'overage_seconds' => $overageSeconds,
+                'date' => $date,
+            ]
+        );
+    }
 }
