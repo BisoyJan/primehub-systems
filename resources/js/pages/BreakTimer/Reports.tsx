@@ -16,6 +16,7 @@ import { DatePicker } from '@/components/ui/date-picker';
 import { reports as reportsRoute } from '@/routes/break-timer';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useState, useMemo } from 'react';
+import { format, parseISO } from 'date-fns';
 import { AlertTriangle, BarChart3, Check, ChevronsUpDown, Download, FileText, RotateCcw } from 'lucide-react';
 import { start as startExport } from '@/routes/break-timer/reports/export';
 
@@ -454,7 +455,7 @@ export default function BreakTimerReports() {
                                 ) : (
                                     sessions.data.map((session) => (
                                         <TableRow key={session.id}>
-                                            <TableCell className="text-sm">{session.shift_date}</TableCell>
+                                            <TableCell className="text-sm">{format(parseISO(session.shift_date), 'MMM dd, yyyy')}</TableCell>
                                             <TableCell className="font-medium">
                                                 {session.user
                                                     ? `${session.user.first_name} ${session.user.last_name}`
@@ -521,7 +522,7 @@ export default function BreakTimerReports() {
                                                 ? `${session.user.first_name} ${session.user.last_name}`
                                                 : '—'}
                                         </span>
-                                        <p className="text-muted-foreground text-xs">{session.shift_date}</p>
+                                        <p className="text-muted-foreground text-xs">{format(parseISO(session.shift_date), 'MMM dd, yyyy')}</p>
                                     </div>
                                     <Badge {...statusBadgeVariant(session.status, session.overage_seconds)}>
                                         {session.status}

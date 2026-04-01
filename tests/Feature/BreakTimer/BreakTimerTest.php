@@ -7,6 +7,7 @@ use App\Models\BreakPolicy;
 use App\Models\BreakSession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -23,6 +24,9 @@ class BreakTimerTest extends TestCase
     {
         parent::setUp();
 
+        // Freeze time to 10:00 AM so getShiftDate() returns today's calendar date
+        Carbon::setTestNow(Carbon::today()->setTime(10, 0, 0));
+
         $this->user = User::factory()->create([
             'role' => 'admin',
             'is_approved' => true,
@@ -35,6 +39,12 @@ class BreakTimerTest extends TestCase
             'max_lunch' => 1,
             'lunch_duration_minutes' => 60,
         ]);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     #[Test]
@@ -351,6 +361,7 @@ class BreakTimerTest extends TestCase
         $response = $this->actingAs($this->user)
             ->post(route('break-timer.start'), [
                 'type' => 'combined',
+                'combined_break_count' => 1,
             ]);
 
         $response->assertRedirect();

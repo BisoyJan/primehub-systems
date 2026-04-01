@@ -30,6 +30,7 @@ class BreakPolicy extends Model
         'grace_period_seconds',
         'allowed_pause_reasons',
         'is_active',
+        'retention_months',
         'shift_reset_time',
     ];
 
@@ -43,6 +44,7 @@ class BreakPolicy extends Model
             'grace_period_seconds' => 'integer',
             'allowed_pause_reasons' => 'array',
             'is_active' => 'boolean',
+            'retention_months' => 'integer',
         ];
     }
 

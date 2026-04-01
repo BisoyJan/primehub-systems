@@ -6,6 +6,7 @@ use App\Models\BreakPolicy;
 use App\Models\BreakSession;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -22,12 +23,21 @@ class BreakDashboardTest extends TestCase
     {
         parent::setUp();
 
+        // Freeze time to 10:00 AM so getShiftDate() returns today's calendar date
+        Carbon::setTestNow(Carbon::today()->setTime(10, 0, 0));
+
         $this->admin = User::factory()->create([
             'role' => 'admin',
             'is_approved' => true,
         ]);
 
         $this->policy = BreakPolicy::factory()->create(['is_active' => true]);
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
     }
 
     #[Test]

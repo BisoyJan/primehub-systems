@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\GenerateBreakTimerExportExcel;
 use App\Models\BreakSession;
 use App\Models\User;
+use App\Services\BreakTimerService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -12,9 +13,12 @@ use Inertia\Inertia;
 
 class BreakDashboardController extends Controller
 {
+    public function __construct(protected BreakTimerService $breakTimerService) {}
+
     public function index(Request $request)
     {
-        $today = now()->toDateString();
+        $policy = $this->breakTimerService->getActivePolicy();
+        $today = $this->breakTimerService->getShiftDate($policy);
         $date = $request->query('date', $today);
 
         $query = BreakSession::query()

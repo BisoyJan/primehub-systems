@@ -18,9 +18,10 @@ class BreakPolicyFactory extends Factory
             'break_duration_minutes' => 15,
             'max_lunch' => 1,
             'lunch_duration_minutes' => 60,
-            'grace_period_minutes' => 0,
+            'grace_period_seconds' => 0,
             'allowed_pause_reasons' => ['Coaching', 'Team Huddle', 'System Issue', 'Supervisor Request', 'Other'],
             'is_active' => true,
+            'retention_months' => null,
         ];
     }
 

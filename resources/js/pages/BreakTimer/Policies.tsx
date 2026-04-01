@@ -38,6 +38,7 @@ interface BreakPolicyData {
     grace_period_seconds: number;
     allowed_pause_reasons: string[] | null;
     is_active: boolean;
+    retention_months: number | null;
     shift_reset_time: string;
 }
 
@@ -54,6 +55,7 @@ type PolicyForm = {
     grace_period_seconds: number;
     allowed_pause_reasons: string;
     is_active: boolean;
+    retention_months: number | string;
     shift_reset_time: string;
 };
 
@@ -66,6 +68,7 @@ const defaultForm: PolicyForm = {
     grace_period_seconds: 0,
     allowed_pause_reasons: '',
     is_active: true,
+    retention_months: '',
     shift_reset_time: '06:00',
 };
 
@@ -106,6 +109,7 @@ export default function BreakTimerPolicies() {
             grace_period_seconds: policy.grace_period_seconds,
             allowed_pause_reasons: policy.allowed_pause_reasons?.join(', ') ?? '',
             is_active: policy.is_active,
+            retention_months: policy.retention_months ?? '',
             shift_reset_time: policy.shift_reset_time ?? '06:00',
         });
         form.clearErrors();
@@ -117,6 +121,7 @@ export default function BreakTimerPolicies() {
 
         const payload = {
             ...form.data,
+            retention_months: form.data.retention_months === '' ? null : Number(form.data.retention_months),
             allowed_pause_reasons: form.data.allowed_pause_reasons
                 ? form.data.allowed_pause_reasons.split(',').map((s) => s.trim()).filter(Boolean)
                 : [],
@@ -151,14 +156,16 @@ export default function BreakTimerPolicies() {
             <LoadingOverlay isLoading={isLoading} />
 
             <div className="space-y-6 p-4 md:p-6">
-                <PageHeader title={title} description="Manage break time policies">
-                    <Can permission="break_timer.manage_policy">
-                        <Button onClick={openCreate}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Add Policy
-                        </Button>
-                    </Can>
-                </PageHeader>
+                <PageHeader title={title} description="Manage break time policies"
+                    actions={
+                        <Can permission="break_timer.manage_policy">
+                            <Button size="sm" onClick={openCreate}>
+                                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                Add Policy
+                            </Button>
+                        </Can>
+                    }
+                />
 
                 {/* Desktop Table */}
                 <div className="hidden md:block">
@@ -173,6 +180,7 @@ export default function BreakTimerPolicies() {
                                         <TableHead>Max Lunch</TableHead>
                                         <TableHead>Lunch Duration</TableHead>
                                         <TableHead>Grace Period</TableHead>
+                                        <TableHead>Retention</TableHead>
                                         <TableHead>Shift Reset</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
@@ -181,7 +189,7 @@ export default function BreakTimerPolicies() {
                                 <TableBody>
                                     {policies.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
+                                            <TableCell colSpan={10} className="text-muted-foreground py-8 text-center">
                                                 No policies configured.
                                             </TableCell>
                                         </TableRow>
@@ -194,6 +202,7 @@ export default function BreakTimerPolicies() {
                                                 <TableCell>{policy.max_lunch}</TableCell>
                                                 <TableCell>{policy.lunch_duration_minutes} min</TableCell>
                                                 <TableCell>{policy.grace_period_seconds}s</TableCell>
+                                                <TableCell>{policy.retention_months ? `${policy.retention_months} mo` : 'Never'}</TableCell>
                                                 <TableCell>{policy.shift_reset_time ?? '06:00'}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={policy.is_active ? 'default' : 'secondary'}>
@@ -263,6 +272,7 @@ export default function BreakTimerPolicies() {
                                     <span>Breaks: {policy.max_breaks} x {policy.break_duration_minutes}min</span>
                                     <span>Lunch: {policy.max_lunch} x {policy.lunch_duration_minutes}min</span>
                                     <span>Grace: {policy.grace_period_seconds}s</span>
+                                    <span>Retention: {policy.retention_months ? `${policy.retention_months} mo` : 'Never'}</span>
                                     <span>Reset: {policy.shift_reset_time ?? '06:00'}</span>
                                 </div>
                                 <Can permission="break_timer.manage_policy">
@@ -391,6 +401,20 @@ export default function BreakTimerPolicies() {
                             />
                             <p className="text-muted-foreground text-[11px]">Time when orphaned sessions from the previous day auto-end (24h format)</p>
                             {form.errors.shift_reset_time && <p className="text-sm text-red-500">{form.errors.shift_reset_time}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Data Retention (months)</Label>
+                            <Input
+                                type="number"
+                                min={1}
+                                max={120}
+                                value={form.data.retention_months}
+                                onChange={(e) => form.setData('retention_months', e.target.value === '' ? '' : parseInt(e.target.value) || '')}
+                                placeholder="Leave empty to keep forever"
+                            />
+                            <p className="text-muted-foreground text-[11px]">Sessions older than this will be automatically purged. Leave empty to disable.</p>
+                            {form.errors.retention_months && <p className="text-sm text-red-500">{form.errors.retention_months}</p>}
                         </div>
 
                         <div className="space-y-2">

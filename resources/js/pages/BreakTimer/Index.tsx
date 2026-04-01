@@ -195,10 +195,9 @@ export default function BreakTimerIndex() {
         setIsSubmitting(true);
         setIsStartDialogOpen(false);
         setPendingStartType(null);
-        const nextType = breaksUsed === 0 ? '1st_break' : '2nd_break';
         router.post(
             startRoute().url,
-            { type: nextType, station: station.trim() || null },
+            { type: 'break', station: station.trim() || null },
             {
                 preserveScroll: true,
                 onFinish: () => setIsSubmitting(false),

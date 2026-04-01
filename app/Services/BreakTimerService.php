@@ -6,6 +6,7 @@ use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
 use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class BreakTimerService
@@ -15,6 +16,21 @@ class BreakTimerService
     public function getActivePolicy(): ?BreakPolicy
     {
         return BreakPolicy::query()->where('is_active', true)->first();
+    }
+
+    /**
+     * Get the effective shift date, accounting for the policy's shift_reset_time.
+     * If current time is before the reset time, the session belongs to yesterday's shift.
+     */
+    public function getShiftDate(?BreakPolicy $policy = null): string
+    {
+        $now = Carbon::now();
+        $resetTime = $policy?->shift_reset_time ?? '06:00';
+        $resetToday = $now->copy()->setTimeFromTimeString($resetTime);
+
+        return $now->lt($resetToday)
+            ? $now->copy()->subDay()->toDateString()
+            : $now->toDateString();
     }
 
     public function getTodaySessions(int $userId, string $date): Collection

@@ -47,6 +47,13 @@ Schedule::command('activitylog:clean')
     ->withoutOverlapping()
     ->onOneServer();
 
+// Clean break sessions based on active policy retention period - runs daily at 1:48 AM
+// Priority: MEDIUM - Purges expired break sessions and events
+Schedule::command('break-timer:clean-old-sessions --force')
+    ->dailyAt('01:48')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 // Clean old notifications (read: 90 days, unread: 180 days) - runs daily at 1:50 AM
 // Priority: MEDIUM - Keeps notifications table from growing unbounded
 Schedule::command('notifications:clean --force')
