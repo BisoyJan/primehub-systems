@@ -30,6 +30,7 @@ class BreakSession extends Model
         'station',
         'break_policy_id',
         'type',
+        'combined_break_count',
         'status',
         'duration_seconds',
         'started_at',
@@ -45,6 +46,7 @@ class BreakSession extends Model
     protected function casts(): array
     {
         return [
+            'combined_break_count' => 'integer',
             'duration_seconds' => 'integer',
             'remaining_seconds' => 'integer',
             'overage_seconds' => 'integer',

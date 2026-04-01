@@ -80,6 +80,19 @@ Schedule::command('leave:process-carryover --year='.(date('Y') - 1))
     ->onOneServer();
 
 // ============================================================================
+// BREAK TIMER AUTO-RESET
+// ============================================================================
+
+// Auto-end orphaned break sessions from previous shifts based on policy shift_reset_time
+// Runs every 15 minutes to reliably catch the configurable reset time (e.g. 07:00)
+// A dailyAt() approach would miss if the schedule runs before the policy's reset time
+// Priority: LOW - Lightweight query, most runs are no-ops
+Schedule::command('break-timer:auto-reset')
+    ->everyFifteenMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// ============================================================================
 // EXPIRY NOTIFICATIONS (2:15 AM - 2:30 AM)
 // ============================================================================
 

@@ -35,9 +35,10 @@ interface BreakPolicyData {
     break_duration_minutes: number;
     max_lunch: number;
     lunch_duration_minutes: number;
-    grace_period_minutes: number;
+    grace_period_seconds: number;
     allowed_pause_reasons: string[] | null;
     is_active: boolean;
+    shift_reset_time: string;
 }
 
 interface PageProps extends Record<string, unknown> {
@@ -50,9 +51,10 @@ type PolicyForm = {
     break_duration_minutes: number;
     max_lunch: number;
     lunch_duration_minutes: number;
-    grace_period_minutes: number;
+    grace_period_seconds: number;
     allowed_pause_reasons: string;
     is_active: boolean;
+    shift_reset_time: string;
 };
 
 const defaultForm: PolicyForm = {
@@ -61,9 +63,10 @@ const defaultForm: PolicyForm = {
     break_duration_minutes: 15,
     max_lunch: 1,
     lunch_duration_minutes: 60,
-    grace_period_minutes: 0,
+    grace_period_seconds: 0,
     allowed_pause_reasons: '',
     is_active: true,
+    shift_reset_time: '06:00',
 };
 
 export default function BreakTimerPolicies() {
@@ -100,9 +103,10 @@ export default function BreakTimerPolicies() {
             break_duration_minutes: policy.break_duration_minutes,
             max_lunch: policy.max_lunch,
             lunch_duration_minutes: policy.lunch_duration_minutes,
-            grace_period_minutes: policy.grace_period_minutes,
+            grace_period_seconds: policy.grace_period_seconds,
             allowed_pause_reasons: policy.allowed_pause_reasons?.join(', ') ?? '',
             is_active: policy.is_active,
+            shift_reset_time: policy.shift_reset_time ?? '06:00',
         });
         form.clearErrors();
         setIsDialogOpen(true);
@@ -169,6 +173,7 @@ export default function BreakTimerPolicies() {
                                         <TableHead>Max Lunch</TableHead>
                                         <TableHead>Lunch Duration</TableHead>
                                         <TableHead>Grace Period</TableHead>
+                                        <TableHead>Shift Reset</TableHead>
                                         <TableHead>Status</TableHead>
                                         <TableHead className="text-right">Actions</TableHead>
                                     </TableRow>
@@ -176,7 +181,7 @@ export default function BreakTimerPolicies() {
                                 <TableBody>
                                     {policies.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={8} className="text-muted-foreground py-8 text-center">
+                                            <TableCell colSpan={9} className="text-muted-foreground py-8 text-center">
                                                 No policies configured.
                                             </TableCell>
                                         </TableRow>
@@ -188,7 +193,8 @@ export default function BreakTimerPolicies() {
                                                 <TableCell>{policy.break_duration_minutes} min</TableCell>
                                                 <TableCell>{policy.max_lunch}</TableCell>
                                                 <TableCell>{policy.lunch_duration_minutes} min</TableCell>
-                                                <TableCell>{policy.grace_period_minutes} min</TableCell>
+                                                <TableCell>{policy.grace_period_seconds}s</TableCell>
+                                                <TableCell>{policy.shift_reset_time ?? '06:00'}</TableCell>
                                                 <TableCell>
                                                     <Badge variant={policy.is_active ? 'default' : 'secondary'}>
                                                         {policy.is_active ? 'Active' : 'Inactive'}
@@ -197,13 +203,12 @@ export default function BreakTimerPolicies() {
                                                 <TableCell>
                                                     <Can permission="break_timer.manage_policy">
                                                         <div className="flex justify-end gap-2">
-                                                            <Button
-                                                                size="sm"
-                                                                variant="ghost"
+                                                            <div
+                                                                className="inline-flex cursor-pointer items-center"
                                                                 onClick={() => handleToggle(policy)}
                                                             >
                                                                 <Switch checked={policy.is_active} />
-                                                            </Button>
+                                                            </div>
                                                             <Button
                                                                 size="sm"
                                                                 variant="ghost"
@@ -257,7 +262,8 @@ export default function BreakTimerPolicies() {
                                 <div className="text-muted-foreground grid grid-cols-2 gap-1 text-sm">
                                     <span>Breaks: {policy.max_breaks} x {policy.break_duration_minutes}min</span>
                                     <span>Lunch: {policy.max_lunch} x {policy.lunch_duration_minutes}min</span>
-                                    <span>Grace: {policy.grace_period_minutes}min</span>
+                                    <span>Grace: {policy.grace_period_seconds}s</span>
+                                    <span>Reset: {policy.shift_reset_time ?? '06:00'}</span>
                                 </div>
                                 <Can permission="break_timer.manage_policy">
                                     <div className="flex gap-2">
@@ -364,16 +370,27 @@ export default function BreakTimerPolicies() {
                         </div>
 
                         <div className="space-y-2">
-                            <Label>Grace Period (min)</Label>
+                            <Label>Grace Period (seconds)</Label>
                             <Input
                                 type="number"
                                 min={0}
-                                max={30}
-                                value={form.data.grace_period_minutes}
-                                onChange={(e) => form.setData('grace_period_minutes', parseInt(e.target.value) || 0)}
+                                max={1800}
+                                value={form.data.grace_period_seconds}
+                                onChange={(e) => form.setData('grace_period_seconds', parseInt(e.target.value) || 0)}
                             />
-                            <p className="text-muted-foreground text-[11px]">0–30 minutes before overage</p>
-                            {form.errors.grace_period_minutes && <p className="text-sm text-red-500">{form.errors.grace_period_minutes}</p>}
+                            <p className="text-muted-foreground text-[11px]">0–1800 seconds before overage (e.g. 30 = 30s, 60 = 1min)</p>
+                            {form.errors.grace_period_seconds && <p className="text-sm text-red-500">{form.errors.grace_period_seconds}</p>}
+                        </div>
+
+                        <div className="space-y-2">
+                            <Label>Shift Reset Time</Label>
+                            <Input
+                                type="time"
+                                value={form.data.shift_reset_time}
+                                onChange={(e) => form.setData('shift_reset_time', e.target.value)}
+                            />
+                            <p className="text-muted-foreground text-[11px]">Time when orphaned sessions from the previous day auto-end (24h format)</p>
+                            {form.errors.shift_reset_time && <p className="text-sm text-red-500">{form.errors.shift_reset_time}</p>}
                         </div>
 
                         <div className="space-y-2">

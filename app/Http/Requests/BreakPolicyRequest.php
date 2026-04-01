@@ -19,10 +19,11 @@ class BreakPolicyRequest extends FormRequest
             'break_duration_minutes' => ['required', 'integer', 'min:1', 'max:120'],
             'max_lunch' => ['required', 'integer', 'min:0', 'max:3'],
             'lunch_duration_minutes' => ['required', 'integer', 'min:1', 'max:180'],
-            'grace_period_minutes' => ['required', 'integer', 'min:0', 'max:30'],
+            'grace_period_seconds' => ['required', 'integer', 'min:0', 'max:1800'],
             'allowed_pause_reasons' => ['nullable', 'array'],
             'allowed_pause_reasons.*' => ['string', 'max:255'],
             'is_active' => ['boolean'],
+            'shift_reset_time' => ['nullable', 'date_format:H:i'],
         ];
     }
 
@@ -33,7 +34,7 @@ class BreakPolicyRequest extends FormRequest
             'break_duration_minutes' => 'break duration',
             'max_lunch' => 'maximum lunch breaks',
             'lunch_duration_minutes' => 'lunch duration',
-            'grace_period_minutes' => 'grace period',
+            'grace_period_seconds' => 'grace period',
             'allowed_pause_reasons' => 'pause reasons',
         ];
     }

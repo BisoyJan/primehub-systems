@@ -27,9 +27,10 @@ class BreakPolicy extends Model
         'break_duration_minutes',
         'max_lunch',
         'lunch_duration_minutes',
-        'grace_period_minutes',
+        'grace_period_seconds',
         'allowed_pause_reasons',
         'is_active',
+        'shift_reset_time',
     ];
 
     protected function casts(): array
@@ -39,7 +40,7 @@ class BreakPolicy extends Model
             'break_duration_minutes' => 'integer',
             'max_lunch' => 'integer',
             'lunch_duration_minutes' => 'integer',
-            'grace_period_minutes' => 'integer',
+            'grace_period_seconds' => 'integer',
             'allowed_pause_reasons' => 'array',
             'is_active' => 'boolean',
         ];

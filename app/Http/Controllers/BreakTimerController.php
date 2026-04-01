@@ -68,6 +68,7 @@ class BreakTimerController extends Controller
                 $user->id,
                 $today,
                 $policy,
+                $validated['combined_break_count'] ?? null,
             );
 
             $this->breakTimerService->startSession(
@@ -77,6 +78,7 @@ class BreakTimerController extends Controller
                 $policy->id,
                 $validated['station'] ?? null,
                 $today,
+                $result['combined_break_count'] ?? null,
             );
 
             return redirect()->back()->with('flash', [

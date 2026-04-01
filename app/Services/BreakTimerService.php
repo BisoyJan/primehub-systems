@@ -34,20 +34,30 @@ class BreakTimerService
 
     public function getBreaksUsed(Collection $todaySessions): int
     {
-        return $todaySessions->whereIn('type', ['1st_break', '2nd_break', 'combined'])
-            ->whereIn('status', ['completed', 'overage', 'active', 'paused'])
-            ->count();
+        $count = 0;
+        foreach ($todaySessions as $session) {
+            if (! in_array($session->status, ['completed', 'overage', 'active', 'paused', 'auto_ended'])) {
+                continue;
+            }
+            if (in_array($session->type, ['1st_break', '2nd_break', 'break'])) {
+                $count += 1;
+            } elseif ($session->type === 'combined') {
+                $count += $session->combined_break_count ?? 1;
+            }
+        }
+
+        return $count;
     }
 
     public function isLunchUsed(Collection $todaySessions): bool
     {
         return $todaySessions->whereIn('type', ['lunch', 'combined'])
-            ->whereIn('status', ['completed', 'overage', 'active', 'paused'])
+            ->whereIn('status', ['completed', 'overage', 'active', 'paused', 'auto_ended'])
             ->count() > 0;
     }
 
     /**
-     * @return array{duration_seconds: int, type: string}
+     * @return array{duration_seconds: int, type: string, combined_break_count: int|null}
      *
      * @throws \RuntimeException
      */
@@ -56,34 +66,46 @@ class BreakTimerService
         int $userId,
         string $date,
         BreakPolicy $policy,
+        ?int $combinedBreakCount = null,
     ): array {
         $isLunch = $type === 'lunch';
         $isCombined = $type === 'combined';
 
         if ($isCombined) {
-            $breakCount = BreakSession::query()
-                ->forUser($userId)
-                ->forDate($date)
-                ->whereIn('type', ['1st_break', '2nd_break', 'combined'])
-                ->count();
+            $requiredBreaks = $combinedBreakCount ?? 1;
 
-            if ($breakCount >= $policy->max_breaks) {
-                throw new \RuntimeException('No breaks remaining for today.');
+            if ($requiredBreaks < 1 || $requiredBreaks > $policy->max_breaks) {
+                throw new \RuntimeException("Invalid combined break count: {$requiredBreaks}. Must be between 1 and {$policy->max_breaks}.");
+            }
+
+            $breakCount = $this->getBreaksUsedRaw($userId, $date);
+
+            if (($policy->max_breaks - $breakCount) < $requiredBreaks) {
+                throw new \RuntimeException("Not enough breaks remaining. Need {$requiredBreaks}, have ".max(0, $policy->max_breaks - $breakCount).'.');
             }
 
             $lunchCount = BreakSession::query()
                 ->forUser($userId)
                 ->forDate($date)
-                ->whereIn('type', ['lunch', 'combined'])
+                ->where('type', 'combined')
+                ->orWhere(function ($q) use ($userId, $date) {
+                    $q->where('user_id', $userId)
+                        ->where('shift_date', $date)
+                        ->where('type', 'lunch');
+                })
                 ->count();
 
             if ($lunchCount >= $policy->max_lunch) {
                 throw new \RuntimeException('Lunch break already used for today.');
             }
 
+            $breakMinutes = $policy->break_duration_minutes * $requiredBreaks;
+            $totalMinutes = $breakMinutes + $policy->lunch_duration_minutes;
+
             return [
-                'duration_seconds' => ($policy->break_duration_minutes + $policy->lunch_duration_minutes) * 60,
-                'type' => $type,
+                'duration_seconds' => $totalMinutes * 60,
+                'type' => 'combined',
+                'combined_break_count' => $requiredBreaks,
             ];
         }
 
@@ -91,7 +113,7 @@ class BreakTimerService
             $lunchCount = BreakSession::query()
                 ->forUser($userId)
                 ->forDate($date)
-                ->where('type', 'lunch')
+                ->whereIn('type', ['lunch', 'combined'])
                 ->count();
 
             if ($lunchCount >= $policy->max_lunch) {
@@ -104,20 +126,45 @@ class BreakTimerService
             ];
         }
 
-        $breakCount = BreakSession::query()
-            ->forUser($userId)
-            ->forDate($date)
-            ->whereIn('type', ['1st_break', '2nd_break'])
-            ->count();
+        $breakCount = $this->getBreaksUsedRaw($userId, $date);
 
         if ($breakCount >= $policy->max_breaks) {
             throw new \RuntimeException('No breaks remaining for today.');
         }
 
+        // Use ordinal names for first 2 breaks, generic 'break' for additional ones
+        if ($breakCount === 0) {
+            $breakType = '1st_break';
+        } elseif ($breakCount === 1) {
+            $breakType = '2nd_break';
+        } else {
+            $breakType = 'break';
+        }
+
         return [
             'duration_seconds' => $policy->break_duration_minutes * 60,
-            'type' => $breakCount === 0 ? '1st_break' : '2nd_break',
+            'type' => $breakType,
+            'combined_break_count' => null,
         ];
+    }
+
+    protected function getBreaksUsedRaw(int $userId, string $date): int
+    {
+        $sessions = BreakSession::query()
+            ->forUser($userId)
+            ->forDate($date)
+            ->get();
+
+        $count = 0;
+        foreach ($sessions as $session) {
+            if (in_array($session->type, ['1st_break', '2nd_break', 'break'])) {
+                $count += 1;
+            } elseif ($session->type === 'combined') {
+                $count += $session->combined_break_count ?? 1;
+            }
+        }
+
+        return $count;
     }
 
     public function startSession(
@@ -127,8 +174,9 @@ class BreakTimerService
         int $policyId,
         ?string $station,
         string $date,
+        ?int $combinedBreakCount = null,
     ): BreakSession {
-        return DB::transaction(function () use ($userId, $type, $durationSeconds, $policyId, $station, $date) {
+        return DB::transaction(function () use ($userId, $type, $durationSeconds, $policyId, $station, $date, $combinedBreakCount) {
             $prefix = strtoupper(str_replace('_', '', $type));
             $sessionId = "{$prefix}-{$userId}-".now()->timestamp.'-'.rand(1000, 9999);
 
@@ -145,6 +193,7 @@ class BreakTimerService
                 'overage_seconds' => 0,
                 'total_paused_seconds' => 0,
                 'shift_date' => $date,
+                'combined_break_count' => $combinedBreakCount,
             ]);
 
             BreakEvent::create([
