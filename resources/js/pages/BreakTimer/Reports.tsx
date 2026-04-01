@@ -94,13 +94,22 @@ function formatBreakType(type: string): string {
     return type.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-function statusBadgeVariant(status: string) {
+function overageColorClass(seconds: number): string {
+    if (seconds >= 60) return 'text-red-500';
+    if (seconds > 30) return 'text-orange-500';
+    return 'text-yellow-500';
+}
+
+function statusBadgeVariant(status: string, overageSeconds = 0): { variant: 'default' | 'secondary' | 'destructive' | 'outline'; className?: string } {
     switch (status) {
-        case 'active': return 'default' as const;
-        case 'paused': return 'secondary' as const;
-        case 'completed': return 'default' as const;
-        case 'overage': return 'destructive' as const;
-        default: return 'secondary' as const;
+        case 'active': return { variant: 'default' };
+        case 'paused': return { variant: 'secondary' };
+        case 'completed': return { variant: 'default' };
+        case 'overage':
+            if (overageSeconds >= 60) return { variant: 'destructive' };
+            if (overageSeconds > 30) return { variant: 'outline', className: 'border-orange-500 bg-orange-500/15 text-orange-600 dark:text-orange-400' };
+            return { variant: 'outline', className: 'border-yellow-500 bg-yellow-500/15 text-yellow-600 dark:text-yellow-400' };
+        default: return { variant: 'secondary' };
     }
 }
 
@@ -454,7 +463,7 @@ export default function BreakTimerReports() {
                                             <TableCell>{session.station || '—'}</TableCell>
                                             <TableCell>{formatBreakType(session.type)}</TableCell>
                                             <TableCell>
-                                                <Badge variant={statusBadgeVariant(session.status)}>
+                                                <Badge {...statusBadgeVariant(session.status, session.overage_seconds)}>
                                                     {session.status}
                                                 </Badge>
                                             </TableCell>
@@ -468,7 +477,7 @@ export default function BreakTimerReports() {
                                             </TableCell>
                                             <TableCell>
                                                 {session.overage_seconds > 0 ? (
-                                                    <span className="text-red-500">+{formatTime(session.overage_seconds)}</span>
+                                                    <span className={overageColorClass(session.overage_seconds)}>+{formatTime(session.overage_seconds)}</span>
                                                 ) : (
                                                     '—'
                                                 )}
@@ -514,7 +523,7 @@ export default function BreakTimerReports() {
                                         </span>
                                         <p className="text-muted-foreground text-xs">{session.shift_date}</p>
                                     </div>
-                                    <Badge variant={statusBadgeVariant(session.status)}>
+                                    <Badge {...statusBadgeVariant(session.status, session.overage_seconds)}>
                                         {session.status}
                                     </Badge>
                                 </div>
@@ -527,7 +536,7 @@ export default function BreakTimerReports() {
                                     </span>
                                 </div>
                                 {session.overage_seconds > 0 && (
-                                    <span className="text-sm text-red-500">
+                                    <span className={`text-sm ${overageColorClass(session.overage_seconds)}`}>
                                         Overage: +{formatTime(session.overage_seconds)}
                                     </span>
                                 )}
