@@ -458,8 +458,8 @@ export function getRingColor(
     isPaused: boolean,
 ): string {
     if (!hasSession) return 'transparent';
-    if (isOverage && overageSeconds >= 60) return theme.ringDanger;
-    if (isOverage && overageSeconds >= 30) return theme.ringOverage;
+    if (isOverage && overageSeconds >= 30) return theme.ringDanger;
+    if (isOverage) return theme.ringOverage;
     if (isPaused) return theme.ringPaused;
     return theme.ringActive;
 }
@@ -474,8 +474,8 @@ export function getStatusColor(
 ): string {
     const idx = isDark ? 1 : 0;
     if (!hasSession) return isDark ? '#a1a1aa' : '#71717a'; // muted-foreground
-    if (isOverage && overageSeconds >= 60) return theme.statusDanger[idx];
-    if (isOverage && overageSeconds >= 30) return theme.statusOverage[idx];
+    if (isOverage && overageSeconds >= 30) return theme.statusDanger[idx];
+    if (isOverage) return theme.statusOverage[idx];
     if (isPaused) return theme.statusPaused[idx];
     return theme.statusActive[idx];
 }
@@ -487,7 +487,7 @@ export function getTimerColor(
     overageSeconds: number,
 ): string | undefined {
     const idx = isDark ? 1 : 0;
-    if (isOverage && overageSeconds >= 60) return theme.statusDanger[idx];
-    if (isOverage && overageSeconds >= 30) return theme.statusOverage[idx];
+    if (isOverage && overageSeconds >= 30) return theme.statusDanger[idx];
+    if (isOverage) return theme.statusOverage[idx];
     return undefined; // use default text color
 }

@@ -405,14 +405,14 @@ export default function BreakTimerIndex() {
                         <motion.div
                             className="relative flex items-center justify-center"
                             animate={
-                                isOverage && overageSeconds >= 60
+                                isOverage
                                     ? { x: [0, -4, 4, -3, 3, -1, 1, 0] }
                                     : isPaused
                                         ? { scale: [1, 1.02, 1] }
                                         : {}
                             }
                             transition={
-                                isOverage && overageSeconds >= 60
+                                isOverage
                                     ? { duration: 0.5, repeat: Infinity, repeatDelay: 2 }
                                     : isPaused
                                         ? { duration: 2.5, repeat: Infinity, ease: 'easeInOut' }
