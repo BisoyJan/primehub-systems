@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import { ArrowLeft, Pencil, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -223,7 +224,7 @@ export default function CoachingSessionsShow() {
 
                 {/* Performance Description */}
                 <SectionCard title="Performance Description">
-                    <p className="whitespace-pre-wrap text-sm">{session.performance_description}</p>
+                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.performance_description) }} />
                 </SectionCard>
 
                 {/* Attachments */}
@@ -277,13 +278,13 @@ export default function CoachingSessionsShow() {
                 {/* Agent Strengths */}
                 {session.agent_strengths_wins && (
                     <SectionCard title="Agent Strengths / Wins">
-                        <p className="whitespace-pre-wrap text-sm">{session.agent_strengths_wins}</p>
+                        <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.agent_strengths_wins) }} />
                     </SectionCard>
                 )}
 
                 {/* SMART Action Plan */}
                 <SectionCard title="SMART Action Plan">
-                    <p className="whitespace-pre-wrap text-sm">{session.smart_action_plan}</p>
+                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.smart_action_plan) }} />
                 </SectionCard>
 
                 {/* Acknowledgement & Compliance Info */}
