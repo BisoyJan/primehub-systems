@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
@@ -31,6 +32,51 @@ class BreakTimerService
         return $now->lt($resetToday)
             ? $now->copy()->subDay()->toDateString()
             : $now->toDateString();
+    }
+
+    /**
+     * Get the effective shift date for a specific user based on their EmployeeSchedule.
+     * Adapts the logic from AttendanceProcessor::isNextDayShift() for consistency.
+     *
+     * - Night/crossing shifts (e.g., 22:00→07:00): if now < scheduled_time_out, shift belongs to yesterday.
+     * - Graveyard shifts (00:00-04:59 start): same-day shift, returns today.
+     * - Same-day shifts (e.g., 08:00→17:00): returns today.
+     * - No schedule: falls back to policy's shift_reset_time.
+     */
+    public function getShiftDateForUser(int $userId): string
+    {
+        $user = User::find($userId);
+        $schedule = $user?->activeSchedule;
+
+        if (! $schedule) {
+            return $this->getShiftDate($this->getActivePolicy());
+        }
+
+        $now = Carbon::now();
+        $schedTimeIn = Carbon::parse($schedule->scheduled_time_in);
+        $schedTimeOut = Carbon::parse($schedule->scheduled_time_out);
+
+        $schedInHour = $schedTimeIn->hour;
+        $schedOutHour = $schedTimeOut->hour;
+
+        // Graveyard shift (00:00-04:59 start with later end): same-day shift
+        if ($schedInHour >= 0 && $schedInHour < 5 && $schedOutHour > $schedInHour) {
+            return $now->toDateString();
+        }
+
+        // Check if shift crosses midnight (time_out <= time_in)
+        $crossesMidnight = $schedTimeOut->lessThanOrEqualTo($schedTimeIn);
+
+        if ($crossesMidnight) {
+            // If current time is before the shift's end time, we're in yesterday's shift
+            $shiftEndToday = $now->copy()->setTimeFromTimeString($schedule->scheduled_time_out);
+
+            if ($now->lt($shiftEndToday)) {
+                return $now->copy()->subDay()->toDateString();
+            }
+        }
+
+        return $now->toDateString();
     }
 
     public function getTodaySessions(int $userId, string $date): Collection

@@ -307,7 +307,7 @@ export default function BreakTimerPolicies() {
 
             {/* Create / Edit Dialog */}
             <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-                <DialogContent className="max-w-[90vw] sm:max-w-lg">
+                <DialogContent className="max-h-[90vh] max-w-[90vw] overflow-y-auto sm:max-w-lg">
                     <DialogHeader>
                         <DialogTitle>{editingPolicy ? 'Edit Policy' : 'Create Policy'}</DialogTitle>
                         <DialogDescription>

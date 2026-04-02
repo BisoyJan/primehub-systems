@@ -5,7 +5,9 @@ namespace Tests\Feature\BreakTimer;
 use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
+use App\Models\EmployeeSchedule;
 use App\Models\User;
+use App\Services\BreakTimerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -403,5 +405,107 @@ class BreakTimerTest extends TestCase
         $response = $this->get(route('break-timer.index'));
 
         $response->assertRedirect(route('login'));
+    }
+
+    #[Test]
+    public function night_shift_user_gets_yesterday_shift_date_after_midnight(): void
+    {
+        EmployeeSchedule::factory()->nightShift()->create([
+            'user_id' => $this->user->id,
+        ]);
+
+        // 1 AM — within the night shift that started yesterday (22:00→07:00)
+        Carbon::setTestNow(Carbon::today()->setTime(1, 0, 0));
+
+        $service = app(BreakTimerService::class);
+        $shiftDate = $service->getShiftDateForUser($this->user->id);
+
+        $this->assertEquals(Carbon::yesterday()->toDateString(), $shiftDate);
+    }
+
+    #[Test]
+    public function night_shift_user_gets_today_shift_date_after_shift_ends(): void
+    {
+        EmployeeSchedule::factory()->nightShift()->create([
+            'user_id' => $this->user->id,
+        ]);
+
+        // 10 AM — after the night shift ended (07:00)
+        Carbon::setTestNow(Carbon::today()->setTime(10, 0, 0));
+
+        $service = app(BreakTimerService::class);
+        $shiftDate = $service->getShiftDateForUser($this->user->id);
+
+        $this->assertEquals(Carbon::today()->toDateString(), $shiftDate);
+    }
+
+    #[Test]
+    public function morning_shift_user_gets_today_shift_date(): void
+    {
+        EmployeeSchedule::factory()->morningShift()->create([
+            'user_id' => $this->user->id,
+        ]);
+
+        // 8 AM — during morning shift (06:00→15:00)
+        Carbon::setTestNow(Carbon::today()->setTime(8, 0, 0));
+
+        $service = app(BreakTimerService::class);
+        $shiftDate = $service->getShiftDateForUser($this->user->id);
+
+        $this->assertEquals(Carbon::today()->toDateString(), $shiftDate);
+    }
+
+    #[Test]
+    public function graveyard_shift_user_gets_today_shift_date(): void
+    {
+        EmployeeSchedule::factory()->graveyardShift()->create([
+            'user_id' => $this->user->id,
+        ]);
+
+        // 3 AM — during graveyard shift (00:00→09:00), same-day shift
+        Carbon::setTestNow(Carbon::today()->setTime(3, 0, 0));
+
+        $service = app(BreakTimerService::class);
+        $shiftDate = $service->getShiftDateForUser($this->user->id);
+
+        $this->assertEquals(Carbon::today()->toDateString(), $shiftDate);
+    }
+
+    #[Test]
+    public function user_without_schedule_falls_back_to_policy_shift_date(): void
+    {
+        // No EmployeeSchedule created for user — should fall back to policy reset time
+
+        // 3 AM — before default policy reset (06:00), so should return yesterday
+        Carbon::setTestNow(Carbon::today()->setTime(3, 0, 0));
+
+        $service = app(BreakTimerService::class);
+        $shiftDate = $service->getShiftDateForUser($this->user->id);
+
+        $this->assertEquals(Carbon::yesterday()->toDateString(), $shiftDate);
+    }
+
+    #[Test]
+    public function night_shift_break_start_assigns_correct_shift_date(): void
+    {
+        EmployeeSchedule::factory()->nightShift()->create([
+            'user_id' => $this->user->id,
+        ]);
+
+        // 12:30 AM — agent started shift yesterday at 22:00, now taking a break
+        Carbon::setTestNow(Carbon::parse('2026-04-02 00:30:00'));
+
+        $response = $this->actingAs($this->user)
+            ->post(route('break-timer.start'), [
+                'type' => 'break',
+            ]);
+
+        $response->assertRedirect();
+
+        $this->assertDatabaseHas('break_sessions', [
+            'user_id' => $this->user->id,
+            'shift_date' => '2026-04-01',
+            'status' => 'active',
+        ]);
     }
 }
