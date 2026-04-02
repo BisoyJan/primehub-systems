@@ -70,6 +70,8 @@ class BreakDashboardController extends Controller
             ->with(['user', 'breakEvents' => fn ($q) => $q->whereIn('action', ['pause', 'resume'])->orderBy('occurred_at')])
             ->where('shift_date', $date)
             ->search($request->query('search'))
+            ->orderByRaw("CASE status WHEN 'overage' THEN 1 WHEN 'active' THEN 2 WHEN 'paused' THEN 3 WHEN 'completed' THEN 4 ELSE 5 END")
+            ->orderBy('overage_seconds', 'desc')
             ->orderBy('started_at', 'desc');
 
         $this->scopeByCampaigns($query, $teamLeadCampaignIds);
