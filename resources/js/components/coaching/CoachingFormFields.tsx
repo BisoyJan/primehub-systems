@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import { RichTextarea } from '@/components/coaching/RichTextarea';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Button } from '@/components/ui/button';
 import { DatePicker } from '@/components/ui/date-picker';
@@ -776,12 +777,12 @@ export function CoachingFormFields({
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
                     Performance Description <span className="text-red-500">*</span>
                 </h3>
-                <Textarea
+                <RichTextarea
                     id="performance_description"
                     value={String(data.performance_description || '')}
-                    onChange={(e) => setData('performance_description', e.target.value)}
+                    onChange={(html) => setData('performance_description', html)}
                     placeholder="Describe the employee's current performance, specific incidents, or areas for improvement..."
-                    rows={5}
+                    minHeight="120px"
                 />
                 {errors.performance_description && <p className="text-red-600 text-sm mt-1">{errors.performance_description}</p>}
             </section>
@@ -830,12 +831,12 @@ export function CoachingFormFields({
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
                     Agent Strengths or Wins
                 </h3>
-                <Textarea
+                <RichTextarea
                     id="agent_strengths_wins"
                     value={String(data.agent_strengths_wins || '')}
-                    onChange={(e) => setData('agent_strengths_wins', e.target.value)}
+                    onChange={(html) => setData('agent_strengths_wins', html)}
                     placeholder="Highlight what the agent is doing well..."
-                    rows={3}
+                    minHeight="80px"
                 />
                 {errors.agent_strengths_wins && <p className="text-red-600 text-sm mt-1">{errors.agent_strengths_wins}</p>}
             </section>
@@ -845,12 +846,12 @@ export function CoachingFormFields({
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
                     SMART Action Plan <span className="text-red-500">*</span>
                 </h3>
-                <Textarea
+                <RichTextarea
                     id="smart_action_plan"
                     value={String(data.smart_action_plan || '')}
-                    onChange={(e) => setData('smart_action_plan', e.target.value)}
+                    onChange={(html) => setData('smart_action_plan', html)}
                     placeholder="Define specific, measurable, achievable, relevant, and time-bound action items..."
-                    rows={5}
+                    minHeight="120px"
                 />
                 {errors.smart_action_plan && <p className="text-red-600 text-sm mt-1">{errors.smart_action_plan}</p>}
             </section>
