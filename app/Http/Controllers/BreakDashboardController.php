@@ -15,17 +15,64 @@ class BreakDashboardController extends Controller
 {
     public function __construct(protected BreakTimerService $breakTimerService) {}
 
+    /**
+     * Get the campaign IDs for a Team Lead, or empty array for other roles.
+     */
+    private function getTeamLeadCampaignIds(): array
+    {
+        $user = auth()->user();
+
+        if ($user->role !== 'Team Lead') {
+            return [];
+        }
+
+        return $user->getCampaignIds();
+    }
+
+    /**
+     * Scope a BreakSession query to only show sessions for users in the given campaigns.
+     */
+    private function scopeByCampaigns($query, array $campaignIds): void
+    {
+        if (! empty($campaignIds)) {
+            $query->whereHas('user.activeSchedule', function ($q) use ($campaignIds) {
+                $q->whereIn('campaign_id', $campaignIds);
+            });
+        }
+    }
+
+    /**
+     * Get the users list, scoped to the Team Lead's campaigns if applicable.
+     */
+    private function getScopedUsers(array $campaignIds)
+    {
+        $query = User::query()
+            ->where('is_approved', true)
+            ->orderBy('first_name');
+
+        if (! empty($campaignIds)) {
+            $query->whereHas('activeSchedule', function ($q) use ($campaignIds) {
+                $q->whereIn('campaign_id', $campaignIds);
+            });
+        }
+
+        return $query->get(['id', 'first_name', 'last_name']);
+    }
+
     public function index(Request $request)
     {
         $policy = $this->breakTimerService->getActivePolicy();
         $today = $this->breakTimerService->getShiftDate($policy);
         $date = $request->query('date', $today);
+        $teamLeadCampaignIds = $this->getTeamLeadCampaignIds();
 
         $query = BreakSession::query()
             ->with(['user', 'breakEvents' => fn ($q) => $q->whereIn('action', ['pause', 'resume'])->orderBy('occurred_at')])
             ->where('shift_date', $date)
             ->search($request->query('search'))
             ->orderBy('started_at', 'desc');
+
+        $this->scopeByCampaigns($query, $teamLeadCampaignIds);
 
         if ($request->query('status')) {
             $query->where('status', $request->query('status'));
@@ -70,6 +117,7 @@ class BreakDashboardController extends Controller
 
         // Live stats for the date
         $sessionsForDate = BreakSession::query()->where('shift_date', $date);
+        $this->scopeByCampaigns($sessionsForDate, $teamLeadCampaignIds);
         $stats = [
             'total_sessions' => (clone $sessionsForDate)->count(),
             'active_now' => (clone $sessionsForDate)->whereIn('status', ['active', 'paused'])->count(),
@@ -97,10 +145,7 @@ class BreakDashboardController extends Controller
                 'type' => $request->query('type', ''),
                 'user_id' => $request->query('user_id', ''),
             ],
-            'users' => User::query()
-                ->where('is_approved', true)
-                ->orderBy('first_name')
-                ->get(['id', 'first_name', 'last_name']),
+            'users' => $this->getScopedUsers($teamLeadCampaignIds),
         ]);
     }
 
@@ -108,6 +153,7 @@ class BreakDashboardController extends Controller
     {
         $startDate = $request->query('start_date', now()->startOfMonth()->toDateString());
         $endDate = $request->query('end_date', now()->toDateString());
+        $teamLeadCampaignIds = $this->getTeamLeadCampaignIds();
 
         $query = BreakSession::query()
             ->with(['user'])
@@ -115,6 +161,8 @@ class BreakDashboardController extends Controller
             ->search($request->query('search'))
             ->orderBy('shift_date', 'desc')
             ->orderBy('started_at', 'desc');
+
+        $this->scopeByCampaigns($query, $teamLeadCampaignIds);
 
         if ($request->query('user_id')) {
             $query->where('user_id', $request->query('user_id'));
@@ -156,6 +204,7 @@ class BreakDashboardController extends Controller
 
         // Summary stats for the period
         $periodQuery = BreakSession::query()->whereBetween('shift_date', [$startDate, $endDate]);
+        $this->scopeByCampaigns($periodQuery, $teamLeadCampaignIds);
         $summary = [
             'total_sessions' => (clone $periodQuery)->count(),
             'total_overage' => (clone $periodQuery)->where('status', 'overage')->count(),
@@ -183,10 +232,7 @@ class BreakDashboardController extends Controller
                 'type' => $request->query('type', ''),
                 'status' => $request->query('status', ''),
             ],
-            'users' => User::query()
-                ->where('is_approved', true)
-                ->orderBy('first_name')
-                ->get(['id', 'first_name', 'last_name']),
+            'users' => $this->getScopedUsers($teamLeadCampaignIds),
         ]);
     }
 
@@ -201,13 +247,17 @@ class BreakDashboardController extends Controller
             'search' => 'nullable|string|max:255',
         ]);
 
-        $count = BreakSession::query()
+        $teamLeadCampaignIds = $this->getTeamLeadCampaignIds();
+
+        $countQuery = BreakSession::query()
             ->whereBetween('shift_date', [$request->input('start_date'), $request->input('end_date')])
             ->when($request->input('user_id'), fn ($q, $v) => $q->where('user_id', $v))
             ->when($request->input('type'), fn ($q, $v) => $q->where('type', $v))
             ->when($request->input('status'), fn ($q, $v) => $q->where('status', $v))
-            ->when($request->input('search'), fn ($q, $v) => $q->search($v))
-            ->count();
+            ->when($request->input('search'), fn ($q, $v) => $q->search($v));
+
+        $this->scopeByCampaigns($countQuery, $teamLeadCampaignIds);
+        $count = $countQuery->count();
 
         if ($count === 0) {
             return response()->json([
@@ -226,6 +276,7 @@ class BreakDashboardController extends Controller
             $request->input('type'),
             $request->input('status'),
             $request->input('search'),
+            ! empty($teamLeadCampaignIds) ? $teamLeadCampaignIds : null,
         ));
 
         $tempDir = storage_path('app/temp');

@@ -4,6 +4,8 @@ namespace Tests\Feature\BreakTimer;
 
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
+use App\Models\Campaign;
+use App\Models\EmployeeSchedule;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Carbon;
@@ -207,5 +209,189 @@ class BreakDashboardTest extends TestCase
             ->get(route('break-timer.dashboard'));
 
         $response->assertForbidden();
+    }
+
+    #[Test]
+    public function team_lead_only_sees_their_campaign_sessions_on_dashboard(): void
+    {
+        $campaignA = Campaign::factory()->create();
+        $campaignB = Campaign::factory()->create();
+
+        $teamLead = User::factory()->create([
+            'role' => 'Team Lead',
+            'is_approved' => true,
+        ]);
+        $teamLead->campaigns()->attach($campaignA);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $teamLead->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentA = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentA->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentB = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentB->id,
+            'campaign_id' => $campaignB->id,
+        ]);
+
+        BreakSession::factory()->create([
+            'user_id' => $agentA->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+        BreakSession::factory()->create([
+            'user_id' => $agentB->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $response = $this->actingAs($teamLead)
+            ->get(route('break-timer.dashboard'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('BreakTimer/Dashboard')
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.user.id', $agentA->id)
+            );
+    }
+
+    #[Test]
+    public function team_lead_only_sees_their_campaign_sessions_on_reports(): void
+    {
+        $campaignA = Campaign::factory()->create();
+        $campaignB = Campaign::factory()->create();
+
+        $teamLead = User::factory()->create([
+            'role' => 'Team Lead',
+            'is_approved' => true,
+        ]);
+        $teamLead->campaigns()->attach($campaignA);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $teamLead->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentA = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentA->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentB = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentB->id,
+            'campaign_id' => $campaignB->id,
+        ]);
+
+        BreakSession::factory()->create([
+            'user_id' => $agentA->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+        BreakSession::factory()->create([
+            'user_id' => $agentB->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $response = $this->actingAs($teamLead)
+            ->get(route('break-timer.reports'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('BreakTimer/Reports')
+                ->has('sessions.data', 1)
+                ->where('sessions.data.0.user.id', $agentA->id)
+            );
+    }
+
+    #[Test]
+    public function team_lead_users_dropdown_is_scoped_to_their_campaigns(): void
+    {
+        $campaignA = Campaign::factory()->create();
+        $campaignB = Campaign::factory()->create();
+
+        $teamLead = User::factory()->create([
+            'role' => 'Team Lead',
+            'is_approved' => true,
+        ]);
+        $teamLead->campaigns()->attach($campaignA);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $teamLead->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentA = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentA->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentB = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentB->id,
+            'campaign_id' => $campaignB->id,
+        ]);
+
+        $response = $this->actingAs($teamLead)
+            ->get(route('break-timer.dashboard'));
+
+        $response->assertOk()
+            ->assertInertia(function (Assert $page) use ($agentA, $agentB, $teamLead) {
+                $page->component('BreakTimer/Dashboard')
+                    ->has('users', 2);
+
+                // The users should include agentA and teamLead (both in campaignA), but not agentB
+                $users = $page->toArray()['props']['users'];
+                $userIds = array_column($users, 'id');
+                $this->assertContains($agentA->id, $userIds);
+                $this->assertContains($teamLead->id, $userIds);
+                $this->assertNotContains($agentB->id, $userIds);
+            });
+    }
+
+    #[Test]
+    public function admin_sees_all_sessions_regardless_of_campaign(): void
+    {
+        $campaignA = Campaign::factory()->create();
+        $campaignB = Campaign::factory()->create();
+
+        $agentA = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentA->id,
+            'campaign_id' => $campaignA->id,
+        ]);
+
+        $agentB = User::factory()->create(['role' => 'agent', 'is_approved' => true]);
+        EmployeeSchedule::factory()->create([
+            'user_id' => $agentB->id,
+            'campaign_id' => $campaignB->id,
+        ]);
+
+        BreakSession::factory()->create([
+            'user_id' => $agentA->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+        BreakSession::factory()->create([
+            'user_id' => $agentB->id,
+            'break_policy_id' => $this->policy->id,
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $response = $this->actingAs($this->admin)
+            ->get(route('break-timer.dashboard'));
+
+        $response->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('BreakTimer/Dashboard')
+                ->has('sessions.data', 2)
+            );
     }
 }

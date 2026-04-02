@@ -298,9 +298,9 @@ export default function BreakTimerIndex() {
         return Math.max(0, Math.min(1, remainingSeconds / totalDuration));
     }, [hasSession, isOverage, remainingSeconds, totalDuration]);
 
-    // SVG ring params
-    const ringSize = 260;
-    const strokeWidth = 6;
+    // SVG ring params (viewBox coordinate system – display size set via CSS)
+    const ringSize = 500;
+    const strokeWidth = 8;
     const radius = (ringSize - strokeWidth) / 2;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference * (1 - progress);
@@ -331,7 +331,7 @@ export default function BreakTimerIndex() {
     // Scale down font when time includes hours (HH:MM:SS is too wide for the ring)
     const displayedSeconds = hasSession ? remainingSeconds : 0;
     const hasHours = Math.abs(displayedSeconds) >= 3600;
-    const timerFontClass = hasHours ? 'text-3xl md:text-4xl' : 'text-5xl md:text-6xl';
+    const timerFontClass = hasHours ? 'text-[2.625rem] md:text-[6rem]' : 'text-[4.2rem] md:text-[9rem]';
 
     // ─── Tick Pulse: bump a key every second so framer-motion re-animates ───
     const [tickKey, setTickKey] = useState(0);
@@ -363,7 +363,7 @@ export default function BreakTimerIndex() {
                 style={pageBg}
             >
                 <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} />
-                <div className="relative mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-3 md:py-4">
+                <div className="relative mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-3 md:max-w-2xl md:py-4">
 
                     {/* ─── Theme Selector & Fullscreen ─── */}
                     <div className="flex w-full items-center justify-end gap-2">
@@ -397,7 +397,7 @@ export default function BreakTimerIndex() {
 
                     {/* ─── Glass Card ─── */}
                     <div
-                        className="flex w-full flex-col items-center gap-4 rounded-3xl border border-white/25 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 md:p-8"
+                        className="flex w-full flex-col items-center gap-4 rounded-3xl border border-white/25 p-6 shadow-2xl backdrop-blur-xl dark:border-white/10 md:gap-6 md:p-10"
                         style={glassStyle}
                     >
 
@@ -425,9 +425,8 @@ export default function BreakTimerIndex() {
                             )}
                             {/* SVG Ring */}
                             <svg
-                                width={ringSize}
-                                height={ringSize}
-                                className="-rotate-90"
+                                viewBox={`0 0 ${ringSize} ${ringSize}`}
+                                className="h-65 w-65 -rotate-90 md:h-125 md:w-125"
                                 style={{ filter: glowFilter, transition: 'filter 0.5s ease' }}
                                 role="img"
                                 aria-label={`Break timer: ${hasSession ? formatTime(remainingSeconds) : 'Ready'}`}
@@ -465,7 +464,7 @@ export default function BreakTimerIndex() {
                             {/* Center content */}
                             <div className="absolute inset-0 flex flex-col items-center justify-center">
                                 {/* ─── Status label with AnimatePresence transition ─── */}
-                                <div className="relative h-5 overflow-hidden">
+                                <div className="relative h-5 overflow-hidden md:h-9">
                                     <AnimatePresence mode="wait">
                                         <motion.span
                                             key={statusText}
@@ -473,7 +472,7 @@ export default function BreakTimerIndex() {
                                             animate={{ y: 0, opacity: 1, filter: 'blur(0px)' }}
                                             exit={{ y: -12, opacity: 0, filter: 'blur(4px)' }}
                                             transition={{ duration: 0.3, ease: 'easeOut' }}
-                                            className="block text-xs font-semibold uppercase tracking-widest"
+                                            className="block text-xs font-semibold uppercase tracking-widest md:text-xl"
                                             style={{ color: statusColor, transition: 'color 0.4s ease' }}
                                         >
                                             {statusText}
@@ -493,12 +492,12 @@ export default function BreakTimerIndex() {
                                     {hasSession ? formatTime(remainingSeconds) : '00:00'}
                                 </motion.span>
                                 {hasSession && (
-                                    <span className="text-muted-foreground mt-2 text-xs">
+                                    <span className="text-muted-foreground mt-2 text-xs md:mt-3 md:text-lg">
                                         of {Math.floor(totalDuration / 60)} min
                                     </span>
                                 )}
                                 {activeSession?.status === 'paused' && activeSession?.last_pause_reason && (
-                                    <span className="text-muted-foreground mt-1 max-w-[180px] truncate text-[11px] italic">
+                                    <span className="text-muted-foreground mt-1 max-w-45 truncate text-[11px] italic md:max-w-75 md:text-sm">
                                         Paused: {activeSession.last_pause_reason}
                                     </span>
                                 )}

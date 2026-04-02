@@ -27,6 +27,7 @@ class GenerateBreakTimerExportExcel implements ShouldQueue
         protected ?string $type = null,
         protected ?string $status = null,
         protected ?string $search = null,
+        protected ?array $campaignIds = null,
     ) {}
 
     public function handle(): void
@@ -56,6 +57,12 @@ class GenerateBreakTimerExportExcel implements ShouldQueue
 
             if ($this->search) {
                 $query->search($this->search);
+            }
+
+            if (! empty($this->campaignIds)) {
+                $query->whereHas('user.activeSchedule', function ($q) {
+                    $q->whereIn('campaign_id', $this->campaignIds);
+                });
             }
 
             $records = $query->get();
