@@ -5,7 +5,6 @@ namespace Tests\Feature\BreakTimer;
 use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
-use App\Models\EmployeeSchedule;
 use App\Models\User;
 use App\Services\BreakTimerService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -410,15 +409,11 @@ class BreakTimerTest extends TestCase
     #[Test]
     public function night_shift_user_gets_yesterday_shift_date_after_midnight(): void
     {
-        EmployeeSchedule::factory()->nightShift()->create([
-            'user_id' => $this->user->id,
-        ]);
-
-        // 1 AM — within the night shift that started yesterday (22:00→07:00)
+        // 1 AM — before policy reset time (06:00), agent is still on yesterday's shift
         Carbon::setTestNow(Carbon::today()->setTime(1, 0, 0));
 
         $service = app(BreakTimerService::class);
-        $shiftDate = $service->getShiftDateForUser($this->user->id);
+        $shiftDate = $service->getShiftDate($this->policy);
 
         $this->assertEquals(Carbon::yesterday()->toDateString(), $shiftDate);
     }
@@ -426,15 +421,11 @@ class BreakTimerTest extends TestCase
     #[Test]
     public function night_shift_user_gets_today_shift_date_after_shift_ends(): void
     {
-        EmployeeSchedule::factory()->nightShift()->create([
-            'user_id' => $this->user->id,
-        ]);
-
-        // 10 AM — after the night shift ended (07:00)
+        // 10 AM — after policy reset time (06:00), new shift day
         Carbon::setTestNow(Carbon::today()->setTime(10, 0, 0));
 
         $service = app(BreakTimerService::class);
-        $shiftDate = $service->getShiftDateForUser($this->user->id);
+        $shiftDate = $service->getShiftDate($this->policy);
 
         $this->assertEquals(Carbon::today()->toDateString(), $shiftDate);
     }
@@ -442,45 +433,35 @@ class BreakTimerTest extends TestCase
     #[Test]
     public function morning_shift_user_gets_today_shift_date(): void
     {
-        EmployeeSchedule::factory()->morningShift()->create([
-            'user_id' => $this->user->id,
-        ]);
-
-        // 8 AM — during morning shift (06:00→15:00)
+        // 8 AM — after policy reset time (06:00), current day's shift
         Carbon::setTestNow(Carbon::today()->setTime(8, 0, 0));
 
         $service = app(BreakTimerService::class);
-        $shiftDate = $service->getShiftDateForUser($this->user->id);
+        $shiftDate = $service->getShiftDate($this->policy);
 
         $this->assertEquals(Carbon::today()->toDateString(), $shiftDate);
     }
 
     #[Test]
-    public function graveyard_shift_user_gets_today_shift_date(): void
+    public function before_reset_time_returns_yesterday_shift_date(): void
     {
-        EmployeeSchedule::factory()->graveyardShift()->create([
-            'user_id' => $this->user->id,
-        ]);
-
-        // 3 AM — during graveyard shift (00:00→09:00), same-day shift
+        // 3 AM — before policy reset time (06:00), still on yesterday's shift
         Carbon::setTestNow(Carbon::today()->setTime(3, 0, 0));
 
         $service = app(BreakTimerService::class);
-        $shiftDate = $service->getShiftDateForUser($this->user->id);
+        $shiftDate = $service->getShiftDate($this->policy);
 
-        $this->assertEquals(Carbon::today()->toDateString(), $shiftDate);
+        $this->assertEquals(Carbon::yesterday()->toDateString(), $shiftDate);
     }
 
     #[Test]
-    public function user_without_schedule_falls_back_to_policy_shift_date(): void
+    public function null_policy_uses_default_reset_time(): void
     {
-        // No EmployeeSchedule created for user — should fall back to policy reset time
-
-        // 3 AM — before default policy reset (06:00), so should return yesterday
+        // 3 AM — before default reset (06:00), so should return yesterday
         Carbon::setTestNow(Carbon::today()->setTime(3, 0, 0));
 
         $service = app(BreakTimerService::class);
-        $shiftDate = $service->getShiftDateForUser($this->user->id);
+        $shiftDate = $service->getShiftDate(null);
 
         $this->assertEquals(Carbon::yesterday()->toDateString(), $shiftDate);
     }
@@ -488,11 +469,7 @@ class BreakTimerTest extends TestCase
     #[Test]
     public function night_shift_break_start_assigns_correct_shift_date(): void
     {
-        EmployeeSchedule::factory()->nightShift()->create([
-            'user_id' => $this->user->id,
-        ]);
-
-        // 12:30 AM — agent started shift yesterday at 22:00, now taking a break
+        // 12:30 AM — before policy reset (06:00), shift_date is still yesterday (Apr 1)
         Carbon::setTestNow(Carbon::parse('2026-04-02 00:30:00'));
 
         $response = $this->actingAs($this->user)

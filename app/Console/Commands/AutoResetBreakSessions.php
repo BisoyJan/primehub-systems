@@ -30,16 +30,15 @@ class AutoResetBreakSessions extends Command
         $now = Carbon::now();
         $todayReset = Carbon::today()->setTimeFromTimeString($resetTime);
 
-        // Only run if we've passed the reset time for today
-        if ($now->lt($todayReset)) {
-            $this->info("Reset time {$resetTime} has not been reached yet. Skipping.");
+        // Determine the current logical shift date (accounts for graveyard shifts)
+        $currentShiftDate = $now->lt($todayReset)
+            ? Carbon::yesterday()->toDateString()
+            : $now->toDateString();
 
-            return self::SUCCESS;
-        }
-
+        // Auto-end sessions from previous shifts (shift_date before the current logical shift)
         $orphanedSessions = BreakSession::query()
             ->whereIn('status', ['active', 'paused'])
-            ->where('shift_date', '<', $now->toDateString())
+            ->where('shift_date', '<', $currentShiftDate)
             ->get();
 
         if ($orphanedSessions->isEmpty()) {

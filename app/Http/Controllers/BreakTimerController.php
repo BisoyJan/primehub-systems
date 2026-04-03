@@ -17,7 +17,7 @@ class BreakTimerController extends Controller
     {
         $user = auth()->user();
         $policy = $this->breakTimerService->getActivePolicy();
-        $today = $this->breakTimerService->getShiftDateForUser($user->id);
+        $today = $this->breakTimerService->getShiftDate($policy);
 
         $todaySessions = $this->breakTimerService->getTodaySessions($user->id, $today);
         $activeSession = $this->breakTimerService->getActiveSession($todaySessions);
@@ -39,7 +39,7 @@ class BreakTimerController extends Controller
         $validated = $request->validated();
 
         $policy = $this->breakTimerService->getActivePolicy();
-        $today = $this->breakTimerService->getShiftDateForUser($user->id);
+        $today = $this->breakTimerService->getShiftDate($policy);
 
         if (! $policy) {
             return redirect()->back()->with('flash', [
@@ -202,7 +202,7 @@ class BreakTimerController extends Controller
 
         $user = auth()->user();
         $policy = $this->breakTimerService->getActivePolicy();
-        $today = $this->breakTimerService->getShiftDateForUser($user->id);
+        $today = $this->breakTimerService->getShiftDate($policy);
 
         try {
             $this->breakTimerService->resetShift($user->id, $today, $request->input('approval'));
@@ -225,7 +225,7 @@ class BreakTimerController extends Controller
     {
         $user = auth()->user();
         $policy = $this->breakTimerService->getActivePolicy();
-        $today = $this->breakTimerService->getShiftDateForUser($user->id);
+        $today = $this->breakTimerService->getShiftDate($policy);
 
         $activeSession = BreakSession::query()
             ->forUser($user->id)

@@ -5,78 +5,37 @@ namespace App\Services;
 use App\Models\BreakEvent;
 use App\Models\BreakPolicy;
 use App\Models\BreakSession;
-use App\Models\User;
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Collection;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 
 class BreakTimerService
 {
     public function __construct(protected NotificationService $notificationService) {}
 
-    public function getActivePolicy(): ?BreakPolicy
-    {
-        return BreakPolicy::query()->where('is_active', true)->first();
-    }
-
     /**
-     * Get the effective shift date, accounting for the policy's shift_reset_time.
-     * If current time is before the reset time, the session belongs to yesterday's shift.
+     * Get the logical shift date based on the policy's shift_reset_time.
+     *
+     * If current time is before the reset time, the agent is still on yesterday's shift.
+     * Example: reset_time=06:00, current=01:30 AM Apr 4 → shift_date = Apr 3
+     * Example: reset_time=06:00, current=08:00 AM Apr 4 → shift_date = Apr 4
      */
     public function getShiftDate(?BreakPolicy $policy = null): string
     {
         $now = Carbon::now();
         $resetTime = $policy?->shift_reset_time ?? '06:00';
-        $resetToday = $now->copy()->setTimeFromTimeString($resetTime);
+        $todayReset = Carbon::today()->setTimeFromTimeString($resetTime);
 
-        return $now->lt($resetToday)
-            ? $now->copy()->subDay()->toDateString()
-            : $now->toDateString();
-    }
-
-    /**
-     * Get the effective shift date for a specific user based on their EmployeeSchedule.
-     * Adapts the logic from AttendanceProcessor::isNextDayShift() for consistency.
-     *
-     * - Night/crossing shifts (e.g., 22:00→07:00): if now < scheduled_time_out, shift belongs to yesterday.
-     * - Graveyard shifts (00:00-04:59 start): same-day shift, returns today.
-     * - Same-day shifts (e.g., 08:00→17:00): returns today.
-     * - No schedule: falls back to policy's shift_reset_time.
-     */
-    public function getShiftDateForUser(int $userId): string
-    {
-        $user = User::find($userId);
-        $schedule = $user?->activeSchedule;
-
-        if (! $schedule) {
-            return $this->getShiftDate($this->getActivePolicy());
-        }
-
-        $now = Carbon::now();
-        $schedTimeIn = Carbon::parse($schedule->scheduled_time_in);
-        $schedTimeOut = Carbon::parse($schedule->scheduled_time_out);
-
-        $schedInHour = $schedTimeIn->hour;
-        $schedOutHour = $schedTimeOut->hour;
-
-        // Graveyard shift (00:00-04:59 start with later end): same-day shift
-        if ($schedInHour >= 0 && $schedInHour < 5 && $schedOutHour > $schedInHour) {
-            return $now->toDateString();
-        }
-
-        // Check if shift crosses midnight (time_out <= time_in)
-        $crossesMidnight = $schedTimeOut->lessThanOrEqualTo($schedTimeIn);
-
-        if ($crossesMidnight) {
-            // If current time is before the shift's end time, we're in yesterday's shift
-            $shiftEndToday = $now->copy()->setTimeFromTimeString($schedule->scheduled_time_out);
-
-            if ($now->lt($shiftEndToday)) {
-                return $now->copy()->subDay()->toDateString();
-            }
+        if ($now->lt($todayReset)) {
+            return Carbon::yesterday()->toDateString();
         }
 
         return $now->toDateString();
+    }
+
+    public function getActivePolicy(): ?BreakPolicy
+    {
+        return BreakPolicy::query()->where('is_active', true)->first();
     }
 
     public function getTodaySessions(int $userId, string $date): Collection
