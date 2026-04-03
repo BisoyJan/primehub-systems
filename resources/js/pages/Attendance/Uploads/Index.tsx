@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Head, router } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
@@ -92,9 +92,12 @@ export default function UploadsIndex({ uploads, filters }: PageProps) {
     };
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(
                 attendanceUploadsIndex().url,
                 {
@@ -109,6 +112,7 @@ export default function UploadsIndex({ uploads, filters }: PageProps) {
                     replace: true,
                     only: ['uploads'],
                     onSuccess: () => setLastRefresh(new Date()),
+                    onFinish: () => { isPollingRef.current = false; },
                 }
             );
         }, 30000);

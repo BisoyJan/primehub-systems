@@ -1,5 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { ArrowLeft, ArrowRight, Clock, RefreshCw, Play, Pause } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
@@ -104,15 +104,19 @@ export default function History({ transfers }: PageProps) {
     };
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(pcTransfersHistoryRoute().url, {}, {
                 preserveScroll: true,
                 preserveState: true,
                 replace: true,
                 only: ['transfers'],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 

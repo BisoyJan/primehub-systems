@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { format, parseISO, getYear } from 'date-fns';
 import AppLayout from '@/layouts/app-layout';
@@ -270,15 +270,19 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
     };
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(leaveIndexRoute().url, buildFilterParams(), {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
                 only: ['leaveRequests', 'hasPendingRequests'],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 

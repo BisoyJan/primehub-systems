@@ -502,7 +502,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                         <div className="space-y-4">
                             <div className="flex items-start gap-4">
                                 <Avatar className="h-16 w-16 overflow-hidden rounded-full">
-                                    <AvatarImage src={leave.avatar_url} alt={leave.user_name} />
+                                    <AvatarImage src={leave.avatar_url ?? undefined} alt={leave.user_name} />
                                     <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-lg">
                                         {getInitials(leave.user_name)}
                                     </AvatarFallback>

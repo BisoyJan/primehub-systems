@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -244,9 +244,12 @@ export default function EmployeeSchedulesIndex() {
     };
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             const params: Record<string, string> = {};
             if (search) params.search = search;
             if (userFilter !== "all") params.user_id = userFilter;
@@ -262,6 +265,7 @@ export default function EmployeeSchedulesIndex() {
                 replace: true,
                 only: ['schedules'],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 

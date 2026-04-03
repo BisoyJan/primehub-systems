@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { router } from '@inertiajs/react';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -43,6 +43,7 @@ export function NotificationBell() {
     const [unreadCount, setUnreadCount] = useState(0);
     const [isOpen, setIsOpen] = useState(false);
     const { can } = usePermission();
+    const abortRef = useRef<AbortController | null>(null);
 
     // Fetch notifications when dropdown opens
     const fetchNotifications = async () => {
@@ -67,13 +68,21 @@ export function NotificationBell() {
     useEffect(() => {
         fetchUnreadCount();
         const interval = setInterval(fetchUnreadCount, 30000); // Poll every 30 seconds
-        return () => clearInterval(interval);
+        return () => {
+            clearInterval(interval);
+            abortRef.current?.abort();
+        };
     }, []);
 
     const fetchUnreadCount = async () => {
+        // Abort any in-flight request to prevent pile-up on slow networks
+        abortRef.current?.abort();
+        abortRef.current = new AbortController();
+
         try {
             const response = await fetch('/notifications/unread-count', {
                 headers: getJsonHeaders(),
+                signal: abortRef.current.signal,
             });
 
             if (!isValidJsonResponse(response)) {
@@ -83,7 +92,7 @@ export function NotificationBell() {
             const data = await response.json();
             setUnreadCount(data.count);
         } catch (error) {
-            // Silently ignore fetch errors - could be due to session expiration
+            if (error instanceof DOMException && error.name === 'AbortError') return;
             console.error('Failed to fetch unread count:', error);
         }
     };

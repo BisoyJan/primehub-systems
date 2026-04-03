@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { toast } from 'sonner';
 import AppLayout from '@/layouts/app-layout';
@@ -337,15 +337,19 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
     };
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(pcMaintenanceIndexRoute().url, buildFilterParams(), {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
                 only: ['maintenances', 'allMatchingIds'],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 

@@ -182,10 +182,16 @@ export default function BreakTimerIndex() {
     }, [activeSession, calculateRemaining]);
 
     // Periodic server sync every 60s to correct client-side drift
+    const isSyncingRef = useRef(false);
     useEffect(() => {
         if (!activeSession || activeSession.status !== 'active') return;
         const syncInterval = setInterval(() => {
-            router.reload({ only: ['activeSession', 'todaySessions', 'breaksUsed', 'lunchUsed'] });
+            if (isSyncingRef.current) return;
+            isSyncingRef.current = true;
+            router.reload({
+                only: ['activeSession', 'todaySessions', 'breaksUsed', 'lunchUsed'],
+                onFinish: () => { isSyncingRef.current = false; },
+            });
         }, 60000);
         return () => clearInterval(syncInterval);
     }, [activeSession?.id, activeSession?.status]);

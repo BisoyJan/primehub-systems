@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
@@ -222,9 +222,12 @@ export default function ItConcernsIndex() {
     const [concernToCancel, setConcernToCancel] = useState<ItConcern | null>(null);
 
     // Auto-refresh every 30 seconds to check for new concerns
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             const params: Record<string, string> = {};
             if (debouncedSearch) params.search = debouncedSearch;
             if (siteFilter !== "all") params.site_id = siteFilter;
@@ -239,6 +242,7 @@ export default function ItConcernsIndex() {
                 replace: true,
                 only: ["concerns"],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
                 onError: (errors) => {
                     console.error('Auto-refresh failed:', errors);
                 },

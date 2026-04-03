@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Head, router, Link } from '@inertiajs/react';
 import { toast } from 'sonner';
 import { ArrowRight, Search, History, CheckSquare, List, RefreshCw, Play, Pause } from 'lucide-react';
@@ -171,15 +171,19 @@ export default function Index({ stations: stationsPayload, filters }: PageProps)
     };
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(pcTransfersIndexRoute().url, buildFilterParams(), {
                 preserveScroll: true,
                 preserveState: true,
                 replace: true,
                 only: ['stations'],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 

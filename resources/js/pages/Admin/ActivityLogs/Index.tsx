@@ -101,9 +101,12 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
     }, [debouncedSearch, filters.search, event, causer]);
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(
                 activityLogs.index().url,
                 {
@@ -111,7 +114,7 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                     event: event === 'all' ? '' : event,
                     causer: causer === 'all' ? '' : causer,
                 },
-                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'] },
+                { preserveState: true, preserveScroll: true, replace: true, only: ['activities'], onFinish: () => { isPollingRef.current = false; } },
             );
         }, 30000);
 

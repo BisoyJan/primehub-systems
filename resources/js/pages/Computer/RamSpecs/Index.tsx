@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Head, Link, useForm, usePage, router } from "@inertiajs/react";
 import type { PageProps as InertiaPageProps } from "@inertiajs/core";
 
@@ -70,13 +70,17 @@ export default function RamSpecsIndexRefactored() {
     };
 
     // Auto-refresh every 30 seconds (only when enabled)
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
 
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.reload({
                 only: ['ramspecs'],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 

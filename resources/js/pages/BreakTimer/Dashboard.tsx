@@ -139,9 +139,15 @@ export default function BreakTimerDashboard() {
 
     // Auto-refresh every 30 seconds for live monitoring
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const isPollingRef = useRef(false);
     useEffect(() => {
         pollRef.current = setInterval(() => {
-            router.reload({ only: ['sessions', 'stats'] });
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
+            router.reload({
+                only: ['sessions', 'stats'],
+                onFinish: () => { isPollingRef.current = false; },
+            });
         }, 30000);
         return () => {
             if (pollRef.current) clearInterval(pollRef.current);

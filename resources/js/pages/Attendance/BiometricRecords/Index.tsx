@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
 import { type SharedData } from "@/types";
@@ -165,9 +165,12 @@ export default function BiometricRecordsIndex() {
     };
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(
                 biometricRecordsIndex().url,
                 {
@@ -182,7 +185,8 @@ export default function BiometricRecordsIndex() {
                     preserveScroll: true,
                     replace: true,
                     only: ['records', 'stats'],
-                    onSuccess: () => setLastRefresh(new Date())
+                    onSuccess: () => setLastRefresh(new Date()),
+                    onFinish: () => { isPollingRef.current = false; },
                 }
             );
         }, 30000);

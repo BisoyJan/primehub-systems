@@ -106,9 +106,12 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
     }, [debouncedSearch]);
 
     // Auto-refresh every 30 seconds
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             const params: Record<string, string> = {};
             if (debouncedSearch) params.search = debouncedSearch;
 
@@ -118,6 +121,7 @@ export default function SiteManagement({ sites, filters = {} }: SiteManagementPr
                 replace: true,
                 only: ['sites'],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 

@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { router, usePage, Link, Head } from "@inertiajs/react";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -172,16 +172,20 @@ export default function AccountIndex() {
     }, [isUserPopoverOpen]);
 
     // Auto-refresh every 30 seconds (only when enabled)
+    const isPollingRef = useRef(false);
     useEffect(() => {
         if (!autoRefreshEnabled) return;
 
         const interval = setInterval(() => {
+            if (isPollingRef.current) return;
+            isPollingRef.current = true;
             router.get(accountsIndex().url, buildFilterParams(search, selectedUserId, roleFilter, statusFilter, employeeStatusFilter), {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
                 only: ["users"],
                 onSuccess: () => setLastRefresh(new Date()),
+                onFinish: () => { isPollingRef.current = false; },
             });
         }, 30000);
 
