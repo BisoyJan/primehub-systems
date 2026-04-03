@@ -108,11 +108,10 @@ class BreakTimerService
             $lunchCount = BreakSession::query()
                 ->forUser($userId)
                 ->forDate($date)
-                ->where('type', 'combined')
-                ->orWhere(function ($q) use ($userId, $date) {
-                    $q->where('user_id', $userId)
-                        ->where('shift_date', $date)
-                        ->where('type', 'lunch');
+                ->where('status', '!=', 'reset')
+                ->where(function ($q) {
+                    $q->where('type', 'combined')
+                        ->orWhere('type', 'lunch');
                 })
                 ->count();
 
@@ -134,6 +133,7 @@ class BreakTimerService
             $lunchCount = BreakSession::query()
                 ->forUser($userId)
                 ->forDate($date)
+                ->where('status', '!=', 'reset')
                 ->whereIn('type', ['lunch', 'combined'])
                 ->count();
 
@@ -174,6 +174,7 @@ class BreakTimerService
         $sessions = BreakSession::query()
             ->forUser($userId)
             ->forDate($date)
+            ->where('status', '!=', 'reset')
             ->get();
 
         $count = 0;
@@ -343,22 +344,57 @@ class BreakTimerService
             $todaySessions = BreakSession::query()
                 ->forUser($userId)
                 ->forDate($date)
+                ->whereNotIn('status', ['reset'])
                 ->get();
 
             if ($todaySessions->isEmpty()) {
                 return 0;
             }
 
-            $sessionIds = $todaySessions->pluck('id');
+            foreach ($todaySessions as $session) {
+                // Calculate final overage/paused if session was still active
+                $totalPaused = $session->total_paused_seconds;
 
-            BreakEvent::whereIn('break_session_id', $sessionIds)->delete();
-            BreakSession::whereIn('id', $sessionIds)->delete();
+                if ($session->status === 'paused') {
+                    $lastPauseEvent = $session->breakEvents()
+                        ->where('action', 'pause')
+                        ->latest('occurred_at')
+                        ->first();
+
+                    if ($lastPauseEvent) {
+                        $totalPaused += (int) now()->diffInSeconds($lastPauseEvent->occurred_at, absolute: true);
+                    }
+                }
+
+                $elapsed = in_array($session->status, ['active', 'paused'])
+                    ? (int) now()->diffInSeconds($session->started_at, absolute: true) - $totalPaused
+                    : ($session->duration_seconds - $session->remaining_seconds) + ($session->overage_seconds ?? 0);
+
+                $overage = max(0, $elapsed - $session->duration_seconds);
+
+                $session->update([
+                    'status' => 'reset',
+                    'ended_at' => $session->ended_at ?? now(),
+                    'remaining_seconds' => max(0, $session->duration_seconds - $elapsed),
+                    'overage_seconds' => $overage,
+                    'total_paused_seconds' => $totalPaused,
+                ]);
+
+                BreakEvent::create([
+                    'break_session_id' => $session->id,
+                    'action' => 'reset',
+                    'remaining_seconds' => max(0, $session->duration_seconds - $elapsed),
+                    'overage_seconds' => $overage,
+                    'reason' => "Shift reset — approval: {$approval}",
+                    'occurred_at' => now(),
+                ]);
+            }
 
             activity()
                 ->causedBy($userId)
                 ->withProperties([
                     'approval' => $approval,
-                    'sessions_cleared' => $todaySessions->count(),
+                    'sessions_reset' => $todaySessions->count(),
                     'date' => $date,
                 ])
                 ->log('Break shift reset');

@@ -312,7 +312,14 @@ class BreakTimerTest extends TestCase
         $response->assertRedirect();
         $response->assertSessionHas('flash.type', 'success');
 
-        $this->assertEquals(0, BreakSession::where('user_id', $this->user->id)->count());
+        // Sessions are preserved with 'reset' status (not deleted)
+        $this->assertEquals(2, BreakSession::where('user_id', $this->user->id)->count());
+        $this->assertEquals(2, BreakSession::where('user_id', $this->user->id)->where('status', 'reset')->count());
+
+        // Reset sessions don't count toward break quota
+        $service = app(BreakTimerService::class);
+        $todaySessions = $service->getTodaySessions($this->user->id, now()->toDateString());
+        $this->assertEquals(0, $service->getBreaksUsed($todaySessions));
     }
 
     #[Test]
