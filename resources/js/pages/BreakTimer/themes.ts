@@ -39,6 +39,7 @@ export interface TimerTheme {
     btnBreak: ButtonColors;
     btnLunch: ButtonColors;
     btnCombined: ButtonColors;
+    btnCombinedBreak: ButtonColors;
     btnPause: ButtonColors;
     btnResume: ButtonColors;
     btnEnd: ButtonColors;
@@ -73,6 +74,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#6366f1', to: '#4f46e5' },
         btnLunch: { from: '#8b5cf6', to: '#7c3aed' },
         btnCombined: { from: '#6366f1', to: '#7c3aed' },
+        btnCombinedBreak: { from: '#0ea5e9', to: '#0284c7' },
         btnPause: { from: '#94a3b8', to: '#64748b' },
         btnResume: { from: '#4f46e5', to: '#6366f1' },
         btnEnd: { from: '#64748b', to: '#475569' },
@@ -103,6 +105,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#c49a6c', to: '#a0785a' },
         btnLunch: { from: '#b07156', to: '#8b5e3c' },
         btnCombined: { from: '#9c7e5a', to: '#7a5e42' },
+        btnCombinedBreak: { from: '#b08850', to: '#8a6a3a' },
         btnPause: { from: '#c2a888', to: '#a89070' },
         btnResume: { from: '#a0785a', to: '#c49a6c' },
         btnEnd: { from: '#8b6e50', to: '#a0785a' },
@@ -133,6 +136,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#7b9bb5', to: '#5a7f99' },
         btnLunch: { from: '#6b8fa8', to: '#4f7590' },
         btnCombined: { from: '#607d8b', to: '#546e7a' },
+        btnCombinedBreak: { from: '#5c8a9a', to: '#45707e' },
         btnPause: { from: '#90a4ae', to: '#78909c' },
         btnResume: { from: '#5a7f99', to: '#7b9bb5' },
         btnEnd: { from: '#546e7a', to: '#607d8b' },
@@ -163,6 +167,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#f48fb1', to: '#e06090' },
         btnLunch: { from: '#ce93d8', to: '#ab47bc' },
         btnCombined: { from: '#e57ca0', to: '#c06088' },
+        btnCombinedBreak: { from: '#ec8faa', to: '#d0708e' },
         btnPause: { from: '#ce93d8', to: '#ba68c8' },
         btnResume: { from: '#e06090', to: '#f48fb1' },
         btnEnd: { from: '#ab7098', to: '#c06088' },
@@ -193,6 +198,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#4dd0e1', to: '#00acc1' },
         btnLunch: { from: '#26c6da', to: '#0097a7' },
         btnCombined: { from: '#4db6ac', to: '#00897b' },
+        btnCombinedBreak: { from: '#26a69a', to: '#00796b' },
         btnPause: { from: '#80cbc4', to: '#4db6ac' },
         btnResume: { from: '#00acc1', to: '#4dd0e1' },
         btnEnd: { from: '#00897b', to: '#00acc1' },
@@ -223,6 +229,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#bb86fc', to: '#7c4dff' },
         btnLunch: { from: '#ff6e7f', to: '#d84060' },
         btnCombined: { from: '#64ffda', to: '#00bfa5' },
+        btnCombinedBreak: { from: '#40c4ff', to: '#00b0ff' },
         btnPause: { from: '#64ffda', to: '#1de9b6' },
         btnResume: { from: '#7c4dff', to: '#bb86fc' },
         btnEnd: { from: '#00bfa5', to: '#64ffda' },
@@ -253,6 +260,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#ffb74d', to: '#f09030' },
         btnLunch: { from: '#ff8a65', to: '#e8704a' },
         btnCombined: { from: '#ffab91', to: '#e08070' },
+        btnCombinedBreak: { from: '#ff8a65', to: '#e06040' },
         btnPause: { from: '#ffcc80', to: '#ffb74d' },
         btnResume: { from: '#f09030', to: '#ffb74d' },
         btnEnd: { from: '#e08070', to: '#f09030' },
@@ -283,6 +291,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#66bb6a', to: '#43a047' },
         btnLunch: { from: '#81c784', to: '#66bb6a' },
         btnCombined: { from: '#4caf50', to: '#388e3c' },
+        btnCombinedBreak: { from: '#2e7d32', to: '#1b5e20' },
         btnPause: { from: '#a5d6a7', to: '#81c784' },
         btnResume: { from: '#43a047', to: '#66bb6a' },
         btnEnd: { from: '#388e3c', to: '#43a047' },
@@ -313,6 +322,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#90caf9', to: '#5e9ed0' },
         btnLunch: { from: '#7bb4e8', to: '#4a8cc0' },
         btnCombined: { from: '#b0bec5', to: '#78909c' },
+        btnCombinedBreak: { from: '#80a0b0', to: '#607888' },
         btnPause: { from: '#b0bec5', to: '#90a4ae' },
         btnResume: { from: '#5e9ed0', to: '#90caf9' },
         btnEnd: { from: '#78909c', to: '#90a4ae' },
@@ -343,6 +353,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#b39ddb', to: '#8e72c0' },
         btnLunch: { from: '#9575cd', to: '#7e57c2' },
         btnCombined: { from: '#7986cb', to: '#5c6bc0' },
+        btnCombinedBreak: { from: '#5c6bc0', to: '#3f51b5' },
         btnPause: { from: '#9fa8da', to: '#7986cb' },
         btnResume: { from: '#8e72c0', to: '#b39ddb' },
         btnEnd: { from: '#5c6bc0', to: '#7986cb' },
@@ -373,6 +384,7 @@ export const THEMES: TimerTheme[] = [
         btnBreak: { from: '#80cbc4', to: '#4db6ac' },
         btnLunch: { from: '#b39ddb', to: '#8e72c0' },
         btnCombined: { from: '#f48fb1', to: '#e06090' },
+        btnCombinedBreak: { from: '#e57373', to: '#d32f2f' },
         btnPause: { from: '#4db6ac', to: '#00897b' },
         btnResume: { from: '#8e72c0', to: '#b39ddb' },
         btnEnd: { from: '#00897b', to: '#4db6ac' },

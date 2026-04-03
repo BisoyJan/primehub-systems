@@ -62,7 +62,7 @@ class BreakTimerService
             }
             if (in_array($session->type, ['1st_break', '2nd_break', 'break'])) {
                 $count += 1;
-            } elseif ($session->type === 'combined') {
+            } elseif (in_array($session->type, ['combined', 'combined_break'])) {
                 $count += $session->combined_break_count ?? 1;
             }
         }
@@ -91,6 +91,29 @@ class BreakTimerService
     ): array {
         $isLunch = $type === 'lunch';
         $isCombined = $type === 'combined';
+        $isCombinedBreak = $type === 'combined_break';
+
+        if ($isCombinedBreak) {
+            $requiredBreaks = $combinedBreakCount ?? 2;
+
+            if ($requiredBreaks < 2 || $requiredBreaks > $policy->max_breaks) {
+                throw new \RuntimeException("Invalid combined break count: {$requiredBreaks}. Must be between 2 and {$policy->max_breaks}.");
+            }
+
+            $breakCount = $this->getBreaksUsedRaw($userId, $date);
+
+            if (($policy->max_breaks - $breakCount) < $requiredBreaks) {
+                throw new \RuntimeException("Not enough breaks remaining. Need {$requiredBreaks}, have ".max(0, $policy->max_breaks - $breakCount).'.');
+            }
+
+            $totalMinutes = $policy->break_duration_minutes * $requiredBreaks;
+
+            return [
+                'duration_seconds' => $totalMinutes * 60,
+                'type' => 'combined_break',
+                'combined_break_count' => $requiredBreaks,
+            ];
+        }
 
         if ($isCombined) {
             $requiredBreaks = $combinedBreakCount ?? 1;
@@ -181,7 +204,7 @@ class BreakTimerService
         foreach ($sessions as $session) {
             if (in_array($session->type, ['1st_break', '2nd_break', 'break'])) {
                 $count += 1;
-            } elseif ($session->type === 'combined') {
+            } elseif (in_array($session->type, ['combined', 'combined_break'])) {
                 $count += $session->combined_break_count ?? 1;
             }
         }

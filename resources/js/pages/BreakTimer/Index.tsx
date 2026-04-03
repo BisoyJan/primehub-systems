@@ -16,7 +16,7 @@ import {
     end as endRoute,
     reset as resetRoute,
 } from '@/routes/break-timer';
-import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, ChevronDown, ChevronUp, Palette, Maximize, Minimize } from 'lucide-react';
+import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize } from 'lucide-react';
 import { ThemeDecor } from './ThemeDecor';
 import {
     DropdownMenu,
@@ -119,7 +119,7 @@ export default function BreakTimerIndex() {
     const [isPauseDialogOpen, setIsPauseDialogOpen] = useState(false);
     const [isResetDialogOpen, setIsResetDialogOpen] = useState(false);
     const [isStartDialogOpen, setIsStartDialogOpen] = useState(false);
-    const [pendingStartType, setPendingStartType] = useState<'break' | 'lunch' | { combined: number } | null>(null);
+    const [pendingStartType, setPendingStartType] = useState<'break' | 'lunch' | { combined: number } | { combinedBreak: number } | null>(null);
     const [pauseReason, setPauseReason] = useState('');
     const [resetApproval, setResetApproval] = useState('');
     const [station, setStation] = useState<string>('');
@@ -226,6 +226,20 @@ export default function BreakTimerIndex() {
         router.post(
             startRoute().url,
             { type: 'combined', combined_break_count: breakCount, station: station.trim() || null },
+            {
+                preserveScroll: true,
+                onFinish: () => setIsSubmitting(false),
+            },
+        );
+    }
+
+    function handleStartCombinedBreak(breakCount: number) {
+        setIsSubmitting(true);
+        setIsStartDialogOpen(false);
+        setPendingStartType(null);
+        router.post(
+            startRoute().url,
+            { type: 'combined_break', combined_break_count: breakCount, station: station.trim() || null },
             {
                 preserveScroll: true,
                 onFinish: () => setIsSubmitting(false),
@@ -578,6 +592,39 @@ export default function BreakTimerIndex() {
                                             </DropdownMenu>
                                         </Can>
                                     )}
+                                    {remainingBreaks >= 2 && (
+                                        <Can permission="break_timer.use">
+                                            <DropdownMenu>
+                                                <DropdownMenuTrigger asChild>
+                                                    <Button
+                                                        size="lg"
+                                                        disabled={isSubmitting || (stationRequired && !station.trim())}
+                                                        className="h-12 gap-2 rounded-full px-7 text-sm font-semibold text-white shadow-lg transition-[filter] hover:brightness-110"
+                                                        style={btnStyle(theme.btnCombinedBreak)}
+                                                    >
+                                                        <Layers className="h-4 w-4" />
+                                                        Combine Breaks
+                                                        <ChevronDown className="ml-1 h-3.5 w-3.5" />
+                                                    </Button>
+                                                </DropdownMenuTrigger>
+                                                <DropdownMenuContent align="center">
+                                                    {Array.from({ length: maxBreaks - 1 }, (_, i) => i + 2).map((n) => (
+                                                        <DropdownMenuItem
+                                                            key={n}
+                                                            onClick={() => {
+                                                                setPendingStartType({ combinedBreak: n });
+                                                                setIsStartDialogOpen(true);
+                                                            }}
+                                                            disabled={remainingBreaks < n}
+                                                        >
+                                                            <Coffee className="mr-2 h-4 w-4 text-amber-500" />
+                                                            {n} Breaks Combined
+                                                        </DropdownMenuItem>
+                                                    ))}
+                                                </DropdownMenuContent>
+                                            </DropdownMenu>
+                                        </Can>
+                                    )}
                                 </>
                             )}
 
@@ -687,13 +734,17 @@ export default function BreakTimerIndex() {
                                             <div
                                                 className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full ${session.type === 'combined'
                                                     ? 'bg-violet-100 text-violet-600 dark:bg-violet-500/10 dark:text-violet-400'
-                                                    : session.type === 'lunch'
-                                                        ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
-                                                        : 'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
+                                                    : session.type === 'combined_break'
+                                                        ? 'bg-sky-100 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400'
+                                                        : session.type === 'lunch'
+                                                            ? 'bg-rose-100 text-rose-600 dark:bg-rose-500/10 dark:text-rose-400'
+                                                            : 'bg-amber-100 text-amber-600 dark:bg-amber-500/10 dark:text-amber-400'
                                                     }`}
                                             >
                                                 {session.type === 'combined' ? (
                                                     <Merge className="h-4 w-4" />
+                                                ) : session.type === 'combined_break' ? (
+                                                    <Layers className="h-4 w-4" />
                                                 ) : session.type === 'lunch' ? (
                                                     <UtensilsCrossed className="h-4 w-4" />
                                                 ) : (
@@ -846,18 +897,22 @@ export default function BreakTimerIndex() {
                         <DialogTitle>
                             {pendingStartType === 'break' ? 'Start Break'
                                 : pendingStartType === 'lunch' ? 'Start Lunch'
-                                    : typeof pendingStartType === 'object' && pendingStartType !== null
-                                        ? `Start ${pendingStartType.combined} Break${pendingStartType.combined > 1 ? 's' : ''} + Lunch`
-                                        : 'Start Break'}
+                                    : typeof pendingStartType === 'object' && pendingStartType !== null && 'combinedBreak' in pendingStartType
+                                        ? `Start ${pendingStartType.combinedBreak} Combined Breaks`
+                                        : typeof pendingStartType === 'object' && pendingStartType !== null && 'combined' in pendingStartType
+                                            ? `Start ${pendingStartType.combined} Break${pendingStartType.combined > 1 ? 's' : ''} + Lunch`
+                                            : 'Start Break'}
                         </DialogTitle>
                         <DialogDescription>
                             {pendingStartType === 'break'
                                 ? `This will start a ${policy?.break_duration_minutes ?? 15} minute break. You have ${remainingBreaks} break(s) remaining.`
                                 : pendingStartType === 'lunch'
                                     ? `This will start a ${policy?.lunch_duration_minutes ?? 60} minute lunch break.`
-                                    : typeof pendingStartType === 'object' && pendingStartType !== null
-                                        ? `This will start a combined ${pendingStartType.combined} break${pendingStartType.combined > 1 ? 's' : ''} + lunch (${(policy?.break_duration_minutes ?? 15) * pendingStartType.combined + (policy?.lunch_duration_minutes ?? 60)} minutes). Uses ${pendingStartType.combined} break slot${pendingStartType.combined > 1 ? 's' : ''} and your lunch.`
-                                        : ''}
+                                    : typeof pendingStartType === 'object' && pendingStartType !== null && 'combinedBreak' in pendingStartType
+                                        ? `This will combine ${pendingStartType.combinedBreak} breaks into one session (${(policy?.break_duration_minutes ?? 15) * pendingStartType.combinedBreak} minutes). Uses ${pendingStartType.combinedBreak} break slots. No lunch included.`
+                                        : typeof pendingStartType === 'object' && pendingStartType !== null && 'combined' in pendingStartType
+                                            ? `This will start a combined ${pendingStartType.combined} break${pendingStartType.combined > 1 ? 's' : ''} + lunch (${(policy?.break_duration_minutes ?? 15) * pendingStartType.combined + (policy?.lunch_duration_minutes ?? 60)} minutes). Uses ${pendingStartType.combined} break slot${pendingStartType.combined > 1 ? 's' : ''} and your lunch.`
+                                            : ''}
                         </DialogDescription>
                     </DialogHeader>
                     <div className="flex justify-end gap-2">
@@ -868,7 +923,8 @@ export default function BreakTimerIndex() {
                             onClick={() => {
                                 if (pendingStartType === 'break') handleStartBreak();
                                 else if (pendingStartType === 'lunch') handleStartLunch();
-                                else if (typeof pendingStartType === 'object' && pendingStartType !== null) handleStartCombined(pendingStartType.combined);
+                                else if (typeof pendingStartType === 'object' && pendingStartType !== null && 'combinedBreak' in pendingStartType) handleStartCombinedBreak(pendingStartType.combinedBreak);
+                                else if (typeof pendingStartType === 'object' && pendingStartType !== null && 'combined' in pendingStartType) handleStartCombined(pendingStartType.combined);
                             }}
                             disabled={isSubmitting}
                         >
