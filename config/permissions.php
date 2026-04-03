@@ -248,7 +248,7 @@ return [
             'it_concerns.create',
             'medication_requests.view', 'medication_requests.create',
             'coaching.view_own', 'coaching.acknowledge',
-            'break_timer.view', 'break_timer.use',
+            'break_timer.view', 'break_timer.use', 'break_timer.reset',
             'settings.account',
         ],
 
