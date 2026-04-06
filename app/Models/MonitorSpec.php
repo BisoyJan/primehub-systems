@@ -30,10 +30,13 @@ class MonitorSpec extends Model
         'notes',
     ];
 
-    protected $casts = [
-        'screen_size' => 'decimal:1',
-        'ports' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'screen_size' => 'decimal:1',
+            'ports' => 'array',
+        ];
+    }
 
     public function pcSpecs(): BelongsToMany
     {

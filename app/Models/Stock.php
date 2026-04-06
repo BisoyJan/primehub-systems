@@ -24,12 +24,15 @@ class Stock extends Model
 
     protected $guarded = ['id'];
 
-    protected $casts = [
-        'quantity' => 'integer',
-        'reserved' => 'integer',
-        'created_at' => 'datetime',
-        'updated_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'quantity' => 'integer',
+            'reserved' => 'integer',
+            'created_at' => 'datetime',
+            'updated_at' => 'datetime',
+        ];
+    }
 
     /**
      * Polymorphic owner (RamSpec, DiskSpec, ProcessorSpec, ...)

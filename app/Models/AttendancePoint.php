@@ -48,20 +48,23 @@ class AttendancePoint extends Model
         'gbro_batch_id',
     ];
 
-    protected $casts = [
-        'shift_date' => 'date:Y-m-d',
-        'points' => 'decimal:2',
-        'is_advised' => 'boolean',
-        'is_excused' => 'boolean',
-        'is_manual' => 'boolean',
-        'excused_at' => 'datetime',
-        'expires_at' => 'date:Y-m-d',
-        'gbro_expires_at' => 'date:Y-m-d',
-        'is_expired' => 'boolean',
-        'expired_at' => 'date:Y-m-d',
-        'eligible_for_gbro' => 'boolean',
-        'gbro_applied_at' => 'date:Y-m-d',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'shift_date' => 'date:Y-m-d',
+            'points' => 'decimal:2',
+            'is_advised' => 'boolean',
+            'is_excused' => 'boolean',
+            'is_manual' => 'boolean',
+            'excused_at' => 'datetime',
+            'expires_at' => 'date:Y-m-d',
+            'gbro_expires_at' => 'date:Y-m-d',
+            'is_expired' => 'boolean',
+            'expired_at' => 'date:Y-m-d',
+            'eligible_for_gbro' => 'boolean',
+            'gbro_applied_at' => 'date:Y-m-d',
+        ];
+    }
 
     /**
      * Point values for each type

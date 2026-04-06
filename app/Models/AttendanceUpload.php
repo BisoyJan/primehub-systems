@@ -40,18 +40,21 @@ class AttendanceUpload extends Model
         'error_message',
     ];
 
-    protected $casts = [
-        'shift_date' => 'date:Y-m-d',
-        'date_from' => 'date:Y-m-d',
-        'date_to' => 'date:Y-m-d',
-        'unmatched_names_list' => 'array',
-        'date_warnings' => 'array',
-        'dates_found' => 'array',
-        'total_records' => 'integer',
-        'processed_records' => 'integer',
-        'matched_employees' => 'integer',
-        'unmatched_names' => 'integer',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'shift_date' => 'date:Y-m-d',
+            'date_from' => 'date:Y-m-d',
+            'date_to' => 'date:Y-m-d',
+            'unmatched_names_list' => 'array',
+            'date_warnings' => 'array',
+            'dates_found' => 'array',
+            'total_records' => 'integer',
+            'processed_records' => 'integer',
+            'matched_employees' => 'integer',
+            'unmatched_names' => 'integer',
+        ];
+    }
 
     /**
      * Get the user who uploaded the file.

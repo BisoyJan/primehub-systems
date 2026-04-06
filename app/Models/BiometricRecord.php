@@ -31,10 +31,13 @@ class BiometricRecord extends Model
         'record_time',
     ];
 
-    protected $casts = [
-        'datetime' => 'datetime',
-        'record_date' => 'date',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'datetime' => 'datetime',
+            'record_date' => 'date',
+        ];
+    }
 
     /**
      * Get the user that owns the biometric record.

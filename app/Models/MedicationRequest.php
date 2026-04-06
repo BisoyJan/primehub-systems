@@ -33,10 +33,13 @@ class MedicationRequest extends Model
         'admin_notes',
     ];
 
-    protected $casts = [
-        'agrees_to_policy' => 'boolean',
-        'approved_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'agrees_to_policy' => 'boolean',
+            'approved_at' => 'datetime',
+        ];
+    }
 
     /**
      * Get the user who submitted the request.

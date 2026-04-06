@@ -105,4 +105,17 @@ return [
 
     'prefix' => env('CACHE_PREFIX', Str::slug(env('APP_NAME', 'laravel'), '_').'_cache_'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Serializable Classes
+    |--------------------------------------------------------------------------
+    |
+    | Laravel 13 restricts which classes can be unserialized from cache.
+    | Set to true to allow all classes (less secure), or list specific
+    | classes that your application caches.
+    |
+    */
+
+    'serializable_classes' => true,
+
 ];

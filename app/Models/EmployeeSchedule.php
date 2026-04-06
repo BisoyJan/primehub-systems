@@ -35,13 +35,16 @@ class EmployeeSchedule extends Model
         'end_date',
     ];
 
-    protected $casts = [
-        'work_days' => 'array',
-        'is_active' => 'boolean',
-        'effective_date' => 'date',
-        'end_date' => 'date',
-        'grace_period_minutes' => 'integer',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'work_days' => 'array',
+            'is_active' => 'boolean',
+            'effective_date' => 'date',
+            'end_date' => 'date',
+            'grace_period_minutes' => 'integer',
+        ];
+    }
 
     /**
      * Get the user that owns the schedule.

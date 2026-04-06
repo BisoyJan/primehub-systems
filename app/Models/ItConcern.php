@@ -33,9 +33,12 @@ class ItConcern extends Model
         'resolved_by',
     ];
 
-    protected $casts = [
-        'resolved_at' => 'datetime',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'resolved_at' => 'datetime',
+        ];
+    }
 
     /**
      * Get the user who submitted the concern.

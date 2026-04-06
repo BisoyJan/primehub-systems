@@ -31,11 +31,14 @@ class FormRequestRetentionPolicy extends Model
         'is_active',
     ];
 
-    protected $casts = [
-        'retention_months' => 'integer',
-        'priority' => 'integer',
-        'is_active' => 'boolean',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'retention_months' => 'integer',
+            'priority' => 'integer',
+            'is_active' => 'boolean',
+        ];
+    }
 
     /**
      * Get the site this policy applies to

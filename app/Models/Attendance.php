@@ -59,25 +59,28 @@ class Attendance extends Model
         'undertime_approval_notes',
     ];
 
-    protected $casts = [
-        'shift_date' => 'date:Y-m-d',
-        'actual_time_in' => 'datetime',
-        'actual_time_out' => 'datetime',
-        'total_minutes_worked' => 'integer',
-        'overtime_approved_at' => 'datetime',
-        'undertime_approval_requested_at' => 'datetime',
-        'undertime_approved_at' => 'datetime',
-        'is_advised' => 'boolean',
-        'admin_verified' => 'boolean',
-        'is_partially_verified' => 'boolean',
-        'is_cross_site_bio' => 'boolean',
-        'is_set_home' => 'boolean',
-        'overtime_approved' => 'boolean',
-        'tardy_minutes' => 'integer',
-        'undertime_minutes' => 'integer',
-        'overtime_minutes' => 'integer',
-        'warnings' => 'array',
-    ];
+    protected function casts(): array
+    {
+        return [
+            'shift_date' => 'date:Y-m-d',
+            'actual_time_in' => 'datetime',
+            'actual_time_out' => 'datetime',
+            'total_minutes_worked' => 'integer',
+            'overtime_approved_at' => 'datetime',
+            'undertime_approval_requested_at' => 'datetime',
+            'undertime_approved_at' => 'datetime',
+            'is_advised' => 'boolean',
+            'admin_verified' => 'boolean',
+            'is_partially_verified' => 'boolean',
+            'is_cross_site_bio' => 'boolean',
+            'is_set_home' => 'boolean',
+            'overtime_approved' => 'boolean',
+            'tardy_minutes' => 'integer',
+            'undertime_minutes' => 'integer',
+            'overtime_minutes' => 'integer',
+            'warnings' => 'array',
+        ];
+    }
 
     /**
      * Get the user that owns the attendance.
