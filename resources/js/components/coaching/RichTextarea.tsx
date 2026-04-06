@@ -1,5 +1,5 @@
 import { useRef, useCallback, useEffect } from 'react';
-import { Bold, Italic, Underline, Highlighter, Type } from 'lucide-react';
+import { Bold, Italic, Underline, Highlighter, Type, List, ListOrdered } from 'lucide-react';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
     Popover,
@@ -72,11 +72,12 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
     const handleBold = () => exec('bold');
     const handleItalic = () => exec('italic');
     const handleUnderline = () => exec('underline');
+    const handleBulletList = () => exec('insertUnorderedList');
+    const handleNumberedList = () => exec('insertOrderedList');
     const handleTextColor = (color: string) => exec('foreColor', color);
     const handleHighlight = (color: string) => {
         editorRef.current?.focus();
         document.execCommand('hiliteColor', false, color);
-        document.execCommand('foreColor', false, '#1a1a1a');
         emitChange();
     };
     const handleRemoveHighlight = () => {
@@ -118,6 +119,25 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                         <Underline className="h-3.5 w-3.5" />
                     </ToggleGroupItem>
                 </ToggleGroup>
+
+                <div className="mx-0.5 h-5 w-px bg-border" />
+
+                <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sm font-medium hover:bg-muted hover:text-muted-foreground"
+                    aria-label="Bullet list"
+                    onMouseDown={(e) => { e.preventDefault(); handleBulletList(); }}
+                >
+                    <List className="h-3.5 w-3.5" />
+                </button>
+                <button
+                    type="button"
+                    className="inline-flex h-7 w-7 items-center justify-center rounded-md text-sm font-medium hover:bg-muted hover:text-muted-foreground"
+                    aria-label="Numbered list"
+                    onMouseDown={(e) => { e.preventDefault(); handleNumberedList(); }}
+                >
+                    <ListOrdered className="h-3.5 w-3.5" />
+                </button>
 
                 {/* Text color picker */}
                 <Popover>
@@ -198,8 +218,9 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                 aria-label={placeholder || 'Rich text editor'}
                 title={placeholder || 'Rich text editor'}
                 className={cn(
-                    'px-3 py-2 text-sm outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]',
+                    'px-3 py-2 text-sm text-foreground outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]',
                     'overflow-y-auto',
+                    '[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5',
                 )}
                 style={{ minHeight }}
                 data-placeholder={placeholder}

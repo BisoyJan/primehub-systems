@@ -23,6 +23,7 @@ import { RecentActivityWidget } from './Dashboard/widgets/RecentActivityWidget';
 import { BiometricAnomalyWidget } from './Dashboard/widgets/BiometricAnomalyWidget';
 import { PendingLeaveApprovalsWidget } from './Dashboard/widgets/PendingLeaveApprovalsWidget';
 import { CoachingFollowUpsWidget } from './Dashboard/widgets/CoachingFollowUpsWidget';
+import { LoginDigestDialog } from '@/components/LoginDigestDialog';
 import type { DashboardProps, TabType } from './Dashboard/types';
 import { ROLE_TABS, TAB_CONFIG, ROLE_WIDGETS } from './Dashboard/types';
 
@@ -99,6 +100,7 @@ export default function Dashboard({
     pendingLeaveApprovals,
     coachingSummary,
     coachingFollowUps,
+    loginDigest,
 }: DashboardProps) {
     // Get user role from shared data
     const { auth } = usePage<SharedData>().props;
@@ -349,6 +351,9 @@ export default function Dashboard({
                         <CalendarWithHolidays countryCode={['PH', 'US']} width={420} />
                     </div>
                 </DetailDialog>
+
+                {/* Login Digest Dialog — shown once per session */}
+                <LoginDigestDialog digest={loginDigest} />
             </motion.div>
         </AppLayout>
     );
