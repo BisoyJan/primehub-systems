@@ -188,6 +188,13 @@ return [
         'break_timer.reports' => 'View Break Timer Reports',
         'break_timer.manage_policy' => 'Manage Break Policies',
         'break_timer.reset' => 'Reset Break Timer Shift',
+
+        // Database Backups
+        'database_backups.view' => 'View Database Backups',
+        'database_backups.create' => 'Create Database Backups',
+        'database_backups.download' => 'Download Database Backups',
+        'database_backups.delete' => 'Delete Database Backups',
+        'database_backups.clean' => 'Clean Old Database Backups',
     ],
 
     /*

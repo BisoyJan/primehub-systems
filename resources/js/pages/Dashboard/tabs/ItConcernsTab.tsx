@@ -154,7 +154,7 @@ export const ItConcernsTab: React.FC<ItConcernsTabProps> = ({
                                             color: activeItTrendSlide.color,
                                         }
                                     }}
-                                    className="h-[320px] w-full"
+                                    className="h-80 w-full"
                                 >
                                     <ResponsiveContainer width="100%" height="100%">
                                         <AreaChart data={itTrends} margin={{ left: 10, right: 10 }}>

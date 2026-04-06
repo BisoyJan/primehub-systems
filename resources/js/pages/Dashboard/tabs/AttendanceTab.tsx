@@ -260,7 +260,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                 </div>
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:flex-wrap">
                     {!isRestrictedRole && campaigns && campaigns.length > 0 && (
-                        <div className="flex-1 min-w-[160px] max-w-[200px]">
+                        <div className="flex-1 min-w-40 max-w-50">
                             <Select value={selectedCampaignId || "all"} onValueChange={(value) => setSelectedCampaignId(value === "all" ? "" : value)}>
                                 <SelectTrigger>
                                     <SelectValue placeholder="All Campaigns" />
@@ -276,7 +276,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                             </Select>
                         </div>
                     )}
-                    <div className="flex-1 min-w-[150px] max-w-[180px]">
+                    <div className="flex-1 min-w-37.5 max-w-45">
                         <Select value={verificationFilter} onValueChange={setVerificationFilter}>
                             <SelectTrigger>
                                 <SelectValue placeholder="Verification" />
@@ -552,7 +552,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                                 ncns: { label: "NCNS", color: "hsl(0, 84%, 60%)" },
                                 advised: { label: "Advised", color: "hsl(221, 83%, 53%)" },
                             }}
-                            className="mx-auto aspect-square max-h-[250px]"
+                            className="mx-auto aspect-square max-h-62.5"
                         >
                             <PieChart>
                                 <ChartTooltip
@@ -618,7 +618,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                     <CardContent className="flex-1 pb-0">
                         <ChartContainer
                             config={{ count: { label: "Records" } }}
-                            className="aspect-square max-h-[250px]"
+                            className="aspect-square max-h-62.5"
                         >
                             <BarChart
                                 data={[
@@ -687,7 +687,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                                     color: currentRadialData.fill,
                                 },
                             }}
-                            className="mx-auto aspect-square max-h-[250px]"
+                            className="mx-auto aspect-square max-h-62.5"
                         >
                             <RadialBarChart
                                 data={[currentRadialData]}
@@ -786,7 +786,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                         <div className="flex items-center gap-2">
                             <span className="text-xs font-medium">Filter Month:</span>
                             <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                                <SelectTrigger className="h-8 w-[140px] text-xs">
+                                <SelectTrigger className="h-8 w-35 text-xs">
                                     <SelectValue placeholder="All Months" />
                                 </SelectTrigger>
                                 <SelectContent>
@@ -817,7 +817,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                                             }
                                         }
                                 }
-                                className="h-[320px] w-full"
+                                className="h-80 w-full"
                             >
                                 <ResponsiveContainer width="100%" height="100%">
                                     <AreaChart data={attendanceTrendData} margin={{ left: 10, right: 10 }}>
@@ -975,7 +975,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                                 </CardDescription>
                             </CardHeader>
                             <CardContent>
-                                <ChartContainer config={{ earned: { label: 'Earned', color: 'hsl(142, 71%, 45%)' }, used: { label: 'Used', color: 'hsl(221, 83%, 53%)' }, utilization_rate: { label: 'Utilization %', color: 'hsl(280, 65%, 60%)' } }} className="h-[200px] w-full">
+                                <ChartContainer config={{ earned: { label: 'Earned', color: 'hsl(142, 71%, 45%)' }, used: { label: 'Used', color: 'hsl(221, 83%, 53%)' }, utilization_rate: { label: 'Utilization %', color: 'hsl(280, 65%, 60%)' } }} className="h-50 w-full">
                                     <ResponsiveContainer width="100%" height="100%">
                                         <ComposedChart data={leaveUtilization.months} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                                             <CartesianGrid strokeDasharray="3 3" />
@@ -1046,7 +1046,7 @@ export const AttendanceTab: React.FC<AttendanceTabProps> = ({
                         <CardDescription>No Call No Show incidents over the last 6 months</CardDescription>
                     </CardHeader>
                     <CardContent>
-                        <ChartContainer config={{ ncns_count: { label: 'NCNS Count', color: 'hsl(0, 84%, 60%)' } }} className="h-[250px] w-full">
+                        <ChartContainer config={{ ncns_count: { label: 'NCNS Count', color: 'hsl(0, 84%, 60%)' } }} className="h-62.5 w-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <LineChart data={ncnsTrend} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" />

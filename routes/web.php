@@ -17,6 +17,7 @@ use App\Http\Controllers\BreakTimerController;
 use App\Http\Controllers\CoachingDashboardController;
 use App\Http\Controllers\CoachingSessionController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\DatabaseBackupController;
 use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\EmployeeScheduleController;
 use App\Http\Controllers\FormRequestRetentionPolicyController;
@@ -574,6 +575,26 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
             ->middleware('permission:break_timer.manage_policy')
             ->name('policies.toggle');
     });
+
+    // Database Backups
+    Route::prefix('database-backups')->name('database-backups.')
+        ->middleware('permission:database_backups.view')
+        ->group(function () {
+            Route::get('/', [DatabaseBackupController::class, 'index'])->name('index');
+            Route::post('/', [DatabaseBackupController::class, 'store'])
+                ->middleware('permission:database_backups.create')
+                ->name('store');
+            Route::get('progress/{jobId}', [DatabaseBackupController::class, 'progress'])->name('progress');
+            Route::get('{databaseBackup}/download', [DatabaseBackupController::class, 'download'])
+                ->middleware('permission:database_backups.download')
+                ->name('download');
+            Route::delete('{databaseBackup}', [DatabaseBackupController::class, 'destroy'])
+                ->middleware('permission:database_backups.delete')
+                ->name('destroy');
+            Route::post('clean-old', [DatabaseBackupController::class, 'cleanOld'])
+                ->middleware('permission:database_backups.clean')
+                ->name('clean-old');
+        });
 });
 
 require __DIR__.'/settings.php';

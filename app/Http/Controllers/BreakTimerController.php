@@ -24,6 +24,14 @@ class BreakTimerController extends Controller
         $breaksUsed = $this->breakTimerService->getBreaksUsed($todaySessions);
         $lunchUsed = $this->breakTimerService->isLunchUsed($todaySessions);
 
+        // Compute real-time remaining_seconds for active session so the client
+        // doesn't need to compare server started_at vs client Date.now() (clock skew).
+        if ($activeSession && $activeSession->status === 'active') {
+            $elapsed = (int) now()->diffInSeconds($activeSession->started_at, absolute: true)
+                - $activeSession->total_paused_seconds;
+            $activeSession->remaining_seconds = $activeSession->duration_seconds - $elapsed;
+        }
+
         return Inertia::render('BreakTimer/Index', [
             'policy' => $policy,
             'activeSession' => $activeSession,

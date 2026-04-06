@@ -26,8 +26,9 @@ import { dashboard as coachingDashboard } from '@/routes/coaching'
 import { index as coachingSessionsIndex } from '@/routes/coaching/sessions'
 import { index as breakTimerIndex, dashboard as breakDashboard, reports as breakReports } from '@/routes/break-timer'
 import { index as breakPoliciesIndex } from '@/routes/break-timer/policies'
+import { index as databaseBackupsIndex } from '@/routes/database-backups'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -267,6 +268,17 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                 },
             ],
         },
+        systemAdmin: {
+            label: 'System',
+            items: [
+                {
+                    title: 'Database Backups',
+                    href: databaseBackupsIndex.url(),
+                    icon: DatabaseBackup,
+                    permission: 'database_backups.view',
+                },
+            ],
+        },
     } as const;
 };
 
@@ -375,6 +387,10 @@ export function AppSidebar() {
             label: navigationConfig.account.label,
             items: filterItemsByPermission(navigationConfig.account.items),
         },
+        systemAdmin: {
+            label: navigationConfig.systemAdmin.label,
+            items: filterItemsByPermission(navigationConfig.systemAdmin.items),
+        },
     };
 
     // When sidebar is collapsed, all groups should be open to show icons
@@ -449,6 +465,13 @@ export function AppSidebar() {
                     label={filteredNavigation.account.label}
                     items={filteredNavigation.account.items}
                     isOpen={isCollapsed || openGroups.includes('account')}
+                    onToggle={handleGroupToggle}
+                />
+                <NavGroup
+                    groupId="systemAdmin"
+                    label={filteredNavigation.systemAdmin.label}
+                    items={filteredNavigation.systemAdmin.items}
+                    isOpen={isCollapsed || openGroups.includes('systemAdmin')}
                     onToggle={handleGroupToggle}
                 />
             </SidebarContent>

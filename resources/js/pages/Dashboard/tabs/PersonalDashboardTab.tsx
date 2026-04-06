@@ -275,7 +275,7 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                                     half_day: { label: 'Half Day', color: 'hsl(25, 95%, 53%)' },
                                                     ncns: { label: 'NCNS', color: 'hsl(0, 84%, 60%)' },
                                                     on_leave: { label: 'On Leave', color: 'hsl(221, 83%, 53%)' },
-                                                }} className="h-[160px] w-full">
+                                                }} className="h-40 w-full">
                                                     <ResponsiveContainer width="100%" height="100%">
                                                         <PieChart>
                                                             <Pie
@@ -317,7 +317,7 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     <div>
                                         <p className="text-xs text-muted-foreground mb-1">Attendance Points</p>
                                         <div className="flex items-center gap-4">
-                                            <ChartContainer config={{ points: { label: 'Points' } }} className="h-[120px] w-[120px] shrink-0">
+                                            <ChartContainer config={{ points: { label: 'Points' } }} className="h-30 w-30 shrink-0">
                                                 <RadialBarChart
                                                     innerRadius={35}
                                                     outerRadius={55}
@@ -372,7 +372,7 @@ export const PersonalDashboardTab: React.FC<PersonalDashboardTabProps> = ({
                                     {pointsByTypeBarData.length > 0 && (
                                         <div>
                                             <p className="text-xs text-muted-foreground mb-2">Points by Type</p>
-                                            <ChartContainer config={{ points: { label: 'Points', color: 'hsl(25, 95%, 53%)' } }} className="h-[120px] w-full">
+                                            <ChartContainer config={{ points: { label: 'Points', color: 'hsl(25, 95%, 53%)' } }} className="h-30 w-full">
                                                 <ResponsiveContainer width="100%" height="100%">
                                                     <BarChart data={pointsByTypeBarData} layout="vertical" margin={{ left: 0, right: 5, top: 0, bottom: 0 }}>
                                                         <XAxis type="number" hide />

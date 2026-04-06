@@ -129,6 +129,16 @@ export default function BreakTimerIndex() {
     const [isFullscreen, setIsFullscreen] = useState(false);
     const containerRef = useRef<HTMLDivElement>(null);
 
+    // Snapshot: when props arrive, record the server remaining_seconds and the client timestamp.
+    // This avoids server-vs-client clock skew by only using Date.now() deltas.
+    const propsReceivedAtRef = useRef<number>(Date.now());
+    const serverRemainingRef = useRef<number>(activeSession?.remaining_seconds ?? 0);
+
+    useEffect(() => {
+        propsReceivedAtRef.current = Date.now();
+        serverRemainingRef.current = activeSession?.remaining_seconds ?? 0;
+    }, [activeSession?.id, activeSession?.remaining_seconds, activeSession?.status]);
+
     const toggleFullscreen = useCallback(() => {
         if (!document.fullscreenElement) {
             containerRef.current?.requestFullscreen().then(() => setIsFullscreen(true)).catch(() => { });
@@ -146,17 +156,17 @@ export default function BreakTimerIndex() {
     const maxBreaks = policy?.max_breaks ?? 2;
     const remainingBreaks = Math.max(0, maxBreaks - breaksUsed);
 
-    // Calculate real-time remaining seconds
+    // Calculate real-time remaining seconds using client-only time delta.
+    // Uses server remaining_seconds as baseline, then subtracts client-side elapsed
+    // since props were received. This avoids server-vs-client clock skew.
     const calculateRemaining = useCallback(() => {
         if (!activeSession) return 0;
         if (activeSession.status === 'paused') {
             return activeSession.remaining_seconds ?? 0;
         }
 
-        const startedAt = new Date(activeSession.started_at).getTime();
-        const now = Date.now();
-        const elapsed = Math.floor((now - startedAt) / 1000) - activeSession.total_paused_seconds;
-        return activeSession.duration_seconds - elapsed;
+        const clientElapsed = Math.floor((Date.now() - propsReceivedAtRef.current) / 1000);
+        return serverRemainingRef.current - clientElapsed;
     }, [activeSession]);
 
     // Timer tick

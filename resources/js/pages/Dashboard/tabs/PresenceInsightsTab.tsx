@@ -211,7 +211,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                 <Button variant="outline" size="icon" onClick={handlePrevMonth}>
                                     <ChevronLeft className="h-4 w-4" />
                                 </Button>
-                                <div className="text-sm font-semibold min-w-[140px] text-center">
+                                <div className="text-sm font-semibold min-w-35 text-center">
                                     {calendarDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
                                 </div>
                                 <Button variant="outline" size="icon" onClick={handleNextMonth}>
@@ -339,7 +339,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                 {/* Employee List - Right Side */}
                                 <div className="border rounded-lg p-4 flex flex-col">
                                     <h4 className="text-sm font-semibold mb-3">All Leaves ({filteredLeaves.length})</h4>
-                                    <div className="space-y-2 flex-1 max-h-[280px] overflow-y-auto pr-2">
+                                    <div className="space-y-2 flex-1 max-h-70 overflow-y-auto pr-2">
                                         {filteredLeaves.map((leave) => (
                                             <div
                                                 key={leave.id}
@@ -719,7 +719,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                 color: "hsl(221, 83%, 53%)",
                             },
                         }}
-                        className="h-[250px] w-full"
+                        className="h-62.5 w-full"
                     >
                         <ResponsiveContainer width="100%" height="100%">
                             <BarChart data={presenceInsights?.attendancePoints.trend || []} margin={{ left: 0, right: 0, top: 5, bottom: 5 }}>
@@ -770,7 +770,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                 absent: { label: 'Absent', color: 'hsl(0, 84%, 60%)' },
                                 on_leave: { label: 'On Leave', color: 'hsl(221, 83%, 53%)' },
                             }}
-                            className="h-[300px] w-full"
+                            className="h-75 w-full"
                         >
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={campaignPresence} layout="vertical" margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
@@ -817,7 +817,7 @@ export const PresenceInsightsTab: React.FC<PresenceInsightsTabProps> = ({
                                 total_points: { label: 'Total Points', color: 'hsl(25, 95%, 53%)' },
                                 high_risk_count: { label: 'High Risk', color: 'hsl(0, 84%, 60%)' },
                             }}
-                            className="h-[280px] w-full"
+                            className="h-70 w-full"
                         >
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={pointsByCampaign} margin={{ left: 0, right: 10, top: 5, bottom: 5 }}>
