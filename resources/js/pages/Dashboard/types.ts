@@ -522,4 +522,24 @@ export interface DashboardProps {
 
     /** Coaching follow-ups and agents not coached this week (TL/Admin/HR) */
     coachingFollowUps?: CoachingFollowUps;
+
+    /** Login digest — role-specific actionable items shown once per session */
+    loginDigest?: LoginDigest;
+}
+
+// ─── Login Digest Types ──────────────────────────────────────────────────────
+
+export interface LoginDigestItem {
+    key: string;
+    label: string;
+    count: number;
+    route: string;
+    icon: string;
+    priority: 'critical' | 'high' | 'medium' | 'low';
+}
+
+export interface LoginDigest {
+    greeting: string;
+    items: LoginDigestItem[];
+    total_actionable: number;
 }

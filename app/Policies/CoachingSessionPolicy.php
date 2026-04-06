@@ -78,6 +78,11 @@ class CoachingSessionPolicy
             }
         }
 
+        // Team Leads cannot edit sessions that have been verified
+        if (! in_array($user->role, ['Super Admin', 'Admin']) && $coachingSession->compliance_status === 'Verified') {
+            return false;
+        }
+
         return $this->permissionService->userHasPermission($user, 'coaching.edit');
     }
 

@@ -43,6 +43,13 @@ import {
 
 import type { CoachingSession, CoachingPurposeLabels } from '@/types';
 
+/** Strip near-black inline color styles that break dark mode readability */
+function sanitizeRichHtml(html: string): string {
+    return DOMPurify.sanitize(
+        html.replace(/color:\s*(?:#(?:1a1a1a|000000|111|222|333)|rgb\(\s*26,\s*26,\s*26\s*\))/gi, 'color: inherit')
+    );
+}
+
 interface Props extends InertiaPageProps {
     session: CoachingSession;
     canAcknowledge: boolean;
@@ -224,7 +231,7 @@ export default function CoachingSessionsShow() {
 
                 {/* Performance Description */}
                 <SectionCard title="Performance Description">
-                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.performance_description) }} />
+                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.performance_description) }} />
                 </SectionCard>
 
                 {/* Attachments */}
@@ -278,13 +285,13 @@ export default function CoachingSessionsShow() {
                 {/* Agent Strengths */}
                 {session.agent_strengths_wins && (
                     <SectionCard title="Agent Strengths / Wins">
-                        <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.agent_strengths_wins) }} />
+                        <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.agent_strengths_wins) }} />
                     </SectionCard>
                 )}
 
                 {/* SMART Action Plan */}
                 <SectionCard title="SMART Action Plan">
-                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(session.smart_action_plan) }} />
+                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.smart_action_plan) }} />
                 </SectionCard>
 
                 {/* Acknowledgement & Compliance Info */}

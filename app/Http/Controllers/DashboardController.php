@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Attendance;
 use App\Services\DashboardService;
 use App\Services\LeaveCreditService;
+use App\Services\LoginDigestService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Inertia\Inertia;
@@ -17,7 +18,8 @@ class DashboardController extends Controller
      */
     public function __construct(
         private readonly DashboardService $dashboardService,
-        private readonly LeaveCreditService $leaveCreditService
+        private readonly LeaveCreditService $leaveCreditService,
+        private readonly LoginDigestService $loginDigestService
     ) {}
 
     /**
@@ -208,6 +210,9 @@ class DashboardController extends Controller
         // Notification summary (cached per-user, short TTL)
         $notificationSummary = Cache::remember("dashboard_notifications_{$user->id}", 60, fn () => $this->dashboardService->getNotificationSummary($user->id));
 
+        // Login digest (role-specific actionable items summary)
+        $loginDigest = $this->loginDigestService->getDigest($user);
+
         return Inertia::render('dashboard', array_merge($dashboardData, $personalData, [
             'attendanceStatistics' => $attendanceStats,
             'verificationFilter' => $verificationFilter,
@@ -221,6 +226,7 @@ class DashboardController extends Controller
             'leaveCredits' => $leaveCredits,
             'leaveCalendarMonth' => $leaveCalendarMonth,
             'notificationSummary' => $notificationSummary,
+            'loginDigest' => $loginDigest,
             'userRole' => $role,
         ]));
     }
