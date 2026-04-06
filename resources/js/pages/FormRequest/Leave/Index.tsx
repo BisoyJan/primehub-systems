@@ -42,6 +42,7 @@ import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { usePermission } from '@/hooks/use-permission';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { TableSkeleton } from '@/components/TableSkeleton';
 import PaginationNav from '@/components/pagination-nav';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -771,139 +772,145 @@ export default function Index({ leaveRequests, filters, statusCounts, isAdmin, i
 
                 {/* Desktop Table View */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden bg-card">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    {showEmployeeColumn && <TableHead>Employee</TableHead>}
-                                    {showEmployeeColumn && <TableHead>Campaign</TableHead>}
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Period</TableHead>
-                                    <TableHead>Days</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Submitted</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {leaveRequests.data.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell
-                                            colSpan={showEmployeeColumn ? 8 : 6}
-                                            className="text-center py-8 text-muted-foreground"
-                                        >
-                                            No leave requests found
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    leaveRequests.data.map((request) => (
-                                        <TableRow key={request.id}>
-                                            {showEmployeeColumn && (
-                                                <TableCell className="font-medium">
-                                                    {request.user.name}
-                                                </TableCell>
-                                            )}
-                                            {showEmployeeColumn && (
-                                                <TableCell className="text-sm">
-                                                    {request.campaign_department}
-                                                </TableCell>
-                                            )}
-                                            <TableCell>{getLeaveTypeBadge(request.leave_type)}</TableCell>
-                                            <TableCell className="whitespace-nowrap">
-                                                {(() => {
-                                                    const start = parseISO(request.start_date);
-                                                    const end = parseISO(request.end_date);
-                                                    return getYear(start) === getYear(end)
-                                                        ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
-                                                        : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
-                                                })()}
-                                            </TableCell>
-                                            <TableCell>
-                                                {request.has_partial_denial && request.approved_days !== null ? (
-                                                    <span className="text-orange-600" title={`${request.approved_days} of ${Math.floor(request.days_requested)} days approved`}>
-                                                        {Math.floor(request.approved_days)} {Math.floor(request.approved_days) === 1 ? 'day' : 'days'}
-                                                        <span className="text-xs text-muted-foreground ml-1">(partial)</span>
-                                                    </span>
-                                                ) : (
-                                                    <>{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}</TableCell>
-                                            <TableCell className="text-sm text-muted-foreground">
-                                                {format(parseISO(request.created_at), 'MMM d, yyyy')}
-                                            </TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Link href={leaveShowRoute(request.id).url}>
-                                                        <Button size="icon" variant="outline" title="View Details">
-                                                            <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                    </Link>
-                                                    {/* Medical/Supporting Document Button - For SL, BL, and UPTO with uploaded cert */}
-                                                    {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
-                                                        <Button
-                                                            size="icon"
-                                                            variant="outline"
-                                                            onClick={() => handleViewMedicalCert(request.id, request.user.name)}
-                                                            title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : request.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}`}
-                                                            className="text-green-600 hover:text-green-700 border-green-300"
-                                                        >
-                                                            <FileImage className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
-                                                        <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
-                                                            <Button size="icon" variant="outline" title="Edit Request">
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                        </Link>
-                                                    )}
-                                                    {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
-                                                        <Button
-                                                            size="icon"
-                                                            variant="outline"
-                                                            onClick={() => handleCancelRequest(request.id)}
-                                                            title="Cancel Request"
-                                                            className="text-orange-600 hover:text-orange-700 border-orange-300"
-                                                        >
-                                                            <Ban className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
-                                                        <Button
-                                                            size="icon"
-                                                            variant="outline"
-                                                            onClick={() => handleCancelRequest(request.id)}
-                                                            title="Cancel Request"
-                                                            className="text-red-600 hover:text-red-700 border-red-300"
-                                                        >
-                                                            <Ban className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
-                                                        <Button
-                                                            size="icon"
-                                                            variant="outline"
-                                                            onClick={() => handleDeleteRequest(request.id)}
-                                                            title="Delete Request"
-                                                            className="text-red-600 hover:text-red-700 border-red-300"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
+                    {isPageLoading ? (
+                        <TableSkeleton columns={8} rows={8} />
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            {showEmployeeColumn && <TableHead>Employee</TableHead>}
+                                            {showEmployeeColumn && <TableHead>Campaign</TableHead>}
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Period</TableHead>
+                                            <TableHead>Days</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Submitted</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {leaveRequests.data.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell
+                                                    colSpan={showEmployeeColumn ? 8 : 6}
+                                                    className="text-center py-8 text-muted-foreground"
+                                                >
+                                                    No leave requests found
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            leaveRequests.data.map((request) => (
+                                                <TableRow key={request.id}>
+                                                    {showEmployeeColumn && (
+                                                        <TableCell className="font-medium">
+                                                            {request.user.name}
+                                                        </TableCell>
+                                                    )}
+                                                    {showEmployeeColumn && (
+                                                        <TableCell className="text-sm">
+                                                            {request.campaign_department}
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell>{getLeaveTypeBadge(request.leave_type)}</TableCell>
+                                                    <TableCell className="whitespace-nowrap">
+                                                        {(() => {
+                                                            const start = parseISO(request.start_date);
+                                                            const end = parseISO(request.end_date);
+                                                            return getYear(start) === getYear(end)
+                                                                ? `${format(start, 'MMM dd')} - ${format(end, 'MMM dd, yyyy')}`
+                                                                : `${format(start, 'MMM dd, yyyy')} - ${format(end, 'MMM dd, yyyy')}`;
+                                                        })()}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {request.has_partial_denial && request.approved_days !== null ? (
+                                                            <span className="text-orange-600" title={`${request.approved_days} of ${Math.floor(request.days_requested)} days approved`}>
+                                                                {Math.floor(request.approved_days)} {Math.floor(request.approved_days) === 1 ? 'day' : 'days'}
+                                                                <span className="text-xs text-muted-foreground ml-1">(partial)</span>
+                                                            </span>
+                                                        ) : (
+                                                            <>{Math.floor(request.days_requested)} {Math.floor(request.days_requested) === 1 ? 'day' : 'days'}</>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>{getStatusBadge(request.status, request.admin_approved_at, request.hr_approved_at, request.requires_tl_approval, request.tl_approved_at, request.tl_rejected)}</TableCell>
+                                                    <TableCell className="text-sm text-muted-foreground">
+                                                        {format(parseISO(request.created_at), 'MMM d, yyyy')}
+                                                    </TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <Link href={leaveShowRoute(request.id).url}>
+                                                                <Button size="icon" variant="outline" title="View Details">
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            </Link>
+                                                            {/* Medical/Supporting Document Button - For SL, BL, and UPTO with uploaded cert */}
+                                                            {(request.leave_type === 'SL' || request.leave_type === 'BL' || request.leave_type === 'UPTO') && request.medical_cert_path && (auth.user.id === request.user.id || isAdmin) && (
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="outline"
+                                                                    onClick={() => handleViewMedicalCert(request.id, request.user.name)}
+                                                                    title={`View ${request.leave_type === 'SL' ? 'Medical Certificate' : request.leave_type === 'BL' ? 'Death Certificate' : 'Supporting Document'}`}
+                                                                    className="text-green-600 hover:text-green-700 border-green-300"
+                                                                >
+                                                                    <FileImage className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {request.status === 'pending' && (auth.user.id === request.user.id || can('leave.edit')) && (
+                                                                <Link href={leaveEditRoute({ leaveRequest: request.id }).url}>
+                                                                    <Button size="icon" variant="outline" title="Edit Request">
+                                                                        <Pencil className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Link>
+                                                            )}
+                                                            {(request.status === 'pending' || (request.status === 'approved' && (request.has_partial_denial || new Date(request.start_date + 'T00:00:00') > new Date()))) && auth.user.id === request.user.id && (
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="outline"
+                                                                    onClick={() => handleCancelRequest(request.id)}
+                                                                    title="Cancel Request"
+                                                                    className="text-orange-600 hover:text-orange-700 border-orange-300"
+                                                                >
+                                                                    <Ban className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {can('leave.cancel') && auth.user.id !== request.user.id && (request.status === 'pending' || (request.status === 'approved' && new Date(request.end_date + 'T23:59:59') >= new Date())) && (
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="outline"
+                                                                    onClick={() => handleCancelRequest(request.id)}
+                                                                    title="Cancel Request"
+                                                                    className="text-red-600 hover:text-red-700 border-red-300"
+                                                                >
+                                                                    <Ban className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {(can('leave.delete') || (auth.user.id === request.user.id && (request.status === 'cancelled' || request.status === 'denied'))) && (
+                                                                <Button
+                                                                    size="icon"
+                                                                    variant="outline"
+                                                                    onClick={() => handleDeleteRequest(request.id)}
+                                                                    title="Delete Request"
+                                                                    className="text-red-600 hover:text-red-700 border-red-300"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
 
-                    {paginationLinks.length > 0 && (
-                        <div className="border-t px-4 py-3 flex justify-center">
-                            <PaginationNav links={paginationLinks} />
-                        </div>
+                            {paginationLinks.length > 0 && (
+                                <div className="border-t px-4 py-3 flex justify-center">
+                                    <PaginationNav links={paginationLinks} />
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 

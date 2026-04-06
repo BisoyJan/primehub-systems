@@ -23,6 +23,7 @@ import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from '@/components/TableSkeleton';
 
 import { create, edit, destroy, index } from "@/routes/ramspecs";
 
@@ -181,68 +182,72 @@ export default function RamSpecsIndexRefactored() {
 
                 {/* Desktop Table View */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>Manufacturer</TableHead>
-                                    <TableHead>Model</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Capacity (GB)</TableHead>
-                                    <TableHead>Speed</TableHead>
-                                    <TableHead>Stock</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-
-                            <TableBody>
-                                {ramspecs.data.map((ram) => (
-                                    <TableRow key={ram.id}>
-                                        <TableCell className="hidden lg:table-cell">{ram.id}</TableCell>
-                                        <TableCell className="font-medium">{ram.manufacturer}</TableCell>
-                                        <TableCell>{ram.model}</TableCell>
-                                        <TableCell>{ram.type}</TableCell>
-                                        <TableCell>{ram.capacity_gb}</TableCell>
-                                        <TableCell>{ram.speed}</TableCell>
-                                        <TableCell>
-                                            {ram.stock ? ram.stock.quantity : 0}
-                                            {(!ram.stock || ram.stock.quantity < 10) && (
-                                                <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
-                                                    Low Stock
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Can permission="hardware.edit">
-                                                    <Link href={edit({ ramspec: ram.id }).url}>
-                                                        <Button variant="outline" size="sm">Edit</Button>
-                                                    </Link>
-                                                </Can>
-
-                                                {/* Reusable delete confirmation dialog */}
-                                                <Can permission="hardware.delete">
-                                                    <DeleteConfirmDialog
-                                                        onConfirm={() => handleDelete(ram.id)}
-                                                        title="Delete RAM Specification"
-                                                        description={`Are you sure you want to delete ${ram.manufacturer} ${ram.model}?`}
-                                                    />
-                                                </Can>
-                                            </div>
-                                        </TableCell>
+                    {isLoading ? (
+                        <TableSkeleton columns={8} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>Manufacturer</TableHead>
+                                        <TableHead>Model</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Capacity (GB)</TableHead>
+                                        <TableHead>Speed</TableHead>
+                                        <TableHead>Stock</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
-                                ))}
-                                {ramspecs.data.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                                            No RAM specifications found
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                </TableHeader>
+
+                                <TableBody>
+                                    {ramspecs.data.map((ram) => (
+                                        <TableRow key={ram.id}>
+                                            <TableCell className="hidden lg:table-cell">{ram.id}</TableCell>
+                                            <TableCell className="font-medium">{ram.manufacturer}</TableCell>
+                                            <TableCell>{ram.model}</TableCell>
+                                            <TableCell>{ram.type}</TableCell>
+                                            <TableCell>{ram.capacity_gb}</TableCell>
+                                            <TableCell>{ram.speed}</TableCell>
+                                            <TableCell>
+                                                {ram.stock ? ram.stock.quantity : 0}
+                                                {(!ram.stock || ram.stock.quantity < 10) && (
+                                                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800">
+                                                        Low Stock
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Can permission="hardware.edit">
+                                                        <Link href={edit({ ramspec: ram.id }).url}>
+                                                            <Button variant="outline" size="sm">Edit</Button>
+                                                        </Link>
+                                                    </Can>
+
+                                                    {/* Reusable delete confirmation dialog */}
+                                                    <Can permission="hardware.delete">
+                                                        <DeleteConfirmDialog
+                                                            onConfirm={() => handleDelete(ram.id)}
+                                                            title="Delete RAM Specification"
+                                                            description={`Are you sure you want to delete ${ram.manufacturer} ${ram.model}?`}
+                                                        />
+                                                    </Can>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {ramspecs.data.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                                No RAM specifications found
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

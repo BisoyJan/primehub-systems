@@ -25,6 +25,24 @@ import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { show as leaveShowRoute, update as leaveUpdateRoute, medicalCert as leaveMedicalCertRoute } from '@/routes/leave-requests';
+import {
+    type CreditsSummary,
+    type AttendanceViolation,
+    type ExistingLeaveRequest,
+    type CampaignConflict,
+    type DateSuggestion,
+    isWeekend,
+    getDayName,
+    getSlMinDate,
+    getSlMaxEndDate,
+    getSplMinDate,
+    getSplMaxEndDate,
+    getMlMaxEndDate,
+    willBeEligibleByStartDate as checkEligibleByStartDate,
+    getProjectedBalance as calcProjectedBalance,
+    calculateFutureCredits as calcFutureCredits,
+    countWorkingDays,
+} from '@/lib/leave-utils';
 
 interface LeaveRequest {
     id: number;
@@ -54,61 +72,6 @@ interface LeaveRequest {
         id: number;
         name: string;
     };
-}
-
-interface PendingRegularizationCredits {
-    year: number;
-    credits: number;
-    months_accrued: number;
-    regularization_date: string | null;
-    is_pending: boolean;
-}
-
-interface CreditsSummary {
-    year: number;
-    is_eligible: boolean;
-    eligibility_date: string | null;
-    monthly_rate: number;
-    total_earned: number;
-    total_used: number;
-    balance: number;
-    pending_credits: number;
-    pending_regularization_credits?: PendingRegularizationCredits;
-}
-
-interface AttendanceViolation {
-    id: number;
-    shift_date: string;
-    point_type: string;
-    points: number;
-    violation_details: string;
-    expires_at: string;
-}
-
-interface ExistingLeaveRequest {
-    id: number;
-    leave_type: string;
-    start_date: string;
-    end_date: string;
-    status: string;
-}
-
-interface CampaignConflict {
-    id: number;
-    user_name: string;
-    leave_type: string;
-    start_date: string;
-    end_date: string;
-    status: string;
-    created_at: string;
-    overlapping_dates: string[];
-}
-
-interface DateSuggestion {
-    start_date: string;
-    end_date: string;
-    conflicts: number;
-    label: string;
 }
 
 interface Props {
@@ -176,90 +139,12 @@ export default function Edit({
         data.end_date !== leaveRequest.end_date
     );
 
-    // Check if user will be eligible by the selected start date
-    const willBeEligibleByStartDate = (): boolean => {
-        if (creditsSummary.is_eligible) return true;
-        if (!data.start_date || !creditsSummary.eligibility_date) return false;
-        const startDate = parseISO(data.start_date);
-        const eligibilityDate = parseISO(creditsSummary.eligibility_date);
-        return startDate >= eligibilityDate;
-    };
+    // Delegate to shared pure functions with component state
+    const willBeEligibleByStartDate = () =>
+        checkEligibleByStartDate(data.start_date, creditsSummary.is_eligible, creditsSummary.eligibility_date);
 
-    // Calculate projected balance for users who will be eligible by their leave date
-    const getProjectedBalance = (): number => {
-        if (!data.start_date || !creditsSummary.eligibility_date) return 0;
-
-        const startDate = parseISO(data.start_date);
-        const eligibilityDate = parseISO(creditsSummary.eligibility_date);
-
-        // If not eligible by start date, no projected balance
-        if (startDate < eligibilityDate) return 0;
-
-        // Start with pending regularization credits (from probation period in previous year)
-        let projectedBalance = 0;
-        if (creditsSummary.pending_regularization_credits?.is_pending) {
-            projectedBalance += creditsSummary.pending_regularization_credits.credits;
-        }
-
-        // Calculate months from eligibility to leave start
-        const eligMonth = eligibilityDate.getMonth();
-        const eligYear = eligibilityDate.getFullYear();
-        const leaveMonth = startDate.getMonth();
-        const leaveYear = startDate.getFullYear();
-
-        // Months of credit accrual between eligibility and leave (after regularization)
-        const monthsOfCredits = (leaveYear - eligYear) * 12 + (leaveMonth - eligMonth);
-        projectedBalance += Math.max(0, monthsOfCredits) * creditsSummary.monthly_rate;
-
-        return projectedBalance;
-    };
-
-    // Helper function to check if a date is a weekend
-    const isWeekend = (dateString: string): boolean => {
-        if (!dateString) return false;
-        const date = new Date(dateString);
-        const day = date.getDay();
-        return day === 0 || day === 6; // 0 = Sunday, 6 = Saturday
-    };
-
-    // Helper function to get the day name
-    const getDayName = (dateString: string): string => {
-        const date = new Date(dateString);
-        return date.toLocaleDateString('en-US', { weekday: 'long' });
-    };
-
-    // Get date constraints for Sick Leave (3 weeks back for start, 1 month ahead for end)
-    const getSlMinDate = (): string => {
-        const date = new Date();
-        date.setDate(date.getDate() - 21); // 3 weeks ago
-        return date.toISOString().split('T')[0];
-    };
-
-    const getSlMaxEndDate = (): string => {
-        const date = new Date();
-        date.setMonth(date.getMonth() + 1); // 1 month from now
-        return date.toISOString().split('T')[0];
-    };
-
-    // Get date constraints for Solo Parent Leave (2 weeks back for start, 1 month ahead for end)
-    const getSplMinDate = (): string => {
-        const date = new Date();
-        date.setDate(date.getDate() - 14); // 2 weeks ago
-        return date.toISOString().split('T')[0];
-    };
-
-    const getSplMaxEndDate = (): string => {
-        const date = new Date();
-        date.setMonth(date.getMonth() + 1); // 1 month from now
-        return date.toISOString().split('T')[0];
-    };
-
-    // Get date constraints for Maternity Leave (no min restriction, 1 year ahead for end)
-    const getMlMaxEndDate = (): string => {
-        const date = new Date();
-        date.setFullYear(date.getFullYear() + 1); // 1 year from now
-        return date.toISOString().split('T')[0];
-    };
+    const getProjectedBalance = () =>
+        calcProjectedBalance(data.start_date, creditsSummary.eligibility_date, creditsSummary.monthly_rate, creditsSummary.pending_regularization_credits);
 
     // Handle medical certificate file selection
     const handleMedicalCertChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -348,65 +233,17 @@ export default function Edit({
         setData('end_date', value);
     };
 
-    // Calculate future credits that will accrue by the leave start date
-    const calculateFutureCredits = useCallback((startDate: string): number => {
-        if (!startDate) return 0;
-
-        // Check if user will be eligible by the start date (not just current eligibility)
-        if (!creditsSummary.is_eligible && creditsSummary.eligibility_date) {
-            const leaveStart = parseISO(startDate);
-            const eligibilityDate = parseISO(creditsSummary.eligibility_date);
-            // If leave start date is before eligibility, no future credits calculation
-            if (leaveStart < eligibilityDate) return 0;
-        } else if (!creditsSummary.is_eligible) {
-            return 0;
-        }
-
-        const today = new Date();
-        const leaveStart = parseISO(startDate);
-
-        // Get the current month and year
-        const currentMonth = today.getMonth(); // 0-indexed
-        const currentYear = today.getFullYear();
-
-        // Get the leave start month and year
-        const leaveMonth = leaveStart.getMonth();
-        const leaveYear = leaveStart.getFullYear();
-
-        // Calculate how many full months will pass before the leave date
-        // Credits accrue at the end of each month, so if leave is in Feb, Jan credits will be added
-        let monthsToAccrue = 0;
-
-        if (leaveYear > currentYear || (leaveYear === currentYear && leaveMonth > currentMonth)) {
-            // Calculate months difference
-            monthsToAccrue = (leaveYear - currentYear) * 12 + (leaveMonth - currentMonth);
-        }
-
-        return monthsToAccrue * creditsSummary.monthly_rate;
-    }, [creditsSummary.is_eligible, creditsSummary.eligibility_date, creditsSummary.monthly_rate]);
+    // Calculate future credits delegating to shared utility
+    const calculateFutureCredits = useCallback(
+        (startDate: string): number => calcFutureCredits(startDate, creditsSummary),
+        [creditsSummary.is_eligible, creditsSummary.eligibility_date, creditsSummary.monthly_rate],
+    );
 
     // Calculate working days when dates change (excluding weekends)
     useEffect(() => {
         if (data.start_date && data.end_date) {
             try {
-                const start = parseISO(data.start_date);
-                const end = parseISO(data.end_date);
-
-                // Count only weekdays (Monday-Friday)
-                let workingDays = 0;
-                const currentDate = new Date(start);
-
-                while (currentDate <= end) {
-                    const dayOfWeek = currentDate.getDay();
-                    // 0 = Sunday, 6 = Saturday, exclude these
-                    // 1-5 = Monday-Friday, count these
-                    if (dayOfWeek >= 1 && dayOfWeek <= 5) {
-                        workingDays++;
-                    }
-                    currentDate.setDate(currentDate.getDate() + 1);
-                }
-
-                setCalculatedDays(workingDays);
+                setCalculatedDays(countWorkingDays(data.start_date, data.end_date));
 
                 // Calculate future credits based on start date
                 const projectedCredits = calculateFutureCredits(data.start_date);

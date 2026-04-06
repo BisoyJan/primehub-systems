@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 import { Head, router, usePage } from "@inertiajs/react";
 import AppLayout from "@/layouts/app-layout";
-import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
+import { useDebounce, useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { usePermission } from "@/hooks/useAuthorization";
 import type { SharedData } from "@/types";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from '@/components/TableSkeleton';
 import { Can } from "@/components/authorization";
 
 import { Button } from "@/components/ui/button";
@@ -184,7 +185,7 @@ export default function ItConcernsIndex() {
 
     const [loading, setLoading] = useState(false);
     const [search, setSearch] = useState(appliedFilters.search || "");
-    const [debouncedSearch, setDebouncedSearch] = useState(appliedFilters.search || "");
+    const debouncedSearch = useDebounce(search, 500);
     const [siteFilter, setSiteFilter] = useState(appliedFilters.site_id || "all");
     const [categoryFilter, setCategoryFilter] = useState(appliedFilters.category || "all");
     const [statusFilter, setStatusFilter] = useState(appliedFilters.status || "all");
@@ -198,7 +199,6 @@ export default function ItConcernsIndex() {
 
     useEffect(() => {
         setSearch(appliedFilters.search || "");
-        setDebouncedSearch(appliedFilters.search || "");
         setSiteFilter(appliedFilters.site_id || "all");
         setCategoryFilter(appliedFilters.category || "all");
         setStatusFilter(appliedFilters.status || "all");
@@ -251,11 +251,6 @@ export default function ItConcernsIndex() {
 
         return () => clearInterval(interval);
     }, [autoRefreshEnabled, debouncedSearch, siteFilter, categoryFilter, statusFilter, priorityFilter, campaignFilter]);
-
-    useEffect(() => {
-        const timer = setTimeout(() => setDebouncedSearch(search), 500);
-        return () => clearTimeout(timer);
-    }, [search]);
 
     const isInitialMount = React.useRef(true);
 
@@ -522,106 +517,110 @@ export default function ItConcernsIndex() {
                 </div>
 
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead>Date</TableHead>
-                                    <TableHead>Priority</TableHead>
-                                    <TableHead>Submitted By</TableHead>
-                                    <TableHead>Site</TableHead>
-                                    <TableHead>Station</TableHead>
-                                    <TableHead>Category</TableHead>
-                                    <TableHead>Description</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Resolved By</TableHead>
-                                    {!isTeamLead && <TableHead>Actions</TableHead>}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {concernData.data.map((concern) => (
-                                    <TableRow key={concern.id}>
-                                        <TableCell className="text-xs">{formatDate(concern.created_at)}</TableCell>
-                                        <TableCell>{getPriorityBadge(concern.priority)}</TableCell>
-                                        <TableCell className="font-medium">{concern.user?.name || 'N/A'}</TableCell>
-                                        <TableCell>{concern.site.name}</TableCell>
-                                        <TableCell>{concern.station_number}</TableCell>
-                                        <TableCell>{getCategoryBadge(concern.category)}</TableCell>
-                                        <TableCell className="max-w-xs truncate" title={concern.description}>
-                                            {concern.description}
-                                        </TableCell>
-                                        <TableCell>{getStatusBadge(concern.status)}</TableCell>
-                                        <TableCell className="text-sm">{concern.resolved_by?.name || '-'}</TableCell>
-                                        {!isTeamLead && (
-                                            <TableCell>
-                                                <div className="flex gap-2">
-                                                    {/* Resolve Button - IT/Admin */}
-                                                    <Can permission="it_concerns.resolve">
-                                                        {concern.status !== 'resolved' && (
+                    {loading ? (
+                        <TableSkeleton columns={10} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead>Date</TableHead>
+                                        <TableHead>Priority</TableHead>
+                                        <TableHead>Submitted By</TableHead>
+                                        <TableHead>Site</TableHead>
+                                        <TableHead>Station</TableHead>
+                                        <TableHead>Category</TableHead>
+                                        <TableHead>Description</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Resolved By</TableHead>
+                                        {!isTeamLead && <TableHead>Actions</TableHead>}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {concernData.data.map((concern) => (
+                                        <TableRow key={concern.id}>
+                                            <TableCell className="text-xs">{formatDate(concern.created_at)}</TableCell>
+                                            <TableCell>{getPriorityBadge(concern.priority)}</TableCell>
+                                            <TableCell className="font-medium">{concern.user?.name || 'N/A'}</TableCell>
+                                            <TableCell>{concern.site.name}</TableCell>
+                                            <TableCell>{concern.station_number}</TableCell>
+                                            <TableCell>{getCategoryBadge(concern.category)}</TableCell>
+                                            <TableCell className="max-w-xs truncate" title={concern.description}>
+                                                {concern.description}
+                                            </TableCell>
+                                            <TableCell>{getStatusBadge(concern.status)}</TableCell>
+                                            <TableCell className="text-sm">{concern.resolved_by?.name || '-'}</TableCell>
+                                            {!isTeamLead && (
+                                                <TableCell>
+                                                    <div className="flex gap-2">
+                                                        {/* Resolve Button - IT/Admin */}
+                                                        <Can permission="it_concerns.resolve">
+                                                            {concern.status !== 'resolved' && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    onClick={() => handleResolve(concern)}
+                                                                    title="Resolve Concern"
+                                                                    className="text-green-600 hover:text-green-700 border-green-300"
+                                                                >
+                                                                    <CheckCircle className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                        </Can>
+
+                                                        {/* Edit Button - Global permission OR Owner (pending/in_progress) */}
+                                                        {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
                                                             <Button
                                                                 variant="outline"
                                                                 size="icon"
-                                                                onClick={() => handleResolve(concern)}
-                                                                title="Resolve Concern"
-                                                                className="text-green-600 hover:text-green-700 border-green-300"
+                                                                onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
+                                                                title="Edit Concern"
                                                             >
-                                                                <CheckCircle className="h-4 w-4" />
+                                                                <Edit className="h-4 w-4" />
                                                             </Button>
                                                         )}
-                                                    </Can>
 
-                                                    {/* Edit Button - Global permission OR Owner (pending/in_progress) */}
-                                                    {(can('it_concerns.edit') || (concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status))) && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            onClick={() => router.get(`/form-requests/it-concerns/${concern.id}/edit`)}
-                                                            title="Edit Concern"
-                                                        >
-                                                            <Edit className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
+                                                        {/* Cancel Button - Owner (pending/in_progress) */}
+                                                        {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                onClick={() => handleCancel(concern)}
+                                                                title="Cancel Request"
+                                                                className="text-orange-600 hover:text-orange-700 border-orange-300"
+                                                            >
+                                                                <XCircle className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
 
-                                                    {/* Cancel Button - Owner (pending/in_progress) */}
-                                                    {concern.user?.id === auth.user.id && ['pending', 'in_progress'].includes(concern.status) && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            onClick={() => handleCancel(concern)}
-                                                            title="Cancel Request"
-                                                            className="text-orange-600 hover:text-orange-700 border-orange-300"
-                                                        >
-                                                            <XCircle className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-
-                                                    {/* Delete Button - Global permission OR Owner (pending) */}
-                                                    {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            onClick={() => handleDelete(concern.id)}
-                                                            title="Delete Concern"
-                                                            className="text-red-600 hover:text-red-700 border-red-300"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                </div>
+                                                        {/* Delete Button - Global permission OR Owner (pending) */}
+                                                        {(can('it_concerns.delete') || (concern.user?.id === auth.user.id && concern.status === 'pending')) && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="icon"
+                                                                onClick={() => handleDelete(concern.id)}
+                                                                title="Delete Concern"
+                                                                className="text-red-600 hover:text-red-700 border-red-300"
+                                                            >
+                                                                <Trash2 className="h-4 w-4" />
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            )}
+                                        </TableRow>
+                                    ))}
+                                    {concernData.data.length === 0 && !loading && (
+                                        <TableRow>
+                                            <TableCell colSpan={isTeamLead ? 9 : 10} className="h-24 text-center text-muted-foreground">
+                                                No IT concerns found
                                             </TableCell>
-                                        )}
-                                    </TableRow>
-                                ))}
-                                {concernData.data.length === 0 && !loading && (
-                                    <TableRow>
-                                        <TableCell colSpan={isTeamLead ? 9 : 10} className="h-24 text-center text-muted-foreground">
-                                            No IT concerns found
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 <div className="md:hidden space-y-4">

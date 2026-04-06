@@ -1,6 +1,5 @@
 import { send } from '@/routes/verification';
 import { type BreadcrumbItem, type SharedData } from '@/types';
-import { Transition } from '@headlessui/react';
 import { Form, Head, Link, usePage, router } from '@inertiajs/react';
 
 import InputError from '@/components/input-error';
@@ -284,18 +283,12 @@ export default function AccountManagement({
                                                 {processing ? 'Saving...' : 'Save Changes'}
                                             </Button>
 
-                                            <Transition
-                                                show={recentlySuccessful}
-                                                enter="transition ease-in-out duration-300"
-                                                enterFrom="opacity-0"
-                                                leave="transition ease-in-out duration-300"
-                                                leaveTo="opacity-0"
-                                            >
-                                                <div className="flex items-center gap-2 text-sm text-green-600">
+                                            {recentlySuccessful && (
+                                                <div className="flex items-center gap-2 text-sm text-green-600 transition-opacity duration-300">
                                                     <CheckCircle2 className="h-4 w-4" />
                                                     <span>Changes saved successfully</span>
                                                 </div>
-                                            </Transition>
+                                            )}
                                         </div>
                                     </>
                                 )}

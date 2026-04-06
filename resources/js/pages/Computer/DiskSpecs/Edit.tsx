@@ -3,8 +3,8 @@ import { Head, Link, useForm } from '@inertiajs/react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { FormField } from '@/components/FormField';
 import {
     Select,
     SelectContent,
@@ -84,8 +84,7 @@ export default function Edit({ diskspec }: Props) {
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Core Info</h2>
                         <div className="grid grid-cols-2 gap-6">
-                            <div>
-                                <Label htmlFor="manufacturer">Manufacturer</Label>
+                            <FormField label="Manufacturer" htmlFor="manufacturer" error={errors.manufacturer}>
                                 <Input
                                     id="manufacturer"
                                     name="manufacturer"
@@ -93,10 +92,8 @@ export default function Edit({ diskspec }: Props) {
                                     value={data.manufacturer}
                                     onChange={(e) => setData("manufacturer", e.target.value)}
                                 />
-                                {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
-                            </div>
-                            <div>
-                                <Label htmlFor="model">Model Number</Label>
+                            </FormField>
+                            <FormField label="Model Number" htmlFor="model" error={errors.model}>
                                 <Input
                                     id="model"
                                     name="model"
@@ -104,8 +101,7 @@ export default function Edit({ diskspec }: Props) {
                                     value={data.model}
                                     onChange={(e) => setData("model", e.target.value)}
                                 />
-                                {errors.model && <p className="text-red-600">{errors.model}</p>}
-                            </div>
+                            </FormField>
                         </div>
                     </section>
 
@@ -113,8 +109,7 @@ export default function Edit({ diskspec }: Props) {
                     <section>
                         <h2 className="text-lg font-semibold mb-2">Capacity</h2>
                         <div className="grid grid-cols-2 gap-6">
-                            <div>
-                                <Label htmlFor="capacity_gb">Capacity (GB)</Label>
+                            <FormField label="Capacity (GB)" htmlFor="capacity_gb" error={errors.capacity_gb}>
                                 <Select
                                     value={String(data.capacity_gb)}
                                     onValueChange={(val) => setData("capacity_gb", Number(val))}
@@ -130,8 +125,7 @@ export default function Edit({ diskspec }: Props) {
                                         ))}
                                     </SelectContent>
                                 </Select>
-                                {errors.capacity_gb && <p className="text-red-600">{errors.capacity_gb}</p>}
-                            </div>
+                            </FormField>
                         </div>
                     </section>
 

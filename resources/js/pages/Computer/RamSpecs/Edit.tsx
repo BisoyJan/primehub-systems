@@ -4,8 +4,8 @@ import { ArrowLeft, CircleAlert } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { FormField } from '@/components/FormField';
 import {
     Select,
     SelectContent,
@@ -104,8 +104,7 @@ export default function Edit({ ramspec }: Props) {
                         </div>
                     )}
 
-                    <div>
-                        <Label htmlFor="manufacturer">Manufacturer</Label>
+                    <FormField label="Manufacturer" htmlFor="manufacturer" error={errors.manufacturer}>
                         <Input
                             id="manufacturer"
                             name="manufacturer"
@@ -113,13 +112,9 @@ export default function Edit({ ramspec }: Props) {
                             value={data.manufacturer}
                             onChange={(e) => setData('manufacturer', e.target.value)}
                         />
-                        {errors.manufacturer && (
-                            <p className="mt-1 text-sm text-red-600">{errors.manufacturer}</p>
-                        )}
-                    </div>
+                    </FormField>
 
-                    <div>
-                        <Label htmlFor="model">Model</Label>
+                    <FormField label="Model" htmlFor="model" error={errors.model}>
                         <Input
                             id="model"
                             name="model"
@@ -127,11 +122,9 @@ export default function Edit({ ramspec }: Props) {
                             value={data.model}
                             onChange={(e) => setData('model', e.target.value)}
                         />
-                        {errors.model && <p className="mt-1 text-sm text-red-600">{errors.model}</p>}
-                    </div>
+                    </FormField>
 
-                    <div>
-                        <Label htmlFor="capacity_gb">Capacity (GB)</Label>
+                    <FormField label="Capacity (GB)" htmlFor="capacity_gb" error={errors.capacity_gb}>
                         <Select
                             value={data.capacity_gb ? String(data.capacity_gb) : ''}
                             onValueChange={(value) => setData('capacity_gb', Number(value))}
@@ -147,13 +140,9 @@ export default function Edit({ ramspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.capacity_gb && (
-                            <p className="mt-1 text-sm text-red-600">{errors.capacity_gb}</p>
-                        )}
-                    </div>
+                    </FormField>
 
-                    <div>
-                        <Label htmlFor="type">Type</Label>
+                    <FormField label="Type" htmlFor="type" error={errors.type}>
                         <Select
                             value={data.type}
                             onValueChange={(value) => setData('type', value)}
@@ -169,11 +158,9 @@ export default function Edit({ ramspec }: Props) {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.type && <p className="mt-1 text-sm text-red-600">{errors.type}</p>}
-                    </div>
+                    </FormField>
 
-                    <div>
-                        <Label htmlFor="speed">Speed (MHz)</Label>
+                    <FormField label="Speed (MHz)" htmlFor="speed" error={errors.speed}>
                         <Input
                             id="speed"
                             name="speed"
@@ -183,8 +170,7 @@ export default function Edit({ ramspec }: Props) {
                             value={data.speed}
                             onChange={(e) => setData('speed', Number(e.target.value))}
                         />
-                        {errors.speed && <p className="mt-1 text-sm text-red-600">{errors.speed}</p>}
-                    </div>
+                    </FormField>
 
                     <div className="md:col-span-2 flex justify-end">
                         <Button type="submit" disabled={processing}>

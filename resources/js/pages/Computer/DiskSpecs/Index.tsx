@@ -21,6 +21,7 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from '@/components/TableSkeleton';
 import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 
@@ -183,69 +184,73 @@ export default function Index() {
 
                 {/* Desktop Table - hidden on mobile */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>Manufacturer</TableHead>
-                                    <TableHead>Model Number</TableHead>
-                                    <TableHead>Capacity (GB)</TableHead>
-                                    <TableHead>Stocks</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                    {isLoading ? (
+                        <TableSkeleton columns={6} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>Manufacturer</TableHead>
+                                        <TableHead>Model Number</TableHead>
+                                        <TableHead>Capacity (GB)</TableHead>
+                                        <TableHead>Stocks</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
 
-                            <TableBody>
-                                {diskspecs.data.map((disk) => (
-                                    <TableRow key={disk.id}>
-                                        <TableCell className="hidden lg:table-cell">{disk.id}</TableCell>
-                                        <TableCell className="font-medium">{disk.manufacturer}</TableCell>
-                                        <TableCell>{disk.model}</TableCell>
-                                        <TableCell>{disk.capacity_gb}</TableCell>
-                                        <TableCell>
-                                            {disk.stock ? disk.stock.quantity : 0}
+                                <TableBody>
+                                    {diskspecs.data.map((disk) => (
+                                        <TableRow key={disk.id}>
+                                            <TableCell className="hidden lg:table-cell">{disk.id}</TableCell>
+                                            <TableCell className="font-medium">{disk.manufacturer}</TableCell>
+                                            <TableCell>{disk.model}</TableCell>
+                                            <TableCell>{disk.capacity_gb}</TableCell>
+                                            <TableCell>
+                                                {disk.stock ? disk.stock.quantity : 0}
 
-                                            {(!disk.stock || disk.stock.quantity < 10) && (
-                                                <span
-                                                    className={`
+                                                {(!disk.stock || disk.stock.quantity < 10) && (
+                                                    <span
+                                                        className={`
                                         ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
                                         ${!disk.stock || disk.stock.quantity === 0
-                                                            ? "bg-red-100 text-red-700"
-                                                            : "bg-yellow-100 text-yellow-700"}
+                                                                ? "bg-red-100 text-red-700"
+                                                                : "bg-yellow-100 text-yellow-700"}
                                                 `}
-                                                >
-                                                    {!disk.stock || disk.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="flex justify-center gap-2">
-                                            <Can permission="hardware.edit">
-                                                <Link href={edit.url(disk.id)}>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="bg-green-600 hover:bg-green-700 text-white"
                                                     >
-                                                        Edit
-                                                    </Button>
-                                                </Link>
-                                            </Can>
+                                                        {!disk.stock || disk.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="flex justify-center gap-2">
+                                                <Can permission="hardware.edit">
+                                                    <Link href={edit.url(disk.id)}>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                    </Link>
+                                                </Can>
 
-                                            {/* Reusable delete confirmation dialog */}
-                                            <Can permission="hardware.delete">
-                                                <DeleteConfirmDialog
-                                                    onConfirm={() => handleDelete(disk.id)}
-                                                    title="Delete Disk Specification"
-                                                    description={`Are you sure you want to delete ${disk.manufacturer} ${disk.model}?`}
-                                                />
-                                            </Can>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                                {/* Reusable delete confirmation dialog */}
+                                                <Can permission="hardware.delete">
+                                                    <DeleteConfirmDialog
+                                                        onConfirm={() => handleDelete(disk.id)}
+                                                        title="Delete Disk Specification"
+                                                        description={`Are you sure you want to delete ${disk.manufacturer} ${disk.model}?`}
+                                                    />
+                                                </Can>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

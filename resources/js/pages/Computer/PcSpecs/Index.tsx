@@ -45,6 +45,7 @@ import { RefreshCw, Search, Filter, Plus, Play, Pause } from 'lucide-react';
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from '@/components/TableSkeleton';
 
 import {
     index as pcSpecIndex,
@@ -613,255 +614,259 @@ export default function Index() {
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="w-12">
-                                        <Checkbox
-                                            checked={selectedPcIds.length === pcspecs.data.length && pcspecs.data.length > 0}
-                                            onCheckedChange={(checked) => handleSelectAll(checked === true)}
-                                            aria-label="Select all PC specs"
-                                        />
-                                    </TableHead>
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>PC Number</TableHead>
-                                    <TableHead>Manufacturer</TableHead>
-                                    <TableHead>Model</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Processor</TableHead>
-                                    <TableHead>RAM (GB)</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Storage Type</TableHead>
-                                    <TableHead>Issue</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {pcspecs.data.map((pc) => {
-                                    // Get first processor
-                                    const proc = pc.processorSpecs?.[0];
-                                    const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
+                    {isLoading ? (
+                        <TableSkeleton columns={10} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="w-12">
+                                            <Checkbox
+                                                checked={selectedPcIds.length === pcspecs.data.length && pcspecs.data.length > 0}
+                                                onCheckedChange={(checked) => handleSelectAll(checked === true)}
+                                                aria-label="Select all PC specs"
+                                            />
+                                        </TableHead>
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>PC Number</TableHead>
+                                        <TableHead>Manufacturer</TableHead>
+                                        <TableHead>Model</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Processor</TableHead>
+                                        <TableHead>RAM (GB)</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Storage Type</TableHead>
+                                        <TableHead>Issue</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {pcspecs.data.map((pc) => {
+                                        // Get first processor
+                                        const proc = pc.processorSpecs?.[0];
+                                        const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
 
-                                    // Total RAM GB
-                                    const totalRamGb = pc.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
+                                        // Total RAM GB
+                                        const totalRamGb = pc.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
 
-                                    // Storage: show disk count
-                                    const diskCount = pc.diskSpecs?.length || 0;
+                                        // Storage: show disk count
+                                        const diskCount = pc.diskSpecs?.length || 0;
 
-                                    return (
-                                        <TableRow key={pc.id}>
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedPcIds.includes(pc.id)}
-                                                    onCheckedChange={(checked) => handleSelectPc(pc.id, checked === true)}
-                                                    aria-label={`Select PC ${pc.pc_number || pc.id}`}
-                                                />
-                                            </TableCell>
-                                            <TableCell className="hidden lg:table-cell">{pc.id}</TableCell>
-                                            <TableCell className="font-medium">
-                                                {pc.pc_number || <span className="text-gray-400">—</span>}
-                                            </TableCell>
-                                            <TableCell>{pc.manufacturer}</TableCell>
-                                            <TableCell>{pc.model}</TableCell>
-                                            <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
-                                            <TableCell>{totalRamGb || 0}</TableCell>
-                                            <TableCell className="hidden xl:table-cell">{diskCount > 0 ? `${diskCount} disk(s)` : '—'}</TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    {pc.issue ? (
-                                                        <span className="text-xs text-red-600 font-medium truncate max-w-[200px]" title={pc.issue}>
-                                                            ⚠️ {pc.issue}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-gray-400">No issue</span>
-                                                    )}
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() => handleOpenIssueDialog(pc)}
-                                                        className="h-7 px-2 text-xs"
-                                                    >
-                                                        {pc.issue ? 'Edit' : 'Add'}
-                                                    </Button>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="flex justify-center gap-2">
-                                                {/* Edit */}
-                                                <Link href={pcSpecEdit.url(pc.id)}>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="bg-green-600 hover:bg-green-700 text-white"
-                                                    >
-                                                        Edit
-                                                    </Button>
-                                                </Link>
-
-                                                {/* Details Dialog */}
-                                                <Dialog>
-                                                    <DialogTrigger asChild>
-                                                        <Button variant="outline" size="sm">
-                                                            Details
-                                                        </Button>
-                                                    </DialogTrigger>
-                                                    <DialogContent className="max-w-[95vw] sm:max-w-7xl w-full h-[90vh] flex flex-col">
-                                                        <DialogTitle className="text-lg sm:text-xl font-semibold break-words">
-                                                            {pc.manufacturer} {pc.model} — Full Specifications
-                                                        </DialogTitle>
-
-                                                        {/* Scrollable body */}
-                                                        <div className="flex-1 overflow-y-auto pr-2 mt-4 space-y-6 text-sm">
-                                                            {/* Motherboard Core Info */}
-                                                            <section>
-                                                                <h3 className="font-semibold text-base mb-2">PC Spec Details</h3>
-                                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
-                                                                    <p><span className="font-medium">Manufacturer:</span> {pc.manufacturer}</p>
-                                                                    <p><span className="font-medium">Model:</span> {pc.model}</p>
-                                                                    <p><span className="font-medium">Memory Type:</span> {pc.memory_type}</p>
-                                                                </div>
-                                                            </section>
-
-                                                            {/* RAM Specs */}
-                                                            <section>
-                                                                <h3 className="font-semibold text-base mb-2">RAM Specs</h3>
-                                                                {pc.ramSpecs?.length ? (
-                                                                    <Table>
-                                                                        <TableHeader>
-                                                                            <TableRow>
-                                                                                <TableHead>Manufacturer</TableHead>
-                                                                                <TableHead>Model</TableHead>
-                                                                                <TableHead>Capacity</TableHead>
-                                                                                <TableHead>Type</TableHead>
-                                                                                <TableHead>Speed</TableHead>
-                                                                            </TableRow>
-                                                                        </TableHeader>
-                                                                        <TableBody>
-                                                                            {pc.ramSpecs.map((r) => (
-                                                                                <TableRow key={r.id}>
-                                                                                    <TableCell>{r.manufacturer}</TableCell>
-                                                                                    <TableCell>{r.model}</TableCell>
-                                                                                    <TableCell>{r.capacity_gb} GB</TableCell>
-                                                                                    <TableCell>{r.type}</TableCell>
-                                                                                    <TableCell>{r.speed}</TableCell>
-                                                                                </TableRow>
-                                                                            ))}
-                                                                        </TableBody>
-                                                                    </Table>
-                                                                ) : (
-                                                                    <p className="text-muted-foreground">No RAM specs available.</p>
-                                                                )}
-                                                            </section>
-
-                                                            {/* Disk Specs */}
-                                                            <section>
-                                                                <h3 className="font-semibold text-base mb-2">Disk Specs</h3>
-                                                                {pc.diskSpecs?.length ? (
-                                                                    <Table>
-                                                                        <TableHeader>
-                                                                            <TableRow>
-                                                                                <TableHead>Manufacturer</TableHead>
-                                                                                <TableHead>Model</TableHead>
-                                                                                <TableHead>Capacity</TableHead>
-                                                                            </TableRow>
-                                                                        </TableHeader>
-                                                                        <TableBody>
-                                                                            {pc.diskSpecs.map((d) => (
-                                                                                <TableRow key={d.id}>
-                                                                                    <TableCell>{d.manufacturer}</TableCell>
-                                                                                    <TableCell>{d.model}</TableCell>
-                                                                                    <TableCell>{d.capacity_gb} GB</TableCell>
-                                                                                </TableRow>
-                                                                            ))}
-                                                                        </TableBody>
-                                                                    </Table>
-                                                                ) : (
-                                                                    <p className="text-muted-foreground">No disk specs available.</p>
-                                                                )}
-                                                            </section>
-
-                                                            {/* Processor Specs */}
-                                                            <section>
-                                                                <h3 className="font-semibold text-base mb-2">Processor Specs</h3>
-                                                                {pc.processorSpecs?.length ? (
-                                                                    <Table>
-                                                                        <TableHeader>
-                                                                            <TableRow>
-                                                                                <TableHead>Manufacturer</TableHead>
-                                                                                <TableHead>Model</TableHead>
-                                                                                <TableHead>Cores</TableHead>
-                                                                                <TableHead>Threads</TableHead>
-                                                                                <TableHead>Base Clock</TableHead>
-                                                                                <TableHead>Boost Clock</TableHead>
-                                                                            </TableRow>
-                                                                        </TableHeader>
-                                                                        <TableBody>
-                                                                            {pc.processorSpecs.map((p) => (
-                                                                                <TableRow key={p.id}>
-                                                                                    <TableCell>{p.manufacturer}</TableCell>
-                                                                                    <TableCell>{p.model}</TableCell>
-                                                                                    <TableCell>{p.core_count}</TableCell>
-                                                                                    <TableCell>{p.thread_count}</TableCell>
-                                                                                    <TableCell>{p.base_clock_ghz} GHz</TableCell>
-                                                                                    <TableCell>{p.boost_clock_ghz} GHz</TableCell>
-                                                                                </TableRow>
-                                                                            ))}
-                                                                        </TableBody>
-                                                                    </Table>
-                                                                ) : (
-                                                                    <p className="text-muted-foreground">No processor specs available.</p>
-                                                                )}
-                                                            </section>
-                                                        </div>
-
-                                                        {/* Footer */}
-                                                        <DialogClose asChild>
-                                                            <Button className="mt-4 self-end">Close</Button>
-                                                        </DialogClose>
-                                                    </DialogContent>
-                                                </Dialog>
-
-                                                {/* Delete */}
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
+                                        return (
+                                            <TableRow key={pc.id}>
+                                                <TableCell>
+                                                    <Checkbox
+                                                        checked={selectedPcIds.includes(pc.id)}
+                                                        onCheckedChange={(checked) => handleSelectPc(pc.id, checked === true)}
+                                                        aria-label={`Select PC ${pc.pc_number || pc.id}`}
+                                                    />
+                                                </TableCell>
+                                                <TableCell className="hidden lg:table-cell">{pc.id}</TableCell>
+                                                <TableCell className="font-medium">
+                                                    {pc.pc_number || <span className="text-gray-400">—</span>}
+                                                </TableCell>
+                                                <TableCell>{pc.manufacturer}</TableCell>
+                                                <TableCell>{pc.model}</TableCell>
+                                                <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
+                                                <TableCell>{totalRamGb || 0}</TableCell>
+                                                <TableCell className="hidden xl:table-cell">{diskCount > 0 ? `${diskCount} disk(s)` : '—'}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        {pc.issue ? (
+                                                            <span className="text-xs text-red-600 font-medium truncate max-w-[200px]" title={pc.issue}>
+                                                                ⚠️ {pc.issue}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs text-gray-400">No issue</span>
+                                                        )}
                                                         <Button
-                                                            variant="destructive"
-                                                            className="bg-red-600 hover:bg-red-700 text-white"
+                                                            variant="ghost"
+                                                            size="sm"
+                                                            onClick={() => handleOpenIssueDialog(pc)}
+                                                            className="h-7 px-2 text-xs"
                                                         >
-                                                            Delete
+                                                            {pc.issue ? 'Edit' : 'Add'}
                                                         </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Are you sure you want to delete {pc.manufacturer} {pc.model}? This action cannot be undone.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction
-                                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                                onClick={() => handleDelete(pc.id)}
-                                                            >
-                                                                Yes, Delete
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </TableCell>
-                                        </TableRow>
-                                    );
-                                })}
-                            </TableBody>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="flex justify-center gap-2">
+                                                    {/* Edit */}
+                                                    <Link href={pcSpecEdit.url(pc.id)}>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                    </Link>
 
-                            <TableFooter>
-                                <TableRow>
-                                    <TableCell colSpan={10} className="text-center font-medium">
-                                        PC Specs List
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </div>
+                                                    {/* Details Dialog */}
+                                                    <Dialog>
+                                                        <DialogTrigger asChild>
+                                                            <Button variant="outline" size="sm">
+                                                                Details
+                                                            </Button>
+                                                        </DialogTrigger>
+                                                        <DialogContent className="max-w-[95vw] sm:max-w-7xl w-full h-[90vh] flex flex-col">
+                                                            <DialogTitle className="text-lg sm:text-xl font-semibold break-words">
+                                                                {pc.manufacturer} {pc.model} — Full Specifications
+                                                            </DialogTitle>
+
+                                                            {/* Scrollable body */}
+                                                            <div className="flex-1 overflow-y-auto pr-2 mt-4 space-y-6 text-sm">
+                                                                {/* Motherboard Core Info */}
+                                                                <section>
+                                                                    <h3 className="font-semibold text-base mb-2">PC Spec Details</h3>
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                                                                        <p><span className="font-medium">Manufacturer:</span> {pc.manufacturer}</p>
+                                                                        <p><span className="font-medium">Model:</span> {pc.model}</p>
+                                                                        <p><span className="font-medium">Memory Type:</span> {pc.memory_type}</p>
+                                                                    </div>
+                                                                </section>
+
+                                                                {/* RAM Specs */}
+                                                                <section>
+                                                                    <h3 className="font-semibold text-base mb-2">RAM Specs</h3>
+                                                                    {pc.ramSpecs?.length ? (
+                                                                        <Table>
+                                                                            <TableHeader>
+                                                                                <TableRow>
+                                                                                    <TableHead>Manufacturer</TableHead>
+                                                                                    <TableHead>Model</TableHead>
+                                                                                    <TableHead>Capacity</TableHead>
+                                                                                    <TableHead>Type</TableHead>
+                                                                                    <TableHead>Speed</TableHead>
+                                                                                </TableRow>
+                                                                            </TableHeader>
+                                                                            <TableBody>
+                                                                                {pc.ramSpecs.map((r) => (
+                                                                                    <TableRow key={r.id}>
+                                                                                        <TableCell>{r.manufacturer}</TableCell>
+                                                                                        <TableCell>{r.model}</TableCell>
+                                                                                        <TableCell>{r.capacity_gb} GB</TableCell>
+                                                                                        <TableCell>{r.type}</TableCell>
+                                                                                        <TableCell>{r.speed}</TableCell>
+                                                                                    </TableRow>
+                                                                                ))}
+                                                                            </TableBody>
+                                                                        </Table>
+                                                                    ) : (
+                                                                        <p className="text-muted-foreground">No RAM specs available.</p>
+                                                                    )}
+                                                                </section>
+
+                                                                {/* Disk Specs */}
+                                                                <section>
+                                                                    <h3 className="font-semibold text-base mb-2">Disk Specs</h3>
+                                                                    {pc.diskSpecs?.length ? (
+                                                                        <Table>
+                                                                            <TableHeader>
+                                                                                <TableRow>
+                                                                                    <TableHead>Manufacturer</TableHead>
+                                                                                    <TableHead>Model</TableHead>
+                                                                                    <TableHead>Capacity</TableHead>
+                                                                                </TableRow>
+                                                                            </TableHeader>
+                                                                            <TableBody>
+                                                                                {pc.diskSpecs.map((d) => (
+                                                                                    <TableRow key={d.id}>
+                                                                                        <TableCell>{d.manufacturer}</TableCell>
+                                                                                        <TableCell>{d.model}</TableCell>
+                                                                                        <TableCell>{d.capacity_gb} GB</TableCell>
+                                                                                    </TableRow>
+                                                                                ))}
+                                                                            </TableBody>
+                                                                        </Table>
+                                                                    ) : (
+                                                                        <p className="text-muted-foreground">No disk specs available.</p>
+                                                                    )}
+                                                                </section>
+
+                                                                {/* Processor Specs */}
+                                                                <section>
+                                                                    <h3 className="font-semibold text-base mb-2">Processor Specs</h3>
+                                                                    {pc.processorSpecs?.length ? (
+                                                                        <Table>
+                                                                            <TableHeader>
+                                                                                <TableRow>
+                                                                                    <TableHead>Manufacturer</TableHead>
+                                                                                    <TableHead>Model</TableHead>
+                                                                                    <TableHead>Cores</TableHead>
+                                                                                    <TableHead>Threads</TableHead>
+                                                                                    <TableHead>Base Clock</TableHead>
+                                                                                    <TableHead>Boost Clock</TableHead>
+                                                                                </TableRow>
+                                                                            </TableHeader>
+                                                                            <TableBody>
+                                                                                {pc.processorSpecs.map((p) => (
+                                                                                    <TableRow key={p.id}>
+                                                                                        <TableCell>{p.manufacturer}</TableCell>
+                                                                                        <TableCell>{p.model}</TableCell>
+                                                                                        <TableCell>{p.core_count}</TableCell>
+                                                                                        <TableCell>{p.thread_count}</TableCell>
+                                                                                        <TableCell>{p.base_clock_ghz} GHz</TableCell>
+                                                                                        <TableCell>{p.boost_clock_ghz} GHz</TableCell>
+                                                                                    </TableRow>
+                                                                                ))}
+                                                                            </TableBody>
+                                                                        </Table>
+                                                                    ) : (
+                                                                        <p className="text-muted-foreground">No processor specs available.</p>
+                                                                    )}
+                                                                </section>
+                                                            </div>
+
+                                                            {/* Footer */}
+                                                            <DialogClose asChild>
+                                                                <Button className="mt-4 self-end">Close</Button>
+                                                            </DialogClose>
+                                                        </DialogContent>
+                                                    </Dialog>
+
+                                                    {/* Delete */}
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button
+                                                                variant="destructive"
+                                                                className="bg-red-600 hover:bg-red-700 text-white"
+                                                            >
+                                                                Delete
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Are you sure you want to delete {pc.manufacturer} {pc.model}? This action cannot be undone.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction
+                                                                    className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                                                    onClick={() => handleDelete(pc.id)}
+                                                                >
+                                                                    Yes, Delete
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                </TableBody>
+
+                                <TableFooter>
+                                    <TableRow>
+                                        <TableCell colSpan={10} className="text-center font-medium">
+                                            PC Specs List
+                                        </TableCell>
+                                    </TableRow>
+                                </TableFooter>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

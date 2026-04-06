@@ -27,6 +27,7 @@ import { Plus, Search, Eye, Trash2, RefreshCw, Filter, Play, Pause } from 'lucid
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { TableSkeleton } from '@/components/TableSkeleton';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { Can } from '@/components/authorization';
 import { index as medicationIndexRoute, create as medicationCreateRoute, show as medicationShowRoute, destroy as medicationDestroyRoute } from '@/routes/medication-requests';
@@ -335,70 +336,76 @@ export default function Index({ medicationRequests, filters, medicationTypes = [
 
                 {/* Desktop Table View */}
                 <div className="hidden md:block overflow-hidden rounded-md border bg-card">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead>Employee Name</TableHead>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Campaign</TableHead>
-                                    <TableHead>Site</TableHead>
-                                    <TableHead>Medication Type</TableHead>
-                                    <TableHead>Onset of Symptoms</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Requested Date</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {medicationRequests.data.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
-                                            No medication requests found
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    medicationRequests.data.map((request) => (
-                                        <TableRow key={request.id}>
-                                            <TableCell className="font-medium">{request.name}</TableCell>
-                                            <TableCell>{request.user?.email || '-'}</TableCell>
-                                            <TableCell>{request.user?.active_schedule?.campaign?.name || '-'}</TableCell>
-                                            <TableCell>{request.user?.active_schedule?.site?.name || '-'}</TableCell>
-                                            <TableCell>{request.medication_type}</TableCell>
-                                            <TableCell className="capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</TableCell>
-                                            <TableCell>{getStatusBadge(request.status)}</TableCell>
-                                            <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Link href={medicationShowRoute(request.id).url}>
-                                                        <Button variant="outline" size="icon" title="View Details">
-                                                            <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                    </Link>
-                                                    <Can permission="medication_requests.delete">
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            onClick={() => handleDelete(request.id)}
-                                                            title="Delete Request"
-                                                            className="text-red-600 hover:text-red-700 border-red-300"
-                                                        >
-                                                            <Trash2 className="h-4 w-4" />
-                                                        </Button>
-                                                    </Can>
-                                                </div>
-                                            </TableCell>
+                    {isPageLoading ? (
+                        <TableSkeleton columns={9} rows={8} />
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            <TableHead>Employee Name</TableHead>
+                                            <TableHead>Email</TableHead>
+                                            <TableHead>Campaign</TableHead>
+                                            <TableHead>Site</TableHead>
+                                            <TableHead>Medication Type</TableHead>
+                                            <TableHead>Onset of Symptoms</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Requested Date</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {medicationRequests.data.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                                                    No medication requests found
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            medicationRequests.data.map((request) => (
+                                                <TableRow key={request.id}>
+                                                    <TableCell className="font-medium">{request.name}</TableCell>
+                                                    <TableCell>{request.user?.email || '-'}</TableCell>
+                                                    <TableCell>{request.user?.active_schedule?.campaign?.name || '-'}</TableCell>
+                                                    <TableCell>{request.user?.active_schedule?.site?.name || '-'}</TableCell>
+                                                    <TableCell>{request.medication_type}</TableCell>
+                                                    <TableCell className="capitalize">{request.onset_of_symptoms.replace(/_/g, ' ')}</TableCell>
+                                                    <TableCell>{getStatusBadge(request.status)}</TableCell>
+                                                    <TableCell>{new Date(request.created_at).toLocaleDateString()}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <Link href={medicationShowRoute(request.id).url}>
+                                                                <Button variant="outline" size="icon" title="View Details">
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            </Link>
+                                                            <Can permission="medication_requests.delete">
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    onClick={() => handleDelete(request.id)}
+                                                                    title="Delete Request"
+                                                                    className="text-red-600 hover:text-red-700 border-red-300"
+                                                                >
+                                                                    <Trash2 className="h-4 w-4" />
+                                                                </Button>
+                                                            </Can>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
 
-                    {paginationLinks.length > 0 && (
-                        <div className="border-t px-4 py-3 flex justify-center">
-                            <PaginationNav links={paginationLinks} />
-                        </div>
+                            {paginationLinks.length > 0 && (
+                                <div className="border-t px-4 py-3 flex justify-center">
+                                    <PaginationNav links={paginationLinks} />
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 

@@ -1125,4 +1125,249 @@ class CoachingSessionControllerTest extends TestCase
                 ->where('pendingReviewCount', 2)
             );
     }
+
+    // ─── Gap Coverage: Search Filter ────────────────────────────────
+
+    #[Test]
+    public function admin_can_search_sessions_by_coachee_name(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        $agent1 = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'first_name' => 'UniqueSearchName']);
+        $agent2 = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'first_name' => 'OtherAgent']);
+
+        CoachingSession::factory()->create(['coachee_id' => $agent1->id]);
+        CoachingSession::factory()->create(['coachee_id' => $agent2->id]);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index', ['search' => 'UniqueSearchName']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+            );
+    }
+
+    // ─── Gap Coverage: Edit Form ────────────────────────────────────
+
+    #[Test]
+    public function team_lead_can_view_edit_form_for_own_session(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->get(route('coaching.sessions.edit', $session));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Edit')
+                ->has('session')
+                ->has('purposes')
+                ->has('severityFlags')
+            );
+    }
+
+    #[Test]
+    public function agent_cannot_view_edit_form(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        $response = $this->actingAs($team['agent'])
+            ->get(route('coaching.sessions.edit', $session));
+
+        $response->assertStatus(403);
+    }
+
+    // ─── Gap Coverage: Admin Update ─────────────────────────────────
+
+    #[Test]
+    public function admin_can_update_any_coaching_session(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'performance_description' => 'Original description',
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->put(route('coaching.sessions.update', $session), [
+                'coachee_id' => $team['agent']->id,
+                'session_date' => $session->session_date->format('Y-m-d'),
+                'purpose' => $session->purpose,
+                'performance_description' => 'Updated by admin',
+                'smart_action_plan' => $session->smart_action_plan,
+                'profile_new_hire' => false,
+                'profile_tenured' => true,
+                'profile_returning' => false,
+                'profile_previously_coached_same_issue' => false,
+                'focus_attendance_tardiness' => true,
+                'focus_productivity' => false,
+                'focus_compliance' => false,
+                'focus_callouts' => false,
+                'focus_recognition_milestones' => false,
+                'focus_growth_development' => false,
+                'focus_other' => false,
+                'root_cause_lack_of_skills' => false,
+                'root_cause_lack_of_clarity' => false,
+                'root_cause_personal_issues' => false,
+                'root_cause_motivation_engagement' => false,
+                'root_cause_health_fatigue' => false,
+                'root_cause_workload_process' => false,
+                'root_cause_peer_conflict' => false,
+                'root_cause_others' => false,
+            ]);
+
+        $response->assertRedirect(route('coaching.sessions.show', $session));
+        $this->assertDatabaseHas('coaching_sessions', [
+            'id' => $session->id,
+            'performance_description' => 'Updated by admin',
+        ]);
+    }
+
+    // ─── Gap Coverage: Admin Review ─────────────────────────────────
+
+    #[Test]
+    public function admin_can_review_coaching_session(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+        $team = $this->createTeamWithCampaign();
+
+        $session = CoachingSession::factory()->acknowledged()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        $response = $this->actingAs($admin)
+            ->patch(route('coaching.sessions.review', $session), [
+                'compliance_status' => 'Verified',
+            ]);
+
+        $response->assertRedirect(route('coaching.sessions.index'));
+        $this->assertDatabaseHas('coaching_sessions', [
+            'id' => $session->id,
+            'compliance_status' => 'Verified',
+            'compliance_reviewer_id' => $admin->id,
+        ]);
+    }
+
+    // ─── Gap Coverage: Unauthenticated Access ───────────────────────
+
+    #[Test]
+    public function unauthenticated_user_is_redirected_from_coaching_index(): void
+    {
+        $response = $this->get(route('coaching.sessions.index'));
+        $response->assertRedirect(route('login'));
+    }
+
+    #[Test]
+    public function unauthenticated_user_is_redirected_from_coaching_store(): void
+    {
+        $response = $this->post(route('coaching.sessions.store'), []);
+        $response->assertRedirect(route('login'));
+    }
+
+    // ─── Gap Coverage: Update Validation ────────────────────────────
+
+    #[Test]
+    public function update_validates_required_fields(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->put(route('coaching.sessions.update', $session), []);
+
+        $response->assertSessionHasErrors([
+            'session_date',
+            'purpose',
+            'performance_description',
+            'smart_action_plan',
+        ]);
+    }
+
+    // ─── Gap Coverage: Acknowledge Edge Cases ───────────────────────
+
+    #[Test]
+    public function agent_can_acknowledge_without_comment(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coachee_id' => $team['agent']->id,
+            'coach_id' => $team['teamLead']->id,
+            'ack_status' => 'Pending',
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        $response = $this->actingAs($team['agent'])
+            ->patch(route('coaching.sessions.acknowledge', $session), [
+                'ack_comment' => null,
+            ]);
+
+        $response->assertRedirect(route('coaching.sessions.show', $session));
+        $this->assertDatabaseHas('coaching_sessions', [
+            'id' => $session->id,
+            'ack_status' => 'Acknowledged',
+            'compliance_status' => 'For_Review',
+        ]);
+    }
+
+    // ─── Gap Coverage: Compliance Status Filter ─────────────────────
+
+    #[Test]
+    public function admin_can_filter_sessions_by_compliance_status(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        CoachingSession::factory()->create(['compliance_status' => 'Verified']);
+        CoachingSession::factory()->create(['compliance_status' => 'Rejected']);
+        CoachingSession::factory()->create(['compliance_status' => 'Verified']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index', ['compliance_status' => 'Verified']));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 2)
+            );
+    }
+
+    // ─── Gap Coverage: Date Range Filter ────────────────────────────
+
+    #[Test]
+    public function admin_can_filter_sessions_by_date_range(): void
+    {
+        $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
+
+        CoachingSession::factory()->create(['session_date' => '2024-06-01']);
+        CoachingSession::factory()->create(['session_date' => '2024-07-15']);
+        CoachingSession::factory()->create(['session_date' => '2024-08-01']);
+
+        $response = $this->actingAs($admin)
+            ->get(route('coaching.sessions.index', [
+                'date_from' => '2024-06-01',
+                'date_to' => '2024-06-30',
+            ]));
+
+        $response->assertStatus(200)
+            ->assertInertia(fn (Assert $page) => $page
+                ->component('Coaching/Sessions/Index')
+                ->has('sessions.data', 1)
+            );
+    }
 }

@@ -61,6 +61,7 @@ import { toast } from 'sonner';
 import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { TableSkeleton } from '@/components/TableSkeleton';
 import PaginationNav from '@/components/pagination-nav';
 import { index as leaveIndexRoute } from '@/routes/leave-requests';
 import { format } from 'date-fns';
@@ -895,280 +896,286 @@ export default function Index({ creditsData, allEmployees, campaigns = [], teamL
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden bg-card">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead>Employee</TableHead>
-                                    <TableHead>Role</TableHead>
-                                    <TableHead>Hire Date</TableHead>
-                                    <TableHead className="text-center">Regularization</TableHead>
-                                    <TableHead className="text-right">Rate/Month</TableHead>
-                                    <TableHead className="text-right">Earned</TableHead>
-                                    <TableHead className="text-right">Used</TableHead>
-                                    <TableHead className="text-right">Balance</TableHead>
-                                    <TableHead className="text-center">Pending Transfer</TableHead>
-                                    <TableHead className="text-center">Carryover Received</TableHead>
-                                    <TableHead className="text-center">Carryover Forward</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {!creditsData?.data || creditsData.data.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
-                                            No employees found
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    creditsData.data.map((employee) => (
-                                        <TableRow key={employee.id}>
-                                            <TableCell>
-                                                <div>
-                                                    <p className="font-medium">{employee.name}</p>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <Badge variant={getRoleBadgeVariant(employee.role)}>
-                                                    {employee.role}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell>{format(new Date(employee.hired_date), 'MMM d, yyyy')}</TableCell>
-                                            <TableCell className="text-center">
-                                                {employee.regularization.is_regularized ? (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Badge variant="default" className="bg-green-600 cursor-help">
-                                                                    {employee.regularization.regularization_date
-                                                                        ? format(new Date(employee.regularization.regularization_date), 'MMM d, yyyy')
-                                                                        : 'Regularized'
-                                                                    }
-                                                                </Badge>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p className="font-medium">Regular Employee</p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    Hired: {format(new Date(employee.hired_date), 'MMM d, yyyy')}
-                                                                </p>
-                                                                {employee.regularization.has_first_regularization && (
-                                                                    <p className="text-xs text-green-600 mt-1">
-                                                                        ✓ First regularization transfer completed
-                                                                    </p>
-                                                                )}
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                ) : (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Badge variant="secondary" className="cursor-help">
-                                                                    <Clock className="h-3 w-3 mr-1" />
-                                                                    {format(new Date(employee.eligibility_date), 'MMM d, yyyy')}
-                                                                </Badge>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p className="font-medium">Probationary Period</p>
-                                                                <p className="text-xs">
-                                                                    Regularization: {format(new Date(employee.eligibility_date), 'MMM d, yyyy')}
-                                                                </p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {employee.regularization.days_until_regularization > 0
-                                                                        ? `${employee.regularization.days_until_regularization} days remaining`
-                                                                        : 'Awaiting system processing'}
-                                                                </p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-right">{employee.monthly_rate}</TableCell>
-                                            <TableCell className="text-right font-medium text-green-600">
-                                                +{employee.total_earned.toFixed(2)}
-                                            </TableCell>
-                                            <TableCell className="text-right font-medium text-orange-600">
-                                                -{employee.total_used.toFixed(2)}
-                                            </TableCell>
-                                            <TableCell className="text-right font-bold">
-                                                {employee.balance.toFixed(2)}
-                                            </TableCell>
-                                            {/* Accrued (Pending Regularization) Column */}
-                                            <TableCell className="text-center">
-                                                {employee.regularization.pending_credits ? (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className="border-purple-500 text-purple-600 bg-purple-50 cursor-help whitespace-nowrap"
-                                                                >
-                                                                    <Clock className="h-3 w-3 mr-1" />
-                                                                    {employee.regularization.pending_credits.credits.toFixed(2)}
-                                                                    <span className="mx-0.5 text-purple-400 text-xs">({employee.regularization.pending_credits.from_year}→{employee.regularization.pending_credits.to_year})</span>
-                                                                </Badge>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p className="font-medium">Pending Regularization Credits</p>
-                                                                <p className="text-xs">
-                                                                    {employee.regularization.pending_credits.credits.toFixed(2)} credits from {employee.regularization.pending_credits.from_year}
-                                                                </p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    ({employee.regularization.pending_credits.months_accrued} months accrued)
-                                                                </p>
-                                                                <p className="text-xs text-purple-600 mt-1">
-                                                                    {employee.regularization.pending_credits.from_year} → {employee.regularization.pending_credits.to_year} transfer upon regularization
-                                                                </p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-sm">—</span>
-                                                )}
-                                            </TableCell>
-                                            {/* Carryover Received (from previous year) */}
-                                            <TableCell className="text-center">
-                                                {employee.carryover_received ? (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className={employee.carryover_received.cash_converted
-                                                                        ? "border-gray-400 text-gray-500 bg-gray-50 cursor-help line-through"
-                                                                        : employee.carryover_received.is_first_regularization
-                                                                            ? "border-green-500 text-green-600 bg-green-50 cursor-help"
-                                                                            : "border-blue-500 text-blue-600 bg-blue-50 cursor-help"
-                                                                    }
-                                                                >
-                                                                    {employee.carryover_received.cash_converted
-                                                                        ? <Banknote className="h-3 w-3 mr-1" />
-                                                                        : <Check className="h-3 w-3 mr-1" />
-                                                                    }
-                                                                    {employee.carryover_received.credits.toFixed(2)}
-                                                                </Badge>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p className="font-medium">
-                                                                    {employee.carryover_received.cash_converted
-                                                                        ? 'Converted to Cash'
-                                                                        : employee.carryover_received.is_first_regularization
-                                                                            ? 'First Regularization Transfer'
-                                                                            : 'Carryover Received'
-                                                                    }
-                                                                </p>
-                                                                <p className="text-xs">
-                                                                    {employee.carryover_received.credits.toFixed(2)} credits from {employee.carryover_received.from_year}
-                                                                </p>
-                                                                {employee.carryover_received.cash_converted && (
-                                                                    <p className="text-xs text-green-600 mt-1">
-                                                                        Credits converted to cash — not available for leave
-                                                                    </p>
-                                                                )}
-                                                                {employee.carryover_received.is_first_regularization && !employee.carryover_received.cash_converted && (
-                                                                    <p className="text-xs text-green-600 mt-1">
-                                                                        All credits transferred (first regularization)
-                                                                    </p>
-                                                                )}
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-sm">—</span>
-                                                )}
-                                            </TableCell>
-                                            {/* Carryover Forward (to next year) */}
-                                            <TableCell className="text-center">
-                                                {employee.carryover ? (
-                                                    <TooltipProvider>
-                                                        <Tooltip>
-                                                            <TooltipTrigger asChild>
-                                                                <Badge
-                                                                    variant="outline"
-                                                                    className={employee.carryover.cash_converted
-                                                                        ? "border-green-500 text-green-600 bg-green-50"
-                                                                        : employee.carryover.is_expired
-                                                                            ? "border-red-500 text-red-600 bg-red-50"
-                                                                            : employee.carryover.is_processed
-                                                                                ? "border-amber-500 text-amber-600 bg-amber-50"
-                                                                                : "border-blue-500 text-blue-600 bg-blue-50"
-                                                                    }
-                                                                >
-                                                                    <Banknote className="h-3 w-3 mr-1" />
-                                                                    {employee.carryover.credits.toFixed(2)}
-                                                                </Badge>
-                                                            </TooltipTrigger>
-                                                            <TooltipContent>
-                                                                <p>To {employee.carryover.to_year} (for conversion/leave)</p>
-                                                                <p className="text-xs text-muted-foreground">
-                                                                    {employee.carryover.cash_converted
-                                                                        ? 'Converted'
-                                                                        : employee.carryover.is_expired
-                                                                            ? 'Expired (past March)'
-                                                                            : employee.carryover.is_processed
-                                                                                ? 'Available until March'
-                                                                                : 'Projected (not yet processed)'}
-                                                                </p>
-                                                            </TooltipContent>
-                                                        </Tooltip>
-                                                    </TooltipProvider>
-                                                ) : (
-                                                    <span className="text-muted-foreground text-sm">—</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell className="text-center">
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
-                                                        <Button variant="outline" size="icon" title="View History">
-                                                            <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                    </Link>
-                                                    {canEdit && employee.carryover_received && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="icon"
-                                                            title="Edit Carryover Credits"
-                                                            onClick={() => openEditCarryover(employee)}
-                                                        >
-                                                            <Pencil className="h-4 w-4" />
-                                                        </Button>
-                                                    )}
-                                                    {canEdit && employee.carryover_received && !employee.carryover_received.cash_converted && !employee.carryover_received.is_first_regularization && (
-                                                        <TooltipProvider>
-                                                            <Tooltip>
-                                                                <TooltipTrigger asChild>
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        size="icon"
-                                                                        title="Convert Carryover to Cash"
-                                                                        onClick={() => {
-                                                                            setConvertingEmployeeId(employee.id);
-                                                                            setConvertingEmployeeName(employee.name);
-                                                                        }}
-                                                                        disabled={isConverting}
-                                                                    >
-                                                                        <ArrowRightLeft className="h-4 w-4" />
-                                                                    </Button>
-                                                                </TooltipTrigger>
-                                                                <TooltipContent>
-                                                                    <p>Convert {employee.carryover_received.credits.toFixed(2)} carryover credits to cash</p>
-                                                                </TooltipContent>
-                                                            </Tooltip>
-                                                        </TooltipProvider>
-                                                    )}
-                                                </div>
-                                            </TableCell>
+                    {isPageLoading ? (
+                        <TableSkeleton columns={12} rows={8} />
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
+                                            <TableHead>Employee</TableHead>
+                                            <TableHead>Role</TableHead>
+                                            <TableHead>Hire Date</TableHead>
+                                            <TableHead className="text-center">Regularization</TableHead>
+                                            <TableHead className="text-right">Rate/Month</TableHead>
+                                            <TableHead className="text-right">Earned</TableHead>
+                                            <TableHead className="text-right">Used</TableHead>
+                                            <TableHead className="text-right">Balance</TableHead>
+                                            <TableHead className="text-center">Pending Transfer</TableHead>
+                                            <TableHead className="text-center">Carryover Received</TableHead>
+                                            <TableHead className="text-center">Carryover Forward</TableHead>
+                                            <TableHead className="text-center">Actions</TableHead>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {!creditsData?.data || creditsData.data.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={12} className="text-center py-8 text-muted-foreground">
+                                                    No employees found
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            creditsData.data.map((employee) => (
+                                                <TableRow key={employee.id}>
+                                                    <TableCell>
+                                                        <div>
+                                                            <p className="font-medium">{employee.name}</p>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Badge variant={getRoleBadgeVariant(employee.role)}>
+                                                            {employee.role}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>{format(new Date(employee.hired_date), 'MMM d, yyyy')}</TableCell>
+                                                    <TableCell className="text-center">
+                                                        {employee.regularization.is_regularized ? (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Badge variant="default" className="bg-green-600 cursor-help">
+                                                                            {employee.regularization.regularization_date
+                                                                                ? format(new Date(employee.regularization.regularization_date), 'MMM d, yyyy')
+                                                                                : 'Regularized'
+                                                                            }
+                                                                        </Badge>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        <p className="font-medium">Regular Employee</p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            Hired: {format(new Date(employee.hired_date), 'MMM d, yyyy')}
+                                                                        </p>
+                                                                        {employee.regularization.has_first_regularization && (
+                                                                            <p className="text-xs text-green-600 mt-1">
+                                                                                ✓ First regularization transfer completed
+                                                                            </p>
+                                                                        )}
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        ) : (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Badge variant="secondary" className="cursor-help">
+                                                                            <Clock className="h-3 w-3 mr-1" />
+                                                                            {format(new Date(employee.eligibility_date), 'MMM d, yyyy')}
+                                                                        </Badge>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        <p className="font-medium">Probationary Period</p>
+                                                                        <p className="text-xs">
+                                                                            Regularization: {format(new Date(employee.eligibility_date), 'MMM d, yyyy')}
+                                                                        </p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {employee.regularization.days_until_regularization > 0
+                                                                                ? `${employee.regularization.days_until_regularization} days remaining`
+                                                                                : 'Awaiting system processing'}
+                                                                        </p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-right">{employee.monthly_rate}</TableCell>
+                                                    <TableCell className="text-right font-medium text-green-600">
+                                                        +{employee.total_earned.toFixed(2)}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-medium text-orange-600">
+                                                        -{employee.total_used.toFixed(2)}
+                                                    </TableCell>
+                                                    <TableCell className="text-right font-bold">
+                                                        {employee.balance.toFixed(2)}
+                                                    </TableCell>
+                                                    {/* Accrued (Pending Regularization) Column */}
+                                                    <TableCell className="text-center">
+                                                        {employee.regularization.pending_credits ? (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className="border-purple-500 text-purple-600 bg-purple-50 cursor-help whitespace-nowrap"
+                                                                        >
+                                                                            <Clock className="h-3 w-3 mr-1" />
+                                                                            {employee.regularization.pending_credits.credits.toFixed(2)}
+                                                                            <span className="mx-0.5 text-purple-400 text-xs">({employee.regularization.pending_credits.from_year}→{employee.regularization.pending_credits.to_year})</span>
+                                                                        </Badge>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        <p className="font-medium">Pending Regularization Credits</p>
+                                                                        <p className="text-xs">
+                                                                            {employee.regularization.pending_credits.credits.toFixed(2)} credits from {employee.regularization.pending_credits.from_year}
+                                                                        </p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            ({employee.regularization.pending_credits.months_accrued} months accrued)
+                                                                        </p>
+                                                                        <p className="text-xs text-purple-600 mt-1">
+                                                                            {employee.regularization.pending_credits.from_year} → {employee.regularization.pending_credits.to_year} transfer upon regularization
+                                                                        </p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        ) : (
+                                                            <span className="text-muted-foreground text-sm">—</span>
+                                                        )}
+                                                    </TableCell>
+                                                    {/* Carryover Received (from previous year) */}
+                                                    <TableCell className="text-center">
+                                                        {employee.carryover_received ? (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className={employee.carryover_received.cash_converted
+                                                                                ? "border-gray-400 text-gray-500 bg-gray-50 cursor-help line-through"
+                                                                                : employee.carryover_received.is_first_regularization
+                                                                                    ? "border-green-500 text-green-600 bg-green-50 cursor-help"
+                                                                                    : "border-blue-500 text-blue-600 bg-blue-50 cursor-help"
+                                                                            }
+                                                                        >
+                                                                            {employee.carryover_received.cash_converted
+                                                                                ? <Banknote className="h-3 w-3 mr-1" />
+                                                                                : <Check className="h-3 w-3 mr-1" />
+                                                                            }
+                                                                            {employee.carryover_received.credits.toFixed(2)}
+                                                                        </Badge>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        <p className="font-medium">
+                                                                            {employee.carryover_received.cash_converted
+                                                                                ? 'Converted to Cash'
+                                                                                : employee.carryover_received.is_first_regularization
+                                                                                    ? 'First Regularization Transfer'
+                                                                                    : 'Carryover Received'
+                                                                            }
+                                                                        </p>
+                                                                        <p className="text-xs">
+                                                                            {employee.carryover_received.credits.toFixed(2)} credits from {employee.carryover_received.from_year}
+                                                                        </p>
+                                                                        {employee.carryover_received.cash_converted && (
+                                                                            <p className="text-xs text-green-600 mt-1">
+                                                                                Credits converted to cash — not available for leave
+                                                                            </p>
+                                                                        )}
+                                                                        {employee.carryover_received.is_first_regularization && !employee.carryover_received.cash_converted && (
+                                                                            <p className="text-xs text-green-600 mt-1">
+                                                                                All credits transferred (first regularization)
+                                                                            </p>
+                                                                        )}
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        ) : (
+                                                            <span className="text-muted-foreground text-sm">—</span>
+                                                        )}
+                                                    </TableCell>
+                                                    {/* Carryover Forward (to next year) */}
+                                                    <TableCell className="text-center">
+                                                        {employee.carryover ? (
+                                                            <TooltipProvider>
+                                                                <Tooltip>
+                                                                    <TooltipTrigger asChild>
+                                                                        <Badge
+                                                                            variant="outline"
+                                                                            className={employee.carryover.cash_converted
+                                                                                ? "border-green-500 text-green-600 bg-green-50"
+                                                                                : employee.carryover.is_expired
+                                                                                    ? "border-red-500 text-red-600 bg-red-50"
+                                                                                    : employee.carryover.is_processed
+                                                                                        ? "border-amber-500 text-amber-600 bg-amber-50"
+                                                                                        : "border-blue-500 text-blue-600 bg-blue-50"
+                                                                            }
+                                                                        >
+                                                                            <Banknote className="h-3 w-3 mr-1" />
+                                                                            {employee.carryover.credits.toFixed(2)}
+                                                                        </Badge>
+                                                                    </TooltipTrigger>
+                                                                    <TooltipContent>
+                                                                        <p>To {employee.carryover.to_year} (for conversion/leave)</p>
+                                                                        <p className="text-xs text-muted-foreground">
+                                                                            {employee.carryover.cash_converted
+                                                                                ? 'Converted'
+                                                                                : employee.carryover.is_expired
+                                                                                    ? 'Expired (past March)'
+                                                                                    : employee.carryover.is_processed
+                                                                                        ? 'Available until March'
+                                                                                        : 'Projected (not yet processed)'}
+                                                                        </p>
+                                                                    </TooltipContent>
+                                                                </Tooltip>
+                                                            </TooltipProvider>
+                                                        ) : (
+                                                            <span className="text-muted-foreground text-sm">—</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="text-center">
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <Link href={`/form-requests/leave-requests/credits/${employee.id}?year=${yearFilter}`}>
+                                                                <Button variant="outline" size="icon" title="View History">
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            </Link>
+                                                            {canEdit && employee.carryover_received && (
+                                                                <Button
+                                                                    variant="outline"
+                                                                    size="icon"
+                                                                    title="Edit Carryover Credits"
+                                                                    onClick={() => openEditCarryover(employee)}
+                                                                >
+                                                                    <Pencil className="h-4 w-4" />
+                                                                </Button>
+                                                            )}
+                                                            {canEdit && employee.carryover_received && !employee.carryover_received.cash_converted && !employee.carryover_received.is_first_regularization && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon"
+                                                                                title="Convert Carryover to Cash"
+                                                                                onClick={() => {
+                                                                                    setConvertingEmployeeId(employee.id);
+                                                                                    setConvertingEmployeeName(employee.name);
+                                                                                }}
+                                                                                disabled={isConverting}
+                                                                            >
+                                                                                <ArrowRightLeft className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>
+                                                                            <p>Convert {employee.carryover_received.credits.toFixed(2)} carryover credits to cash</p>
+                                                                        </TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
 
-                    {creditsData.links && creditsData.links.length > 0 && (
-                        <div className="border-t px-4 py-3 flex justify-center">
-                            <PaginationNav links={creditsData.links} only={["creditsData"]} />
-                        </div>
+                            {creditsData.links && creditsData.links.length > 0 && (
+                                <div className="border-t px-4 py-3 flex justify-center">
+                                    <PaginationNav links={creditsData.links} only={["creditsData"]} />
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 

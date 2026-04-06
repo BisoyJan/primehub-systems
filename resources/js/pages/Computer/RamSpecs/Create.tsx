@@ -4,8 +4,8 @@ import { ArrowLeft } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { FormField } from '@/components/FormField';
 import {
     Select,
     SelectContent,
@@ -73,8 +73,7 @@ export default function Create() {
                 />
 
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    <div>
-                        <Label htmlFor="manufacturer">Manufacturer</Label>
+                    <FormField label="Manufacturer" htmlFor="manufacturer" error={errors.manufacturer}>
                         <Input
                             id="manufacturer"
                             name="manufacturer"
@@ -82,10 +81,8 @@ export default function Create() {
                             value={data.manufacturer}
                             onChange={(e) => setData('manufacturer', e.target.value)}
                         />
-                        {errors.manufacturer && <p className="text-red-600 text-sm mt-1">{errors.manufacturer}</p>}
-                    </div>
-                    <div>
-                        <Label htmlFor="model">Model</Label>
+                    </FormField>
+                    <FormField label="Model" htmlFor="model" error={errors.model}>
                         <Input
                             id="model"
                             name="model"
@@ -93,11 +90,9 @@ export default function Create() {
                             value={data.model}
                             onChange={(e) => setData('model', e.target.value)}
                         />
-                        {errors.model && <p className="text-red-600 text-sm mt-1">{errors.model}</p>}
-                    </div>
+                    </FormField>
 
-                    <div>
-                        <Label htmlFor="capacity_gb">Capacity (GB)</Label>
+                    <FormField label="Capacity (GB)" htmlFor="capacity_gb" error={errors.capacity_gb}>
                         <Select
                             value={data.capacity_gb ? String(data.capacity_gb) : ''}
                             onValueChange={(val) => setData('capacity_gb', Number(val))}
@@ -113,10 +108,8 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.capacity_gb && <p className="text-red-600 text-sm mt-1">{errors.capacity_gb}</p>}
-                    </div>
-                    <div>
-                        <Label htmlFor="type">Type</Label>
+                    </FormField>
+                    <FormField label="Type" htmlFor="type" error={errors.type}>
                         <Select
                             value={data.type}
                             onValueChange={(val) => setData('type', val)}
@@ -132,11 +125,9 @@ export default function Create() {
                                 ))}
                             </SelectContent>
                         </Select>
-                        {errors.type && <p className="text-red-600 text-sm mt-1">{errors.type}</p>}
-                    </div>
+                    </FormField>
 
-                    <div>
-                        <Label htmlFor="speed">Speed (MHz)</Label>
+                    <FormField label="Speed (MHz)" htmlFor="speed" error={errors.speed}>
                         <Input
                             id="speed"
                             name="speed"
@@ -146,11 +137,9 @@ export default function Create() {
                             value={data.speed}
                             onChange={(e) => setData('speed', e.target.value)}
                         />
-                        {errors.speed && <p className="text-red-600 text-sm mt-1">{errors.speed}</p>}
-                    </div>
+                    </FormField>
 
-                    <div>
-                        <Label htmlFor="stock_quantity">Initial Stock Quantity</Label>
+                    <FormField label="Initial Stock Quantity" htmlFor="stock_quantity" error={errors.stock_quantity}>
                         <Input
                             type="number"
                             id="stock_quantity"
@@ -159,10 +148,7 @@ export default function Create() {
                             min={0}
                             onChange={(e) => setData('stock_quantity', Number(e.target.value))}
                         />
-                        {errors.stock_quantity && (
-                            <p className="text-red-600 text-sm mt-1">{errors.stock_quantity}</p>
-                        )}
-                    </div>
+                    </FormField>
 
                     <div className="md:col-span-2 flex justify-end">
                         <Button type="submit" disabled={processing}>

@@ -49,7 +49,7 @@ export function PageHeader({
                         {actions}
                         {createLink && (
                             <Link href={createLink} className="w-full sm:w-auto">
-                                <Button className="bg-blue-600 hover:bg-blue-700 text-white w-full sm:w-auto">
+                                <Button variant="default" className="w-full sm:w-auto">
                                     <Plus className="w-4 h-4 mr-2" />
                                     {createLabel}
                                 </Button>

@@ -3,7 +3,6 @@ import InputError from '@/components/input-error';
 import AppLayout from '@/layouts/app-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import { type BreadcrumbItem } from '@/types';
-import { Transition } from '@headlessui/react';
 import { Form, Head } from '@inertiajs/react';
 import { useRef } from 'react';
 
@@ -124,17 +123,11 @@ export default function Password() {
                                         Save password
                                     </Button>
 
-                                    <Transition
-                                        show={recentlySuccessful}
-                                        enter="transition ease-in-out"
-                                        enterFrom="opacity-0"
-                                        leave="transition ease-in-out"
-                                        leaveTo="opacity-0"
-                                    >
-                                        <p className="text-sm text-neutral-600">
+                                    {recentlySuccessful && (
+                                        <p className="text-sm text-neutral-600 transition-opacity duration-300">
                                             Saved
                                         </p>
-                                    </Transition>
+                                    )}
                                 </div>
                             </>
                         )}

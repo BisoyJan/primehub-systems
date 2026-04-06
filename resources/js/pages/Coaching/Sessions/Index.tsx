@@ -41,6 +41,7 @@ import { usePageMeta, useFlashMessage, usePageLoading, usePermission } from '@/h
 import { PageHeader } from '@/components/PageHeader';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { TableSkeleton } from '@/components/TableSkeleton';
 import {
     CoachingStatusBadge,
     AckStatusBadge,
@@ -464,90 +465,94 @@ export default function CoachingSessionsIndex() {
 
                 {/* Desktop Table */}
                 <div className="hidden overflow-hidden rounded-md shadow md:block">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead>Date</TableHead>
-                                    {!isAgent && activeTab !== 'my' && <TableHead>Coachee</TableHead>}
-                                    {(isAdmin || activeTab === 'my') && <TableHead>Coach</TableHead>}
-                                    <TableHead>Purpose</TableHead>
-                                    <TableHead>Severity</TableHead>
-                                    <TableHead>Ack Status</TableHead>
-                                    <TableHead>Compliance</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {sessions.data.length === 0 ? (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
-                                            No coaching sessions found.
-                                        </TableCell>
+                    {isLoading ? (
+                        <TableSkeleton columns={8} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead>Date</TableHead>
+                                        {!isAgent && activeTab !== 'my' && <TableHead>Coachee</TableHead>}
+                                        {(isAdmin || activeTab === 'my') && <TableHead>Coach</TableHead>}
+                                        <TableHead>Purpose</TableHead>
+                                        <TableHead>Severity</TableHead>
+                                        <TableHead>Ack Status</TableHead>
+                                        <TableHead>Compliance</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
-                                ) : (
-                                    sessions.data.map((session) => (
-                                        <TableRow key={session.id}>
-                                            <TableCell className="whitespace-nowrap">
-                                                {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                                            </TableCell>
-                                            {!isAgent && activeTab !== 'my' && (
-                                                <TableCell className="font-medium">
-                                                    {formatName(session.coachee)}
-                                                </TableCell>
-                                            )}
-                                            {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
-                                            <TableCell className="max-w-[200px] truncate">
-                                                {purposes[session.purpose] ?? session.purpose}
-                                            </TableCell>
-                                            <TableCell>
-                                                <SeverityBadge flag={session.severity_flag} />
-                                            </TableCell>
-                                            <TableCell>
-                                                <AckStatusBadge status={session.ack_status} />
-                                            </TableCell>
-                                            <TableCell>
-                                                <ComplianceStatusBadge status={session.compliance_status} />
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center justify-center gap-1">
-                                                    <Link href={sessionsShow.url(session.id)}>
-                                                        <Button variant="ghost" size="icon" title="View">
-                                                            <Eye className="h-4 w-4" />
-                                                        </Button>
-                                                    </Link>
-                                                    {can('coaching.edit') && (
-                                                        <Link href={sessionsEdit.url(session.id)}>
-                                                            <Button variant="ghost" size="icon" title="Edit">
-                                                                <Pencil className="h-4 w-4" />
-                                                            </Button>
-                                                        </Link>
-                                                    )}
-                                                    {can('coaching.delete') && (
-                                                        <DeleteConfirmDialog
-                                                            title="Delete Coaching Session"
-                                                            description="Are you sure you want to delete this coaching session? This action cannot be undone."
-                                                            onConfirm={() => handleDelete(session.id)}
-                                                            trigger={
-                                                                <Button
-                                                                    variant="ghost"
-                                                                    size="icon"
-                                                                    title="Delete"
-                                                                    className="text-red-600 hover:text-red-700"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4" />
-                                                                </Button>
-                                                            }
-                                                        />
-                                                    )}
-                                                </div>
+                                </TableHeader>
+                                <TableBody>
+                                    {sessions.data.length === 0 ? (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                                No coaching sessions found.
                                             </TableCell>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    ) : (
+                                        sessions.data.map((session) => (
+                                            <TableRow key={session.id}>
+                                                <TableCell className="whitespace-nowrap">
+                                                    {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                                                </TableCell>
+                                                {!isAgent && activeTab !== 'my' && (
+                                                    <TableCell className="font-medium">
+                                                        {formatName(session.coachee)}
+                                                    </TableCell>
+                                                )}
+                                                {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
+                                                <TableCell className="max-w-[200px] truncate">
+                                                    {purposes[session.purpose] ?? session.purpose}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <SeverityBadge flag={session.severity_flag} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <AckStatusBadge status={session.ack_status} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <ComplianceStatusBadge status={session.compliance_status} />
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center justify-center gap-1">
+                                                        <Link href={sessionsShow.url(session.id)}>
+                                                            <Button variant="ghost" size="icon" title="View">
+                                                                <Eye className="h-4 w-4" />
+                                                            </Button>
+                                                        </Link>
+                                                        {can('coaching.edit') && (
+                                                            <Link href={sessionsEdit.url(session.id)}>
+                                                                <Button variant="ghost" size="icon" title="Edit">
+                                                                    <Pencil className="h-4 w-4" />
+                                                                </Button>
+                                                            </Link>
+                                                        )}
+                                                        {can('coaching.delete') && (
+                                                            <DeleteConfirmDialog
+                                                                title="Delete Coaching Session"
+                                                                description="Are you sure you want to delete this coaching session? This action cannot be undone."
+                                                                onConfirm={() => handleDelete(session.id)}
+                                                                trigger={
+                                                                    <Button
+                                                                        variant="ghost"
+                                                                        size="icon"
+                                                                        title="Delete"
+                                                                        className="text-red-600 hover:text-red-700"
+                                                                    >
+                                                                        <Trash2 className="h-4 w-4" />
+                                                                    </Button>
+                                                                }
+                                                            />
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

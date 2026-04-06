@@ -33,6 +33,9 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import activityLogs, { exportMethod } from '@/routes/activity-logs';
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
+import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { TableSkeleton } from '@/components/TableSkeleton';
+import { usePageLoading } from '@/hooks';
 
 interface Activity {
     id: number;
@@ -74,6 +77,7 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
     const [selectedActivity, setSelectedActivity] = useState<Activity | null>(null);
     const debouncedSearch = useDebounce(search, 300);
     const isUserTyping = useRef(false);
+    const isLoading = usePageLoading();
 
     // Update local state when filters prop changes (e.g., from pagination)
     useEffect(() => {
@@ -279,69 +283,73 @@ export default function ActivityLogsIndex({ activities, causers, filters }: Prop
                     <CardContent>
                         {/* Desktop Table View */}
                         <div className="hidden md:block rounded-md border">
-                            <Table>
-                                <TableHeader>
-                                    <TableRow>
-                                        <TableHead>User</TableHead>
-                                        <TableHead>Event</TableHead>
-                                        <TableHead>Subject</TableHead>
-                                        <TableHead>Description</TableHead>
-                                        <TableHead>Changes</TableHead>
-                                        <TableHead>Date</TableHead>
-                                        <TableHead className="w-[50px]" />
-                                    </TableRow>
-                                </TableHeader>
-                                <TableBody>
-                                    {activities.data.length === 0 ? (
+                            {isLoading ? (
+                                <TableSkeleton columns={7} rows={8} />
+                            ) : (
+                                <Table>
+                                    <TableHeader>
                                         <TableRow>
-                                            <TableCell colSpan={7} className="h-24 text-center">
-                                                No logs found.
-                                            </TableCell>
+                                            <TableHead>User</TableHead>
+                                            <TableHead>Event</TableHead>
+                                            <TableHead>Subject</TableHead>
+                                            <TableHead>Description</TableHead>
+                                            <TableHead>Changes</TableHead>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead className="w-[50px]" />
                                         </TableRow>
-                                    ) : (
-                                        activities.data.map((activity) => (
-                                            <TableRow
-                                                key={activity.id}
-                                                className="cursor-pointer hover:bg-muted/50"
-                                                onClick={() => setSelectedActivity(activity)}
-                                            >
-                                                <TableCell className="font-medium">{activity.causer}</TableCell>
-                                                <TableCell>
-                                                    <Badge variant="outline" className={getEventColor(activity.event)}>
-                                                        {activity.event}
-                                                    </Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {activity.subject_type} #{activity.subject_id}
-                                                </TableCell>
-                                                <TableCell className="max-w-xs truncate" title={activity.description}>
-                                                    {activity.description}
-                                                </TableCell>
-                                                <TableCell>
-                                                    {hasChanges(activity) ? (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {getChangedFields(activity).length} field{getChangedFields(activity).length !== 1 ? 's' : ''}
-                                                        </span>
-                                                    ) : (
-                                                        <span className="text-xs text-muted-foreground">—</span>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="whitespace-nowrap text-muted-foreground">
-                                                    <div className="flex flex-col">
-                                                        <span>{activity.created_at}</span>
-                                                        <span className="text-xs">{activity.created_at_human}</span>
-                                                    </div>
-                                                </TableCell>
-                                                <TableCell>
-                                                    <Button variant="ghost" size="icon" className="h-8 w-8" title="View details">
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {activities.data.length === 0 ? (
+                                            <TableRow>
+                                                <TableCell colSpan={7} className="h-24 text-center">
+                                                    No logs found.
                                                 </TableCell>
                                             </TableRow>
-                                        ))
-                                    )}
-                                </TableBody>
-                            </Table>
+                                        ) : (
+                                            activities.data.map((activity) => (
+                                                <TableRow
+                                                    key={activity.id}
+                                                    className="cursor-pointer hover:bg-muted/50"
+                                                    onClick={() => setSelectedActivity(activity)}
+                                                >
+                                                    <TableCell className="font-medium">{activity.causer}</TableCell>
+                                                    <TableCell>
+                                                        <Badge variant="outline" className={getEventColor(activity.event)}>
+                                                            {activity.event}
+                                                        </Badge>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {activity.subject_type} #{activity.subject_id}
+                                                    </TableCell>
+                                                    <TableCell className="max-w-xs truncate" title={activity.description}>
+                                                        {activity.description}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {hasChanges(activity) ? (
+                                                            <span className="text-xs text-muted-foreground">
+                                                                {getChangedFields(activity).length} field{getChangedFields(activity).length !== 1 ? 's' : ''}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="text-xs text-muted-foreground">—</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell className="whitespace-nowrap text-muted-foreground">
+                                                        <div className="flex flex-col">
+                                                            <span>{activity.created_at}</span>
+                                                            <span className="text-xs">{activity.created_at_human}</span>
+                                                        </div>
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8" title="View details">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            )}
                         </div>
 
                         {/* Mobile Card View */}

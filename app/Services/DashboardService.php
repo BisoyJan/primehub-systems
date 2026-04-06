@@ -20,6 +20,7 @@ use App\Models\Stock;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Spatie\Activitylog\Models\Activity;
 
@@ -425,8 +426,16 @@ class DashboardService
 
     /**
      * Get monthly IT concern trend data for charts.
+     * Cached for 1 hour — historical data changes slowly.
      */
     public function getItConcernTrends(): array
+    {
+        return Cache::remember('dashboard_it_concern_trends', 3600, function () {
+            return $this->computeItConcernTrends();
+        });
+    }
+
+    protected function computeItConcernTrends(): array
     {
         $startDate = now()->subMonths(11)->startOfMonth();
 
@@ -467,9 +476,6 @@ class DashboardService
             ->toArray();
     }
 
-    /**
-     * Get presence insights statistics
-     */
     /**
      * Get presence insights including leave calendar
      *
@@ -1034,10 +1040,18 @@ class DashboardService
 
     /**
      * Get NCNS count trend for the last 6 months.
+     * Cached for 1 hour — historical data changes slowly.
      *
      * @return array<int, array{month: string, label: string, ncns_count: int, change: string}>
      */
     public function getNcnsTrend(): array
+    {
+        return Cache::remember('dashboard_ncns_trend', 3600, function () {
+            return $this->computeNcnsTrend();
+        });
+    }
+
+    protected function computeNcnsTrend(): array
     {
         $startDate = now()->subMonths(5)->startOfMonth();
 
@@ -1096,6 +1110,13 @@ class DashboardService
      */
     public function getLeaveUtilizationData(): array
     {
+        return Cache::remember('dashboard_leave_utilization', 3600, function () {
+            return $this->computeLeaveUtilizationData();
+        });
+    }
+
+    protected function computeLeaveUtilizationData(): array
+    {
         $year = now()->year;
         $currentMonth = now()->month;
 
@@ -1147,6 +1168,13 @@ class DashboardService
     {
         $today = $date ?? now()->toDateString();
 
+        return Cache::remember("dashboard_campaign_presence:{$today}", 600, function () use ($today) {
+            return $this->computeCampaignPresenceComparison($today);
+        });
+    }
+
+    protected function computeCampaignPresenceComparison(string $today): array
+    {
         $campaigns = Campaign::select('id', 'name')->orderBy('name')->get();
 
         // Bulk-load all active schedules grouped by campaign (was N queries in loop)

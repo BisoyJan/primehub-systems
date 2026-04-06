@@ -42,6 +42,7 @@ import { RefreshCw, Search, Filter, Plus, Play, Pause } from 'lucide-react';
 import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from '@/components/TableSkeleton';
 
 import {
     index as monitorSpecIndex,
@@ -210,161 +211,165 @@ export default function Index() {
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>Brand</TableHead>
-                                    <TableHead>Model</TableHead>
-                                    <TableHead>Screen Size</TableHead>
-                                    <TableHead>Resolution</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Panel Type</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Stock</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {monitorspecs.data.map((monitor) => (
-                                    <TableRow key={monitor.id}>
-                                        <TableCell className="hidden lg:table-cell">{monitor.id}</TableCell>
-                                        <TableCell className="font-medium">{monitor.brand}</TableCell>
-                                        <TableCell>{monitor.model}</TableCell>
-                                        <TableCell>{monitor.screen_size}"</TableCell>
-                                        <TableCell>{monitor.resolution}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{monitor.panel_type}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">
-                                            {monitor.stock ? (
-                                                <span className={monitor.stock.quantity > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}>
-                                                    {monitor.stock.quantity} units
-                                                </span>
-                                            ) : (
-                                                <span className="text-gray-400">No stock</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="flex justify-center gap-2">
-                                            {/* Edit */}
-                                            <Can permission="hardware.edit">
-                                                <Link href={monitorSpecEdit.url(monitor.id)}>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="bg-green-600 hover:bg-green-700 text-white"
-                                                    >
-                                                        Edit
-                                                    </Button>
-                                                </Link>
-                                            </Can>
+                    {isLoading ? (
+                        <TableSkeleton columns={8} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>Brand</TableHead>
+                                        <TableHead>Model</TableHead>
+                                        <TableHead>Screen Size</TableHead>
+                                        <TableHead>Resolution</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Panel Type</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Stock</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {monitorspecs.data.map((monitor) => (
+                                        <TableRow key={monitor.id}>
+                                            <TableCell className="hidden lg:table-cell">{monitor.id}</TableCell>
+                                            <TableCell className="font-medium">{monitor.brand}</TableCell>
+                                            <TableCell>{monitor.model}</TableCell>
+                                            <TableCell>{monitor.screen_size}"</TableCell>
+                                            <TableCell>{monitor.resolution}</TableCell>
+                                            <TableCell className="hidden xl:table-cell">{monitor.panel_type}</TableCell>
+                                            <TableCell className="hidden xl:table-cell">
+                                                {monitor.stock ? (
+                                                    <span className={monitor.stock.quantity > 0 ? 'text-green-600 font-medium' : 'text-gray-400'}>
+                                                        {monitor.stock.quantity} units
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-400">No stock</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="flex justify-center gap-2">
+                                                {/* Edit */}
+                                                <Can permission="hardware.edit">
+                                                    <Link href={monitorSpecEdit.url(monitor.id)}>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                    </Link>
+                                                </Can>
 
-                                            {/* Details Dialog */}
-                                            <Dialog>
-                                                <DialogTrigger asChild>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                    >
-                                                        Details
-                                                    </Button>
-                                                </DialogTrigger>
-                                                <DialogContent className="max-w-[95vw] sm:max-w-2xl">
-                                                    <DialogHeader>
-                                                        <DialogTitle className="text-lg sm:text-xl font-semibold">
-                                                            {monitor.brand} {monitor.model}
-                                                        </DialogTitle>
-                                                    </DialogHeader>
+                                                {/* Details Dialog */}
+                                                <Dialog>
+                                                    <DialogTrigger asChild>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                        >
+                                                            Details
+                                                        </Button>
+                                                    </DialogTrigger>
+                                                    <DialogContent className="max-w-[95vw] sm:max-w-2xl">
+                                                        <DialogHeader>
+                                                            <DialogTitle className="text-lg sm:text-xl font-semibold">
+                                                                {monitor.brand} {monitor.model}
+                                                            </DialogTitle>
+                                                        </DialogHeader>
 
-                                                    <div className="space-y-4 mt-4">
-                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                            <div>
-                                                                <span className="font-medium">Brand:</span> {monitor.brand}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium">Model:</span> {monitor.model}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium">Screen Size:</span> {monitor.screen_size}"
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium">Resolution:</span> {monitor.resolution}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium">Panel Type:</span> {monitor.panel_type}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium">Ports:</span>{' '}
-                                                                {monitor.ports?.join(', ') || 'Not specified'}
-                                                            </div>
-                                                            <div>
-                                                                <span className="font-medium">Stock:</span>{' '}
-                                                                <span className={monitor.stock?.quantity ? 'text-green-600' : 'text-gray-400'}>
-                                                                    {monitor.stock ? `${monitor.stock.quantity} units` : 'No stock'}
-                                                                </span>
-                                                            </div>
-                                                            {monitor.stock?.location && (
+                                                        <div className="space-y-4 mt-4">
+                                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                                 <div>
-                                                                    <span className="font-medium">Location:</span> {monitor.stock.location}
+                                                                    <span className="font-medium">Brand:</span> {monitor.brand}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">Model:</span> {monitor.model}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">Screen Size:</span> {monitor.screen_size}"
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">Resolution:</span> {monitor.resolution}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">Panel Type:</span> {monitor.panel_type}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">Ports:</span>{' '}
+                                                                    {monitor.ports?.join(', ') || 'Not specified'}
+                                                                </div>
+                                                                <div>
+                                                                    <span className="font-medium">Stock:</span>{' '}
+                                                                    <span className={monitor.stock?.quantity ? 'text-green-600' : 'text-gray-400'}>
+                                                                        {monitor.stock ? `${monitor.stock.quantity} units` : 'No stock'}
+                                                                    </span>
+                                                                </div>
+                                                                {monitor.stock?.location && (
+                                                                    <div>
+                                                                        <span className="font-medium">Location:</span> {monitor.stock.location}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                            {monitor.notes && (
+                                                                <div className="pt-2 border-t">
+                                                                    <span className="font-medium">Notes:</span>
+                                                                    <p className="mt-1 text-sm text-muted-foreground">{monitor.notes}</p>
                                                                 </div>
                                                             )}
                                                         </div>
-                                                        {monitor.notes && (
-                                                            <div className="pt-2 border-t">
-                                                                <span className="font-medium">Notes:</span>
-                                                                <p className="mt-1 text-sm text-muted-foreground">{monitor.notes}</p>
-                                                            </div>
-                                                        )}
-                                                    </div>
 
-                                                    <DialogClose asChild>
-                                                        <Button className="mt-4 self-end">Close</Button>
-                                                    </DialogClose>
-                                                </DialogContent>
-                                            </Dialog>
+                                                        <DialogClose asChild>
+                                                            <Button className="mt-4 self-end">Close</Button>
+                                                        </DialogClose>
+                                                    </DialogContent>
+                                                </Dialog>
 
-                                            {/* Delete */}
-                                            <Can permission="hardware.delete">
-                                                <AlertDialog>
-                                                    <AlertDialogTrigger asChild>
-                                                        <Button
-                                                            variant="destructive"
-                                                            size="sm"
-                                                            className="bg-red-600 hover:bg-red-700 text-white"
-                                                        >
-                                                            Delete
-                                                        </Button>
-                                                    </AlertDialogTrigger>
-                                                    <AlertDialogContent>
-                                                        <AlertDialogHeader>
-                                                            <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
-                                                            <AlertDialogDescription>
-                                                                Are you sure you want to delete {monitor.brand} {monitor.model}? This action cannot be undone.
-                                                            </AlertDialogDescription>
-                                                        </AlertDialogHeader>
-                                                        <AlertDialogFooter className="flex-col sm:flex-row gap-2">
-                                                            <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
-                                                            <AlertDialogAction
-                                                                className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
-                                                                onClick={() => handleDelete(monitor.id)}
+                                                {/* Delete */}
+                                                <Can permission="hardware.delete">
+                                                    <AlertDialog>
+                                                        <AlertDialogTrigger asChild>
+                                                            <Button
+                                                                variant="destructive"
+                                                                size="sm"
+                                                                className="bg-red-600 hover:bg-red-700 text-white"
                                                             >
-                                                                Yes, Delete
-                                                            </AlertDialogAction>
-                                                        </AlertDialogFooter>
-                                                    </AlertDialogContent>
-                                                </AlertDialog>
-                                            </Can>
+                                                                Delete
+                                                            </Button>
+                                                        </AlertDialogTrigger>
+                                                        <AlertDialogContent>
+                                                            <AlertDialogHeader>
+                                                                <AlertDialogTitle>Confirm Delete</AlertDialogTitle>
+                                                                <AlertDialogDescription>
+                                                                    Are you sure you want to delete {monitor.brand} {monitor.model}? This action cannot be undone.
+                                                                </AlertDialogDescription>
+                                                            </AlertDialogHeader>
+                                                            <AlertDialogFooter className="flex-col sm:flex-row gap-2">
+                                                                <AlertDialogCancel className="w-full sm:w-auto">Cancel</AlertDialogCancel>
+                                                                <AlertDialogAction
+                                                                    className="bg-red-600 hover:bg-red-700 w-full sm:w-auto"
+                                                                    onClick={() => handleDelete(monitor.id)}
+                                                                >
+                                                                    Yes, Delete
+                                                                </AlertDialogAction>
+                                                            </AlertDialogFooter>
+                                                        </AlertDialogContent>
+                                                    </AlertDialog>
+                                                </Can>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+
+                                <TableFooter>
+                                    <TableRow>
+                                        <TableCell colSpan={8} className="text-center font-medium">
+                                            Monitor Specs List
                                         </TableCell>
                                     </TableRow>
-                                ))}
-                            </TableBody>
-
-                            <TableFooter>
-                                <TableRow>
-                                    <TableCell colSpan={8} className="text-center font-medium">
-                                        Monitor Specs List
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </div>
+                                </TableFooter>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

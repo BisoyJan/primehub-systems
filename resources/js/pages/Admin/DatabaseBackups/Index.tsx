@@ -42,6 +42,7 @@ import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from "@/components/TableSkeleton";
 
 import { index, store, destroy, progress, download, cleanOld } from "@/routes/database-backups";
 
@@ -322,79 +323,83 @@ export default function DatabaseBackupsIndex() {
 
                 {/* Desktop Table View */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>Filename</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Size</TableHead>
-                                    <TableHead>Created By</TableHead>
-                                    <TableHead>Created At</TableHead>
-                                    <TableHead>Completed</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-
-                            <TableBody>
-                                {backups.data.map((backup) => (
-                                    <TableRow key={backup.id}>
-                                        <TableCell className="hidden lg:table-cell">{backup.id}</TableCell>
-                                        <TableCell className="font-medium">
-                                            <div className="flex items-center gap-2">
-                                                <Database className="h-4 w-4 text-muted-foreground" />
-                                                {backup.filename}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <Badge variant={statusVariant(backup.status)}>
-                                                {statusLabel(backup.status)}
-                                            </Badge>
-                                            {backup.error_message && (
-                                                <p className="text-xs text-red-500 mt-1 max-w-[200px] truncate" title={backup.error_message}>
-                                                    {backup.error_message}
-                                                </p>
-                                            )}
-                                        </TableCell>
-                                        <TableCell>{backup.status === "completed" ? backup.formatted_size : "-"}</TableCell>
-                                        <TableCell>{backup.creator?.name ?? "System"}</TableCell>
-                                        <TableCell>{formatDate(backup.created_at)}</TableCell>
-                                        <TableCell>{formatDate(backup.completed_at)}</TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center justify-center gap-2">
-                                                <Can permission="database_backups.download">
-                                                    {backup.status === "completed" && (
-                                                        <a href={download(backup.id).url}>
-                                                            <Button variant="outline" size="sm">
-                                                                <Download className="mr-1 h-3 w-3" />
-                                                                Download
-                                                            </Button>
-                                                        </a>
-                                                    )}
-                                                </Can>
-
-                                                <Can permission="database_backups.delete">
-                                                    <DeleteConfirmDialog
-                                                        onConfirm={() => handleDelete(backup.id)}
-                                                        title="Delete Backup"
-                                                        description={`Are you sure you want to delete backup "${backup.filename}"? This action cannot be undone.`}
-                                                    />
-                                                </Can>
-                                            </div>
-                                        </TableCell>
+                    {isLoading ? (
+                        <TableSkeleton columns={8} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>Filename</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Size</TableHead>
+                                        <TableHead>Created By</TableHead>
+                                        <TableHead>Created At</TableHead>
+                                        <TableHead>Completed</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
-                                ))}
-                                {backups.data.length === 0 && (
-                                    <TableRow>
-                                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
-                                            No backups found. Create your first backup to get started.
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                </TableHeader>
+
+                                <TableBody>
+                                    {backups.data.map((backup) => (
+                                        <TableRow key={backup.id}>
+                                            <TableCell className="hidden lg:table-cell">{backup.id}</TableCell>
+                                            <TableCell className="font-medium">
+                                                <div className="flex items-center gap-2">
+                                                    <Database className="h-4 w-4 text-muted-foreground" />
+                                                    {backup.filename}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Badge variant={statusVariant(backup.status)}>
+                                                    {statusLabel(backup.status)}
+                                                </Badge>
+                                                {backup.error_message && (
+                                                    <p className="text-xs text-red-500 mt-1 max-w-[200px] truncate" title={backup.error_message}>
+                                                        {backup.error_message}
+                                                    </p>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>{backup.status === "completed" ? backup.formatted_size : "-"}</TableCell>
+                                            <TableCell>{backup.creator?.name ?? "System"}</TableCell>
+                                            <TableCell>{formatDate(backup.created_at)}</TableCell>
+                                            <TableCell>{formatDate(backup.completed_at)}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center justify-center gap-2">
+                                                    <Can permission="database_backups.download">
+                                                        {backup.status === "completed" && (
+                                                            <a href={download(backup.id).url}>
+                                                                <Button variant="outline" size="sm">
+                                                                    <Download className="mr-1 h-3 w-3" />
+                                                                    Download
+                                                                </Button>
+                                                            </a>
+                                                        )}
+                                                    </Can>
+
+                                                    <Can permission="database_backups.delete">
+                                                        <DeleteConfirmDialog
+                                                            onConfirm={() => handleDelete(backup.id)}
+                                                            title="Delete Backup"
+                                                            description={`Are you sure you want to delete backup "${backup.filename}"? This action cannot be undone.`}
+                                                        />
+                                                    </Can>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                    {backups.data.length === 0 && (
+                                        <TableRow>
+                                            <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                                                No backups found. Create your first backup to get started.
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

@@ -38,6 +38,7 @@ import { Edit, Calendar, Search, RefreshCw, Filter, Plus, Monitor, Wrench, Play,
 import { PageHeader } from '@/components/PageHeader';
 import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { TableSkeleton } from '@/components/TableSkeleton';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import { Can } from '@/components/authorization';
 import { usePermission } from '@/hooks/useAuthorization';
@@ -560,123 +561,129 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
 
                 {/* Desktop Table View */}
                 <div className="hidden md:block border rounded-lg overflow-hidden bg-card">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    {can('pc_maintenance.edit') && (
-                                        <TableHead className="w-12">
-                                            <Checkbox
-                                                checked={isAllRecordsSelected || isCurrentPageAllSelected}
-                                                ref={(el) => {
-                                                    if (el) {
-                                                        (el as HTMLButtonElement).dataset.state = isCurrentPagePartiallySelected ? 'indeterminate' : ((isAllRecordsSelected || isCurrentPageAllSelected) ? 'checked' : 'unchecked');
-                                                    }
-                                                }}
-                                                onCheckedChange={handleSelectAll}
-                                                aria-label="Select all on this page"
-                                            />
-                                        </TableHead>
-                                    )}
-                                    <TableHead>PC Number</TableHead>
-                                    <TableHead>Model</TableHead>
-                                    <TableHead>Current Station</TableHead>
-                                    <TableHead>Site</TableHead>
-                                    <TableHead>Maintenance Type</TableHead>
-                                    <TableHead>Last Maintenance</TableHead>
-                                    <TableHead>Next Due Date</TableHead>
-                                    <TableHead>Days Until Due</TableHead>
-                                    <TableHead>Performed By</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {!hasData ? (
-                                    <TableRow>
-                                        <TableCell colSpan={can('pc_maintenance.edit') ? 12 : 11} className="text-center py-8">
-                                            <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-2" />
-                                            <p className="text-muted-foreground">No maintenance records found</p>
-                                        </TableCell>
-                                    </TableRow>
-                                ) : (
-                                    maintenances.data.map((maintenance) => (
-                                        <TableRow key={maintenance.id} className={selectedIds.includes(maintenance.id) ? 'bg-muted/50' : ''}>
+                    {isLoading ? (
+                        <TableSkeleton columns={12} rows={8} />
+                    ) : (
+                        <>
+                            <div className="overflow-x-auto">
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow className="bg-muted/50">
                                             {can('pc_maintenance.edit') && (
-                                                <TableCell>
+                                                <TableHead className="w-12">
                                                     <Checkbox
-                                                        checked={selectedIds.includes(maintenance.id)}
-                                                        onCheckedChange={(checked) => handleSelectOne(maintenance.id, checked as boolean)}
-                                                        aria-label={`Select ${maintenance.pc_spec?.pc_number}`}
+                                                        checked={isAllRecordsSelected || isCurrentPageAllSelected}
+                                                        ref={(el) => {
+                                                            if (el) {
+                                                                (el as HTMLButtonElement).dataset.state = isCurrentPagePartiallySelected ? 'indeterminate' : ((isAllRecordsSelected || isCurrentPageAllSelected) ? 'checked' : 'unchecked');
+                                                            }
+                                                        }}
+                                                        onCheckedChange={handleSelectAll}
+                                                        aria-label="Select all on this page"
                                                     />
-                                                </TableCell>
+                                                </TableHead>
                                             )}
-                                            <TableCell className="font-medium">
-                                                {maintenance.pc_spec?.pc_number || 'N/A'}
-                                            </TableCell>
-                                            <TableCell className="text-muted-foreground">
-                                                {maintenance.pc_spec?.model || 'N/A'}
-                                            </TableCell>
-                                            <TableCell>
-                                                {maintenance.current_station?.station_number || (
-                                                    <span className="text-muted-foreground italic">Not assigned</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                {maintenance.current_station?.site?.name || (
-                                                    <span className="text-muted-foreground italic">-</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>{maintenance.maintenance_type || 'N/A'}</TableCell>
-                                            <TableCell>{formatDate(maintenance.last_maintenance_date)}</TableCell>
-                                            <TableCell>{formatDate(maintenance.next_due_date)}</TableCell>
-                                            <TableCell>
-                                                <span
-                                                    className={
-                                                        isDatePast(maintenance.next_due_date)
-                                                            ? 'text-red-600 font-semibold'
-                                                            : getDaysUntil(maintenance.next_due_date) <= 7
-                                                                ? 'text-yellow-600 font-semibold'
-                                                                : ''
-                                                    }
-                                                >
-                                                    {getDaysUntilText(maintenance.next_due_date)}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>{maintenance.performed_by || 'N/A'}</TableCell>
-                                            <TableCell>{getStatusBadge(maintenance)}</TableCell>
-                                            <TableCell className="text-right">
-                                                <div className="flex justify-end gap-2">
-                                                    <Can permission="pc_maintenance.edit">
-                                                        <Link href={pcMaintenanceEditRoute(maintenance.id).url}>
-                                                            <Button variant="ghost" size="sm" disabled={isMutating}>
-                                                                <Edit className="h-4 w-4" />
-                                                            </Button>
-                                                        </Link>
-                                                    </Can>
-                                                    <Can permission="pc_maintenance.delete">
-                                                        <DeleteConfirmDialog
-                                                            onConfirm={() => handleDelete(maintenance.id)}
-                                                            title="Delete Maintenance Record"
-                                                            description={`Are you sure you want to delete this maintenance record for PC ${maintenance.pc_spec?.pc_number}? This action cannot be undone.`}
-                                                            disabled={isMutating}
-                                                            triggerClassName="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/90"
-                                                            triggerLabel=""
-                                                        />
-                                                    </Can>
-                                                </div>
-                                            </TableCell>
+                                            <TableHead>PC Number</TableHead>
+                                            <TableHead>Model</TableHead>
+                                            <TableHead>Current Station</TableHead>
+                                            <TableHead>Site</TableHead>
+                                            <TableHead>Maintenance Type</TableHead>
+                                            <TableHead>Last Maintenance</TableHead>
+                                            <TableHead>Next Due Date</TableHead>
+                                            <TableHead>Days Until Due</TableHead>
+                                            <TableHead>Performed By</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead className="text-right">Actions</TableHead>
                                         </TableRow>
-                                    ))
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {!hasData ? (
+                                            <TableRow>
+                                                <TableCell colSpan={can('pc_maintenance.edit') ? 12 : 11} className="text-center py-8">
+                                                    <Calendar className="mx-auto h-12 w-12 text-muted-foreground mb-2" />
+                                                    <p className="text-muted-foreground">No maintenance records found</p>
+                                                </TableCell>
+                                            </TableRow>
+                                        ) : (
+                                            maintenances.data.map((maintenance) => (
+                                                <TableRow key={maintenance.id} className={selectedIds.includes(maintenance.id) ? 'bg-muted/50' : ''}>
+                                                    {can('pc_maintenance.edit') && (
+                                                        <TableCell>
+                                                            <Checkbox
+                                                                checked={selectedIds.includes(maintenance.id)}
+                                                                onCheckedChange={(checked) => handleSelectOne(maintenance.id, checked as boolean)}
+                                                                aria-label={`Select ${maintenance.pc_spec?.pc_number}`}
+                                                            />
+                                                        </TableCell>
+                                                    )}
+                                                    <TableCell className="font-medium">
+                                                        {maintenance.pc_spec?.pc_number || 'N/A'}
+                                                    </TableCell>
+                                                    <TableCell className="text-muted-foreground">
+                                                        {maintenance.pc_spec?.model || 'N/A'}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {maintenance.current_station?.station_number || (
+                                                            <span className="text-muted-foreground italic">Not assigned</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {maintenance.current_station?.site?.name || (
+                                                            <span className="text-muted-foreground italic">-</span>
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>{maintenance.maintenance_type || 'N/A'}</TableCell>
+                                                    <TableCell>{formatDate(maintenance.last_maintenance_date)}</TableCell>
+                                                    <TableCell>{formatDate(maintenance.next_due_date)}</TableCell>
+                                                    <TableCell>
+                                                        <span
+                                                            className={
+                                                                isDatePast(maintenance.next_due_date)
+                                                                    ? 'text-red-600 font-semibold'
+                                                                    : getDaysUntil(maintenance.next_due_date) <= 7
+                                                                        ? 'text-yellow-600 font-semibold'
+                                                                        : ''
+                                                            }
+                                                        >
+                                                            {getDaysUntilText(maintenance.next_due_date)}
+                                                        </span>
+                                                    </TableCell>
+                                                    <TableCell>{maintenance.performed_by || 'N/A'}</TableCell>
+                                                    <TableCell>{getStatusBadge(maintenance)}</TableCell>
+                                                    <TableCell className="text-right">
+                                                        <div className="flex justify-end gap-2">
+                                                            <Can permission="pc_maintenance.edit">
+                                                                <Link href={pcMaintenanceEditRoute(maintenance.id).url}>
+                                                                    <Button variant="ghost" size="sm" disabled={isMutating}>
+                                                                        <Edit className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Link>
+                                                            </Can>
+                                                            <Can permission="pc_maintenance.delete">
+                                                                <DeleteConfirmDialog
+                                                                    onConfirm={() => handleDelete(maintenance.id)}
+                                                                    title="Delete Maintenance Record"
+                                                                    description={`Are you sure you want to delete this maintenance record for PC ${maintenance.pc_spec?.pc_number}? This action cannot be undone.`}
+                                                                    disabled={isMutating}
+                                                                    triggerClassName="bg-transparent text-destructive hover:bg-transparent hover:text-destructive/90"
+                                                                    triggerLabel=""
+                                                                />
+                                                            </Can>
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                            ))
+                                        )}
+                                    </TableBody>
+                                </Table>
+                            </div>
 
-                    {paginationLinks.length > 0 && (
-                        <div className="border-t px-4 py-3 flex justify-center">
-                            <PaginationNav links={paginationLinks} />
-                        </div>
+                            {paginationLinks.length > 0 && (
+                                <div className="border-t px-4 py-3 flex justify-center">
+                                    <PaginationNav links={paginationLinks} />
+                                </div>
+                            )}
+                        </>
                     )}
                 </div>
 

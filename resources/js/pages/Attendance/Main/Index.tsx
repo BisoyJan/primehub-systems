@@ -4,6 +4,7 @@ import AppLayout from "@/layouts/app-layout";
 import { useFlashMessage, usePageLoading, usePageMeta } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from "@/components/TableSkeleton";
 import { type SharedData, type UserRole } from "@/types";
 import { formatTime, formatDate, formatDateTime, formatWorkDuration, formatTimeAdjustment } from "@/lib/utils";
 import { Can } from "@/components/authorization";
@@ -784,201 +785,205 @@ export default function AttendanceIndex() {
                 </div>
 
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="w-12">
-                                        <Checkbox
-                                            checked={
-                                                attendanceData.data.length > 0 &&
-                                                attendanceData.data.every(record => selectedRecords.includes(record.id))
-                                            }
-                                            onCheckedChange={toggleSelectAll}
-                                        />
-                                    </TableHead>
-                                    <TableHead>Employee</TableHead>
-                                    <TableHead>Site / Campaign</TableHead>
-                                    <TableHead>Shift Date / Type</TableHead>
-                                    <TableHead>Schedule</TableHead>
-                                    <TableHead>Time In / Out</TableHead>
-                                    <TableHead>Total Hours</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead>Tardy/UT/OT</TableHead>
-                                    <TableHead>Notes</TableHead>
-                                    {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && <TableHead>Actions</TableHead>}
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {attendanceData.data.map(record => (
-                                    <TableRow key={record.id} className={record.is_cross_site_bio ? "bg-orange-50/30 dark:bg-orange-950/10" : ""}>
-                                        <TableCell>
+                    {isPageLoading ? (
+                        <TableSkeleton columns={11} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="w-12">
                                             <Checkbox
-                                                checked={selectedRecords.includes(record.id)}
-                                                onCheckedChange={() => toggleSelectRecord(record.id)}
+                                                checked={
+                                                    attendanceData.data.length > 0 &&
+                                                    attendanceData.data.every(record => selectedRecords.includes(record.id))
+                                                }
+                                                onCheckedChange={toggleSelectAll}
                                             />
-                                        </TableCell>
-                                        <TableCell className="font-medium">
-                                            {record.user.name}
-                                        </TableCell>
-                                        <TableCell>
-                                            <div>
-                                                <div className="font-medium truncate">
-                                                    {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
-                                                    {record.is_cross_site_bio && (
-                                                        <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
-                                                            Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                                {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
-                                                    <div className="text-xs text-muted-foreground">
-                                                        {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <div>
-                                                <div>{formatDate(record.shift_date)}</div>
-                                                <div className="text-xs text-muted-foreground">
-                                                    {record.employee_schedule?.shift_type ? (
-                                                        getShiftTypeBadge(record.employee_schedule.shift_type)
-                                                    ) : (
-                                                        "-"
-                                                    )}
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            {record.employee_schedule ? (
-                                                <div className="whitespace-nowrap">
-                                                    {formatTime(record.employee_schedule.scheduled_time_in)} - {formatTime(record.employee_schedule.scheduled_time_out)}
-                                                </div>
-                                            ) : (
-                                                "-"
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            <div>
-                                                <div>
-                                                    {formatDateTime(record.actual_time_in) || '-'}
-                                                </div>
-                                                <div className="text-muted-foreground">
-                                                    {formatDateTime(record.actual_time_out) || '-'}
-                                                </div>
-                                            </div>
-                                        </TableCell>
-                                        <TableCell className="text-sm">
-                                            <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
-                                        </TableCell>
-                                        <TableCell>{getStatusBadges(record)}</TableCell>
-                                        <TableCell className="text-sm">
-                                            <div className="space-y-1">
-                                                {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
-                                                    <div className="text-xs text-orange-600">
-                                                        +{formatTimeAdjustment(record.tardy_minutes)} T
-                                                    </div>
-                                                )}
-                                                {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
-                                                    <div className="text-xs text-orange-600">
-                                                        {formatTimeAdjustment(record.undertime_minutes)} UT
-                                                    </div>
-                                                )}
-                                                {(!record.tardy_minutes || record.tardy_minutes === 0) &&
-                                                    (!record.undertime_minutes || record.undertime_minutes === 0) &&
-                                                    (!record.overtime_minutes || record.overtime_minutes <= 30) && (
-                                                        <div>-</div>
-                                                    )}
-                                                {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
-                                                    <div className="text-xs flex items-center gap-1">
-                                                        <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
-                                                            +{formatTimeAdjustment(record.overtime_minutes)} OT
-                                                        </span>
-                                                        {record.overtime_approved ? (
-                                                            <CheckCircle className="h-3 w-3 text-green-600" />
-                                                        ) : record.admin_verified ? (
-                                                            <X className="h-3 w-3 text-red-600" />
-                                                        ) : null}
-                                                    </div>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                        <TableCell>
-                                            <NotesDisplay record={record} />
-                                        </TableCell>
-                                        {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && (
+                                        </TableHead>
+                                        <TableHead>Employee</TableHead>
+                                        <TableHead>Site / Campaign</TableHead>
+                                        <TableHead>Shift Date / Type</TableHead>
+                                        <TableHead>Schedule</TableHead>
+                                        <TableHead>Time In / Out</TableHead>
+                                        <TableHead>Total Hours</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead>Tardy/UT/OT</TableHead>
+                                        <TableHead>Notes</TableHead>
+                                        {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && <TableHead>Actions</TableHead>}
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {attendanceData.data.map(record => (
+                                        <TableRow key={record.id} className={record.is_cross_site_bio ? "bg-orange-50/30 dark:bg-orange-950/10" : ""}>
                                             <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Can permission="attendance.approve">
-                                                        {canQuickApprove(record) ? (
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            size="icon"
-                                                                            variant="outline"
-                                                                            onClick={() => handleQuickApprove(record.id)}
-                                                                            className="h-8 w-8"
-                                                                        >
-                                                                            <Check className="h-4 w-4 text-green-600" />
-                                                                        </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>Approve</TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        ) : needsReview(record) ? (
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            size="icon"
-                                                                            variant="outline"
-                                                                            onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
-                                                                            className="h-8 w-8 border-amber-600 text-amber-600"
-                                                                        >
-                                                                            <AlertCircle className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>Review</TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
-                                                        ) : null}
-                                                    </Can>
-                                                    <Can permission="attendance.verify">
-                                                        {!record.admin_verified && (
-                                                            <TooltipProvider>
-                                                                <Tooltip>
-                                                                    <TooltipTrigger asChild>
-                                                                        <Button
-                                                                            size="icon"
-                                                                            variant="outline"
-                                                                            onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
-                                                                            className="h-8 w-8"
-                                                                        >
-                                                                            <Edit className="h-4 w-4" />
-                                                                        </Button>
-                                                                    </TooltipTrigger>
-                                                                    <TooltipContent>Verify</TooltipContent>
-                                                                </Tooltip>
-                                                            </TooltipProvider>
+                                                <Checkbox
+                                                    checked={selectedRecords.includes(record.id)}
+                                                    onCheckedChange={() => toggleSelectRecord(record.id)}
+                                                />
+                                            </TableCell>
+                                            <TableCell className="font-medium">
+                                                {record.user.name}
+                                            </TableCell>
+                                            <TableCell>
+                                                <div>
+                                                    <div className="font-medium truncate">
+                                                        {record.employee_schedule?.site?.name || record.user.active_schedule?.site?.name || 'No site'}
+                                                        {record.is_cross_site_bio && (
+                                                            <Badge variant="outline" className="ml-2 text-orange-600 border-orange-600 text-xs">
+                                                                Cross-Site {record.bio_in_site?.name && `@ ${record.bio_in_site.name}`}
+                                                            </Badge>
                                                         )}
-                                                    </Can>
+                                                    </div>
+                                                    {(record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name) && (
+                                                        <div className="text-xs text-muted-foreground">
+                                                            {record.employee_schedule?.campaign?.name || record.user.active_schedule?.campaign?.name}
+                                                        </div>
+                                                    )}
                                                 </div>
                                             </TableCell>
-                                        )}
-                                    </TableRow>
-                                ))}
-                                {attendanceData.data.length === 0 && !loading && (
-                                    <TableRow>
-                                        <TableCell colSpan={14} className="h-24 text-center text-muted-foreground">
-                                            No attendance records found
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                            <TableCell>
+                                                <div>
+                                                    <div>{formatDate(record.shift_date)}</div>
+                                                    <div className="text-xs text-muted-foreground">
+                                                        {record.employee_schedule?.shift_type ? (
+                                                            getShiftTypeBadge(record.employee_schedule.shift_type)
+                                                        ) : (
+                                                            "-"
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                {record.employee_schedule ? (
+                                                    <div className="whitespace-nowrap">
+                                                        {formatTime(record.employee_schedule.scheduled_time_in)} - {formatTime(record.employee_schedule.scheduled_time_out)}
+                                                    </div>
+                                                ) : (
+                                                    "-"
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                <div>
+                                                    <div>
+                                                        {formatDateTime(record.actual_time_in) || '-'}
+                                                    </div>
+                                                    <div className="text-muted-foreground">
+                                                        {formatDateTime(record.actual_time_out) || '-'}
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell className="text-sm">
+                                                <span className="font-medium">{formatWorkDuration(record.total_minutes_worked)}</span>
+                                            </TableCell>
+                                            <TableCell>{getStatusBadges(record)}</TableCell>
+                                            <TableCell className="text-sm">
+                                                <div className="space-y-1">
+                                                    {record.tardy_minutes !== null && record.tardy_minutes !== undefined && record.tardy_minutes > 0 && (
+                                                        <div className="text-xs text-orange-600">
+                                                            +{formatTimeAdjustment(record.tardy_minutes)} T
+                                                        </div>
+                                                    )}
+                                                    {record.undertime_minutes !== null && record.undertime_minutes !== undefined && record.undertime_minutes > 0 && (
+                                                        <div className="text-xs text-orange-600">
+                                                            {formatTimeAdjustment(record.undertime_minutes)} UT
+                                                        </div>
+                                                    )}
+                                                    {(!record.tardy_minutes || record.tardy_minutes === 0) &&
+                                                        (!record.undertime_minutes || record.undertime_minutes === 0) &&
+                                                        (!record.overtime_minutes || record.overtime_minutes <= 30) && (
+                                                            <div>-</div>
+                                                        )}
+                                                    {record.overtime_minutes !== null && record.overtime_minutes !== undefined && record.overtime_minutes > 30 && (
+                                                        <div className="text-xs flex items-center gap-1">
+                                                            <span className={record.overtime_approved ? 'text-green-600' : 'text-red-600'}>
+                                                                +{formatTimeAdjustment(record.overtime_minutes)} OT
+                                                            </span>
+                                                            {record.overtime_approved ? (
+                                                                <CheckCircle className="h-3 w-3 text-green-600" />
+                                                            ) : record.admin_verified ? (
+                                                                <X className="h-3 w-3 text-red-600" />
+                                                            ) : null}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <NotesDisplay record={record} />
+                                            </TableCell>
+                                            {(can('attendance.approve') || can('attendance.verify') || can('attendance.delete')) && (
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <Can permission="attendance.approve">
+                                                            {canQuickApprove(record) ? (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                size="icon"
+                                                                                variant="outline"
+                                                                                onClick={() => handleQuickApprove(record.id)}
+                                                                                className="h-8 w-8"
+                                                                            >
+                                                                                <Check className="h-4 w-4 text-green-600" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>Approve</TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            ) : needsReview(record) ? (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                size="icon"
+                                                                                variant="outline"
+                                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                                className="h-8 w-8 border-amber-600 text-amber-600"
+                                                                            >
+                                                                                <AlertCircle className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>Review</TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            ) : null}
+                                                        </Can>
+                                                        <Can permission="attendance.verify">
+                                                            {!record.admin_verified && (
+                                                                <TooltipProvider>
+                                                                    <Tooltip>
+                                                                        <TooltipTrigger asChild>
+                                                                            <Button
+                                                                                size="icon"
+                                                                                variant="outline"
+                                                                                onClick={() => window.open(attendanceReview({ query: { verify: record.id } }).url, '_blank')}
+                                                                                className="h-8 w-8"
+                                                                            >
+                                                                                <Edit className="h-4 w-4" />
+                                                                            </Button>
+                                                                        </TooltipTrigger>
+                                                                        <TooltipContent>Verify</TooltipContent>
+                                                                    </Tooltip>
+                                                                </TooltipProvider>
+                                                            )}
+                                                        </Can>
+                                                    </div>
+                                                </TableCell>
+                                            )}
+                                        </TableRow>
+                                    ))}
+                                    {attendanceData.data.length === 0 && !loading && (
+                                        <TableRow>
+                                            <TableCell colSpan={14} className="h-24 text-center text-muted-foreground">
+                                                No attendance records found
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 <div className="md:hidden space-y-4">

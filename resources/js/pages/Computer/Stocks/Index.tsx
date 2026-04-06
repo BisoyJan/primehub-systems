@@ -3,6 +3,7 @@ import { Head, useForm, usePage, router } from '@inertiajs/react';
 import type { Page as InertiaPage } from '@inertiajs/core';
 import { toast } from 'sonner';
 import { Plus, Trash, Edit, RefreshCw, Search, Filter } from 'lucide-react';
+import { useDebounce } from '@/hooks';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,7 @@ import {
 import PaginationNav, { PaginationLink } from '@/components/pagination-nav';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
+import { TableSkeleton } from '@/components/TableSkeleton';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
 import {
     index as stocksIndex,
@@ -90,7 +92,7 @@ export default function Index() {
     const [pollMs, setPollMs] = useState<number | null>(null);
 
     const [searchQuery, setSearchQuery] = useState('');
-    const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
+    const debouncedSearchQuery = useDebounce(searchQuery, 500);
 
     const [open, setOpen] = useState(false);
     const [editing, setEditing] = useState<StockRow | null>(null);
@@ -131,13 +133,6 @@ export default function Index() {
             return pageUrl;
         }
     }, []);
-
-    useEffect(() => {
-        const timer = setTimeout(() => {
-            setDebouncedSearchQuery(searchQuery);
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [searchQuery]);
 
     const fetchIndex = useCallback((pageUrl?: string) => {
         setLoading(true);
@@ -391,89 +386,93 @@ export default function Index() {
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableCaption>
-                                Stock items for RAM, Disk, Processor and Monitor specs
-                            </TableCaption>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>Type</TableHead>
-                                    <TableHead>Manufacturer / Brand</TableHead>
-                                    <TableHead>Model / Series</TableHead>
-                                    <TableHead>Quantity</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Reserved</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Location</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Notes</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {rows.map((row) => (
-                                    <TableRow key={row.id}>
-                                        <TableCell className="hidden lg:table-cell">{row.id}</TableCell>
-                                        <TableCell>
-                                            {mapTypeFromStockable(row.stockable_type).charAt(0).toUpperCase() +
-                                                mapTypeFromStockable(row.stockable_type).slice(1)}
-                                        </TableCell>
-                                        <TableCell>
-                                            {row.stockable?.manufacturer ?? row.stockable?.brand ?? '-'}
-                                        </TableCell>
-                                        <TableCell>
-                                            {row.stockable?.model_number ??
-                                                row.stockable?.model ??
-                                                row.stockable?.series ??
-                                                '-'}
-                                        </TableCell>
-                                        <TableCell>
-                                            {row.quantity}
-                                            {row.quantity < 10 && (
-                                                <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
-                                                    Low Stock
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="hidden xl:table-cell">{row.reserved}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{row.location ?? '-'}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{row.notes ?? '-'}</TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center gap-2">
-                                                <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => openEdit(row)}>
-                                                    <Edit size={14} />
-                                                </Button>
-                                                <Button variant="ghost" onClick={() => openQuickAdjust(row)}>
-                                                    <Plus size={14} />
-                                                </Button>
-                                                <Button variant="destructive"
-                                                    className="bg-red-600 hover:bg-red-700 text-white" onClick={() => openDeleteConfirm(row)}>
-                                                    <Trash size={14} />
-                                                </Button>
-                                            </div>
-                                        </TableCell>
+                    {isLoading ? (
+                        <TableSkeleton columns={9} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableCaption>
+                                    Stock items for RAM, Disk, Processor and Monitor specs
+                                </TableCaption>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>Type</TableHead>
+                                        <TableHead>Manufacturer / Brand</TableHead>
+                                        <TableHead>Model / Series</TableHead>
+                                        <TableHead>Quantity</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Reserved</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Location</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Notes</TableHead>
+                                        <TableHead>Actions</TableHead>
                                     </TableRow>
-                                ))}
+                                </TableHeader>
+                                <TableBody>
+                                    {rows.map((row) => (
+                                        <TableRow key={row.id}>
+                                            <TableCell className="hidden lg:table-cell">{row.id}</TableCell>
+                                            <TableCell>
+                                                {mapTypeFromStockable(row.stockable_type).charAt(0).toUpperCase() +
+                                                    mapTypeFromStockable(row.stockable_type).slice(1)}
+                                            </TableCell>
+                                            <TableCell>
+                                                {row.stockable?.manufacturer ?? row.stockable?.brand ?? '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {row.stockable?.model_number ??
+                                                    row.stockable?.model ??
+                                                    row.stockable?.series ??
+                                                    '-'}
+                                            </TableCell>
+                                            <TableCell>
+                                                {row.quantity}
+                                                {row.quantity < 10 && (
+                                                    <span className="ml-2 px-2 py-0.5 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-200">
+                                                        Low Stock
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="hidden xl:table-cell">{row.reserved}</TableCell>
+                                            <TableCell className="hidden xl:table-cell">{row.location ?? '-'}</TableCell>
+                                            <TableCell className="hidden xl:table-cell">{row.notes ?? '-'}</TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center gap-2">
+                                                    <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={() => openEdit(row)}>
+                                                        <Edit size={14} />
+                                                    </Button>
+                                                    <Button variant="ghost" onClick={() => openQuickAdjust(row)}>
+                                                        <Plus size={14} />
+                                                    </Button>
+                                                    <Button variant="destructive"
+                                                        className="bg-red-600 hover:bg-red-700 text-white" onClick={() => openDeleteConfirm(row)}>
+                                                        <Trash size={14} />
+                                                    </Button>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
 
-                                {rows.length === 0 && !loading && (
+                                    {rows.length === 0 && !loading && (
+                                        <TableRow>
+                                            <TableCell
+                                                colSpan={9}
+                                                className="py-8 text-center text-gray-500"
+                                            >
+                                                No stock items found
+                                            </TableCell>
+                                        </TableRow>
+                                    )}
+                                </TableBody>
+                                <TableFooter>
                                     <TableRow>
-                                        <TableCell
-                                            colSpan={9}
-                                            className="py-8 text-center text-gray-500"
-                                        >
-                                            No stock items found
+                                        <TableCell colSpan={10} className="text-center font-medium">
+                                            Stock List
                                         </TableCell>
                                     </TableRow>
-                                )}
-                            </TableBody>
-                            <TableFooter>
-                                <TableRow>
-                                    <TableCell colSpan={10} className="text-center font-medium">
-                                        Stock List
-                                    </TableCell>
-                                </TableRow>
-                            </TableFooter>
-                        </Table>
-                    </div>
+                                </TableFooter>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

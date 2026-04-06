@@ -21,6 +21,7 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from '@/components/TableSkeleton';
 import { Can } from "@/components/authorization";
 import { usePermission } from "@/hooks/useAuthorization";
 
@@ -186,75 +187,79 @@ export default function Index() {
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>Manufacturer</TableHead>
-                                    <TableHead>Model</TableHead>
-                                    <TableHead>Cores</TableHead>
-                                    <TableHead>Threads</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Base Clock</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Boost Clock</TableHead>
-                                    <TableHead>Stocks</TableHead>
-                                    <TableHead className="text-center">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
+                    {isLoading ? (
+                        <TableSkeleton columns={9} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>Manufacturer</TableHead>
+                                        <TableHead>Model</TableHead>
+                                        <TableHead>Cores</TableHead>
+                                        <TableHead>Threads</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Base Clock</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Boost Clock</TableHead>
+                                        <TableHead>Stocks</TableHead>
+                                        <TableHead className="text-center">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
 
-                            <TableBody>
-                                {processorspecs.data.map((cpu) => (
-                                    <TableRow key={cpu.id}>
-                                        <TableCell className="hidden lg:table-cell">{cpu.id}</TableCell>
-                                        <TableCell className="font-medium">{cpu.manufacturer}</TableCell>
-                                        <TableCell>{cpu.model}</TableCell>
-                                        <TableCell>{cpu.core_count}</TableCell>
-                                        <TableCell>{cpu.thread_count}</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{cpu.base_clock_ghz} GHz</TableCell>
-                                        <TableCell className="hidden xl:table-cell">{cpu.boost_clock_ghz} GHz</TableCell>
-                                        <TableCell>
-                                            {cpu.stock ? cpu.stock.quantity : 0}
+                                <TableBody>
+                                    {processorspecs.data.map((cpu) => (
+                                        <TableRow key={cpu.id}>
+                                            <TableCell className="hidden lg:table-cell">{cpu.id}</TableCell>
+                                            <TableCell className="font-medium">{cpu.manufacturer}</TableCell>
+                                            <TableCell>{cpu.model}</TableCell>
+                                            <TableCell>{cpu.core_count}</TableCell>
+                                            <TableCell>{cpu.thread_count}</TableCell>
+                                            <TableCell className="hidden xl:table-cell">{cpu.base_clock_ghz} GHz</TableCell>
+                                            <TableCell className="hidden xl:table-cell">{cpu.boost_clock_ghz} GHz</TableCell>
+                                            <TableCell>
+                                                {cpu.stock ? cpu.stock.quantity : 0}
 
-                                            {(!cpu.stock || cpu.stock.quantity < 10) && (
-                                                <span
-                                                    className={`
+                                                {(!cpu.stock || cpu.stock.quantity < 10) && (
+                                                    <span
+                                                        className={`
                                         ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
                                         ${!cpu.stock || cpu.stock.quantity === 0
-                                                            ? "bg-red-100 text-red-700"
-                                                            : "bg-yellow-100 text-yellow-700"}
+                                                                ? "bg-red-100 text-red-700"
+                                                                : "bg-yellow-100 text-yellow-700"}
                                                 `}
-                                                >
-                                                    {!cpu.stock || cpu.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
-                                                </span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="flex justify-center gap-2">
-                                            <Can permission="hardware.edit">
-                                                <Link href={edit.url(cpu.id)}>
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="bg-green-600 hover:bg-green-700 text-white"
                                                     >
-                                                        Edit
-                                                    </Button>
-                                                </Link>
-                                            </Can>
+                                                        {!cpu.stock || cpu.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
+                                                    </span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="flex justify-center gap-2">
+                                                <Can permission="hardware.edit">
+                                                    <Link href={edit.url(cpu.id)}>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="bg-green-600 hover:bg-green-700 text-white"
+                                                        >
+                                                            Edit
+                                                        </Button>
+                                                    </Link>
+                                                </Can>
 
-                                            {/* Reusable delete confirmation dialog */}
-                                            <Can permission="hardware.delete">
-                                                <DeleteConfirmDialog
-                                                    onConfirm={() => handleDelete(cpu.id)}
-                                                    title="Delete Processor Specification"
-                                                    description={`Are you sure you want to delete ${cpu.manufacturer} ${cpu.model}?`}
-                                                />
-                                            </Can>
-                                        </TableCell>
-                                    </TableRow>
-                                ))}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                                {/* Reusable delete confirmation dialog */}
+                                                <Can permission="hardware.delete">
+                                                    <DeleteConfirmDialog
+                                                        onConfirm={() => handleDelete(cpu.id)}
+                                                        title="Delete Processor Specification"
+                                                        description={`Are you sure you want to delete ${cpu.manufacturer} ${cpu.model}?`}
+                                                    />
+                                                </Can>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View */}

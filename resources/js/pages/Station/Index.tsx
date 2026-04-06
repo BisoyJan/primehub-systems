@@ -36,6 +36,7 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from '@/components/TableSkeleton';
 import { Can } from "@/components/authorization";
 
 interface Station {
@@ -701,215 +702,219 @@ export default function StationIndex() {
 
                 {/* Desktop Table View - hidden on mobile */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <TableHead className="w-12">
-                                        <Checkbox
-                                            checked={isAllRecordsSelected || isCurrentPageAllSelected}
-                                            ref={(el) => {
-                                                if (el) {
-                                                    (el as HTMLButtonElement).dataset.state = isCurrentPagePartiallySelected ? 'indeterminate' : ((isAllRecordsSelected || isCurrentPageAllSelected) ? 'checked' : 'unchecked');
-                                                }
-                                            }}
-                                            onCheckedChange={(checked) => handleSelectAllStations(checked === true)}
-                                            aria-label="Select all on this page"
-                                        />
-                                    </TableHead>
-                                    <TableHead className="hidden lg:table-cell">ID</TableHead>
-                                    <TableHead>Site</TableHead>
-                                    <TableHead>Station #</TableHead>
-                                    <TableHead>Campaign</TableHead>
-                                    <TableHead>Status</TableHead>
-                                    <TableHead className="hidden xl:table-cell">Monitor Type</TableHead>
-                                    <TableHead>Monitors</TableHead>
-                                    <TableHead>PC Spec</TableHead>
-                                    <TableHead className="hidden xl:table-cell">PC Issue</TableHead>
-                                    <TableHead>Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {stations.data.map((station) => {
-                                    const isSelected = selectedEmptyStations.includes(station.id);
-
-                                    return (
-                                        <TableRow
-                                            key={station.id}
-                                            className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
-                                        >
-                                            <TableCell>
-                                                <Checkbox
-                                                    checked={selectedStationIds.includes(station.id)}
-                                                    onCheckedChange={(checked) => handleSelectStation(station.id, checked === true)}
-                                                />
-                                            </TableCell>
-
-                                            <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
-                                            <TableCell>{station.site}</TableCell>
-                                            <TableCell>{station.station_number}</TableCell>
-                                            <TableCell>{station.campaign}</TableCell>
-                                            <TableCell>
-                                                <Badge
-                                                    className={
-                                                        station.status.toLowerCase() === 'occupied'
-                                                            ? 'bg-green-500 hover:bg-green-600 text-white'
-                                                            : station.status.toLowerCase() === 'vacant'
-                                                                ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
-                                                                : station.status.toLowerCase() === 'no pc'
-                                                                    ? 'bg-red-500 hover:bg-red-600 text-white'
-                                                                    : station.status.toLowerCase() === 'admin'
-                                                                        ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                                                                        : 'bg-gray-500 hover:bg-gray-600 text-white'
+                    {isLoading ? (
+                        <TableSkeleton columns={11} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <TableHead className="w-12">
+                                            <Checkbox
+                                                checked={isAllRecordsSelected || isCurrentPageAllSelected}
+                                                ref={(el) => {
+                                                    if (el) {
+                                                        (el as HTMLButtonElement).dataset.state = isCurrentPagePartiallySelected ? 'indeterminate' : ((isAllRecordsSelected || isCurrentPageAllSelected) ? 'checked' : 'unchecked');
                                                     }
-                                                >
-                                                    {station.status}
-                                                </Badge>
-                                            </TableCell>
-                                            <TableCell className="hidden xl:table-cell">
-                                                <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
-                                                    {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    {station.monitors && station.monitors.length > 0 ? (
-                                                        <>
-                                                            <div className="text-sm">
-                                                                {station.monitors.map((monitor, idx) => (
-                                                                    <div key={monitor.id} className="flex items-center gap-1">
-                                                                        <span>{monitor.brand} {monitor.model}</span>
-                                                                        {monitor.quantity > 1 && (
-                                                                            <span className="text-xs text-blue-600 font-medium">×{monitor.quantity}</span>
-                                                                        )}
-                                                                        {idx < station.monitors!.length - 1 && <span className="text-gray-400">,</span>}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => {
-                                                                    setSelectedMonitors(station.monitors || []);
-                                                                    setMonitorDialogOpen(true);
-                                                                }}
-                                                                className="h-7 w-7 p-0"
-                                                                title="View Monitor Details"
-                                                            >
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-                                                        </>
-                                                    ) : (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => router.get(stationsEditRoute(station.id).url)}
-                                                            className="gap-2"
-                                                            title="Assign Monitor to this station"
-                                                        >
-                                                            <Plus className="h-4 w-4" />
-                                                            Assign Monitor
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    {station.pc_spec_details ? (
-                                                        <>
-                                                            <div>
-                                                                <span>{station.pc_spec}</span>
-                                                                {station.pc_spec_details.pc_number && (
-                                                                    <div className="text-xs text-blue-600 mt-0.5">
-                                                                        PC: {station.pc_spec_details.pc_number}
-                                                                    </div>
-                                                                )}
-                                                            </div>
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                onClick={() => {
-                                                                    setSelectedPcSpec(station.pc_spec_details || null);
-                                                                    setPcSpecDialogOpen(true);
-                                                                }}
-                                                                className="h-7 w-7 p-0"
-                                                                title="View PC Spec Details"
-                                                            >
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-                                                        </>
-                                                    ) : (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            onClick={() => router.visit(transferPage(station.id, { query: { filter: 'available' } }).url)}
-                                                            className="gap-2"
-                                                            title="Assign PC to this station"
-                                                        >
-                                                            <Plus className="h-4 w-4" />
-                                                            Assign PC
-                                                        </Button>
-                                                    )}
-                                                </div>
-                                            </TableCell>
-                                            <TableCell className="hidden xl:table-cell">
-                                                {station.pc_spec_details ? (
+                                                }}
+                                                onCheckedChange={(checked) => handleSelectAllStations(checked === true)}
+                                                aria-label="Select all on this page"
+                                            />
+                                        </TableHead>
+                                        <TableHead className="hidden lg:table-cell">ID</TableHead>
+                                        <TableHead>Site</TableHead>
+                                        <TableHead>Station #</TableHead>
+                                        <TableHead>Campaign</TableHead>
+                                        <TableHead>Status</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Monitor Type</TableHead>
+                                        <TableHead>Monitors</TableHead>
+                                        <TableHead>PC Spec</TableHead>
+                                        <TableHead className="hidden xl:table-cell">PC Issue</TableHead>
+                                        <TableHead>Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {stations.data.map((station) => {
+                                        const isSelected = selectedEmptyStations.includes(station.id);
+
+                                        return (
+                                            <TableRow
+                                                key={station.id}
+                                                className={isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''}
+                                            >
+                                                <TableCell>
+                                                    <Checkbox
+                                                        checked={selectedStationIds.includes(station.id)}
+                                                        onCheckedChange={(checked) => handleSelectStation(station.id, checked === true)}
+                                                    />
+                                                </TableCell>
+
+                                                <TableCell className="hidden lg:table-cell">{station.id}</TableCell>
+                                                <TableCell>{station.site}</TableCell>
+                                                <TableCell>{station.station_number}</TableCell>
+                                                <TableCell>{station.campaign}</TableCell>
+                                                <TableCell>
+                                                    <Badge
+                                                        className={
+                                                            station.status.toLowerCase() === 'occupied'
+                                                                ? 'bg-green-500 hover:bg-green-600 text-white'
+                                                                : station.status.toLowerCase() === 'vacant'
+                                                                    ? 'bg-yellow-500 hover:bg-yellow-600 text-white'
+                                                                    : station.status.toLowerCase() === 'no pc'
+                                                                        ? 'bg-red-500 hover:bg-red-600 text-white'
+                                                                        : station.status.toLowerCase() === 'admin'
+                                                                            ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                                                                            : 'bg-gray-500 hover:bg-gray-600 text-white'
+                                                        }
+                                                    >
+                                                        {station.status}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell className="hidden xl:table-cell">
+                                                    <span className={station.monitor_type === 'dual' ? 'text-blue-600 font-medium' : ''}>
+                                                        {station.monitor_type === 'dual' ? 'Dual' : 'Single'}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>
                                                     <div className="flex items-center gap-2">
-                                                        {station.pc_spec_details.issue ? (
+                                                        {station.monitors && station.monitors.length > 0 ? (
                                                             <>
-                                                                <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
-                                                                <span className="text-xs text-red-600 font-medium truncate max-w-[150px]" title={station.pc_spec_details.issue}>
-                                                                    {station.pc_spec_details.issue}
-                                                                </span>
+                                                                <div className="text-sm">
+                                                                    {station.monitors.map((monitor, idx) => (
+                                                                        <div key={monitor.id} className="flex items-center gap-1">
+                                                                            <span>{monitor.brand} {monitor.model}</span>
+                                                                            {monitor.quantity > 1 && (
+                                                                                <span className="text-xs text-blue-600 font-medium">×{monitor.quantity}</span>
+                                                                            )}
+                                                                            {idx < station.monitors!.length - 1 && <span className="text-gray-400">,</span>}
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setSelectedMonitors(station.monitors || []);
+                                                                        setMonitorDialogOpen(true);
+                                                                    }}
+                                                                    className="h-7 w-7 p-0"
+                                                                    title="View Monitor Details"
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
                                                             </>
                                                         ) : (
-                                                            <span className="text-xs text-gray-400">No issue</span>
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => router.get(stationsEditRoute(station.id).url)}
+                                                                className="gap-2"
+                                                                title="Assign Monitor to this station"
+                                                            >
+                                                                <Plus className="h-4 w-4" />
+                                                                Assign Monitor
+                                                            </Button>
                                                         )}
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => handleOpenIssueDialog(station.pc_spec_details)}
-                                                            className="h-7 px-2 text-xs"
-                                                        >
-                                                            {station.pc_spec_details.issue ? 'Edit' : 'Add'}
-                                                        </Button>
                                                     </div>
-                                                ) : (
-                                                    <span className="text-xs text-gray-400">—</span>
-                                                )}
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Can permission="stations.edit">
-                                                        <Button variant="outline" size="sm" onClick={() => router.get(stationsEditRoute(station.id).url)} disabled={loading}>
-                                                            Edit
-                                                        </Button>
-                                                    </Can>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        {station.pc_spec_details ? (
+                                                            <>
+                                                                <div>
+                                                                    <span>{station.pc_spec}</span>
+                                                                    {station.pc_spec_details.pc_number && (
+                                                                        <div className="text-xs text-blue-600 mt-0.5">
+                                                                            PC: {station.pc_spec_details.pc_number}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <Button
+                                                                    variant="ghost"
+                                                                    size="sm"
+                                                                    onClick={() => {
+                                                                        setSelectedPcSpec(station.pc_spec_details || null);
+                                                                        setPcSpecDialogOpen(true);
+                                                                    }}
+                                                                    className="h-7 w-7 p-0"
+                                                                    title="View PC Spec Details"
+                                                                >
+                                                                    <Eye className="h-4 w-4" />
+                                                                </Button>
+                                                            </>
+                                                        ) : (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                onClick={() => router.visit(transferPage(station.id, { query: { filter: 'available' } }).url)}
+                                                                className="gap-2"
+                                                                title="Assign PC to this station"
+                                                            >
+                                                                <Plus className="h-4 w-4" />
+                                                                Assign PC
+                                                            </Button>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="hidden xl:table-cell">
+                                                    {station.pc_spec_details ? (
+                                                        <div className="flex items-center gap-2">
+                                                            {station.pc_spec_details.issue ? (
+                                                                <>
+                                                                    <AlertTriangle className="h-4 w-4 text-red-600 flex-shrink-0" />
+                                                                    <span className="text-xs text-red-600 font-medium truncate max-w-[150px]" title={station.pc_spec_details.issue}>
+                                                                        {station.pc_spec_details.issue}
+                                                                    </span>
+                                                                </>
+                                                            ) : (
+                                                                <span className="text-xs text-gray-400">No issue</span>
+                                                            )}
+                                                            <Button
+                                                                variant="ghost"
+                                                                size="sm"
+                                                                onClick={() => handleOpenIssueDialog(station.pc_spec_details)}
+                                                                className="h-7 px-2 text-xs"
+                                                            >
+                                                                {station.pc_spec_details.issue ? 'Edit' : 'Add'}
+                                                            </Button>
+                                                        </div>
+                                                    ) : (
+                                                        <span className="text-xs text-gray-400">—</span>
+                                                    )}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <Can permission="stations.edit">
+                                                            <Button variant="outline" size="sm" onClick={() => router.get(stationsEditRoute(station.id).url)} disabled={loading}>
+                                                                Edit
+                                                            </Button>
+                                                        </Can>
 
-                                                    {/* Reusable delete confirmation dialog */}
-                                                    <Can permission="stations.delete">
-                                                        <DeleteConfirmDialog
-                                                            onConfirm={() => handleDelete(station.id)}
-                                                            title="Delete Station"
-                                                            description={`Are you sure you want to delete station "${station.station_number}"?`}
-                                                            disabled={loading}
-                                                        />
-                                                    </Can>
-                                                </div>
+                                                        {/* Reusable delete confirmation dialog */}
+                                                        <Can permission="stations.delete">
+                                                            <DeleteConfirmDialog
+                                                                onConfirm={() => handleDelete(station.id)}
+                                                                title="Delete Station"
+                                                                description={`Are you sure you want to delete station "${station.station_number}"?`}
+                                                                disabled={loading}
+                                                            />
+                                                        </Can>
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {stations.data.length === 0 && !loading && (
+                                        <TableRow>
+                                            <TableCell colSpan={11} className="py-8 text-center text-gray-500">
+                                                No stations found
                                             </TableCell>
                                         </TableRow>
-                                    );
-                                })}
-                                {stations.data.length === 0 && !loading && (
-                                    <TableRow>
-                                        <TableCell colSpan={11} className="py-8 text-center text-gray-500">
-                                            No stations found
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Card View - visible only on mobile */}

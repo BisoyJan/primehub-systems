@@ -34,6 +34,7 @@ import { usePageMeta, useFlashMessage, usePageLoading } from "@/hooks";
 import { PageHeader } from "@/components/PageHeader";
 import { DeleteConfirmDialog } from "@/components/DeleteConfirmDialog";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
+import { TableSkeleton } from "@/components/TableSkeleton";
 
 // Authorization components and hooks
 import { Can, HasRole } from "@/components/authorization";
@@ -727,256 +728,260 @@ export default function AccountIndex() {
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <Table>
-                            <TableHeader>
-                                <TableRow className="bg-muted/50">
-                                    <Can permission="accounts.edit">
-                                        <TableHead className="w-12">
-                                            <div className="flex flex-col gap-1">
-                                                {approvableUsers.length > 0 && (
-                                                    <Checkbox
-                                                        checked={allApprovableSelected}
-                                                        onCheckedChange={toggleSelectAllApprove}
-                                                        aria-label="Select all pending"
-                                                        className="border-green-500 data-[state=checked]:bg-green-600"
-                                                    />
-                                                )}
-                                                {revokableUsers.length > 0 && (
-                                                    <Checkbox
-                                                        checked={allRevokableSelected}
-                                                        onCheckedChange={toggleSelectAllRevoke}
-                                                        aria-label="Select all approved"
-                                                        className="border-yellow-500 data-[state=checked]:bg-yellow-600"
-                                                    />
-                                                )}
-                                            </div>
-                                        </TableHead>
-                                    </Can>
-                                    <TableHead>Name</TableHead>
-                                    <TableHead>Email</TableHead>
-                                    <TableHead>Role</TableHead>
-                                    <TableHead>Employee Status</TableHead>
-                                    <TableHead>Account Status</TableHead>
-                                    <TableHead>Hired Date</TableHead>
-                                    <TableHead>Created At</TableHead>
-                                    <TableHead className="text-right">Actions</TableHead>
-                                </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                                {users.data.map((user) => {
-                                    const statusBadge = getStatusBadge(user);
-                                    return (
-                                        <TableRow key={user.id} className={isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50' : ''}>
-                                            <Can permission="accounts.edit">
-                                                <TableCell>
-                                                    {!user.deleted_at && user.id !== currentUserId && (
-                                                        user.is_approved ? (
-                                                            <Checkbox
-                                                                checked={selectedRevokeIds.includes(user.id)}
-                                                                onCheckedChange={() => toggleSelectRevoke(user.id)}
-                                                                aria-label={`Select ${user.first_name} ${user.last_name} for revoke`}
-                                                                className="border-yellow-500 data-[state=checked]:bg-yellow-600"
-                                                            />
-                                                        ) : (
-                                                            <Checkbox
-                                                                checked={selectedApproveIds.includes(user.id)}
-                                                                onCheckedChange={() => toggleSelectApprove(user.id)}
-                                                                aria-label={`Select ${user.first_name} ${user.last_name} for approve`}
-                                                                className="border-green-500 data-[state=checked]:bg-green-600"
-                                                            />
-                                                        )
+                    {isPageLoading ? (
+                        <TableSkeleton columns={9} rows={8} />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader>
+                                    <TableRow className="bg-muted/50">
+                                        <Can permission="accounts.edit">
+                                            <TableHead className="w-12">
+                                                <div className="flex flex-col gap-1">
+                                                    {approvableUsers.length > 0 && (
+                                                        <Checkbox
+                                                            checked={allApprovableSelected}
+                                                            onCheckedChange={toggleSelectAllApprove}
+                                                            aria-label="Select all pending"
+                                                            className="border-green-500 data-[state=checked]:bg-green-600"
+                                                        />
                                                     )}
-                                                </TableCell>
-                                            </Can>
-                                            <TableCell className="font-medium">
-                                                <div className="flex items-center gap-3">
-                                                    <Avatar className="h-10 w-10 overflow-hidden rounded-full">
-                                                        <AvatarImage src={user.avatar_url} alt={`${user.first_name} ${user.last_name}`} />
-                                                        <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-sm">
-                                                            {getInitials(`${user.first_name} ${user.last_name}`)}
-                                                        </AvatarFallback>
-                                                    </Avatar>
-                                                    <span>
-                                                        {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
-                                                    </span>
+                                                    {revokableUsers.length > 0 && (
+                                                        <Checkbox
+                                                            checked={allRevokableSelected}
+                                                            onCheckedChange={toggleSelectAllRevoke}
+                                                            aria-label="Select all approved"
+                                                            className="border-yellow-500 data-[state=checked]:bg-yellow-600"
+                                                        />
+                                                    )}
                                                 </div>
-                                            </TableCell>
-                                            <TableCell>{user.email}</TableCell>
-                                            <TableCell>
-                                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
-                                                    {user.role}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    <Can permission="accounts.edit">
+                                            </TableHead>
+                                        </Can>
+                                        <TableHead>Name</TableHead>
+                                        <TableHead>Email</TableHead>
+                                        <TableHead>Role</TableHead>
+                                        <TableHead>Employee Status</TableHead>
+                                        <TableHead>Account Status</TableHead>
+                                        <TableHead>Hired Date</TableHead>
+                                        <TableHead>Created At</TableHead>
+                                        <TableHead className="text-right">Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {users.data.map((user) => {
+                                        const statusBadge = getStatusBadge(user);
+                                        return (
+                                            <TableRow key={user.id} className={isPendingDeletion(user) ? 'bg-orange-50 dark:bg-orange-950/50' : isDeleted(user) ? 'bg-red-50 dark:bg-red-950/50' : ''}>
+                                                <Can permission="accounts.edit">
+                                                    <TableCell>
                                                         {!user.deleted_at && user.id !== currentUserId && (
-                                                            <Switch
-                                                                checked={user.is_active}
-                                                                onCheckedChange={() => handleToggleActive(user)}
-                                                                aria-label="Toggle employee active status"
-                                                            />
-                                                        )}
-                                                    </Can>
-                                                    <div className={`flex items-center justify-center px-3 py-1 rounded-full border ${user.is_active
-                                                        ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
-                                                        : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
-                                                        }`}>
-                                                        {user.is_active ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
-                                                    </div>
-                                                </div>
-                                            </TableCell>
-                                            <TableCell>
-                                                <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
-                                                    {statusBadge.label}
-                                                </span>
-                                            </TableCell>
-                                            <TableCell>
-                                                {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : '-'}
-                                            </TableCell>
-                                            <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                                            <TableCell>
-                                                <div className="flex items-center gap-2">
-                                                    {/* Show different actions based on deletion status */}
-                                                    {isPendingDeletion(user) ? (
-                                                        <>
-                                                            {/* Confirm Delete Button - Only for Super Admin, Admin, IT */}
-                                                            <HasRole role={['Super Admin', 'Admin', 'IT']}>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="icon"
-                                                                    onClick={() => handleConfirmDelete(user.id)}
-                                                                    disabled={loading || user.id === currentUserId}
-                                                                    className="text-red-600 hover:text-red-700 border-red-300"
-                                                                    title="Confirm Delete"
-                                                                >
-                                                                    <CheckCircle className="h-4 w-4" />
-                                                                </Button>
-                                                            </HasRole>
-
-                                                            {/* Restore Button */}
-                                                            <Can permission="accounts.edit">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="icon"
-                                                                    onClick={() => handleRestore(user.id)}
-                                                                    disabled={loading}
-                                                                    className="text-green-600 hover:text-green-700 border-green-300"
-                                                                    title="Restore Account"
-                                                                >
-                                                                    <RotateCcw className="h-4 w-4" />
-                                                                </Button>
-                                                            </Can>
-                                                        </>
-                                                    ) : isDeleted(user) ? (
-                                                        <>
-                                                            {/* Restore Button for deleted accounts */}
-                                                            <HasRole role={['Super Admin', 'Admin', 'HR', 'IT']}>
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="icon"
-                                                                    onClick={() => handleRestore(user.id)}
-                                                                    disabled={loading}
-                                                                    className="text-green-600 hover:text-green-700 border-green-300"
-                                                                    title="Restore Account"
-                                                                >
-                                                                    <RotateCcw className="h-4 w-4" />
-                                                                </Button>
-                                                            </HasRole>
-
-                                                            {/* Permanently Delete Button */}
-                                                            <HasRole role={['Super Admin', 'Admin', 'IT']}>
-                                                                <DeleteConfirmDialog
-                                                                    onConfirm={() => handleForceDelete(user.id)}
-                                                                    title="Permanently Delete Account"
-                                                                    description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
-                                                                    disabled={loading || user.id === currentUserId}
-                                                                    trigger={
-                                                                        <Button
-                                                                            variant="destructive"
-                                                                            size="icon"
-                                                                            disabled={loading || user.id === currentUserId}
-                                                                            title="Permanently Delete"
-                                                                        >
-                                                                            <XCircle className="h-4 w-4" />
-                                                                        </Button>
-                                                                    }
+                                                            user.is_approved ? (
+                                                                <Checkbox
+                                                                    checked={selectedRevokeIds.includes(user.id)}
+                                                                    onCheckedChange={() => toggleSelectRevoke(user.id)}
+                                                                    aria-label={`Select ${user.first_name} ${user.last_name} for revoke`}
+                                                                    className="border-yellow-500 data-[state=checked]:bg-yellow-600"
                                                                 />
-                                                            </HasRole>
-                                                        </>
-                                                    ) : (
-                                                        <>
-                                                            <Can permission="accounts.edit">
-                                                                <Link href={accountsEdit(user.id).url}>
-                                                                    <Button variant="outline" size="icon" disabled={loading} title="Edit Account">
-                                                                        <Pencil className="h-4 w-4" />
-                                                                    </Button>
-                                                                </Link>
-                                                            </Can>
-
-                                                            <Can permission="accounts.edit">
-                                                                {user.is_approved ? (
+                                                            ) : (
+                                                                <Checkbox
+                                                                    checked={selectedApproveIds.includes(user.id)}
+                                                                    onCheckedChange={() => toggleSelectApprove(user.id)}
+                                                                    aria-label={`Select ${user.first_name} ${user.last_name} for approve`}
+                                                                    className="border-green-500 data-[state=checked]:bg-green-600"
+                                                                />
+                                                            )
+                                                        )}
+                                                    </TableCell>
+                                                </Can>
+                                                <TableCell className="font-medium">
+                                                    <div className="flex items-center gap-3">
+                                                        <Avatar className="h-10 w-10 overflow-hidden rounded-full">
+                                                            <AvatarImage src={user.avatar_url} alt={`${user.first_name} ${user.last_name}`} />
+                                                            <AvatarFallback className="rounded-full bg-neutral-200 text-black dark:bg-neutral-700 dark:text-white text-sm">
+                                                                {getInitials(`${user.first_name} ${user.last_name}`)}
+                                                            </AvatarFallback>
+                                                        </Avatar>
+                                                        <span>
+                                                            {user.first_name} {user.middle_name ? `${user.middle_name}. ` : ''}{user.last_name}
+                                                        </span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>{user.email}</TableCell>
+                                                <TableCell>
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${getRoleBadgeColor(user.role)}`}>
+                                                        {user.role}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        <Can permission="accounts.edit">
+                                                            {!user.deleted_at && user.id !== currentUserId && (
+                                                                <Switch
+                                                                    checked={user.is_active}
+                                                                    onCheckedChange={() => handleToggleActive(user)}
+                                                                    aria-label="Toggle employee active status"
+                                                                />
+                                                            )}
+                                                        </Can>
+                                                        <div className={`flex items-center justify-center px-3 py-1 rounded-full border ${user.is_active
+                                                            ? 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700'
+                                                            : 'bg-gray-100 text-gray-800 border-gray-300 dark:bg-gray-900/30 dark:text-gray-400 dark:border-gray-700'
+                                                            }`}>
+                                                            {user.is_active ? <UserCheck className="h-4 w-4" /> : <UserX className="h-4 w-4" />}
+                                                        </div>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell>
+                                                    <span className={`px-3 py-1 rounded-full text-xs font-medium border ${statusBadge.className}`}>
+                                                        {statusBadge.label}
+                                                    </span>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {user.hired_date ? new Date(user.hired_date).toLocaleDateString() : '-'}
+                                                </TableCell>
+                                                <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-2">
+                                                        {/* Show different actions based on deletion status */}
+                                                        {isPendingDeletion(user) ? (
+                                                            <>
+                                                                {/* Confirm Delete Button - Only for Super Admin, Admin, IT */}
+                                                                <HasRole role={['Super Admin', 'Admin', 'IT']}>
                                                                     <Button
                                                                         variant="outline"
                                                                         size="icon"
-                                                                        onClick={() => handleUnapprove(user)}
+                                                                        onClick={() => handleConfirmDelete(user.id)}
                                                                         disabled={loading || user.id === currentUserId}
-                                                                        className="text-yellow-600 hover:text-yellow-700 border-yellow-300"
-                                                                        title="Revoke Access"
+                                                                        className="text-red-600 hover:text-red-700 border-red-300"
+                                                                        title="Confirm Delete"
                                                                     >
-                                                                        <UserMinus className="h-4 w-4" />
+                                                                        <CheckCircle className="h-4 w-4" />
                                                                     </Button>
-                                                                ) : (
+                                                                </HasRole>
+
+                                                                {/* Restore Button */}
+                                                                <Can permission="accounts.edit">
                                                                     <Button
                                                                         variant="outline"
                                                                         size="icon"
-                                                                        onClick={() => handleApprove(user.id)}
+                                                                        onClick={() => handleRestore(user.id)}
                                                                         disabled={loading}
                                                                         className="text-green-600 hover:text-green-700 border-green-300"
-                                                                        title="Approve Account"
+                                                                        title="Restore Account"
                                                                     >
-                                                                        <UserCheck2 className="h-4 w-4" />
+                                                                        <RotateCcw className="h-4 w-4" />
                                                                     </Button>
-                                                                )}
-                                                            </Can>
+                                                                </Can>
+                                                            </>
+                                                        ) : isDeleted(user) ? (
+                                                            <>
+                                                                {/* Restore Button for deleted accounts */}
+                                                                <HasRole role={['Super Admin', 'Admin', 'HR', 'IT']}>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        size="icon"
+                                                                        onClick={() => handleRestore(user.id)}
+                                                                        disabled={loading}
+                                                                        className="text-green-600 hover:text-green-700 border-green-300"
+                                                                        title="Restore Account"
+                                                                    >
+                                                                        <RotateCcw className="h-4 w-4" />
+                                                                    </Button>
+                                                                </HasRole>
 
-                                                            <Can permission="accounts.delete">
-                                                                <DeleteConfirmDialog
-                                                                    onConfirm={() => handleDelete(user.id)}
-                                                                    title="Delete User Account"
-                                                                    description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? The account will be marked for deletion and require admin confirmation.`}
-                                                                    disabled={loading || user.id === currentUserId}
-                                                                    trigger={
+                                                                {/* Permanently Delete Button */}
+                                                                <HasRole role={['Super Admin', 'Admin', 'IT']}>
+                                                                    <DeleteConfirmDialog
+                                                                        onConfirm={() => handleForceDelete(user.id)}
+                                                                        title="Permanently Delete Account"
+                                                                        description={`Are you sure you want to PERMANENTLY delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? This action cannot be undone and all data will be lost forever.`}
+                                                                        disabled={loading || user.id === currentUserId}
+                                                                        trigger={
+                                                                            <Button
+                                                                                variant="destructive"
+                                                                                size="icon"
+                                                                                disabled={loading || user.id === currentUserId}
+                                                                                title="Permanently Delete"
+                                                                            >
+                                                                                <XCircle className="h-4 w-4" />
+                                                                            </Button>
+                                                                        }
+                                                                    />
+                                                                </HasRole>
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <Can permission="accounts.edit">
+                                                                    <Link href={accountsEdit(user.id).url}>
+                                                                        <Button variant="outline" size="icon" disabled={loading} title="Edit Account">
+                                                                            <Pencil className="h-4 w-4" />
+                                                                        </Button>
+                                                                    </Link>
+                                                                </Can>
+
+                                                                <Can permission="accounts.edit">
+                                                                    {user.is_approved ? (
                                                                         <Button
                                                                             variant="outline"
                                                                             size="icon"
+                                                                            onClick={() => handleUnapprove(user)}
                                                                             disabled={loading || user.id === currentUserId}
-                                                                            className="text-red-600 hover:text-red-700 border-red-300"
-                                                                            title="Delete Account"
+                                                                            className="text-yellow-600 hover:text-yellow-700 border-yellow-300"
+                                                                            title="Revoke Access"
                                                                         >
-                                                                            <Trash2 className="h-4 w-4" />
+                                                                            <UserMinus className="h-4 w-4" />
                                                                         </Button>
-                                                                    }
-                                                                />
-                                                            </Can>
-                                                        </>
-                                                    )}
-                                                </div>
+                                                                    ) : (
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            size="icon"
+                                                                            onClick={() => handleApprove(user.id)}
+                                                                            disabled={loading}
+                                                                            className="text-green-600 hover:text-green-700 border-green-300"
+                                                                            title="Approve Account"
+                                                                        >
+                                                                            <UserCheck2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    )}
+                                                                </Can>
+
+                                                                <Can permission="accounts.delete">
+                                                                    <DeleteConfirmDialog
+                                                                        onConfirm={() => handleDelete(user.id)}
+                                                                        title="Delete User Account"
+                                                                        description={`Are you sure you want to delete the account for "${user.first_name} ${user.middle_name ? user.middle_name + '. ' : ''}${user.last_name}"? The account will be marked for deletion and require admin confirmation.`}
+                                                                        disabled={loading || user.id === currentUserId}
+                                                                        trigger={
+                                                                            <Button
+                                                                                variant="outline"
+                                                                                size="icon"
+                                                                                disabled={loading || user.id === currentUserId}
+                                                                                className="text-red-600 hover:text-red-700 border-red-300"
+                                                                                title="Delete Account"
+                                                                            >
+                                                                                <Trash2 className="h-4 w-4" />
+                                                                            </Button>
+                                                                        }
+                                                                    />
+                                                                </Can>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </TableCell>
+                                            </TableRow>
+                                        );
+                                    })}
+                                    {users.data.length === 0 && !loading && (
+                                        <TableRow>
+                                            <TableCell colSpan={10} className="py-8 text-center text-gray-500">
+                                                No user accounts found
                                             </TableCell>
                                         </TableRow>
-                                    );
-                                })}
-                                {users.data.length === 0 && !loading && (
-                                    <TableRow>
-                                        <TableCell colSpan={10} className="py-8 text-center text-gray-500">
-                                            No user accounts found
-                                        </TableCell>
-                                    </TableRow>
-                                )}
-                            </TableBody>
-                        </Table>
-                    </div>
+                                    )}
+                                </TableBody>
+                            </Table>
+                        </div>
+                    )}
                 </div>
 
                 {/* Mobile Cards */}
