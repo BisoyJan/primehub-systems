@@ -124,7 +124,6 @@ class RunDatabaseBackup implements ShouldQueue
             ->setDbName($config['database'])
             ->setUserName($config['username'])
             ->setPassword($config['password'] ?? '')
-            ->excludeTables(['activity_log'])
             ->addExtraOption('--routines')
             ->addExtraOption('--triggers')
             ->addExtraOption('--quick')
