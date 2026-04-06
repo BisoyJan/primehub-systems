@@ -218,8 +218,8 @@ export function RichTextarea({ id, value, onChange, placeholder, minHeight = '12
                 aria-label={placeholder || 'Rich text editor'}
                 title={placeholder || 'Rich text editor'}
                 className={cn(
-                    'px-3 py-2 text-sm text-foreground outline-none empty:before:text-muted-foreground empty:before:content-[attr(data-placeholder)]',
-                    'overflow-y-auto',
+                    'px-3 py-2 text-sm text-gray-900 bg-white outline-none empty:before:text-gray-400 empty:before:content-[attr(data-placeholder)]',
+                    'overflow-y-auto rounded-b-md',
                     '[&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6 [&_li]:my-0.5',
                 )}
                 style={{ minHeight }}

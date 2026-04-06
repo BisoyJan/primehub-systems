@@ -231,7 +231,7 @@ export default function CoachingSessionsShow() {
 
                 {/* Performance Description */}
                 <SectionCard title="Performance Description">
-                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.performance_description) }} />
+                    <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.performance_description) }} />
                 </SectionCard>
 
                 {/* Attachments */}
@@ -285,13 +285,13 @@ export default function CoachingSessionsShow() {
                 {/* Agent Strengths */}
                 {session.agent_strengths_wins && (
                     <SectionCard title="Agent Strengths / Wins">
-                        <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.agent_strengths_wins) }} />
+                        <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.agent_strengths_wins) }} />
                     </SectionCard>
                 )}
 
                 {/* SMART Action Plan */}
                 <SectionCard title="SMART Action Plan">
-                    <div className="whitespace-pre-wrap text-sm prose prose-sm max-w-none dark:prose-invert" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.smart_action_plan) }} />
+                    <div className="whitespace-pre-wrap text-sm text-gray-900 bg-white rounded-md p-3 prose prose-sm max-w-none [&_ul]:list-disc [&_ul]:pl-6 [&_ol]:list-decimal [&_ol]:pl-6" dangerouslySetInnerHTML={{ __html: sanitizeRichHtml(session.smart_action_plan) }} />
                 </SectionCard>
 
                 {/* Acknowledgement & Compliance Info */}
