@@ -18,7 +18,7 @@ return [
          * The name of this application. You can use this name to monitor
          * the backups.
          */
-        'name' => env('APP_NAME', 'laravel-backup'),
+        'name' => 'backups',
 
         'source' => [
             'files' => [
@@ -198,18 +198,18 @@ return [
          * After creating the zip, verify it can be opened and contains files.
          * Recommended for critical backups but adds a small overhead.
          */
-        'verify_backup' => false,
+        'verify_backup' => true,
 
         /*
          * The number of attempts, in case the backup command encounters an exception
          */
-        'tries' => 1,
+        'tries' => 3,
 
         /*
          * The number of seconds to wait before attempting a new backup if the previous try failed
          * Set to `0` for none
          */
-        'retry_delay' => 0,
+        'retry_delay' => 10,
     ],
 
     /*
@@ -236,7 +236,7 @@ return [
         'notifiable' => Notifiable::class,
 
         'mail' => [
-            'to' => 'your@example.com',
+            'to' => env('BACKUP_NOTIFICATION_EMAIL', 'admin@example.com'),
 
             'from' => [
                 'address' => env('MAIL_FROM_ADDRESS', 'hello@example.com'),
@@ -296,7 +296,7 @@ return [
      */
     'monitor_backups' => [
         [
-            'name' => env('APP_NAME', 'laravel-backup'),
+            'name' => 'backups',
             'disks' => ['local'],
             'health_checks' => [
                 MaximumAgeInDays::class => 1,

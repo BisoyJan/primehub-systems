@@ -17,9 +17,9 @@ class DatabaseBackupFactory extends Factory
     public function definition(): array
     {
         return [
-            'filename' => 'backup-'.fake()->dateTimeThisYear()->format('Y-m-d-His').'.sql.gz',
+            'filename' => 'backup-'.fake()->dateTimeThisYear()->format('Y-m-d-His').'.zip',
             'disk' => 'local',
-            'path' => 'backups/backup-'.fake()->uuid().'.sql.gz',
+            'path' => 'backups/backup-'.fake()->uuid().'.zip',
             'size' => fake()->numberBetween(1024, 104857600),
             'status' => 'completed',
             'created_by' => User::factory(),

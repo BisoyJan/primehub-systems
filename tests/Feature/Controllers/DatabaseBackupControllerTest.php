@@ -80,11 +80,11 @@ class DatabaseBackupControllerTest extends TestCase
     {
         $admin = $this->createSuperAdmin();
         DatabaseBackup::factory()->create([
-            'filename' => 'backup-2026-01-01.sql.gz',
+            'filename' => 'backup-2026-01-01.zip',
             'created_by' => $admin->id,
         ]);
         DatabaseBackup::factory()->create([
-            'filename' => 'backup-2026-02-15.sql.gz',
+            'filename' => 'backup-2026-02-15.zip',
             'created_by' => $admin->id,
         ]);
 

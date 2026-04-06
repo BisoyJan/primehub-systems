@@ -130,3 +130,25 @@ Schedule::command('notifications:check-expiry --days=7')
     ->dailyAt('02:30')
     ->withoutOverlapping()
     ->onOneServer();
+
+// ============================================================================
+// DATABASE BACKUPS (Spatie Laravel Backup)
+// ============================================================================
+
+// Automated daily database backup at 00:30 AM
+// Uses Spatie backup:run with --only-db (dump config in config/database.php)
+Schedule::command('backup:run --only-db')
+    ->dailyAt('00:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Clean old backups based on retention strategy in config/backup.php at 00:45 AM
+Schedule::command('backup:clean')
+    ->dailyAt('00:45')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// Monitor backup health (alerts if backups are too old or too large) at 03:00 AM
+Schedule::command('backup:monitor')
+    ->dailyAt('03:00')
+    ->onOneServer();

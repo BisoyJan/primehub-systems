@@ -60,6 +60,12 @@ return [
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
+            'dump' => [
+                'dump_binary_path' => env('MYSQL_DUMP_BINARY_PATH'),
+                'useSingleTransaction' => true,
+                'timeout' => 600,
+                'add_extra_option' => '--routines --triggers --events --quick --max-allowed-packet=256M',
+            ],
         ],
 
         'mariadb' => [
@@ -80,6 +86,12 @@ return [
             'options' => extension_loaded('pdo_mysql') ? array_filter([
                 PDO::MYSQL_ATTR_SSL_CA => env('MYSQL_ATTR_SSL_CA'),
             ]) : [],
+            'dump' => [
+                'dump_binary_path' => env('MYSQL_DUMP_BINARY_PATH'),
+                'useSingleTransaction' => true,
+                'timeout' => 600,
+                'add_extra_option' => '--routines --triggers --events --quick --max-allowed-packet=256M',
+            ],
         ],
 
         'pgsql' => [

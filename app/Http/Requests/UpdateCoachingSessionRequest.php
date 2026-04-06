@@ -41,9 +41,9 @@ class UpdateCoachingSessionRequest extends FormRequest
             'focus_recognition_milestones' => ['sometimes', 'boolean'],
             'focus_growth_development' => ['sometimes', 'boolean'],
             'focus_other' => ['sometimes', 'boolean'],
-            'focus_other_notes' => ['nullable', 'required_if:focus_other,true', 'string', 'max:2000'],
+            'focus_other_notes' => ['nullable', 'required_if:focus_other,true', 'string', 'max:100000'],
             // Narrative
-            'performance_description' => ['required', 'string', 'min:10', 'max:10000'],
+            'performance_description' => ['required', 'string', 'min:10', 'max:100000'],
             // Root Causes
             'root_cause_lack_of_skills' => ['sometimes', 'boolean'],
             'root_cause_lack_of_clarity' => ['sometimes', 'boolean'],
@@ -53,10 +53,10 @@ class UpdateCoachingSessionRequest extends FormRequest
             'root_cause_workload_process' => ['sometimes', 'boolean'],
             'root_cause_peer_conflict' => ['sometimes', 'boolean'],
             'root_cause_others' => ['sometimes', 'boolean'],
-            'root_cause_others_notes' => ['nullable', 'string', 'max:2000'],
+            'root_cause_others_notes' => ['nullable', 'string', 'max:7000'],
             // More Narrative
-            'agent_strengths_wins' => ['nullable', 'string', 'max:10000'],
-            'smart_action_plan' => ['required', 'string', 'min:10', 'max:10000'],
+            'agent_strengths_wins' => ['nullable', 'string', 'max:100000'],
+            'smart_action_plan' => ['required', 'string', 'min:10', 'max:100000'],
             'follow_up_date' => ['nullable', 'date'],
             // Other
             'severity_flag' => ['sometimes', Rule::in(CoachingSession::SEVERITY_FLAGS)],

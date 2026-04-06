@@ -43,12 +43,13 @@ class DatabaseBackupController extends Controller
     {
         try {
             $jobId = Str::uuid()->toString();
-            $filename = 'backup-'.now()->format('Y-m-d-His').'.sql.gz';
+            $filename = 'backup-'.now()->format('Y-m-d-His').'.zip';
+            $backupName = config('backup.backup.name', 'backups');
 
             $backup = DatabaseBackup::create([
                 'filename' => $filename,
                 'disk' => 'local',
-                'path' => "backups/{$filename}",
+                'path' => "{$backupName}/{$filename}",
                 'status' => 'pending',
                 'created_by' => auth()->id(),
             ]);

@@ -16,7 +16,7 @@ import {
     end as endRoute,
     reset as resetRoute,
 } from '@/routes/break-timer';
-import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize } from 'lucide-react';
+import { Play, Pause, Square, Coffee, UtensilsCrossed, RotateCcw, Merge, Layers, ChevronDown, ChevronUp, Palette, Maximize, Minimize, Volume2 } from 'lucide-react';
 import { ThemeDecor } from './ThemeDecor';
 import {
     DropdownMenu,
@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { useTimerTheme, useIsDark, btnStyle, getRingColor, getStatusColor, getTimerColor, getPageBackground, getGlassStyle } from './themes';
+import { useAlarmSound, ALARM_OPTIONS } from './useAlarmSound';
 
 interface BreakPolicy {
     id: number;
@@ -114,6 +115,7 @@ export default function BreakTimerIndex() {
 
     const { theme, themeId, setTheme, themes } = useTimerTheme();
     const isDark = useIsDark();
+    const { alarmId, setAlarmId, volume, setVolume, preview, checkOverage, stopAlarm } = useAlarmSound();
 
     const [remainingSeconds, setRemainingSeconds] = useState<number>(0);
     const [isPauseDialogOpen, setIsPauseDialogOpen] = useState(false);
@@ -174,7 +176,9 @@ export default function BreakTimerIndex() {
         if (activeSession && activeSession.status === 'active') {
             setRemainingSeconds(calculateRemaining());
             timerRef.current = setInterval(() => {
-                setRemainingSeconds(calculateRemaining());
+                const r = calculateRemaining();
+                setRemainingSeconds(r);
+                checkOverage(r, true);
             }, 1000);
 
             return () => {
@@ -182,8 +186,10 @@ export default function BreakTimerIndex() {
             };
         } else if (activeSession && activeSession.status === 'paused') {
             setRemainingSeconds(activeSession.remaining_seconds ?? 0);
+            stopAlarm();
         } else {
             setRemainingSeconds(0);
+            stopAlarm();
         }
 
         return () => {
@@ -395,7 +401,7 @@ export default function BreakTimerIndex() {
                 <ThemeDecor theme={theme} isDark={isDark || theme.alwaysDark} />
                 <div className="relative mx-auto flex max-w-lg flex-col items-center gap-4 px-4 py-3 md:max-w-2xl md:py-4">
 
-                    {/* ─── Theme Selector & Fullscreen ─── */}
+                    {/* ─── Theme Selector, Alarm & Fullscreen ─── */}
                     <div className="flex w-full items-center justify-end gap-2">
                         <button
                             onClick={toggleFullscreen}
@@ -405,6 +411,24 @@ export default function BreakTimerIndex() {
                         >
                             {isFullscreen ? <Minimize className="h-3.5 w-3.5 opacity-70" /> : <Maximize className="h-3.5 w-3.5 opacity-70" />}
                         </button>
+                        <div className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10" style={glassStyle}>
+                            <Volume2 className="h-3.5 w-3.5 opacity-60" />
+                            <Select value={alarmId} onValueChange={(v) => { setAlarmId(v); if (v !== 'none') preview(v); }}>
+                                <SelectTrigger className="h-7 w-28 border-none bg-transparent px-1 text-xs shadow-none">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                    {ALARM_OPTIONS.map((a) => (
+                                        <SelectItem key={a.id} value={a.id}>
+                                            <span className="flex items-center gap-2">
+                                                <span>{a.icon}</span>
+                                                <span>{a.name}</span>
+                                            </span>
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                         <div className="flex items-center gap-1.5 rounded-full border border-white/20 px-3 py-1 backdrop-blur-md dark:border-white/10" style={glassStyle}>
                             <Palette className="h-3.5 w-3.5 opacity-60" />
                             <Select value={themeId} onValueChange={setTheme}>
