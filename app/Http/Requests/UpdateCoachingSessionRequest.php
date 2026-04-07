@@ -6,6 +6,7 @@ use App\Models\CoachingSession;
 use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateCoachingSessionRequest extends FormRequest
 {
@@ -87,6 +88,47 @@ class UpdateCoachingSessionRequest extends FormRequest
             'attachments.*.image' => 'Each attachment must be an image.',
             'attachments.*.mimes' => 'Only JPEG, PNG, GIF, and WebP images are allowed.',
             'attachments.*.max' => 'Each image must be less than 4MB.',
+        ];
+    }
+
+    /**
+     * Additional validation after rules pass.
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator) {
+                // Require at least one Agent Profile checkbox
+                if (! $this->boolean('profile_new_hire')
+                    && ! $this->boolean('profile_tenured')
+                    && ! $this->boolean('profile_returning')
+                    && ! $this->boolean('profile_previously_coached_same_issue')) {
+                    $validator->errors()->add('profile', 'Please select at least one agent profile.');
+                }
+
+                // Require at least one Focus Area checkbox
+                if (! $this->boolean('focus_attendance_tardiness')
+                    && ! $this->boolean('focus_productivity')
+                    && ! $this->boolean('focus_compliance')
+                    && ! $this->boolean('focus_callouts')
+                    && ! $this->boolean('focus_recognition_milestones')
+                    && ! $this->boolean('focus_growth_development')
+                    && ! $this->boolean('focus_other')) {
+                    $validator->errors()->add('focus', 'Please select at least one focus area.');
+                }
+
+                // Require at least one Root Cause checkbox
+                if (! $this->boolean('root_cause_lack_of_skills')
+                    && ! $this->boolean('root_cause_lack_of_clarity')
+                    && ! $this->boolean('root_cause_personal_issues')
+                    && ! $this->boolean('root_cause_motivation_engagement')
+                    && ! $this->boolean('root_cause_health_fatigue')
+                    && ! $this->boolean('root_cause_workload_process')
+                    && ! $this->boolean('root_cause_peer_conflict')
+                    && ! $this->boolean('root_cause_others')) {
+                    $validator->errors()->add('root_cause', 'Please select at least one root cause.');
+                }
+            },
         ];
     }
 }

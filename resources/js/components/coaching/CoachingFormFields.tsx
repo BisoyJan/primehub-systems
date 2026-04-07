@@ -689,7 +689,7 @@ export function CoachingFormFields({
             {/* Section 2: Agent Profile */}
             <section className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
-                    Agent's Profile
+                    Agent's Profile <span className="text-red-500">*</span>
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {[
@@ -708,6 +708,7 @@ export function CoachingFormFields({
                         </div>
                     ))}
                 </div>
+                {errors.profile && <p className="text-red-600 text-sm mt-1">{errors.profile}</p>}
             </section>
 
             {/* Section 3: Purpose */}
@@ -736,7 +737,7 @@ export function CoachingFormFields({
             {/* Section 4: Focus Areas */}
             <section className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
-                    Focus Area(s)
+                    Focus Area(s) <span className="text-red-500">*</span>
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {[
@@ -770,6 +771,7 @@ export function CoachingFormFields({
                         {errors.focus_other_notes && <p className="text-red-600 text-sm mt-1">{errors.focus_other_notes}</p>}
                     </div>
                 )}
+                {errors.focus && <p className="text-red-600 text-sm mt-1">{errors.focus}</p>}
             </section>
 
             {/* Section 5: Performance Description */}
@@ -801,7 +803,7 @@ export function CoachingFormFields({
             {/* Section 6: Root Causes */}
             <section className="space-y-4">
                 <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide border-b pb-2">
-                    Root Cause(s)
+                    Root Cause(s) <span className="text-red-500">*</span>
                 </h3>
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     {[
@@ -824,6 +826,7 @@ export function CoachingFormFields({
                         </div>
                     ))}
                 </div>
+                {errors.root_cause && <p className="text-red-600 text-sm mt-1">{errors.root_cause}</p>}
             </section>
 
             {/* Section 7: Agent Strengths */}
