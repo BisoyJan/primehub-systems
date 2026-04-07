@@ -109,6 +109,7 @@ class CoachingDashboardController extends Controller
             'campaignName' => $campaignName,
             'upcomingFollowUps' => $followUpData['upcoming'],
             'overdueFollowUps' => $followUpData['overdue'],
+            'followUpComplianceRate' => $this->dashboardService->getFollowUpComplianceRate($user->id),
             'filters' => $request->only(['coaching_status', 'date_from', 'date_to']),
             'statusColors' => CoachingDashboardService::STATUS_COLORS,
             'purposes' => CoachingSession::PURPOSE_LABELS,
@@ -159,6 +160,10 @@ class CoachingDashboardController extends Controller
             'queueData' => $queueData,
             'upcomingFollowUps' => $followUpData['upcoming'],
             'overdueFollowUps' => $followUpData['overdue'],
+            'followUpComplianceRate' => $this->dashboardService->getFollowUpComplianceRate(
+                $request->input('coach_id') ? (int) $request->input('coach_id') : null,
+                $request->input('campaign_id') ? (int) $request->input('campaign_id') : null,
+            ),
             'campaigns' => $campaigns,
             'teamLeads' => $teamLeads,
             'filters' => $request->only(['campaign_id', 'coach_id', 'coaching_status', 'coachee_role', 'date_from', 'date_to']),

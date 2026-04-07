@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Head, Link, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { Calendar as CalendarIcon, CalendarClock, Eye, Plus, Filter, Users, AlertTriangle } from 'lucide-react';
+import { Calendar as CalendarIcon, CalendarClock, Eye, Plus, Filter, Users, AlertTriangle, ArrowUpDown, ChevronUp, ChevronDown, ClipboardList, TrendingUp, TrendingDown, Download, Loader2 } from 'lucide-react';
 import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
 
 import AppLayout from '@/layouts/app-layout';
@@ -31,8 +31,10 @@ import { Badge } from '@/components/ui/badge';
 import { Calendar } from '@/components/ui/calendar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 
+import { toast } from 'sonner';
 import { dashboard as coachingDashboard } from '@/routes/coaching';
 import { create as sessionsCreate, show as sessionsShow } from '@/routes/coaching/sessions';
+import { start as exportStart, progress as exportProgress, download as exportDownload } from '@/routes/coaching/export';
 
 import type { CoachingSession, CoachingPurposeLabels, CoachingStatusColors, CoachingStatusLabel } from '@/types';
 
@@ -48,6 +50,7 @@ interface AgentRow {
     older_coached_date: string | null;
     pending_acknowledgements: number;
     total_sessions: number;
+    trend?: number;
 }
 
 interface DashboardData {
@@ -82,6 +85,7 @@ interface Props extends InertiaPageProps {
     campaignName: string;
     upcomingFollowUps: FollowUp[];
     overdueFollowUps: FollowUp[];
+    followUpComplianceRate?: { rate: number; completed: number; total: number };
     filters: Filters;
     statusColors: CoachingStatusColors;
     purposes: CoachingPurposeLabels;
@@ -101,8 +105,40 @@ function getUrgencyStyles(days: number) {
     return { border: 'border-yellow-500/50 bg-yellow-500/5', text: 'text-yellow-600 dark:text-yellow-400', label: `${days}d away` };
 }
 
+const TrendIndicator = ({ trend }: { trend?: number }) => {
+    if (!trend || trend === 0) return <span className="text-muted-foreground">—</span>;
+    if (trend > 0) return (
+        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-green-600">
+            <TrendingUp className="h-3.5 w-3.5" /> +{trend}
+        </span>
+    );
+    return (
+        <span className="inline-flex items-center gap-0.5 text-xs font-medium text-red-600">
+            <TrendingDown className="h-3.5 w-3.5" /> {trend}
+        </span>
+    );
+};
+
+const STATUS_PRIORITY: Record<string, number> = {
+    'Please Coach ASAP': 0,
+    'Badly Needs Coaching': 1,
+    'Needs Coaching': 2,
+    'Coaching Done': 3,
+    'No Record': 4,
+};
+
+function getStatusRowClass(status: string): string {
+    switch (status) {
+        case 'Coaching Done': return 'bg-green-50/50 dark:bg-green-950/20';
+        case 'Needs Coaching': return 'bg-yellow-50/50 dark:bg-yellow-950/20';
+        case 'Badly Needs Coaching': return 'bg-orange-50/50 dark:bg-orange-950/20';
+        case 'Please Coach ASAP': return 'bg-red-50/50 dark:bg-red-950/20';
+        default: return '';
+    }
+}
+
 export default function CoachingDashboardIndex() {
-    const { dashboardData, recentSessions, campaignName, upcomingFollowUps, overdueFollowUps, filters: initialFilters, purposes } = usePage<Props>().props;
+    const { dashboardData, recentSessions, campaignName, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, filters: initialFilters, purposes } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Dashboard',
@@ -115,6 +151,58 @@ export default function CoachingDashboardIndex() {
     const [dateFrom, setDateFrom] = useState(initialFilters.date_from || '');
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
     const [calendarSelectedDate, setCalendarSelectedDate] = useState<Date | undefined>(undefined);
+    const [sortField, setSortField] = useState<string>('coaching_status');
+    const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    const [isExporting, setIsExporting] = useState(false);
+    const [exportStatusText, setExportStatusText] = useState<{ percent: number; status: string } | null>(null);
+    const [selectedAgentIds, setSelectedAgentIds] = useState<number[]>([]);
+
+    const sortedAgents = useMemo(() => {
+        const agents = [...dashboardData.agents];
+        agents.sort((a, b) => {
+            let cmp = 0;
+            switch (sortField) {
+                case 'name':
+                    cmp = a.name.localeCompare(b.name);
+                    break;
+                case 'coaching_status':
+                    cmp = (STATUS_PRIORITY[a.coaching_status] ?? 99) - (STATUS_PRIORITY[b.coaching_status] ?? 99);
+                    break;
+                case 'last_coached_date':
+                    cmp = (a.last_coached_date ?? '').localeCompare(b.last_coached_date ?? '');
+                    break;
+                case 'total_sessions':
+                    cmp = a.total_sessions - b.total_sessions;
+                    break;
+                case 'trend':
+                    cmp = (a.trend ?? 0) - (b.trend ?? 0);
+                    break;
+                case 'pending_acknowledgements':
+                    cmp = a.pending_acknowledgements - b.pending_acknowledgements;
+                    break;
+                default:
+                    cmp = 0;
+            }
+            return sortDirection === 'asc' ? cmp : -cmp;
+        });
+        return agents;
+    }, [dashboardData.agents, sortField, sortDirection]);
+
+    const handleSort = (field: string) => {
+        if (sortField === field) {
+            setSortDirection((d) => (d === 'asc' ? 'desc' : 'asc'));
+        } else {
+            setSortField(field);
+            setSortDirection('asc');
+        }
+    };
+
+    const SortIcon = ({ field }: { field: string }) => {
+        if (sortField !== field) return <ArrowUpDown className="ml-1 inline h-3.5 w-3.5 text-muted-foreground/50" />;
+        return sortDirection === 'asc'
+            ? <ChevronUp className="ml-1 inline h-3.5 w-3.5" />
+            : <ChevronDown className="ml-1 inline h-3.5 w-3.5" />;
+    };
 
     const allFollowUps = useMemo(() => [...overdueFollowUps, ...upcomingFollowUps], [overdueFollowUps, upcomingFollowUps]);
 
@@ -127,6 +215,65 @@ export default function CoachingDashboardIndex() {
         const dateStr = calendarSelectedDate.toISOString().split('T')[0];
         return allFollowUps.filter((item) => item.follow_up_date === dateStr);
     }, [calendarSelectedDate, allFollowUps]);
+
+    const handleExport = async () => {
+        setIsExporting(true);
+        setExportStatusText({ percent: 0, status: 'Starting export...' });
+
+        try {
+            const response = await fetch(exportStart().url, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({
+                    date_from: dateFrom || undefined,
+                    date_to: dateTo || undefined,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (!data.jobId) {
+                throw new Error('Failed to start export');
+            }
+
+            const pollInterval = setInterval(async () => {
+                try {
+                    const progressRes = await fetch(exportProgress(data.jobId).url);
+                    const progressData = await progressRes.json();
+                    setExportStatusText({ percent: progressData.percent, status: progressData.status });
+
+                    if (progressData.finished) {
+                        clearInterval(pollInterval);
+                        setIsExporting(false);
+                        setExportStatusText(null);
+                        toast.success('Export complete! Downloading...');
+                        window.open(exportDownload(data.jobId).url, '_blank');
+                    }
+
+                    if (progressData.error) {
+                        clearInterval(pollInterval);
+                        setIsExporting(false);
+                        setExportStatusText(null);
+                        toast.error(progressData.status || 'Export failed');
+                    }
+                } catch {
+                    clearInterval(pollInterval);
+                    setIsExporting(false);
+                    setExportStatusText(null);
+                    toast.error('Failed to check export progress');
+                }
+            }, 1000);
+        } catch {
+            setIsExporting(false);
+            setExportStatusText(null);
+            toast.error('Failed to start export');
+        }
+    };
 
     const handleFilter = () => {
         router.get(
@@ -154,15 +301,67 @@ export default function CoachingDashboardIndex() {
             <div className="relative flex h-full flex-1 flex-col gap-4 rounded-xl p-3">
                 <LoadingOverlay isLoading={isLoading} />
 
-                <PageHeader
-                    title="Team Coaching Dashboard"
-                    description={`Campaign: ${campaignName}`}
-                    createLink={sessionsCreate().url}
-                    createLabel="New Session"
-                />
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <PageHeader
+                        title="Team Coaching Dashboard"
+                        description={`Campaign: ${campaignName}`}
+                        createLink={sessionsCreate().url}
+                        createLabel="New Session"
+                    />
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 self-start"
+                        onClick={handleExport}
+                        disabled={isExporting}
+                    >
+                        {isExporting ? (
+                            <>
+                                <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                                {exportStatusText?.percent ?? 0}%
+                            </>
+                        ) : (
+                            <>
+                                <Download className="mr-1.5 h-4 w-4" /> Export
+                            </>
+                        )}
+                    </Button>
+                </div>
 
                 {/* Summary Cards */}
-                <CoachingSummaryCards totalAgents={dashboardData.total_agents} statusCounts={dashboardData.status_counts} />
+                {isLoading ? (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
+                        ))}
+                    </div>
+                ) : (
+                    <CoachingSummaryCards totalAgents={dashboardData.total_agents} statusCounts={dashboardData.status_counts} />
+                )}
+
+                {/* Follow-up Compliance Rate */}
+                {followUpComplianceRate && followUpComplianceRate.total > 0 && (
+                    <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Follow-up Compliance</p>
+                                <p className="text-2xl font-bold">{followUpComplianceRate.rate}%</p>
+                            </div>
+                            <div className="text-right text-xs text-muted-foreground">
+                                <p>{followUpComplianceRate.completed} of {followUpComplianceRate.total}</p>
+                                <p>follow-ups completed</p>
+                            </div>
+                        </div>
+                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                                className={`h-full rounded-full transition-all ${followUpComplianceRate.rate >= 80 ? 'bg-green-500' :
+                                        followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                    }`}
+                                style={{ width: `${followUpComplianceRate.rate}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Main Tabs */}
                 <Tabs defaultValue="agents" className="space-y-2">
@@ -230,31 +429,91 @@ export default function CoachingDashboardIndex() {
                             </Button>
                         </div>
 
+                        {/* Bulk Action Bar */}
+                        {selectedAgentIds.length > 0 && (
+                            <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
+                                <span className="text-sm font-medium">{selectedAgentIds.length} agent(s) selected</span>
+                                <div className="flex gap-2">
+                                    <Button
+                                        size="sm"
+                                        onClick={() => {
+                                            const firstId = selectedAgentIds[0];
+                                            const queueAgents = selectedAgentIds.map(id => {
+                                                const agent = sortedAgents.find(a => a.id === id);
+                                                return { id, name: agent?.name ?? 'Unknown', coaching_status: agent?.coaching_status ?? '', done: false };
+                                            });
+                                            // Mark first as in-progress, store full queue
+                                            sessionStorage.setItem('coaching_queue', JSON.stringify(queueAgents));
+                                            router.visit(sessionsCreate().url + `?coachee_id=${firstId}`);
+                                        }}
+                                    >
+                                        <Plus className="mr-1.5 h-4 w-4" /> Coach Selected
+                                    </Button>
+                                    <Button size="sm" variant="outline" onClick={() => setSelectedAgentIds([])}>
+                                        Clear
+                                    </Button>
+                                </div>
+                            </div>
+                        )}
+
                         {/* Desktop Table */}
                         <div className="hidden overflow-hidden rounded-md shadow md:block">
                             <div className="overflow-x-auto">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="sticky top-0 z-10">
                                         <TableRow className="bg-muted/50">
-                                            <TableHead>Agent</TableHead>
+                                            <TableHead className="w-10">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label="Select all agents"
+                                                    className="rounded border-gray-300"
+                                                    checked={selectedAgentIds.length === sortedAgents.length && sortedAgents.length > 0}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedAgentIds(sortedAgents.map(a => a.id));
+                                                        } else {
+                                                            setSelectedAgentIds([]);
+                                                        }
+                                                    }}
+                                                />
+                                            </TableHead>
+                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('name')}>Agent <SortIcon field="name" /></TableHead>
                                             <TableHead>Account</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Last Coached</TableHead>
-                                            <TableHead>Sessions</TableHead>
-                                            <TableHead>Pending Ack</TableHead>
+                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('coaching_status')}>Status <SortIcon field="coaching_status" /></TableHead>
+                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('last_coached_date')}>Last Coached <SortIcon field="last_coached_date" /></TableHead>
+                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('total_sessions')}>Sessions <SortIcon field="total_sessions" /></TableHead>
+                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('trend')}>Trend <SortIcon field="trend" /></TableHead>
+                                            <TableHead className="cursor-pointer select-none" onClick={() => handleSort('pending_acknowledgements')}>Pending Ack <SortIcon field="pending_acknowledgements" /></TableHead>
                                             <TableHead className="text-center">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {dashboardData.agents.length === 0 ? (
+                                        {sortedAgents.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
-                                                    No agents found matching filters.
+                                                <TableCell colSpan={9} className="py-12 text-center">
+                                                    <Users className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                                                    <p className="mt-2 text-sm font-medium text-muted-foreground">No agents found</p>
+                                                    <p className="text-xs text-muted-foreground/70">Try adjusting your filters or date range</p>
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            dashboardData.agents.map((agent) => (
-                                                <TableRow key={agent.id}>
+                                            sortedAgents.map((agent) => (
+                                                <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <input
+                                                            type="checkbox"
+                                                            aria-label={`Select ${agent.name}`}
+                                                            className="rounded border-gray-300"
+                                                            checked={selectedAgentIds.includes(agent.id)}
+                                                            onChange={(e) => {
+                                                                if (e.target.checked) {
+                                                                    setSelectedAgentIds(prev => [...prev, agent.id]);
+                                                                } else {
+                                                                    setSelectedAgentIds(prev => prev.filter(id => id !== agent.id));
+                                                                }
+                                                            }}
+                                                        />
+                                                    </TableCell>
                                                     <TableCell className="font-medium">{agent.name}</TableCell>
                                                     <TableCell>{agent.account}</TableCell>
                                                     <TableCell>
@@ -264,6 +523,7 @@ export default function CoachingDashboardIndex() {
                                                         {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}
                                                     </TableCell>
                                                     <TableCell>{agent.total_sessions}</TableCell>
+                                                    <TableCell><TrendIndicator trend={agent.trend} /></TableCell>
                                                     <TableCell>
                                                         {agent.pending_acknowledgements > 0 ? (
                                                             <span className="font-medium text-amber-600">{agent.pending_acknowledgements}</span>
@@ -290,21 +550,43 @@ export default function CoachingDashboardIndex() {
 
                         {/* Mobile Card View */}
                         <div className="space-y-3 md:hidden">
-                            {dashboardData.agents.length === 0 ? (
-                                <div className="py-8 text-center text-muted-foreground">No agents found.</div>
+                            {sortedAgents.length === 0 ? (
+                                <div className="py-12 text-center">
+                                    <Users className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                                    <p className="mt-2 text-sm font-medium text-muted-foreground">No agents found</p>
+                                    <p className="text-xs text-muted-foreground/70">Try adjusting your filters or date range</p>
+                                </div>
                             ) : (
-                                dashboardData.agents.map((agent) => (
-                                    <div key={agent.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-2">
+                                sortedAgents.map((agent) => (
+                                    <div key={agent.id} className={`rounded-lg border bg-card p-4 shadow-sm space-y-2 ${getStatusRowClass(agent.coaching_status)}`}>
                                         <div className="flex items-start justify-between">
-                                            <div>
-                                                <p className="font-medium">{agent.name}</p>
-                                                <p className="text-xs text-muted-foreground">{agent.account}</p>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label={`Select ${agent.name}`}
+                                                    className="rounded border-gray-300"
+                                                    checked={selectedAgentIds.includes(agent.id)}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedAgentIds(prev => [...prev, agent.id]);
+                                                        } else {
+                                                            setSelectedAgentIds(prev => prev.filter(id => id !== agent.id));
+                                                        }
+                                                    }}
+                                                />
+                                                <div>
+                                                    <p className="font-medium">{agent.name}</p>
+                                                    <p className="text-xs text-muted-foreground">{agent.account}</p>
+                                                </div>
                                             </div>
                                             <CoachingStatusBadge status={agent.coaching_status} />
                                         </div>
                                         <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
                                             <span>Last: {agent.last_coached_date ? new Date(agent.last_coached_date).toLocaleDateString() : 'Never'}</span>
                                             <span>Sessions: {agent.total_sessions}</span>
+                                            {agent.trend !== undefined && agent.trend !== 0 && (
+                                                <TrendIndicator trend={agent.trend} />
+                                            )}
                                             {agent.pending_acknowledgements > 0 && (
                                                 <span className="font-medium text-amber-600">{agent.pending_acknowledgements} Pending</span>
                                             )}
@@ -390,14 +672,15 @@ export default function CoachingDashboardIndex() {
                     <TabsContent value="sessions" className="space-y-2">
                         {recentSessions.data.length === 0 ? (
                             <div className="rounded-lg border border-dashed p-6 text-center">
-                                <CalendarIcon className="mx-auto h-8 w-8 text-muted-foreground/50" />
-                                <p className="mt-2 text-sm text-muted-foreground">No recent sessions.</p>
+                                <ClipboardList className="mx-auto h-8 w-8 text-muted-foreground/40" />
+                                <p className="mt-2 text-sm font-medium text-muted-foreground">No recent sessions</p>
+                                <p className="text-xs text-muted-foreground/70">Coaching sessions will appear here once created</p>
                             </div>
                         ) : (
                             <>
                                 <div className="hidden overflow-hidden rounded-md shadow md:block">
                                     <Table>
-                                        <TableHeader>
+                                        <TableHeader className="sticky top-0 z-10">
                                             <TableRow className="bg-muted/50">
                                                 <TableHead>Date</TableHead>
                                                 <TableHead>Coachee</TableHead>
@@ -513,7 +796,7 @@ function FollowUpTable({
             <div className="hidden overflow-hidden rounded-md shadow md:block">
                 <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader>
+                        <TableHeader className="sticky top-0 z-10">
                             <TableRow className="bg-muted/50">
                                 <TableHead>Follow-up Date</TableHead>
                                 <TableHead>Coachee</TableHead>

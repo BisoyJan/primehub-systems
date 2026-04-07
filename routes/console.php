@@ -132,6 +132,17 @@ Schedule::command('notifications:check-expiry --days=7')
     ->onOneServer();
 
 // ============================================================================
+// COACHING ESCALATION CHECKS (8:00 AM)
+// ============================================================================
+
+// Check for overdue coaching follow-ups and at-risk agents - runs daily at 8:00 AM
+// Priority: MEDIUM - Sends escalation notifications to coaches and team leads
+Schedule::command('coaching:check-escalations')
+    ->dailyAt('08:00')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+// ============================================================================
 // DATABASE BACKUPS (Spatie Laravel Backup)
 // ============================================================================
 

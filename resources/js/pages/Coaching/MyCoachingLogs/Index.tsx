@@ -1,6 +1,6 @@
 import { Head, Link, usePage, useForm } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { AlertTriangle, Calendar, CheckCircle2, Eye } from 'lucide-react';
+import { AlertTriangle, Calendar, CheckCircle2, Eye, FileText } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -52,7 +52,7 @@ export default function MyCoachingLogsIndex() {
     useFlashMessage();
     const isLoading = usePageLoading();
 
-    const ackForm = useForm({ ack_comment: '' });
+    const ackForm = useForm({ ack_comment: '', agent_response: '' });
 
     const handleAcknowledge = (sessionId: number) => {
         ackForm.patch(sessionsAcknowledge(sessionId).url, {
@@ -121,6 +121,25 @@ export default function MyCoachingLogsIndex() {
                     </div>
                 </div>
 
+                {/* Coaching Progress */}
+                <div className="rounded-lg border bg-card p-4 shadow-sm">
+                    <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">Coaching Progress ({new Date().getFullYear()})</span>
+                        <span className="text-sm text-muted-foreground">{summary.total_sessions} / 52 sessions</span>
+                    </div>
+                    <div className="h-2 w-full rounded-full bg-muted overflow-hidden">
+                        <div
+                            className="h-full rounded-full bg-primary transition-all duration-500"
+                            style={{ width: `${Math.min((summary.total_sessions / 52) * 100, 100)}%` }}
+                        />
+                    </div>
+                    <p className="mt-1.5 text-xs text-muted-foreground">
+                        {summary.total_sessions >= 52
+                            ? 'Yearly coaching target met!'
+                            : `${52 - summary.total_sessions} more session${52 - summary.total_sessions === 1 ? '' : 's'} to reach yearly target (1 per week)`}
+                    </p>
+                </div>
+
                 {/* Sessions Table */}
                 <div className="space-y-2">
                     <h3 className="flex items-center gap-2 text-sm font-semibold">
@@ -144,8 +163,12 @@ export default function MyCoachingLogsIndex() {
                                 <TableBody>
                                     {sessions.data.length === 0 ? (
                                         <TableRow>
-                                            <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
-                                                No coaching sessions found.
+                                            <TableCell colSpan={6} className="py-12 text-center">
+                                                <div className="flex flex-col items-center justify-center">
+                                                    <FileText className="h-12 w-12 text-muted-foreground/30" />
+                                                    <p className="mt-3 text-sm font-medium text-muted-foreground">No coaching sessions yet</p>
+                                                    <p className="mt-1 text-xs text-muted-foreground/70">Your coaching sessions will appear here once your team lead creates one.</p>
+                                                </div>
                                             </TableCell>
                                         </TableRow>
                                     ) : (
@@ -193,6 +216,16 @@ export default function MyCoachingLogsIndex() {
                                                                             placeholder="Add any comments..."
                                                                             rows={3}
                                                                         />
+                                                                        <div className="space-y-2">
+                                                                            <Label htmlFor={`ack-response-${session.id}`}>Your Reflection / Response (optional)</Label>
+                                                                            <Textarea
+                                                                                id={`ack-response-${session.id}`}
+                                                                                value={ackForm.data.agent_response}
+                                                                                onChange={(e) => ackForm.setData('agent_response', e.target.value)}
+                                                                                placeholder="Share your thoughts, reflections, or commitments from this coaching session..."
+                                                                                rows={4}
+                                                                            />
+                                                                        </div>
                                                                     </div>
                                                                     <DialogFooter>
                                                                         <Button
@@ -219,7 +252,11 @@ export default function MyCoachingLogsIndex() {
                     {/* Mobile Card View */}
                     <div className="space-y-3 md:hidden">
                         {sessions.data.length === 0 ? (
-                            <div className="py-8 text-center text-muted-foreground">No coaching sessions found.</div>
+                            <div className="flex flex-col items-center justify-center py-12 text-center">
+                                <FileText className="h-12 w-12 text-muted-foreground/30" />
+                                <p className="mt-3 text-sm font-medium text-muted-foreground">No coaching sessions yet</p>
+                                <p className="mt-1 text-xs text-muted-foreground/70">Your coaching sessions will appear here once your team lead creates one.</p>
+                            </div>
                         ) : (
                             sessions.data.map((session) => (
                                 <div key={session.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-3">
@@ -265,6 +302,16 @@ export default function MyCoachingLogsIndex() {
                                                             placeholder="Add any comments..."
                                                             rows={3}
                                                         />
+                                                        <div className="space-y-2">
+                                                            <Label htmlFor={`ack-mobile-response-${session.id}`}>Your Reflection / Response (optional)</Label>
+                                                            <Textarea
+                                                                id={`ack-mobile-response-${session.id}`}
+                                                                value={ackForm.data.agent_response}
+                                                                onChange={(e) => ackForm.setData('agent_response', e.target.value)}
+                                                                placeholder="Share your thoughts, reflections, or commitments from this coaching session..."
+                                                                rows={4}
+                                                            />
+                                                        </div>
                                                     </div>
                                                     <DialogFooter>
                                                         <Button

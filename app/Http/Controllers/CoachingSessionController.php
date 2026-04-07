@@ -260,6 +260,24 @@ class CoachingSessionController extends Controller
         // Pre-select agent if provided via query param
         $selectedAgentId = $request->input('agent_id') ?? $request->input('coachee_id');
 
+        // Handle clone_from
+        $cloneData = null;
+        if ($request->has('clone_from')) {
+            $sourceSession = CoachingSession::find($request->clone_from);
+            if ($sourceSession) {
+                $cloneData = $sourceSession->only([
+                    'coachee_id', 'purpose', 'severity_flag',
+                    'profile_new_hire', 'profile_tenured', 'profile_returning', 'profile_previously_coached_same_issue',
+                    'focus_attendance_tardiness', 'focus_productivity', 'focus_compliance', 'focus_callouts',
+                    'focus_recognition_milestones', 'focus_growth_development', 'focus_other', 'focus_other_notes',
+                    'root_cause_lack_of_skills', 'root_cause_lack_of_clarity', 'root_cause_personal_issues',
+                    'root_cause_motivation_engagement', 'root_cause_health_fatigue', 'root_cause_workload_process',
+                    'root_cause_peer_conflict', 'root_cause_others', 'root_cause_others_notes',
+                    'performance_description', 'agent_strengths_wins', 'smart_action_plan',
+                ]);
+            }
+        }
+
         return Inertia::render('Coaching/Sessions/Create', [
             'agents' => $agents,
             'teamLeads' => $teamLeads,
@@ -270,6 +288,7 @@ class CoachingSessionController extends Controller
             'selectedAgentId' => $selectedAgentId ? (int) $selectedAgentId : null,
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'severityFlags' => CoachingSession::SEVERITY_FLAGS,
+            'clone_data' => $cloneData,
         ]);
     }
 
@@ -356,8 +375,18 @@ class CoachingSessionController extends Controller
         $canReview = $user->can('review', $session);
         $canEdit = $user->can('update', $session);
 
+        // Load last 5 coaching sessions for the same coachee (excluding current)
+        $coachingHistory = CoachingSession::where('coachee_id', $session->coachee_id)
+            ->where('id', '!=', $session->id)
+            ->orderByDesc('session_date')
+            ->limit(5)
+            ->select(['id', 'session_date', 'purpose', 'severity_flag', 'compliance_status', 'ack_status'])
+            ->with(['coach:id,first_name,last_name'])
+            ->get();
+
         return Inertia::render('Coaching/Sessions/Show', [
             'session' => $session,
+            'coaching_history' => $coachingHistory,
             'canAcknowledge' => $canAcknowledge,
             'canReview' => $canReview,
             'canEdit' => $canEdit,
@@ -493,6 +522,8 @@ class CoachingSessionController extends Controller
                     'ack_status' => 'Acknowledged',
                     'ack_timestamp' => Carbon::now(),
                     'ack_comment' => $request->validated('ack_comment'),
+                    'agent_response' => $request->input('agent_response'),
+                    'agent_response_at' => $request->input('agent_response') ? now() : null,
                     'compliance_status' => 'For_Review',
                 ]);
             });

@@ -126,6 +126,8 @@ export interface CoachingSession {
     ack_status: AckStatus;
     ack_timestamp: string | null;
     ack_comment: string | null;
+    agent_response: string | null;
+    agent_response_at: string | null;
     compliance_status: ComplianceStatus;
     compliance_reviewer_id: number | null;
     compliance_review_timestamp: string | null;

@@ -3,8 +3,10 @@ import { Head, Link, usePage, router, useForm } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 import {
     AlertTriangle,
+    BarChart3,
     Calendar as CalendarIcon,
     CalendarClock,
+    CheckCircle,
     Eye,
     Filter,
     Plus,
@@ -13,6 +15,7 @@ import {
     Users,
     Clock,
     ClipboardCheck,
+    ChevronDown,
 } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
@@ -119,6 +122,7 @@ interface Props extends InertiaPageProps {
     queueData: QueueData;
     upcomingFollowUps: FollowUp[];
     overdueFollowUps: FollowUp[];
+    followUpComplianceRate?: { rate: number; completed: number; total: number };
     campaigns: Campaign[];
     teamLeads: User[];
     filters: Filters;
@@ -142,8 +146,25 @@ function getUrgencyStyles(days: number) {
     return { border: 'border-yellow-500/50 bg-yellow-500/5', text: 'text-yellow-600 dark:text-yellow-400', label: `${days}d away` };
 }
 
+const getAgingLabel = (dateStr: string): { text: string; className: string } => {
+    const days = Math.floor((Date.now() - new Date(dateStr).getTime()) / (1000 * 60 * 60 * 24));
+    if (days <= 2) return { text: `${days}d ago`, className: 'text-green-600' };
+    if (days <= 5) return { text: `${days}d ago`, className: 'text-amber-600' };
+    return { text: `${days}d ago`, className: 'text-red-600 font-semibold' };
+};
+
+const getStatusRowClass = (status: string): string => {
+    switch (status) {
+        case 'Please Coach ASAP': return 'bg-red-50/50 dark:bg-red-950/20';
+        case 'Badly Needs Coaching': return 'bg-orange-50/50 dark:bg-orange-950/20';
+        case 'Needs Coaching': return 'bg-yellow-50/50 dark:bg-yellow-950/20';
+        case 'Coaching Done': return 'bg-green-50/50 dark:bg-green-950/20';
+        default: return '';
+    }
+};
+
 export default function CoachingAdminIndex() {
-    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, campaigns, teamLeads, filters: initialFilters, purposes } = usePage<Props>().props;
+    const { dashboardData, teamLeadCoachingData, queueData, upcomingFollowUps, overdueFollowUps, followUpComplianceRate, campaigns, teamLeads, filters: initialFilters, purposes } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Compliance',
@@ -153,6 +174,8 @@ export default function CoachingAdminIndex() {
     const isLoading = usePageLoading();
 
     const [activeTab, setActiveTab] = useState<TabKey>('overview');
+    const [campaignCompletionOpen, setCampaignCompletionOpen] = useState(false);
+    const [selectedForReview, setSelectedForReview] = useState<number[]>([]);
     const [campaignId, setCampaignId] = useState(initialFilters.campaign_id || '');
     const [coachId, setCoachId] = useState(initialFilters.coach_id || '');
     const [coachingStatus, setCoachingStatus] = useState(initialFilters.coaching_status || '');
@@ -244,6 +267,29 @@ export default function CoachingAdminIndex() {
         return Object.entries(groups).sort(([a], [b]) => a.localeCompare(b));
     }, [activeData.agents]);
 
+    const teamLeadSummary = useMemo(() => {
+        if (coacheeRole === 'Team Lead') return [];
+        return groupedAgents.map(([account, agents]) => {
+            const total = agents.length;
+            const coached = agents.filter(a => a.coaching_status === 'Coaching Done').length;
+            const atRisk = agents.filter(a => ['Please Coach ASAP', 'Badly Needs Coaching', 'No Record'].includes(a.coaching_status)).length;
+            const rate = total > 0 ? Math.round((coached / total) * 100) : 0;
+            return { account, total, coached, atRisk, rate };
+        }).sort((a, b) => b.rate - a.rate);
+    }, [groupedAgents, coacheeRole]);
+
+    const handleBulkVerify = () => {
+        if (!confirm(`Verify ${selectedForReview.length} sessions?`)) return;
+
+        selectedForReview.forEach((sessionId) => {
+            router.patch(sessionsReview(sessionId).url, {
+                compliance_status: 'Verified',
+                compliance_notes: 'Bulk verified by admin',
+            }, { preserveState: true, preserveScroll: true });
+        });
+        setSelectedForReview([]);
+    };
+
     const tabs: { key: TabKey; label: string; icon: React.ComponentType<{ className?: string }>; count?: number; overdueCount?: number }[] = [
         { key: 'overview', label: 'Overview', icon: Users, count: activeData.agents.length },
         { key: 'unacknowledged', label: 'Unacknowledged', icon: Clock, count: queueData.unacknowledged.length },
@@ -262,7 +308,39 @@ export default function CoachingAdminIndex() {
                 <PageHeader title="Coaching Compliance Dashboard" />
 
                 {/* Summary Cards */}
-                <CoachingSummaryCards totalAgents={activeData.total_agents} statusCounts={activeData.status_counts} totalLabel={coacheeRole === 'Team Lead' ? 'Total Team Leads' : 'Total Agents'} />
+                {isLoading ? (
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                            <div key={i} className="h-20 animate-pulse rounded-lg bg-muted" />
+                        ))}
+                    </div>
+                ) : (
+                    <CoachingSummaryCards totalAgents={activeData.total_agents} statusCounts={activeData.status_counts} totalLabel={coacheeRole === 'Team Lead' ? 'Total Team Leads' : 'Total Agents'} />
+                )}
+
+                {/* Follow-up Compliance Rate */}
+                {followUpComplianceRate && followUpComplianceRate.total > 0 && (
+                    <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <p className="text-sm font-medium text-muted-foreground">Follow-up Compliance</p>
+                                <p className="text-2xl font-bold">{followUpComplianceRate.rate}%</p>
+                            </div>
+                            <div className="text-right text-xs text-muted-foreground">
+                                <p>{followUpComplianceRate.completed} of {followUpComplianceRate.total}</p>
+                                <p>follow-ups completed</p>
+                            </div>
+                        </div>
+                        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+                            <div
+                                className={`h-full rounded-full transition-all ${followUpComplianceRate.rate >= 80 ? 'bg-green-500' :
+                                        followUpComplianceRate.rate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                                    }`}
+                                style={{ width: `${followUpComplianceRate.rate}%` }}
+                            />
+                        </div>
+                    </div>
+                )}
 
                 {/* Filters */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-8">
@@ -354,6 +432,40 @@ export default function CoachingAdminIndex() {
                 {/* Tab Content */}
                 {activeTab === 'overview' && (
                     <div className="space-y-2">
+                        {coacheeRole !== 'Team Lead' && teamLeadSummary.length > 1 && (
+                            <div className="rounded-lg border bg-card p-4 shadow-sm">
+                                <button
+                                    type="button"
+                                    onClick={() => setCampaignCompletionOpen((v) => !v)}
+                                    className="flex w-full items-center justify-between text-sm font-semibold"
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <BarChart3 className="h-4 w-4" /> Campaign Coaching Completion
+                                    </span>
+                                    <ChevronDown className={`h-4 w-4 transition-transform ${campaignCompletionOpen ? 'rotate-180' : ''}`} />
+                                </button>
+                                {campaignCompletionOpen && <div className="mt-3 space-y-2">
+                                    {teamLeadSummary.map((tl) => (
+                                        <div key={tl.account} className="flex items-center gap-3">
+                                            <span className="w-32 truncate text-sm font-medium">{tl.account}</span>
+                                            <div className="flex-1">
+                                                <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                                                    <div
+                                                        className="h-full rounded-full bg-primary transition-all"
+                                                        style={{ width: `${tl.rate}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                            <span className="w-12 text-right text-xs font-medium">{tl.rate}%</span>
+                                            {tl.atRisk > 0 && (
+                                                <Badge variant="destructive" className="text-[10px]">{tl.atRisk} at risk</Badge>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>}
+                            </div>
+                        )}
+
                         <h3 className="flex items-center gap-2 text-sm font-semibold">
                             <Users className="h-4 w-4" /> All {coacheeRole === 'Team Lead' ? 'Team Leads' : 'Agents'} ({activeData.agents.length})
                         </h3>
@@ -362,7 +474,7 @@ export default function CoachingAdminIndex() {
                         <div className="hidden overflow-hidden rounded-md shadow md:block">
                             <div className="overflow-x-auto">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="sticky top-0 z-10">
                                         <TableRow className="bg-muted/50">
                                             <TableHead>{coacheeRole === 'Team Lead' ? 'Team Lead' : 'Agent'}</TableHead>
                                             <TableHead>Status</TableHead>
@@ -392,7 +504,7 @@ export default function CoachingAdminIndex() {
                                                         </TableCell>
                                                     </TableRow>
                                                     {agents.map((agent) => (
-                                                        <TableRow key={agent.id}>
+                                                        <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
                                                             <TableCell className="pl-6 font-medium">{agent.name}</TableCell>
                                                             <TableCell>
                                                                 <CoachingStatusBadge status={agent.coaching_status} />
@@ -440,7 +552,7 @@ export default function CoachingAdminIndex() {
                                             {account} ({agents.length})
                                         </h4>
                                         {agents.map((agent) => (
-                                            <div key={agent.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-2">
+                                            <div key={agent.id} className={`rounded-lg border bg-card p-4 shadow-sm space-y-2 ${getStatusRowClass(agent.coaching_status)}`}>
                                                 <div className="flex items-start justify-between">
                                                     <p className="font-medium">{agent.name}</p>
                                                     <CoachingStatusBadge status={agent.coaching_status} />
@@ -485,55 +597,104 @@ export default function CoachingAdminIndex() {
                             <ClipboardCheck className="h-4 w-4" /> Sessions For Review ({queueData.for_review.length})
                         </h3>
 
+                        {selectedForReview.length > 0 && (
+                            <div className="flex items-center gap-3 rounded-lg border bg-primary/5 p-3">
+                                <span className="text-sm font-medium">{selectedForReview.length} session(s) selected</span>
+                                <Button size="sm" onClick={handleBulkVerify}>
+                                    <CheckCircle className="mr-1.5 h-4 w-4" /> Bulk Verify
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => setSelectedForReview([])}>
+                                    Clear
+                                </Button>
+                            </div>
+                        )}
+
                         {/* Desktop Table */}
                         <div className="hidden overflow-hidden rounded-md shadow md:block">
                             <div className="overflow-x-auto">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="sticky top-0 z-10">
                                         <TableRow className="bg-muted/50">
+                                            <TableHead className="w-10">
+                                                <input
+                                                    type="checkbox"
+                                                    aria-label="Select all sessions"
+                                                    className="rounded border-gray-300"
+                                                    checked={selectedForReview.length === queueData.for_review.length && queueData.for_review.length > 0}
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setSelectedForReview(queueData.for_review.map(s => s.id));
+                                                        } else {
+                                                            setSelectedForReview([]);
+                                                        }
+                                                    }}
+                                                />
+                                            </TableHead>
                                             <TableHead>Date</TableHead>
                                             <TableHead>Coachee</TableHead>
                                             <TableHead>Coach</TableHead>
                                             <TableHead>Purpose</TableHead>
                                             <TableHead>Severity</TableHead>
+                                            <TableHead>Age</TableHead>
                                             <TableHead className="text-center">Actions</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
                                         {queueData.for_review.length === 0 ? (
                                             <TableRow>
-                                                <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                                                <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
                                                     No sessions pending review.
                                                 </TableCell>
                                             </TableRow>
                                         ) : (
-                                            queueData.for_review.map((session) => (
-                                                <TableRow key={session.id}>
-                                                    <TableCell className="whitespace-nowrap">
-                                                        {new Date(session.session_date).toLocaleDateString()}
-                                                    </TableCell>
-                                                    <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
-                                                    <TableCell>{formatName(session.coach)}</TableCell>
-                                                    <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
-                                                    <TableCell>
-                                                        <SeverityBadge flag={session.severity_flag} />
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        <div className="flex items-center justify-center gap-1">
-                                                            <Link href={sessionsShow.url(session.id)}>
-                                                                <Button variant="ghost" size="icon" title="View">
-                                                                    <Eye className="h-4 w-4" />
-                                                                </Button>
-                                                            </Link>
-                                                            <ReviewDialog
-                                                                sessionId={session.id}
-                                                                reviewForm={reviewForm}
-                                                                onReview={handleReview}
+                                            queueData.for_review.map((session) => {
+                                                const aging = getAgingLabel(session.session_date);
+                                                return (
+                                                    <TableRow key={session.id}>
+                                                        <TableCell>
+                                                            <input
+                                                                type="checkbox"
+                                                                aria-label={`Select session ${session.id}`}
+                                                                className="rounded border-gray-300"
+                                                                checked={selectedForReview.includes(session.id)}
+                                                                onChange={(e) => {
+                                                                    if (e.target.checked) {
+                                                                        setSelectedForReview(prev => [...prev, session.id]);
+                                                                    } else {
+                                                                        setSelectedForReview(prev => prev.filter(id => id !== session.id));
+                                                                    }
+                                                                }}
                                                             />
-                                                        </div>
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
+                                                        </TableCell>
+                                                        <TableCell className="whitespace-nowrap">
+                                                            {new Date(session.session_date).toLocaleDateString()}
+                                                        </TableCell>
+                                                        <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
+                                                        <TableCell>{formatName(session.coach)}</TableCell>
+                                                        <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
+                                                        <TableCell>
+                                                            <SeverityBadge flag={session.severity_flag} />
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <span className={`text-xs font-medium ${aging.className}`}>{aging.text}</span>
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            <div className="flex items-center justify-center gap-1">
+                                                                <Link href={sessionsShow.url(session.id)}>
+                                                                    <Button variant="ghost" size="icon" title="View">
+                                                                        <Eye className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Link>
+                                                                <ReviewDialog
+                                                                    sessionId={session.id}
+                                                                    reviewForm={reviewForm}
+                                                                    onReview={handleReview}
+                                                                />
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })
                                         )}
                                     </TableBody>
                                 </Table>
@@ -545,31 +706,34 @@ export default function CoachingAdminIndex() {
                             {queueData.for_review.length === 0 ? (
                                 <div className="py-8 text-center text-muted-foreground">No sessions pending review.</div>
                             ) : (
-                                queueData.for_review.map((session) => (
-                                    <div key={session.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-3">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div>
-                                                <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()}</p>
-                                                <p className="text-sm font-medium">{formatName(session.coachee)}</p>
-                                                <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
+                                queueData.for_review.map((session) => {
+                                    const aging = getAgingLabel(session.session_date);
+                                    return (
+                                        <div key={session.id} className="rounded-lg border bg-card p-4 shadow-sm space-y-3">
+                                            <div className="flex items-start justify-between gap-2">
+                                                <div>
+                                                    <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
+                                                    <p className="text-sm font-medium">{formatName(session.coachee)}</p>
+                                                    <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
+                                                </div>
+                                                <SeverityBadge flag={session.severity_flag} />
                                             </div>
-                                            <SeverityBadge flag={session.severity_flag} />
+                                            <div className="flex flex-col gap-2 sm:flex-row">
+                                                <Link href={sessionsShow.url(session.id)} className="flex-1">
+                                                    <Button variant="outline" size="sm" className="w-full">
+                                                        <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                                                    </Button>
+                                                </Link>
+                                                <ReviewDialog
+                                                    sessionId={session.id}
+                                                    reviewForm={reviewForm}
+                                                    onReview={handleReview}
+                                                    mobile
+                                                />
+                                            </div>
                                         </div>
-                                        <div className="flex flex-col gap-2 sm:flex-row">
-                                            <Link href={sessionsShow.url(session.id)} className="flex-1">
-                                                <Button variant="outline" size="sm" className="w-full">
-                                                    <Eye className="mr-1.5 h-3.5 w-3.5" /> View
-                                                </Button>
-                                            </Link>
-                                            <ReviewDialog
-                                                sessionId={session.id}
-                                                reviewForm={reviewForm}
-                                                onReview={handleReview}
-                                                mobile
-                                            />
-                                        </div>
-                                    </div>
-                                ))
+                                    );
+                                })
                             )}
                         </div>
                     </div>
@@ -585,7 +749,7 @@ export default function CoachingAdminIndex() {
                         <div className="hidden overflow-hidden rounded-md shadow md:block">
                             <div className="overflow-x-auto">
                                 <Table>
-                                    <TableHeader>
+                                    <TableHeader className="sticky top-0 z-10">
                                         <TableRow className="bg-muted/50">
                                             <TableHead>{coacheeRole === 'Team Lead' ? 'Team Lead' : 'Agent'}</TableHead>
                                             <TableHead>Account</TableHead>
@@ -601,7 +765,7 @@ export default function CoachingAdminIndex() {
                                             </TableRow>
                                         ) : (
                                             queueData.at_risk_agents.map((agent) => (
-                                                <TableRow key={agent.id}>
+                                                <TableRow key={agent.id} className={getStatusRowClass(agent.coaching_status)}>
                                                     <TableCell className="font-medium">{agent.name}</TableCell>
                                                     <TableCell>{agent.account}</TableCell>
                                                     <TableCell>
@@ -621,7 +785,7 @@ export default function CoachingAdminIndex() {
                                 <div className="py-8 text-center text-muted-foreground">No at-risk agents.</div>
                             ) : (
                                 queueData.at_risk_agents.map((agent) => (
-                                    <div key={agent.id} className="flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm">
+                                    <div key={agent.id} className={`flex items-center justify-between rounded-lg border bg-card p-4 shadow-sm ${getStatusRowClass(agent.coaching_status)}`}>
                                         <div>
                                             <p className="font-medium">{agent.name}</p>
                                             <p className="text-xs text-muted-foreground">{agent.account}</p>
@@ -676,11 +840,18 @@ export default function CoachingAdminIndex() {
                                         mode="single"
                                         selected={calendarSelectedDate}
                                         onSelect={setCalendarSelectedDate}
-                                        modifiers={{ hasFollowUp: followUpDates }}
-                                        modifiersClassNames={{ hasFollowUp: 'ring-2 ring-primary/40 ring-offset-1' }}
+                                        modifiers={{
+                                            upcoming: upcomingFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
+                                            overdue: overdueFollowUps.map(f => new Date(f.follow_up_date + 'T00:00:00')),
+                                        }}
+                                        modifiersClassNames={{
+                                            upcoming: 'ring-2 ring-green-400/60 ring-offset-1',
+                                            overdue: 'ring-2 ring-red-400/60 ring-offset-1',
+                                        }}
                                     />
                                     <div className="flex items-center gap-4 border-t px-3 pt-2 text-[10px] text-muted-foreground">
-                                        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-primary/40" /> Has follow-up</span>
+                                        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-green-400/60" /> Upcoming</span>
+                                        <span className="flex items-center gap-1"><span className="inline-block h-2 w-2 rounded-full ring-2 ring-red-400/60" /> Overdue</span>
                                         {calendarSelectedDate && (
                                             <button onClick={() => setCalendarSelectedDate(undefined)} className="text-primary hover:underline">Clear selection</button>
                                         )}
@@ -730,46 +901,53 @@ function SessionQueueTable({
             <div className="hidden overflow-hidden rounded-md shadow md:block">
                 <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader>
+                        <TableHeader className="sticky top-0 z-10">
                             <TableRow className="bg-muted/50">
                                 <TableHead>Date</TableHead>
                                 <TableHead>Coachee</TableHead>
                                 <TableHead>Coach</TableHead>
                                 <TableHead>Purpose</TableHead>
                                 <TableHead>Severity</TableHead>
+                                <TableHead>Age</TableHead>
                                 <TableHead className="text-center">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {sessions.length === 0 ? (
                                 <TableRow>
-                                    <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
+                                    <TableCell colSpan={7} className="py-8 text-center text-muted-foreground">
                                         {emptyMessage}
                                     </TableCell>
                                 </TableRow>
                             ) : (
-                                sessions.map((session) => (
-                                    <TableRow key={session.id}>
-                                        <TableCell className="whitespace-nowrap">
-                                            {new Date(session.session_date).toLocaleDateString()}
-                                        </TableCell>
-                                        <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
-                                        <TableCell>{formatName(session.coach)}</TableCell>
-                                        <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
-                                        <TableCell>
-                                            <SeverityBadge flag={session.severity_flag} />
-                                        </TableCell>
-                                        <TableCell>
-                                            <div className="flex items-center justify-center">
-                                                <Link href={sessionsShow.url(session.id)}>
-                                                    <Button variant="ghost" size="icon" title="View">
-                                                        <Eye className="h-4 w-4" />
-                                                    </Button>
-                                                </Link>
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                sessions.map((session) => {
+                                    const aging = getAgingLabel(session.session_date);
+                                    return (
+                                        <TableRow key={session.id}>
+                                            <TableCell className="whitespace-nowrap">
+                                                {new Date(session.session_date).toLocaleDateString()}
+                                            </TableCell>
+                                            <TableCell className="font-medium">{formatName(session.coachee)}</TableCell>
+                                            <TableCell>{formatName(session.coach)}</TableCell>
+                                            <TableCell>{purposes[session.purpose] ?? session.purpose}</TableCell>
+                                            <TableCell>
+                                                <SeverityBadge flag={session.severity_flag} />
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className={`text-xs font-medium ${aging.className}`}>{aging.text}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <div className="flex items-center justify-center">
+                                                    <Link href={sessionsShow.url(session.id)}>
+                                                        <Button variant="ghost" size="icon" title="View">
+                                                            <Eye className="h-4 w-4" />
+                                                        </Button>
+                                                    </Link>
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             )}
                         </TableBody>
                     </Table>
@@ -781,23 +959,26 @@ function SessionQueueTable({
                 {sessions.length === 0 ? (
                     <div className="py-8 text-center text-muted-foreground">{emptyMessage}</div>
                 ) : (
-                    sessions.map((session) => (
-                        <div key={session.id} className="rounded-lg border bg-card p-3 shadow-sm">
-                            <div className="flex items-start justify-between gap-2">
-                                <div>
-                                    <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()}</p>
-                                    <p className="text-sm font-medium">{formatName(session.coachee)}</p>
-                                    <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
+                    sessions.map((session) => {
+                        const aging = getAgingLabel(session.session_date);
+                        return (
+                            <div key={session.id} className="rounded-lg border bg-card p-3 shadow-sm">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <p className="text-xs text-muted-foreground">{new Date(session.session_date).toLocaleDateString()} <span className={`ml-1 ${aging.className}`}>{aging.text}</span></p>
+                                        <p className="text-sm font-medium">{formatName(session.coachee)}</p>
+                                        <p className="text-xs text-muted-foreground">Coach: {formatName(session.coach)}</p>
+                                    </div>
+                                    <SeverityBadge flag={session.severity_flag} />
                                 </div>
-                                <SeverityBadge flag={session.severity_flag} />
+                                <Link href={sessionsShow.url(session.id)}>
+                                    <Button variant="outline" size="sm" className="mt-2 w-full">
+                                        <Eye className="mr-1.5 h-3.5 w-3.5" /> View
+                                    </Button>
+                                </Link>
                             </div>
-                            <Link href={sessionsShow.url(session.id)}>
-                                <Button variant="outline" size="sm" className="mt-2 w-full">
-                                    <Eye className="mr-1.5 h-3.5 w-3.5" /> View
-                                </Button>
-                            </Link>
-                        </div>
-                    ))
+                        );
+                    })
                 )}
             </div>
         </div>
@@ -919,7 +1100,7 @@ function FollowUpTable({
             <div className="hidden overflow-hidden rounded-md shadow md:block">
                 <div className="overflow-x-auto">
                     <Table>
-                        <TableHeader>
+                        <TableHeader className="sticky top-0 z-10">
                             <TableRow className="bg-muted/50">
                                 <TableHead>Follow-up Date</TableHead>
                                 <TableHead>Coachee</TableHead>

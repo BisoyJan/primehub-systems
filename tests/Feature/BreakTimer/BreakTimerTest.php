@@ -406,6 +406,101 @@ class BreakTimerTest extends TestCase
     }
 
     #[Test]
+    public function it_notifies_admins_on_agent_overbreak(): void
+    {
+        $agent = User::factory()->create([
+            'role' => 'agent',
+            'is_approved' => true,
+            'first_name' => 'John',
+            'last_name' => 'Doe',
+        ]);
+
+        $adminUser = User::factory()->create([
+            'role' => 'Admin',
+            'is_approved' => true,
+        ]);
+
+        $superAdmin = User::factory()->create([
+            'role' => 'Super Admin',
+            'is_approved' => true,
+        ]);
+
+        $session = BreakSession::factory()->active()->create([
+            'user_id' => $agent->id,
+            'break_policy_id' => $this->policy->id,
+            'started_at' => now()->subMinutes(20),
+            'duration_seconds' => 900,
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($agent)
+            ->post(route('break-timer.end', $session));
+
+        $session->refresh();
+        $this->assertEquals('overage', $session->status);
+
+        // Agent gets their own notification
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $agent->id,
+            'type' => 'break_overage',
+            'title' => 'Break Overage',
+        ]);
+
+        // Admin gets notified
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $adminUser->id,
+            'type' => 'break_overage',
+            'title' => 'Agent Break Overage',
+        ]);
+
+        // Super Admin gets notified
+        $this->assertDatabaseHas('notifications', [
+            'user_id' => $superAdmin->id,
+            'type' => 'break_overage',
+            'title' => 'Agent Break Overage',
+        ]);
+    }
+
+    #[Test]
+    public function it_does_not_notify_admins_when_break_completes_on_time(): void
+    {
+        $agent = User::factory()->create([
+            'role' => 'agent',
+            'is_approved' => true,
+        ]);
+
+        $adminUser = User::factory()->create([
+            'role' => 'Admin',
+            'is_approved' => true,
+        ]);
+
+        $session = BreakSession::factory()->active()->create([
+            'user_id' => $agent->id,
+            'break_policy_id' => $this->policy->id,
+            'started_at' => now()->subMinutes(10),
+            'duration_seconds' => 900,
+            'shift_date' => now()->toDateString(),
+        ]);
+
+        $this->actingAs($agent)
+            ->post(route('break-timer.end', $session));
+
+        $session->refresh();
+        $this->assertEquals('completed', $session->status);
+
+        // No notifications created at all
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $agent->id,
+            'type' => 'break_overage',
+        ]);
+
+        $this->assertDatabaseMissing('notifications', [
+            'user_id' => $adminUser->id,
+            'type' => 'break_overage',
+        ]);
+    }
+
+    #[Test]
     public function unauthenticated_user_cannot_access_break_timer(): void
     {
         $response = $this->get(route('break-timer.index'));

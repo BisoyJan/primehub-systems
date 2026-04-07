@@ -356,6 +356,12 @@ class BreakTimerService
                 $session->overage_seconds,
                 $session->shift_date,
             );
+            $this->notificationService->notifyBreakOverageToAdmins(
+                $session->user_id,
+                $session->type,
+                $session->overage_seconds,
+                $session->shift_date,
+            );
         }
 
         return $status;

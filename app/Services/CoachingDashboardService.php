@@ -108,7 +108,9 @@ class CoachingDashboardService
             ->where('ack_status', 'Pending')
             ->count();
 
-        $totalSessions = CoachingSession::where('coachee_id', $coacheeId)->count();
+        $totalSessions = CoachingSession::where('coachee_id', $coacheeId)
+            ->whereYear('session_date', now()->year)
+            ->count();
 
         $status = $this->getCoachingStatus($coacheeId);
 
@@ -193,6 +195,17 @@ class CoachingDashboardService
         $statusCounts = $this->emptyStatusCounts();
         $agents = collect();
 
+        // Batch query for trend data (current vs previous 30-day window)
+        $trendData = CoachingSession::whereIn('coachee_id', $coacheeIds)
+            ->where('session_date', '>=', now()->subDays(60))
+            ->selectRaw('coachee_id,
+                SUM(CASE WHEN session_date >= ? THEN 1 ELSE 0 END) as current_count,
+                SUM(CASE WHEN session_date < ? THEN 1 ELSE 0 END) as previous_count',
+                [now()->subDays(30), now()->subDays(30)])
+            ->groupBy('coachee_id')
+            ->get()
+            ->keyBy('coachee_id');
+
         foreach ($coacheeIds as $coacheeId) {
             $summary = $this->getCoacheeSummary($coacheeId);
             $user = User::find($coacheeId);
@@ -234,6 +247,7 @@ class CoachingDashboardService
                 'older_coached_date' => $summary['older_coached_date'],
                 'pending_acknowledgements' => $summary['pending_acknowledgements'],
                 'total_sessions' => $summary['total_sessions'],
+                'trend' => ($trendData[$coacheeId]->current_count ?? 0) - ($trendData[$coacheeId]->previous_count ?? 0),
             ]);
         }
 
@@ -315,10 +329,22 @@ class CoachingDashboardService
         }
 
         return [
-            'unacknowledged' => $unacknowledgedQuery->get(),
-            'for_review' => $forReviewQuery->get(),
+            'unacknowledged' => $this->sortBySeverity($unacknowledgedQuery->get()),
+            'for_review' => $this->sortBySeverity($forReviewQuery->get()),
             'at_risk_agents' => $atRiskAgents,
         ];
+    }
+
+    /**
+     * Sort sessions by severity_flag priority (Critical first, null/Low last).
+     */
+    private function sortBySeverity(Collection $sessions): Collection
+    {
+        $priority = ['Critical' => 0, 'High' => 1, 'Medium' => 2, 'Low' => 3];
+
+        return $sessions->sortBy(function ($session) use ($priority) {
+            return $priority[$session->severity_flag] ?? 4;
+        })->values();
     }
 
     /**
@@ -357,6 +383,64 @@ class CoachingDashboardService
             self::STATUS_BADLY_NEEDS_COACHING => 0,
             self::STATUS_PLEASE_COACH_ASAP => 0,
             self::STATUS_NO_RECORD => 0,
+        ];
+    }
+
+    /**
+     * Calculate the follow-up compliance rate for a set of coaching sessions.
+     * Rate = sessions with follow-up date that were completed on time / total sessions with follow-up dates.
+     * "Completed on time" = a subsequent session exists for the same coachee before or on the follow-up date.
+     *
+     * @return array{rate: int, completed: int, total: int}
+     */
+    public function getFollowUpComplianceRate(?int $coachId = null, ?int $campaignId = null): array
+    {
+        $query = CoachingSession::whereNotNull('follow_up_date')
+            ->where('follow_up_date', '<=', now());
+
+        if ($coachId) {
+            $query->where('coach_id', $coachId);
+        }
+
+        if ($campaignId) {
+            $query->whereHas('coachee', function ($q) use ($campaignId) {
+                $q->whereHas('campaigns', function ($cq) use ($campaignId) {
+                    $cq->where('campaigns.id', $campaignId);
+                });
+            });
+        }
+
+        $sessionsWithFollowUp = $query->get(['id', 'coachee_id', 'follow_up_date', 'session_date']);
+        $total = $sessionsWithFollowUp->count();
+
+        if ($total === 0) {
+            return ['rate' => 100, 'completed' => 0, 'total' => 0];
+        }
+
+        // Batch: get all follow-up sessions for relevant coachees to avoid N+1
+        $coacheeIds = $sessionsWithFollowUp->pluck('coachee_id')->unique();
+        $allSessions = CoachingSession::whereIn('coachee_id', $coacheeIds)
+            ->orderBy('session_date')
+            ->get(['coachee_id', 'session_date'])
+            ->groupBy('coachee_id');
+
+        $completed = 0;
+        foreach ($sessionsWithFollowUp as $session) {
+            $coacheeSessions = $allSessions->get($session->coachee_id, collect());
+            $hasFollowUp = $coacheeSessions->contains(function ($s) use ($session) {
+                return $s->session_date > $session->session_date
+                    && $s->session_date <= $session->follow_up_date;
+            });
+
+            if ($hasFollowUp) {
+                $completed++;
+            }
+        }
+
+        return [
+            'rate' => round(($completed / $total) * 100),
+            'completed' => $completed,
+            'total' => $total,
         ];
     }
 

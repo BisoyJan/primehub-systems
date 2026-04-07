@@ -91,7 +91,23 @@ class CoachingSessionPolicy
      */
     public function delete(User $user, CoachingSession $coachingSession): bool
     {
-        return $this->permissionService->userHasPermission($user, 'coaching.delete');
+        if (! $this->permissionService->userHasPermission($user, 'coaching.delete')) {
+            return false;
+        }
+
+        // Team Leads can only delete sessions not yet reviewed by Admin
+        if (! in_array($user->role, ['Super Admin', 'Admin'])) {
+            if (in_array($coachingSession->compliance_status, ['Verified', 'Rejected'])) {
+                return false;
+            }
+
+            // TL can only delete sessions they coached
+            if ($coachingSession->coach_id !== $user->id) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

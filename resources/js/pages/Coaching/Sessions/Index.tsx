@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { Fragment, useState, useMemo } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
 
@@ -35,7 +35,7 @@ import {
 } from '@/components/ui/table';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import PaginationNav, { type PaginationLink } from '@/components/pagination-nav';
-import { Check, ChevronsUpDown, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
+import { Check, ChevronsUpDown, Copy, FileText, Filter, Eye, Pencil, Trash2 } from 'lucide-react';
 
 import { usePageMeta, useFlashMessage, usePageLoading, usePermission } from '@/hooks';
 import { PageHeader } from '@/components/PageHeader';
@@ -141,7 +141,50 @@ export default function CoachingSessionsIndex() {
     const [dateTo, setDateTo] = useState(initialFilters.date_to || '');
     const [coacheeRole, setCoacheeRole] = useState(initialFilters.coachee_role || '');
 
+    const [expandedId, setExpandedId] = useState<number | null>(null);
+
     const deleteForm = useForm({});
+
+    const activeFilterCount = [search, ackStatus, complianceStatus, purpose, campaignId, coacheeRole, dateFrom, dateTo].filter(Boolean).length;
+
+    const statusSummary = useMemo(() => {
+        const counts: Record<string, number> = {};
+        sessions.data.forEach((s) => {
+            counts[s.compliance_status] = (counts[s.compliance_status] || 0) + 1;
+        });
+        return counts;
+    }, [sessions.data]);
+
+    const setDatePreset = (preset: string) => {
+        const today = new Date();
+        const formatDate = (d: Date) => d.toISOString().split('T')[0];
+        let from: Date;
+
+        switch (preset) {
+            case 'week': {
+                from = new Date(today);
+                const day = from.getDay();
+                from.setDate(from.getDate() - (day === 0 ? 6 : day - 1));
+                break;
+            }
+            case 'month':
+                from = new Date(today.getFullYear(), today.getMonth(), 1);
+                break;
+            case '30days':
+                from = new Date(today);
+                from.setDate(from.getDate() - 30);
+                break;
+            case 'quarter': {
+                const q = Math.floor(today.getMonth() / 3) * 3;
+                from = new Date(today.getFullYear(), q, 1);
+                break;
+            }
+            default:
+                return;
+        }
+        setDateFrom(formatDate(from));
+        setDateTo(formatDate(today));
+    };
 
     const getAgentCampaign = (agent: User): string | null => {
         const schedule = (agent as Record<string, unknown>).active_schedule as { campaign?: { name?: string } } | null;
@@ -191,7 +234,21 @@ export default function CoachingSessionsIndex() {
     };
 
     const handleTabChange = (tab: string) => {
-        router.get(sessionsIndex().url, { tab }, { preserveState: false });
+        router.get(
+            sessionsIndex().url,
+            {
+                tab,
+                search: search || undefined,
+                ack_status: ackStatus || undefined,
+                compliance_status: complianceStatus || undefined,
+                purpose: purpose || undefined,
+                campaign_id: campaignId || undefined,
+                date_from: dateFrom || undefined,
+                date_to: dateTo || undefined,
+                coachee_role: coacheeRole || undefined,
+            },
+            { preserveState: false },
+        );
     };
 
     const handleDelete = (id: number) => {
@@ -451,16 +508,46 @@ export default function CoachingSessionsIndex() {
                         <div className="flex gap-2">
                             <Button onClick={handleFilter} className="flex-1">
                                 <Filter className="mr-2 h-4 w-4" /> Filter
+                                {activeFilterCount > 0 && (
+                                    <span className="ml-1.5 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-white/20 px-1 text-[10px] font-bold">
+                                        {activeFilterCount}
+                                    </span>
+                                )}
                             </Button>
                             <Button variant="outline" onClick={handleReset} className="flex-1">
                                 Reset
                             </Button>
                         </div>
                     </div>
+
+                    {/* Date Range Presets */}
+                    <div className="flex flex-wrap gap-1.5">
+                        {[
+                            { key: 'week', label: 'This Week' },
+                            { key: 'month', label: 'This Month' },
+                            { key: '30days', label: 'Last 30 Days' },
+                            { key: 'quarter', label: 'This Quarter' },
+                        ].map((p) => (
+                            <Button key={p.key} variant="outline" size="sm" className="h-7 text-xs" onClick={() => setDatePreset(p.key)}>
+                                {p.label}
+                            </Button>
+                        ))}
+                    </div>
                 </div>
 
-                <div className="text-sm text-muted-foreground">
-                    Showing {sessions.data.length} of {sessions.total} sessions
+                {/* Status Count Summary */}
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>Showing {sessions.data.length} of {sessions.total} sessions</span>
+                    {Object.keys(statusSummary).length > 0 && (
+                        <>
+                            <span className="text-muted-foreground/40">|</span>
+                            {Object.entries(statusSummary).map(([status, count]) => (
+                                <span key={status} className="inline-flex items-center gap-1">
+                                    <ComplianceStatusBadge status={status} /> <span className="font-medium">{count}</span>
+                                </span>
+                            ))}
+                        </>
+                    )}
                 </div>
 
                 {/* Desktop Table */}
@@ -470,7 +557,7 @@ export default function CoachingSessionsIndex() {
                     ) : (
                         <div className="overflow-x-auto">
                             <Table>
-                                <TableHeader>
+                                <TableHeader className="sticky top-0 z-10">
                                     <TableRow className="bg-muted/50">
                                         <TableHead>Date</TableHead>
                                         {!isAgent && activeTab !== 'my' && <TableHead>Coachee</TableHead>}
@@ -486,67 +573,98 @@ export default function CoachingSessionsIndex() {
                                     {sessions.data.length === 0 ? (
                                         <TableRow>
                                             <TableCell colSpan={8} className="py-8 text-center text-muted-foreground">
+                                                <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
                                                 No coaching sessions found.
                                             </TableCell>
                                         </TableRow>
                                     ) : (
                                         sessions.data.map((session) => (
-                                            <TableRow key={session.id}>
-                                                <TableCell className="whitespace-nowrap">
-                                                    {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
-                                                </TableCell>
-                                                {!isAgent && activeTab !== 'my' && (
-                                                    <TableCell className="font-medium">
-                                                        {formatName(session.coachee)}
+                                            <Fragment key={session.id}>
+                                                <TableRow className="cursor-pointer" onClick={() => setExpandedId(expandedId === session.id ? null : session.id)}>
+                                                    <TableCell className="whitespace-nowrap">
+                                                        {new Date(session.session_date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
                                                     </TableCell>
-                                                )}
-                                                {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
-                                                <TableCell className="max-w-[200px] truncate">
-                                                    {purposes[session.purpose] ?? session.purpose}
-                                                </TableCell>
-                                                <TableCell>
-                                                    <SeverityBadge flag={session.severity_flag} />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <AckStatusBadge status={session.ack_status} />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <ComplianceStatusBadge status={session.compliance_status} />
-                                                </TableCell>
-                                                <TableCell>
-                                                    <div className="flex items-center justify-center gap-1">
-                                                        <Link href={sessionsShow.url(session.id)}>
-                                                            <Button variant="ghost" size="icon" title="View">
-                                                                <Eye className="h-4 w-4" />
-                                                            </Button>
-                                                        </Link>
-                                                        {can('coaching.edit') && (
-                                                            <Link href={sessionsEdit.url(session.id)}>
-                                                                <Button variant="ghost" size="icon" title="Edit">
-                                                                    <Pencil className="h-4 w-4" />
+                                                    {!isAgent && activeTab !== 'my' && (
+                                                        <TableCell className="font-medium">
+                                                            {formatName(session.coachee)}
+                                                        </TableCell>
+                                                    )}
+                                                    {(isAdmin || activeTab === 'my') && <TableCell>{formatName(session.coach)}</TableCell>}
+                                                    <TableCell className="max-w-[200px] truncate">
+                                                        {purposes[session.purpose] ?? session.purpose}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <SeverityBadge flag={session.severity_flag} />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <AckStatusBadge status={session.ack_status} />
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        <ComplianceStatusBadge status={session.compliance_status} />
+                                                    </TableCell>
+                                                    <TableCell onClick={(e) => e.stopPropagation()}>
+                                                        <div className="flex items-center justify-center gap-1">
+                                                            <Link href={sessionsShow.url(session.id)}>
+                                                                <Button variant="ghost" size="icon" title="View">
+                                                                    <Eye className="h-4 w-4" />
                                                                 </Button>
                                                             </Link>
-                                                        )}
-                                                        {can('coaching.delete') && (
-                                                            <DeleteConfirmDialog
-                                                                title="Delete Coaching Session"
-                                                                description="Are you sure you want to delete this coaching session? This action cannot be undone."
-                                                                onConfirm={() => handleDelete(session.id)}
-                                                                trigger={
-                                                                    <Button
-                                                                        variant="ghost"
-                                                                        size="icon"
-                                                                        title="Delete"
-                                                                        className="text-red-600 hover:text-red-700"
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
+                                                            {can('coaching.edit') && (
+                                                                <Link href={sessionsEdit.url(session.id)}>
+                                                                    <Button variant="ghost" size="icon" title="Edit">
+                                                                        <Pencil className="h-4 w-4" />
                                                                     </Button>
-                                                                }
-                                                            />
-                                                        )}
-                                                    </div>
-                                                </TableCell>
-                                            </TableRow>
+                                                                </Link>
+                                                            )}
+                                                            {can('coaching.create') && (
+                                                                <Link href={sessionsCreate().url + `?clone_from=${session.id}`}>
+                                                                    <Button variant="ghost" size="icon" title="Clone as new">
+                                                                        <Copy className="h-4 w-4" />
+                                                                    </Button>
+                                                                </Link>
+                                                            )}
+                                                            {can('coaching.delete') && (isAdmin || !['Verified', 'Rejected'].includes(session.compliance_status)) && (
+                                                                <DeleteConfirmDialog
+                                                                    title="Delete Coaching Session"
+                                                                    description="Are you sure you want to delete this coaching session? This action cannot be undone."
+                                                                    onConfirm={() => handleDelete(session.id)}
+                                                                    trigger={
+                                                                        <Button
+                                                                            variant="ghost"
+                                                                            size="icon"
+                                                                            title="Delete"
+                                                                            className="text-red-600 hover:text-red-700"
+                                                                        >
+                                                                            <Trash2 className="h-4 w-4" />
+                                                                        </Button>
+                                                                    }
+                                                                />
+                                                            )}
+                                                        </div>
+                                                    </TableCell>
+                                                </TableRow>
+                                                {expandedId === session.id && (
+                                                    <TableRow className="bg-muted/30">
+                                                        <TableCell colSpan={8} className="p-4">
+                                                            <div className="grid gap-3 sm:grid-cols-2">
+                                                                <div>
+                                                                    <p className="text-xs font-semibold text-muted-foreground mb-1">Performance Description</p>
+                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: session.performance_description || 'N/A' }} />
+                                                                </div>
+                                                                <div>
+                                                                    <p className="text-xs font-semibold text-muted-foreground mb-1">SMART Action Plan</p>
+                                                                    <p className="text-sm line-clamp-3" dangerouslySetInnerHTML={{ __html: session.smart_action_plan || 'N/A' }} />
+                                                                </div>
+                                                            </div>
+                                                            <div className="mt-2 flex gap-2">
+                                                                <Link href={sessionsShow.url(session.id)} onClick={(e) => e.stopPropagation()}>
+                                                                    <Button size="sm" variant="outline">View Full Details</Button>
+                                                                </Link>
+                                                            </div>
+                                                        </TableCell>
+                                                    </TableRow>
+                                                )}
+                                            </Fragment>
                                         ))
                                     )}
                                 </TableBody>
@@ -558,7 +676,10 @@ export default function CoachingSessionsIndex() {
                 {/* Mobile Card View */}
                 <div className="space-y-4 md:hidden">
                     {sessions.data.length === 0 ? (
-                        <div className="py-8 text-center text-muted-foreground">No coaching sessions found.</div>
+                        <div className="py-8 text-center text-muted-foreground">
+                            <FileText className="mx-auto mb-2 h-8 w-8 text-muted-foreground/40" />
+                            No coaching sessions found.
+                        </div>
                     ) : (
                         sessions.data.map((session) => (
                             <CoachingSessionCard

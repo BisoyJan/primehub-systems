@@ -25,7 +25,7 @@ export function LoadingOverlay({
 
     const containerClass = fullScreen
         ? "fixed inset-0 z-50"
-        : "absolute inset-0 z-10";
+        : "absolute inset-0 z-20";
 
     return (
         <div className={`${containerClass} bg-background/80 backdrop-blur-sm flex items-center justify-center`}>

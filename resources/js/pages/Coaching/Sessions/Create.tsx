@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, Users, UserPlus } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
 import { usePageMeta, useFlashMessage, usePageLoading } from '@/hooks';
@@ -43,58 +44,138 @@ export default function CoachingSessionsCreate() {
     useFlashMessage();
     const isPageLoading = usePageLoading();
 
+    // Restore per-agent form data from sessionStorage if in bulk coaching mode
+    const getSavedFormData = () => {
+        if (!selectedAgentId) return null;
+        try {
+            const queueRaw = sessionStorage.getItem('coaching_queue');
+            const queue = queueRaw ? JSON.parse(queueRaw) : [];
+            if (queue.length === 0) return null;
+            const raw = sessionStorage.getItem(`coaching_form_${selectedAgentId}`);
+            if (raw) return JSON.parse(raw);
+        } catch { /* ignore */ }
+        return null;
+    };
+    const savedForm = getSavedFormData();
+
     const { data, setData, post, errors, processing } = useForm({
         coaching_mode: coachingMode ?? 'assign',
         coach_id: '' as number | '',
         coachee_id: selectedAgentId ?? ('' as number | ''),
-        session_date: new Date().toISOString().split('T')[0],
+        session_date: savedForm?.session_date ?? new Date().toISOString().split('T')[0],
         // Agent Profile
-        profile_new_hire: false,
-        profile_tenured: false,
-        profile_returning: false,
-        profile_previously_coached_same_issue: false,
+        profile_new_hire: savedForm?.profile_new_hire ?? false,
+        profile_tenured: savedForm?.profile_tenured ?? false,
+        profile_returning: savedForm?.profile_returning ?? false,
+        profile_previously_coached_same_issue: savedForm?.profile_previously_coached_same_issue ?? false,
         // Purpose
-        purpose: '' as string,
+        purpose: savedForm?.purpose ?? ('' as string),
         // Focus Areas
-        focus_attendance_tardiness: false,
-        focus_productivity: false,
-        focus_compliance: false,
-        focus_callouts: false,
-        focus_recognition_milestones: false,
-        focus_growth_development: false,
-        focus_other: false,
-        focus_other_notes: '',
+        focus_attendance_tardiness: savedForm?.focus_attendance_tardiness ?? false,
+        focus_productivity: savedForm?.focus_productivity ?? false,
+        focus_compliance: savedForm?.focus_compliance ?? false,
+        focus_callouts: savedForm?.focus_callouts ?? false,
+        focus_recognition_milestones: savedForm?.focus_recognition_milestones ?? false,
+        focus_growth_development: savedForm?.focus_growth_development ?? false,
+        focus_other: savedForm?.focus_other ?? false,
+        focus_other_notes: savedForm?.focus_other_notes ?? '',
         // Narrative
-        performance_description: '',
+        performance_description: savedForm?.performance_description ?? '',
         // Root Causes
-        root_cause_lack_of_skills: false,
-        root_cause_lack_of_clarity: false,
-        root_cause_personal_issues: false,
-        root_cause_motivation_engagement: false,
-        root_cause_health_fatigue: false,
-        root_cause_workload_process: false,
-        root_cause_peer_conflict: false,
-        root_cause_others: false,
-        root_cause_others_notes: '',
+        root_cause_lack_of_skills: savedForm?.root_cause_lack_of_skills ?? false,
+        root_cause_lack_of_clarity: savedForm?.root_cause_lack_of_clarity ?? false,
+        root_cause_personal_issues: savedForm?.root_cause_personal_issues ?? false,
+        root_cause_motivation_engagement: savedForm?.root_cause_motivation_engagement ?? false,
+        root_cause_health_fatigue: savedForm?.root_cause_health_fatigue ?? false,
+        root_cause_workload_process: savedForm?.root_cause_workload_process ?? false,
+        root_cause_peer_conflict: savedForm?.root_cause_peer_conflict ?? false,
+        root_cause_others: savedForm?.root_cause_others ?? false,
+        root_cause_others_notes: savedForm?.root_cause_others_notes ?? '',
         // More Narrative
-        agent_strengths_wins: '',
-        smart_action_plan: '',
-        follow_up_date: '',
-        severity_flag: 'Normal',
+        agent_strengths_wins: savedForm?.agent_strengths_wins ?? '',
+        smart_action_plan: savedForm?.smart_action_plan ?? '',
+        follow_up_date: savedForm?.follow_up_date ?? '',
+        severity_flag: savedForm?.severity_flag ?? 'Normal',
         attachments: [] as File[],
     });
+
+    // Clean up all per-agent form data when queue is empty
+    useEffect(() => {
+        if (getQueue().length === 0) {
+            Object.keys(sessionStorage).forEach(key => {
+                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+            });
+        }
+    }, []);
 
     const handleModeSwitch = (mode: CoachingMode) => {
         if (mode === coachingMode) return;
         router.get(sessionsCreate.url({ query: { coaching_mode: mode } }), {}, { preserveState: false });
     };
 
+    interface QueueAgent {
+        id: number;
+        name: string;
+        coaching_status: string;
+        done: boolean;
+    }
+
+    const getQueue = (): QueueAgent[] => {
+        try {
+            const raw = sessionStorage.getItem('coaching_queue');
+            if (raw) return JSON.parse(raw);
+        } catch { /* ignore */ }
+        return [];
+    };
+
+    const queueAgents = useMemo(() => getQueue(), []);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         post(sessionsStore().url, {
             forceFormData: true,
+            onSuccess: () => {
+                // Mark current agent as done in the queue
+                const queue = getQueue();
+                if (queue.length > 0) {
+                    const updated = queue.map(a => a.id === selectedAgentId ? { ...a, done: true } : a);
+                    const nextAgent = updated.find(a => !a.done);
+                    if (nextAgent) {
+                        sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+                        // Remove completed agent's saved form data
+                        if (selectedAgentId) sessionStorage.removeItem(`coaching_form_${selectedAgentId}`);
+                        router.visit(sessionsCreate().url + `?coachee_id=${nextAgent.id}`);
+                        return;
+                    } else {
+                        sessionStorage.removeItem('coaching_queue');
+                        Object.keys(sessionStorage).forEach(key => {
+                            if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                        });
+                    }
+                }
+            },
         });
     };
+
+    const handleSwitchToAgent = (agentId: number) => {
+        // Save current agent's form data before switching
+        if (selectedAgentId) {
+            const { coachee_id, attachments, coaching_mode, coach_id, ...formFields } = data;
+            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(formFields));
+        }
+        router.visit(sessionsCreate().url + `?coachee_id=${agentId}`);
+    };
+
+    const queueRemaining = useMemo(() => {
+        try {
+            const raw = sessionStorage.getItem('coaching_queue');
+            if (raw) {
+                const queue: number[] = JSON.parse(raw);
+                return queue.length;
+            }
+        } catch { /* ignore */ }
+        return 0;
+    }, []);
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -115,6 +196,63 @@ export default function CoachingSessionsCreate() {
                         </Link>
                     }
                 />
+
+                {queueAgents.length > 0 && (
+                    <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                            <span className="flex items-center gap-2 text-sm font-medium">
+                                <Users className="h-4 w-4 text-primary" />
+                                Bulk Coaching Queue ({queueAgents.filter(a => a.done).length}/{queueAgents.length} done)
+                            </span>
+                            <button
+                                type="button"
+                                className="text-xs text-muted-foreground hover:text-foreground underline"
+                                onClick={() => {
+                                    sessionStorage.removeItem('coaching_queue');
+                                    Object.keys(sessionStorage).forEach(key => {
+                                        if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+                                    });
+                                    window.location.reload();
+                                }}
+                            >
+                                Cancel queue
+                            </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                            {queueAgents.map((agent) => (
+                                <button
+                                    key={agent.id}
+                                    type="button"
+                                    disabled={agent.id === selectedAgentId}
+                                    onClick={() => !agent.done && agent.id !== selectedAgentId && handleSwitchToAgent(agent.id)}
+                                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${agent.id === selectedAgentId
+                                            ? 'border-primary bg-primary/10 font-medium text-primary'
+                                            : agent.done
+                                                ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400'
+                                                : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 cursor-pointer'
+                                        }`}
+                                >
+                                    {agent.done ? (
+                                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                                    ) : agent.id === selectedAgentId ? (
+                                        <Circle className="h-3.5 w-3.5 fill-primary text-primary" />
+                                    ) : (
+                                        <Circle className="h-3.5 w-3.5" />
+                                    )}
+                                    <span>{agent.name}</span>
+                                    {agent.coaching_status && !agent.done && (
+                                        <Badge variant={agent.coaching_status === 'Please Coach ASAP' ? 'destructive' : 'secondary'} className="px-1 py-0 text-[9px]">
+                                            {agent.coaching_status}
+                                        </Badge>
+                                    )}
+                                    {agent.done && (
+                                        <span className="text-[9px] text-green-600 dark:text-green-400">Done</span>
+                                    )}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {isAdmin && (
                     <div className="flex rounded-lg border bg-muted/30 p-1 w-fit">

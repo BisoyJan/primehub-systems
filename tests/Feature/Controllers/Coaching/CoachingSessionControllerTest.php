@@ -369,6 +369,9 @@ class CoachingSessionControllerTest extends TestCase
             'purpose' => 'recognition_appreciation',
             'performance_description' => 'Updated description for the agent performance review.',
             'smart_action_plan' => 'Updated plan: Continue doing great work and mentor others.',
+            'profile_tenured' => true,
+            'focus_productivity' => true,
+            'root_cause_lack_of_skills' => true,
         ];
 
         $response = $this->actingAs($team['teamLead'])
@@ -393,6 +396,9 @@ class CoachingSessionControllerTest extends TestCase
             'purpose' => 'recognition_appreciation',
             'performance_description' => 'Attempt to update someone else session.',
             'smart_action_plan' => 'Should not be allowed to update this session.',
+            'profile_tenured' => true,
+            'focus_productivity' => true,
+            'root_cause_lack_of_skills' => true,
         ];
 
         $response = $this->actingAs($otherTeam['teamLead'])
@@ -416,6 +422,9 @@ class CoachingSessionControllerTest extends TestCase
                 'purpose' => 'recognition_appreciation',
                 'performance_description' => 'Agent should not edit.',
                 'smart_action_plan' => 'This should be forbidden.',
+                'profile_tenured' => true,
+                'focus_productivity' => true,
+                'root_cause_lack_of_skills' => true,
             ]);
 
         $response->assertStatus(403);
@@ -437,11 +446,61 @@ class CoachingSessionControllerTest extends TestCase
     }
 
     #[Test]
-    public function team_lead_cannot_delete_coaching_session(): void
+    public function team_lead_can_delete_own_unreviewed_coaching_session(): void
     {
         $team = $this->createTeamWithCampaign();
         $session = CoachingSession::factory()->create([
             'coach_id' => $team['teamLead']->id,
+            'compliance_status' => 'Awaiting_Agent_Ack',
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->delete(route('coaching.sessions.destroy', $session));
+
+        $response->assertRedirect(route('coaching.sessions.index'));
+        $this->assertDatabaseMissing('coaching_sessions', ['id' => $session->id]);
+    }
+
+    #[Test]
+    public function team_lead_cannot_delete_verified_coaching_session(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $team['teamLead']->id,
+            'compliance_status' => 'Verified',
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->delete(route('coaching.sessions.destroy', $session));
+
+        $response->assertStatus(403);
+        $this->assertDatabaseHas('coaching_sessions', ['id' => $session->id]);
+    }
+
+    #[Test]
+    public function team_lead_cannot_delete_rejected_coaching_session(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $team['teamLead']->id,
+            'compliance_status' => 'Rejected',
+        ]);
+
+        $response = $this->actingAs($team['teamLead'])
+            ->delete(route('coaching.sessions.destroy', $session));
+
+        $response->assertStatus(403);
+        $this->assertDatabaseHas('coaching_sessions', ['id' => $session->id]);
+    }
+
+    #[Test]
+    public function team_lead_cannot_delete_other_coaches_session(): void
+    {
+        $team = $this->createTeamWithCampaign();
+        $otherCoach = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
+        $session = CoachingSession::factory()->create([
+            'coach_id' => $otherCoach->id,
+            'compliance_status' => 'Awaiting_Agent_Ack',
         ]);
 
         $response = $this->actingAs($team['teamLead'])
@@ -1226,7 +1285,7 @@ class CoachingSessionControllerTest extends TestCase
                 'root_cause_health_fatigue' => false,
                 'root_cause_workload_process' => false,
                 'root_cause_peer_conflict' => false,
-                'root_cause_others' => false,
+                'root_cause_others' => true,
             ]);
 
         $response->assertRedirect(route('coaching.sessions.show', $session));

@@ -62,6 +62,8 @@ class CoachingSession extends Model
         'ack_status',
         'ack_timestamp',
         'ack_comment',
+        'agent_response',
+        'agent_response_at',
         'compliance_status',
         'compliance_reviewer_id',
         'compliance_review_timestamp',
@@ -77,6 +79,7 @@ class CoachingSession extends Model
             'session_date' => 'date',
             'follow_up_date' => 'date',
             'ack_timestamp' => 'datetime',
+            'agent_response_at' => 'datetime',
             'compliance_review_timestamp' => 'datetime',
             // Booleans - Agent Profile
             'profile_new_hire' => 'boolean',
@@ -247,13 +250,23 @@ class CoachingSession extends Model
             return $query;
         }
 
-        return $query->where(function (Builder $q) use ($search) {
-            $q->whereHas('coachee', function (Builder $aq) use ($search) {
-                $aq->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%");
-            })->orWhereHas('coach', function (Builder $tq) use ($search) {
-                $tq->where('first_name', 'like', "%{$search}%")
-                    ->orWhere('last_name', 'like', "%{$search}%");
+        $searchTerm = '%'.$search.'%';
+
+        return $query->where(function (Builder $q) use ($searchTerm) {
+            $q->whereHas('coachee', function (Builder $aq) use ($searchTerm) {
+                $aq->where(function ($q2) use ($searchTerm) {
+                    $q2->whereRaw("CONCAT(first_name, ' ', COALESCE(CONCAT(middle_name, '. '), ''), last_name) LIKE ?", [$searchTerm])
+                        ->orWhere('first_name', 'like', $searchTerm)
+                        ->orWhere('last_name', 'like', $searchTerm)
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
+                });
+            })->orWhereHas('coach', function (Builder $tq) use ($searchTerm) {
+                $tq->where(function ($q2) use ($searchTerm) {
+                    $q2->whereRaw("CONCAT(first_name, ' ', COALESCE(CONCAT(middle_name, '. '), ''), last_name) LIKE ?", [$searchTerm])
+                        ->orWhere('first_name', 'like', $searchTerm)
+                        ->orWhere('last_name', 'like', $searchTerm)
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", [$searchTerm]);
+                });
             });
         });
     }

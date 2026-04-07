@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class AcknowledgeCoachingSessionRequest extends FormRequest
@@ -17,12 +18,13 @@ class AcknowledgeCoachingSessionRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
         return [
             'ack_comment' => ['nullable', 'string', 'max:2000'],
+            'agent_response' => ['nullable', 'string', 'max:10000'],
         ];
     }
 
@@ -33,6 +35,7 @@ class AcknowledgeCoachingSessionRequest extends FormRequest
     {
         return [
             'ack_comment.max' => 'Comment cannot exceed 2000 characters.',
+            'agent_response.max' => 'Response cannot exceed 10000 characters.',
         ];
     }
 }

@@ -1184,4 +1184,28 @@ class NotificationService
             ]
         );
     }
+
+    /**
+     * Notify admins that an agent's break session ended with overage.
+     */
+    public function notifyBreakOverageToAdmins(User|int $user, string $breakType, int $overageSeconds, string $date): void
+    {
+        $agent = $user instanceof User ? $user : User::find($user);
+        $agentName = $agent ? "{$agent->first_name} {$agent->last_name}" : 'Unknown';
+        $typeText = ucfirst(str_replace('_', ' ', $breakType));
+        $minutes = round($overageSeconds / 60, 1);
+
+        $title = 'Agent Break Overage';
+        $message = "{$agentName} exceeded their {$typeText} on {$date} by {$minutes} minute(s).";
+        $data = [
+            'user_id' => $agent?->id,
+            'agent_name' => $agentName,
+            'break_type' => $breakType,
+            'overage_seconds' => $overageSeconds,
+            'date' => $date,
+        ];
+
+        $this->notifyUsersByRole('Admin', 'break_overage', $title, $message, $data);
+        $this->notifyUsersByRole('Super Admin', 'break_overage', $title, $message, $data);
+    }
 }

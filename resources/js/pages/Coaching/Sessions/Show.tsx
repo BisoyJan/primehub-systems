@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, Pencil, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw, History, MessageSquare } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
@@ -35,6 +35,7 @@ import {
 
 import {
     index as sessionsIndex,
+    show as sessionsShow,
     edit as sessionsEdit,
     acknowledge as sessionsAcknowledge,
     review as sessionsReview,
@@ -50,12 +51,23 @@ function sanitizeRichHtml(html: string): string {
     );
 }
 
+interface CoachingHistoryItem {
+    id: number;
+    session_date: string;
+    purpose: string;
+    severity_flag: string | null;
+    compliance_status: string;
+    ack_status: string;
+    coach: { id: number; first_name: string; last_name: string } | null;
+}
+
 interface Props extends InertiaPageProps {
     session: CoachingSession;
     canAcknowledge: boolean;
     canReview: boolean;
     canEdit: boolean;
     purposes: CoachingPurposeLabels;
+    coaching_history: CoachingHistoryItem[];
 }
 
 function InfoRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -90,7 +102,7 @@ function SectionCard({ title, children }: { title: string; children: React.React
 }
 
 export default function CoachingSessionsShow() {
-    const { session, canAcknowledge, canReview, canEdit, purposes } = usePage<Props>().props;
+    const { session, canAcknowledge, canReview, canEdit, purposes, coaching_history } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Coaching Session Details',
@@ -114,7 +126,7 @@ export default function CoachingSessionsShow() {
     const [imageZoom, setImageZoom] = useState(100);
 
     // Acknowledge form
-    const ackForm = useForm({ ack_comment: '' });
+    const ackForm = useForm({ ack_comment: '', agent_response: '' });
     const handleAcknowledge = () => {
         ackForm.patch(sessionsAcknowledge(session.id).url);
     };
@@ -157,13 +169,21 @@ export default function CoachingSessionsShow() {
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
 
+            <style>{`
+                @media print {
+                    nav, header, [data-sidebar], .no-print, button { display: none !important; }
+                    .print-only { display: block !important; }
+                    body { background: white !important; }
+                }
+            `}</style>
+
             <div className="relative mx-auto flex w-full max-w-4xl flex-col gap-4 rounded-xl p-3 md:p-6">
                 <LoadingOverlay isLoading={isLoading} />
 
                 <PageHeader
                     title="Coaching Session Details"
                     actions={
-                        <div className="flex flex-wrap gap-2">
+                        <div className="no-print flex flex-wrap gap-2">
                             <Link href={sessionsIndex().url}>
                                 <Button variant="outline">
                                     <ArrowLeft className="mr-2 h-4 w-4" />
@@ -178,6 +198,9 @@ export default function CoachingSessionsShow() {
                                     </Button>
                                 </Link>
                             )}
+                            <Button variant="outline" size="sm" onClick={() => window.print()}>
+                                <Printer className="mr-1.5 h-4 w-4" /> Print
+                            </Button>
                         </div>
                     }
                 />
@@ -304,6 +327,18 @@ export default function CoachingSessionsShow() {
                             <InfoRow label="Acknowledged At">{formatDateTime(session.ack_timestamp)}</InfoRow>
                         )}
                         {session.ack_comment && <InfoRow label="Ack Comment">{session.ack_comment}</InfoRow>}
+                        {session.agent_response && (
+                            <InfoRow label="Agent Response">
+                                <div className="space-y-1">
+                                    <div className="whitespace-pre-wrap">{session.agent_response}</div>
+                                    {session.agent_response_at && (
+                                        <p className="text-xs text-muted-foreground">
+                                            Responded on {formatDateTime(session.agent_response_at)}
+                                        </p>
+                                    )}
+                                </div>
+                            </InfoRow>
+                        )}
                         <InfoRow label="Compliance Status">
                             <ComplianceStatusBadge status={session.compliance_status} />
                         </InfoRow>
@@ -318,6 +353,35 @@ export default function CoachingSessionsShow() {
                         )}
                     </dl>
                 </SectionCard>
+
+                {/* Coaching History */}
+                {coaching_history && coaching_history.length > 0 && (
+                    <div className="rounded-lg border bg-card p-4 shadow-sm">
+                        <h3 className="mb-3 flex items-center gap-2 text-sm font-semibold">
+                            <History className="h-4 w-4" />
+                            Recent Coaching History ({coaching_history.length})
+                        </h3>
+                        <div className="space-y-2">
+                            {coaching_history.map((item) => (
+                                <Link key={item.id} href={sessionsShow.url(item.id)}>
+                                    <div className="flex items-center justify-between rounded-md border p-3 transition-colors hover:bg-muted/50">
+                                        <div className="flex flex-col gap-0.5">
+                                            <span className="text-sm font-medium">
+                                                {formatDate(item.session_date)}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">
+                                                {item.purpose}{item.coach ? ` \u2022 Coach: ${item.coach.first_name} ${item.coach.last_name}` : ''}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-2">
+                                            <ComplianceStatusBadge status={item.compliance_status} />
+                                        </div>
+                                    </div>
+                                </Link>
+                            ))}
+                        </div>
+                    </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -350,6 +414,19 @@ export default function CoachingSessionsShow() {
                                     {ackForm.errors.ack_comment && (
                                         <p className="text-sm text-red-600">{ackForm.errors.ack_comment}</p>
                                     )}
+                                    <div className="space-y-2">
+                                        <Label htmlFor="agent_response">Your Reflection / Response (optional)</Label>
+                                        <Textarea
+                                            id="agent_response"
+                                            value={ackForm.data.agent_response}
+                                            onChange={(e) => ackForm.setData('agent_response', e.target.value)}
+                                            placeholder="Share your thoughts, reflections, or commitments from this coaching session..."
+                                            rows={4}
+                                        />
+                                        {ackForm.errors.agent_response && (
+                                            <p className="text-sm text-red-600">{ackForm.errors.agent_response}</p>
+                                        )}
+                                    </div>
                                 </div>
                                 <DialogFooter>
                                     <Button variant="outline" onClick={() => setAckDialogOpen(false)}>
