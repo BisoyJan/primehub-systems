@@ -42,7 +42,7 @@ class ProcessorSpecsControllerTest extends TestCase
             'thread_count' => 12,
             'base_clock_ghz' => 2.50,
             'boost_clock_ghz' => 4.40,
-            'stock_quantity' => 5,
+            'release_date' => '2022-01-04',
         ];
 
         $this->post(route('processorspecs.store'), $data)
@@ -50,11 +50,13 @@ class ProcessorSpecsControllerTest extends TestCase
             ->assertSessionHas('message')
             ->assertSessionHas('type', 'success');
 
-        unset($data['stock_quantity']);
-        // Float comparison might be tricky, but database stores as decimal(4,2)
-        // 2.50 might be stored as "2.50" string or 2.5 float.
-        // assertDatabaseHas checks for equality.
-        $this->assertDatabaseHas('processor_specs', $data);
+        $this->assertDatabaseHas('processor_specs', [
+            'manufacturer' => 'Intel',
+            'model' => 'Core i5-12400',
+            'core_count' => 6,
+            'thread_count' => 12,
+            'release_date' => '2022-01-04',
+        ]);
     }
 
     public function test_update_updates_processor_spec()

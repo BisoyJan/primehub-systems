@@ -1,16 +1,13 @@
 <?php
+
 // app/Http/Controllers/StockController.php
 
 namespace App\Http\Controllers;
 
 use App\Models\Stock;
-use App\Models\RamSpec;
-use App\Models\DiskSpec;
-use App\Models\ProcessorSpec;
-use App\Models\MonitorSpec;
 use Illuminate\Http\Request;
-use Illuminate\Validation\ValidationException;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 
 class StockController extends Controller
@@ -18,12 +15,7 @@ class StockController extends Controller
     /**
      * Map short type keys to model class names.
      */
-    protected array $typeMap = [
-        'ram' => RamSpec::class,
-        'disk' => DiskSpec::class,
-        'processor' => ProcessorSpec::class,
-        'monitor' => MonitorSpec::class,
-    ];
+    protected array $typeMap = [];
 
     /**
      * GET /stocks
@@ -38,20 +30,15 @@ class StockController extends Controller
 
     public function index(Request $request)
     {
-        $type    = $request->query('type');
-        $search  = $request->query('search'); // Capture search query
-        $ids     = array_filter(array_map('intval', (array) $request->query('ids', [])));
+        $type = $request->query('type');
+        $search = $request->query('search'); // Capture search query
+        $ids = array_filter(array_map('intval', (array) $request->query('ids', [])));
         $perPage = 10;
 
         $query = Stock::query()->with('stockable');
 
         // Map external type key to FQCN
-        $typeMap = [
-            'ram'       => RamSpec::class,
-            'disk'      => DiskSpec::class,
-            'processor' => ProcessorSpec::class,
-            'monitor'   => MonitorSpec::class,
-        ];
+        $typeMap = $this->typeMap;
 
         // Filter by a specific type if provided
         if ($type && isset($typeMap[$type])) {
@@ -94,33 +81,37 @@ class StockController extends Controller
         // normalize items for the UI (this part remains the same)
         $items = $paginated->getCollection()->map(function (Stock $s) {
             $typeKey = $this->mapTypeKey($s->stockable_type);
-            $label   = class_basename($s->stockable_type) . ' #' . $s->stockable_id;
+            $label = class_basename($s->stockable_type).' #'.$s->stockable_id;
 
             if ($s->relationLoaded('stockable') && $s->stockable) {
-                if (isset($s->stockable->label))      $label = $s->stockable->label;
-                elseif (isset($s->stockable->name))   $label = $s->stockable->name;
-                elseif (isset($s->stockable->model))  $label = $s->stockable->model;
+                if (isset($s->stockable->label)) {
+                    $label = $s->stockable->label;
+                } elseif (isset($s->stockable->name)) {
+                    $label = $s->stockable->name;
+                } elseif (isset($s->stockable->model)) {
+                    $label = $s->stockable->model;
+                }
             }
 
             return [
-                'id'              => $s->id,
-                'stockable_type'  => $s->stockable_type,
-                'stockable_id'    => $s->stockable_id,
-                'type'            => $typeKey,
-                'quantity'        => (int) $s->quantity,
-                'reserved'        => (int) $s->reserved,
-                'location'        => $s->location,
-                'notes'           => $s->notes,
-                'stockable'       => [
-                    'id'            => $s->stockable_id,
-                    'label'         => $label,
-                    'manufacturer'  => $s->stockable->manufacturer ?? null,
-                    'model'         => $s->stockable->model ?? null,
-                    'brand'         => $s->stockable->brand ?? null,
-                    'series'        => $s->stockable->series ?? null,
+                'id' => $s->id,
+                'stockable_type' => $s->stockable_type,
+                'stockable_id' => $s->stockable_id,
+                'type' => $typeKey,
+                'quantity' => (int) $s->quantity,
+                'reserved' => (int) $s->reserved,
+                'location' => $s->location,
+                'notes' => $s->notes,
+                'stockable' => [
+                    'id' => $s->stockable_id,
+                    'label' => $label,
+                    'manufacturer' => $s->stockable->manufacturer ?? null,
+                    'model' => $s->stockable->model ?? null,
+                    'brand' => $s->stockable->brand ?? null,
+                    'series' => $s->stockable->series ?? null,
                 ],
-                'created_at'      => optional($s->created_at)->toDateTimeString(),
-                'updated_at'      => optional($s->updated_at)->toDateTimeString(),
+                'created_at' => optional($s->created_at)->toDateTimeString(),
+                'updated_at' => optional($s->updated_at)->toDateTimeString(),
             ];
         })->toArray();
 
@@ -129,13 +120,13 @@ class StockController extends Controller
 
         return Inertia::render('Computer/Stocks/Index', [
             'stocks' => [
-                'data'  => $items,
+                'data' => $items,
                 'links' => $links,
-                'meta'  => [
+                'meta' => [
                     'current_page' => $paginated->currentPage(),
-                    'last_page'    => $paginated->lastPage(),
-                    'per_page'     => $paginated->perPage(),
-                    'total'        => $paginated->total(),
+                    'last_page' => $paginated->lastPage(),
+                    'per_page' => $paginated->perPage(),
+                    'total' => $paginated->total(),
                 ],
             ],
             'filterType' => $type ?? 'all',
@@ -151,7 +142,7 @@ class StockController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'type' => 'required|string|in:ram,disk,processor,monitor',
+            'type' => ['required', 'string', 'in:'.implode(',', array_keys($this->typeMap))],
             'stockable_id' => 'required|integer|min:1',
             'quantity' => 'nullable|integer|min:0',
             'reserved' => 'nullable|integer|min:0',
@@ -187,6 +178,7 @@ class StockController extends Controller
     public function show(Stock $stock)
     {
         $stock->load('stockable');
+
         return response()->json($stock);
     }
 
@@ -212,17 +204,17 @@ class StockController extends Controller
             $s = Stock::where('id', $stock->id)->lockForUpdate()->first();
 
             if (isset($data['delta_quantity'])) {
-                $new = max(0, ($s->quantity ?? 0) + (int)$data['delta_quantity']);
+                $new = max(0, ($s->quantity ?? 0) + (int) $data['delta_quantity']);
                 $s->quantity = $new;
             } elseif (isset($data['quantity'])) {
-                $s->quantity = (int)$data['quantity'];
+                $s->quantity = (int) $data['quantity'];
             }
 
             if (isset($data['delta_reserved'])) {
-                $newReserved = max(0, ($s->reserved ?? 0) + (int)$data['delta_reserved']);
+                $newReserved = max(0, ($s->reserved ?? 0) + (int) $data['delta_reserved']);
                 $s->reserved = $newReserved;
             } elseif (isset($data['reserved'])) {
-                $s->reserved = (int)$data['reserved'];
+                $s->reserved = (int) $data['reserved'];
             }
 
             if (array_key_exists('location', $data)) {
@@ -244,6 +236,7 @@ class StockController extends Controller
     public function destroy(Stock $stock)
     {
         $stock->delete();
+
         return redirect()->back()->with('flash', ['message' => 'Stock deleted', 'type' => 'success']);
     }
 
@@ -255,7 +248,7 @@ class StockController extends Controller
     public function adjust(Request $request)
     {
         $data = $request->validate([
-            'type' => 'required|string|in:ram,disk,processor,monitor',
+            'type' => ['required', 'string', 'in:'.implode(',', array_keys($this->typeMap))],
             'stockable_id' => 'required|integer|min:1',
             'delta' => 'required|integer',
         ]);
@@ -273,7 +266,7 @@ class StockController extends Controller
 
         DB::transaction(function () use ($stock, $data) {
             $s = Stock::where('id', $stock->id)->lockForUpdate()->first();
-            $new = max(0, ($s->quantity ?? 0) + (int)$data['delta']);
+            $new = max(0, ($s->quantity ?? 0) + (int) $data['delta']);
             $s->quantity = $new;
             $s->save();
         });
@@ -286,11 +279,11 @@ class StockController extends Controller
      */
     protected function mapTypeKey(string $stockableType): string
     {
-        $base = class_basename($stockableType);
-        if (stripos($base, 'Ram') !== false) return 'ram';
-        if (stripos($base, 'Disk') !== false) return 'disk';
-        if (stripos($base, 'Processor') !== false) return 'processor';
-        if (stripos($base, 'Monitor') !== false) return 'monitor';
-        return 'ram';
+        $flipped = array_flip($this->typeMap);
+        if (isset($flipped[$stockableType])) {
+            return $flipped[$stockableType];
+        }
+
+        return class_basename($stockableType);
     }
 }

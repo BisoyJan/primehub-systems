@@ -35,11 +35,7 @@ interface ProcessorSpec {
     thread_count: number;
     base_clock_ghz: number;
     boost_clock_ghz: number;
-    stock?: Stock | null;
-}
-
-interface Stock {
-    quantity: number;
+    release_date: string | null;
 }
 
 interface PaginatedProcessorSpecs {
@@ -201,7 +197,7 @@ export default function Index() {
                                         <TableHead>Threads</TableHead>
                                         <TableHead className="hidden xl:table-cell">Base Clock</TableHead>
                                         <TableHead className="hidden xl:table-cell">Boost Clock</TableHead>
-                                        <TableHead>Stocks</TableHead>
+                                        <TableHead>Release Date</TableHead>
                                         <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
                                 </TableHeader>
@@ -217,20 +213,7 @@ export default function Index() {
                                             <TableCell className="hidden xl:table-cell">{cpu.base_clock_ghz} GHz</TableCell>
                                             <TableCell className="hidden xl:table-cell">{cpu.boost_clock_ghz} GHz</TableCell>
                                             <TableCell>
-                                                {cpu.stock ? cpu.stock.quantity : 0}
-
-                                                {(!cpu.stock || cpu.stock.quantity < 10) && (
-                                                    <span
-                                                        className={`
-                                        ml-2 px-2 py-0.5 rounded-full text-xs font-semibold
-                                        ${!cpu.stock || cpu.stock.quantity === 0
-                                                                ? "bg-red-100 text-red-700"
-                                                                : "bg-yellow-100 text-yellow-700"}
-                                                `}
-                                                    >
-                                                        {!cpu.stock || cpu.stock.quantity === 0 ? "Out of Stock" : "Low Stock"}
-                                                    </span>
-                                                )}
+                                                {cpu.release_date || 'N/A'}
                                             </TableCell>
                                             <TableCell className="flex justify-center gap-2">
                                                 <Can permission="hardware.edit">
@@ -272,18 +255,8 @@ export default function Index() {
                                     <div className="font-semibold text-lg">{cpu.manufacturer}</div>
                                 </div>
                                 <div className="text-right">
-                                    <div className="text-xs text-muted-foreground">Stock</div>
-                                    <div className="font-medium">{cpu.stock ? cpu.stock.quantity : 0}</div>
-                                    {(!cpu.stock || cpu.stock.quantity < 10) && (
-                                        <span
-                                            className={`inline-block mt-1 px-2 py-0.5 rounded-full text-xs font-semibold ${!cpu.stock || cpu.stock.quantity === 0
-                                                ? "bg-red-100 text-red-700"
-                                                : "bg-yellow-100 text-yellow-700"
-                                                }`}
-                                        >
-                                            {!cpu.stock || cpu.stock.quantity === 0 ? "Out" : "Low"}
-                                        </span>
-                                    )}
+                                    <div className="text-xs text-muted-foreground">Release Date</div>
+                                    <div className="font-medium">{cpu.release_date || 'N/A'}</div>
                                 </div>
                             </div>
 

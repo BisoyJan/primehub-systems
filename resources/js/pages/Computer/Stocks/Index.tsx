@@ -2,14 +2,13 @@ import { useEffect, useState, useRef, useCallback } from 'react';
 import { Head, useForm, usePage, router } from '@inertiajs/react';
 import type { Page as InertiaPage } from '@inertiajs/core';
 import { toast } from 'sonner';
-import { Plus, Trash, Edit, RefreshCw, Search, Filter } from 'lucide-react';
+import { Plus, Trash, Edit, RefreshCw, Search } from 'lucide-react';
 import { useDebounce } from '@/hooks';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import {
     Dialog,
     DialogContent,
@@ -37,8 +36,6 @@ import {
     update as stocksUpdate,
     destroy as stocksDestroy,
 } from '@/routes/stocks';
-
-type SpecType = 'ram' | 'disk' | 'processor' | 'monitor';
 
 type StockRow = {
     id: number;
@@ -74,21 +71,18 @@ type StocksPayload = {
 
 type PageProps = {
     stocks?: StocksPayload;
-    filterType?: string;
     flash?: { message?: string; type?: string };
 };
 
 export default function Index() {
-    const { stocks, filterType: filterTypeProp } = usePage<PageProps>().props;
+    const { stocks } = usePage<PageProps>().props;
 
     const initialStocks = (stocks?.data ?? []) as StockRow[];
     const initialLinks = (stocks?.links ?? []) as PaginationLink[];
-    const initialFilter = (filterTypeProp as SpecType | undefined) ?? 'all';
 
     const [rows, setRows] = useState<StockRow[]>(initialStocks);
     const [links, setLinks] = useState<PaginationLink[]>(initialLinks);
     const [loading, setLoading] = useState(false);
-    const [filterType, setFilterType] = useState<SpecType | 'all'>(initialFilter);
     const [pollMs, setPollMs] = useState<number | null>(null);
 
     const [searchQuery, setSearchQuery] = useState('');
@@ -106,7 +100,6 @@ export default function Index() {
     const [lastRefresh, setLastRefresh] = useState(new Date());
 
     const { data, setData, reset, processing, errors } = useForm({
-        type: 'ram' as SpecType,
         stockable_id: '',
         quantity: 0,
         reserved: 0,
@@ -138,7 +131,6 @@ export default function Index() {
         setLoading(true);
 
         const params: Record<string, string | number | string[]> = {};
-        if (filterType !== 'all') params.type = filterType;
         if (debouncedSearchQuery) params.search = debouncedSearchQuery;
 
         const url = resolveUrl(pageUrl);
@@ -154,7 +146,7 @@ export default function Index() {
             },
             onFinish: () => setLoading(false),
         });
-    }, [filterType, debouncedSearchQuery, resolveUrl]);
+    }, [debouncedSearchQuery, resolveUrl]);
 
     useEffect(() => {
         if (isInitialMount.current) {
@@ -162,7 +154,7 @@ export default function Index() {
             return;
         }
         fetchIndex();
-    }, [filterType, debouncedSearchQuery, fetchIndex]);
+    }, [debouncedSearchQuery, fetchIndex]);
 
     useEffect(() => {
         if (!pollMs || pollMs <= 0) return;
@@ -179,14 +171,10 @@ export default function Index() {
         refreshCurrentPage();
     };
 
-    function mapTypeFromStockable(stockableType: string): SpecType {
-        if (!stockableType) return 'ram';
+    function getTypeName(stockableType: string): string {
+        if (!stockableType) return 'Unknown';
         const base = stockableType.split('\\').pop?.() ?? stockableType;
-        if (/Ram/i.test(base)) return 'ram';
-        if (/Disk/i.test(base)) return 'disk';
-        if (/Processor/i.test(base)) return 'processor';
-        if (/Monitor/i.test(base)) return 'monitor';
-        return 'ram';
+        return base.replace(/Spec$/i, '') || base;
     }
 
     function getLabel(row: StockRow) {
@@ -197,8 +185,7 @@ export default function Index() {
 
     function openCreate() {
         setEditing(null);
-        reset('type', 'stockable_id', 'quantity', 'reserved', 'location', 'notes');
-        setData('type', 'ram');
+        reset('stockable_id', 'quantity', 'reserved', 'location', 'notes');
         setData('stockable_id', '');
         setData('quantity', 0);
         setData('reserved', 0);
@@ -209,7 +196,6 @@ export default function Index() {
 
     function openEdit(row: StockRow) {
         setEditing(row);
-        setData('type', mapTypeFromStockable(row.stockable_type));
         setData('stockable_id', String(row.stockable_id));
         setData('quantity', row.quantity);
         setData('reserved', row.reserved);
@@ -225,7 +211,6 @@ export default function Index() {
         }
 
         const payload = {
-            type: data.type,
             stockable_id: Number(data.stockable_id),
             quantity: Number(data.quantity ?? 0),
             reserved: Number(data.reserved ?? 0),
@@ -273,7 +258,6 @@ export default function Index() {
             return;
         }
         router.post('/stocks/adjust', {
-            type: mapTypeFromStockable(adjustRow.stockable_type),
             stockable_id: adjustRow.stockable_id,
             delta,
         }, {
@@ -335,28 +319,9 @@ export default function Index() {
                                 />
                             </div>
 
-                            <Select
-                                value={filterType}
-                                onValueChange={(v: string) => setFilterType(v as SpecType | 'all')}
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="all">All types</SelectItem>
-                                    <SelectItem value="ram">RAM</SelectItem>
-                                    <SelectItem value="disk">Disk</SelectItem>
-                                    <SelectItem value="processor">Processor</SelectItem>
-                                    <SelectItem value="monitor">Monitor</SelectItem>
-                                </SelectContent>
-                            </Select>
                         </div>
 
                         <div className="flex gap-2 w-full sm:w-auto">
-                            <Button onClick={refreshCurrentPage} className="flex-1 sm:flex-none">
-                                <Filter className="mr-2 h-4 w-4" />
-                                Filter
-                            </Button>
                             <Button variant="ghost" size="icon" onClick={handleManualRefresh} title="Refresh">
                                 <RefreshCw className="h-4 w-4" />
                             </Button>
@@ -386,13 +351,13 @@ export default function Index() {
 
                 {/* Desktop Table */}
                 <div className="hidden md:block shadow rounded-md overflow-hidden">
-                    {isLoading ? (
+                    {loading ? (
                         <TableSkeleton columns={9} rows={8} />
                     ) : (
                         <div className="overflow-x-auto">
                             <Table>
                                 <TableCaption>
-                                    Stock items for RAM, Disk, Processor and Monitor specs
+                                    Stock inventory items
                                 </TableCaption>
                                 <TableHeader>
                                     <TableRow className="bg-muted/50">
@@ -412,8 +377,7 @@ export default function Index() {
                                         <TableRow key={row.id}>
                                             <TableCell className="hidden lg:table-cell">{row.id}</TableCell>
                                             <TableCell>
-                                                {mapTypeFromStockable(row.stockable_type).charAt(0).toUpperCase() +
-                                                    mapTypeFromStockable(row.stockable_type).slice(1)}
+                                                {getTypeName(row.stockable_type)}
                                             </TableCell>
                                             <TableCell>
                                                 {row.stockable?.manufacturer ?? row.stockable?.brand ?? '-'}
@@ -483,8 +447,7 @@ export default function Index() {
                                 <div>
                                     <div className="text-xs text-muted-foreground">Type</div>
                                     <div className="font-semibold text-lg">
-                                        {mapTypeFromStockable(row.stockable_type).charAt(0).toUpperCase() +
-                                            mapTypeFromStockable(row.stockable_type).slice(1)}
+                                        {getTypeName(row.stockable_type)}
                                     </div>
                                 </div>
                                 <div className="text-right">
@@ -569,24 +532,6 @@ export default function Index() {
                     </DialogHeader>
 
                     <div className="grid grid-cols-1 gap-3 py-2">
-                        <div>
-                            <Label>Type</Label>
-                            <Select
-                                value={data.type}
-                                onValueChange={(v: string) => setData('type', v as SpecType)}
-                            >
-                                <SelectTrigger className="w-full">
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="ram">RAM</SelectItem>
-                                    <SelectItem value="disk">Disk</SelectItem>
-                                    <SelectItem value="processor">Processor</SelectItem>
-                                    <SelectItem value="monitor">Monitor</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </div>
-
                         <div>
                             <Label>Spec ID</Label>
                             <Input

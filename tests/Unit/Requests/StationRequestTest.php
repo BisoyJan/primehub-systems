@@ -20,7 +20,7 @@ class StationRequestTest extends TestCase
     #[Test]
     public function it_authorizes_all_users(): void
     {
-        $request = new StationRequest();
+        $request = new StationRequest;
 
         $this->assertTrue($request->authorize());
     }
@@ -39,7 +39,7 @@ class StationRequestTest extends TestCase
             'monitor_type' => 'single',
         ];
 
-        $request = new StationRequest();
+        $request = new StationRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertFalse($validator->fails());
@@ -48,7 +48,7 @@ class StationRequestTest extends TestCase
     #[Test]
     public function it_requires_all_mandatory_fields(): void
     {
-        $request = new StationRequest();
+        $request = new StationRequest;
         $data = [];
 
         $validator = Validator::make($data, $request->rules());
@@ -75,7 +75,7 @@ class StationRequestTest extends TestCase
             'monitor_type' => 'single',
         ];
 
-        $request = new StationRequest();
+        $request = new StationRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
@@ -95,7 +95,7 @@ class StationRequestTest extends TestCase
             'monitor_type' => 'single',
         ];
 
-        $request = new StationRequest();
+        $request = new StationRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
@@ -116,33 +116,11 @@ class StationRequestTest extends TestCase
             'monitor_type' => 'triple',
         ];
 
-        $request = new StationRequest();
+        $request = new StationRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());
         $this->assertArrayHasKey('monitor_type', $validator->errors()->toArray());
-    }
-
-    #[Test]
-    public function it_validates_monitor_ids_structure(): void
-    {
-        $site = Site::factory()->create();
-        $campaign = Campaign::factory()->create();
-
-        $data = [
-            'site_id' => $site->id,
-            'station_number' => 'PC-001',
-            'campaign_id' => $campaign->id,
-            'status' => 'active',
-            'monitor_type' => 'dual',
-            'monitor_ids' => 'not-an-array',
-        ];
-
-        $request = new StationRequest();
-        $validator = Validator::make($data, $request->rules());
-
-        $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('monitor_ids', $validator->errors()->toArray());
     }
 
     #[Test]
@@ -158,10 +136,9 @@ class StationRequestTest extends TestCase
             'status' => 'active',
             'monitor_type' => 'single',
             'pc_spec_id' => null,
-            'monitor_ids' => null,
         ];
 
-        $request = new StationRequest();
+        $request = new StationRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertFalse($validator->fails());
@@ -170,7 +147,7 @@ class StationRequestTest extends TestCase
     #[Test]
     public function it_has_custom_attributes(): void
     {
-        $request = new StationRequest();
+        $request = new StationRequest;
 
         $attributes = $request->attributes();
 
@@ -179,13 +156,12 @@ class StationRequestTest extends TestCase
         $this->assertEquals('campaign', $attributes['campaign_id']);
         $this->assertEquals('monitor type', $attributes['monitor_type']);
         $this->assertEquals('PC spec', $attributes['pc_spec_id']);
-        $this->assertEquals('monitors', $attributes['monitor_ids']);
     }
 
     #[Test]
     public function it_has_custom_messages(): void
     {
-        $request = new StationRequest();
+        $request = new StationRequest;
 
         $messages = $request->messages();
 
@@ -210,7 +186,7 @@ class StationRequestTest extends TestCase
             'monitor_type' => 'single',
         ];
 
-        $request = new StationRequest();
+        $request = new StationRequest;
         $validator = Validator::make($data, $request->rules());
 
         $this->assertTrue($validator->fails());

@@ -6,7 +6,7 @@ use App\Models\ProcessorSpec;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\ProcessorSpec>
+ * @extends Factory<ProcessorSpec>
  */
 class ProcessorSpecFactory extends Factory
 {
@@ -50,16 +50,17 @@ class ProcessorSpecFactory extends Factory
             ? $intelModels[array_rand($intelModels)]
             : $amdModels[array_rand($amdModels)];
 
-        $coreCount   = rand(2, 16);
+        $coreCount = rand(2, 16);
         $threadCount = $coreCount * rand(1, 2);
 
         return [
-            'manufacturer'        => $manufacturer,
-            'model'               => $model,
-            'core_count'          => $coreCount,
-            'thread_count'        => $threadCount,
-            'base_clock_ghz'      => round(mt_rand(200, 380) / 100, 2),
-            'boost_clock_ghz'     => round(mt_rand(350, 520) / 100, 2),
+            'manufacturer' => $manufacturer,
+            'model' => $model,
+            'core_count' => $coreCount,
+            'thread_count' => $threadCount,
+            'base_clock_ghz' => round(mt_rand(200, 380) / 100, 2),
+            'boost_clock_ghz' => round(mt_rand(350, 520) / 100, 2),
+            'release_date' => $this->faker->dateTimeBetween('-5 years', 'now')->format('Y-m-d'),
         ];
     }
 }

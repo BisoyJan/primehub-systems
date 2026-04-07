@@ -5,7 +5,6 @@ import AppLayout from "@/layouts/app-layout";
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import PcSpecTable from "@/components/PcSpecTable";
-import MonitorSpecTable from "@/components/MonitorSpecTable";
 import { toast } from "sonner";
 import { PageHeader } from "@/components/PageHeader";
 import { LoadingOverlay } from "@/components/LoadingOverlay";
@@ -18,14 +17,6 @@ import {
 
 interface Site { id: number; name: string; }
 interface Campaign { id: number; name: string; }
-interface MonitorSpec {
-    id: number;
-    brand: string;
-    model: string;
-    screen_size: number;
-    resolution: string;
-    panel_type: string;
-}
 interface PcSpec {
     id: number;
     pc_number?: string;
@@ -46,26 +37,18 @@ interface StationEditProps {
         status: string;
         monitor_type: string;
         pc_spec_id: number;
-        monitors?: Array<{ id: number; pivot: { quantity: number } }>;
     };
     sites: Site[];
     campaigns: Campaign[];
     pcSpecs: PcSpec[];
-    monitorSpecs: MonitorSpec[];
     usedPcSpecIds: number[];
     flash?: { message?: string; type?: string };
     [key: string]: unknown;
 }
 
-export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPcSpecIds, monitorSpecs }: StationEditProps) {
+export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPcSpecIds }: StationEditProps) {
     const [showNoSpecWarning, setShowNoSpecWarning] = useState(false);
     const [showSpecSelectedInfo, setShowSpecSelectedInfo] = useState(false);
-
-    // Initialize monitor_ids from existing station monitors
-    const initialMonitorIds = station.monitors?.map(m => ({
-        id: m.id,
-        quantity: m.pivot.quantity
-    })) || [];
 
     const { data, setData, processing, errors } = useForm({
         site_id: String(station.site_id),
@@ -74,7 +57,6 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
         status: station.status,
         monitor_type: station.monitor_type || 'single',
         pc_spec_id: String(station.pc_spec_id),
-        monitor_ids: initialMonitorIds as Array<{ id: number; quantity: number }>,
     });
 
     const { title, breadcrumbs } = usePageMeta({
@@ -109,7 +91,6 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
         router.put(stationsUpdateRoute(station.id).url, {
             ...data,
             pc_spec_id: data.pc_spec_id || null,
-            monitor_ids: data.monitor_ids.length > 0 ? data.monitor_ids : [],
         }, {
             onSuccess: () => {
                 toast.success("Station updated");
@@ -239,48 +220,6 @@ export default function StationEdit({ station, sites, campaigns, pcSpecs, usedPc
                             usedPcSpecIds={usedPcSpecIds?.filter(id => id !== station.pc_spec_id)}
                         />
                         {errors.pc_spec_id && <p className="text-red-600 text-sm mt-1">{errors.pc_spec_id}</p>}
-                    </div>
-
-                    {/* Monitor Selection Section */}
-                    <div>
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-2 gap-2">
-                            <label className="block font-medium text-sm sm:text-base">
-                                Select Monitor(s) (Optional)
-                            </label>
-                            {data.monitor_ids.length > 0 && (
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    onClick={() => setData("monitor_ids", [])}
-                                    className="text-xs text-red-600 hover:text-red-700 hover:bg-red-50 w-full sm:w-auto"
-                                >
-                                    ✕ Clear Monitor Selection
-                                </Button>
-                            )}
-                        </div>
-                        <p className="text-xs text-gray-500 mb-2 break-words">
-                            💡 Monitor Type: <strong>{data.monitor_type === 'single' ? 'Single' : 'Dual'}</strong>
-                            {data.monitor_type === 'dual' ? ' - You can select up to 2 monitors' : ' - Select 1 monitor'}
-                        </p>
-
-                        <MonitorSpecTable
-                            monitorSpecs={monitorSpecs}
-                            selectedMonitors={data.monitor_ids}
-                            monitorType={data.monitor_type as 'single' | 'dual'}
-                            onSelect={(monitor) => {
-                                setData("monitor_ids", [...data.monitor_ids, { id: monitor.id, quantity: 1 }]);
-                            }}
-                            onQuantityChange={(monitorId, quantity) => {
-                                setData("monitor_ids", data.monitor_ids.map(m =>
-                                    m.id === monitorId ? { ...m, quantity } : m
-                                ));
-                            }}
-                            onDeselect={(monitorId) => {
-                                setData("monitor_ids", data.monitor_ids.filter(m => m.id !== monitorId));
-                            }}
-                        />
-                        {errors.monitor_ids && <p className="text-red-600 text-sm mt-1">{errors.monitor_ids}</p>}
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 mt-4">

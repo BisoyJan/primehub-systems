@@ -12,13 +12,18 @@ use App\Models\EmployeeSchedule;
 use App\Models\ItConcern;
 use App\Models\LeaveCredit;
 use App\Models\LeaveRequest;
+use App\Models\MedicationRequest;
+use App\Models\Notification;
 use App\Models\PcMaintenance;
 use App\Models\PcSpec;
+use App\Models\ProcessorSpec;
 use App\Models\Site;
 use App\Models\Station;
+use App\Models\Stock;
 use App\Models\User;
 use App\Services\DashboardService;
 use Carbon\Carbon;
+use Database\Seeders\CoachingStatusSettingSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
 use Tests\TestCase;
@@ -159,7 +164,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_gets_all_dashboard_stats(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
         $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
@@ -233,7 +238,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_handles_empty_data_gracefully(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
         $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
@@ -245,7 +250,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_restricted_data_for_agent_role(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
@@ -459,7 +464,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_includes_phase4_data_for_super_admin(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
         $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
@@ -473,7 +478,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_excludes_phase4_campaign_data_for_hr_role(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
         $user = User::factory()->create(['role' => 'HR', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
@@ -492,21 +497,21 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_gets_stock_summary(): void
     {
-        $disk = \App\Models\DiskSpec::factory()->create();
-        \App\Models\Stock::factory()->create([
-            'stockable_type' => \App\Models\DiskSpec::class,
-            'stockable_id' => $disk->id,
+        $processor = ProcessorSpec::factory()->create();
+        Stock::factory()->create([
+            'stockable_type' => ProcessorSpec::class,
+            'stockable_id' => $processor->id,
             'quantity' => 50,
             'reserved' => 10,
         ]);
 
         $result = $this->service->getStockSummary();
 
-        $this->assertArrayHasKey('Disk', $result);
-        $this->assertEquals(50, $result['Disk']['total']);
-        $this->assertEquals(10, $result['Disk']['reserved']);
-        $this->assertEquals(40, $result['Disk']['available']);
-        $this->assertEquals(1, $result['Disk']['items']);
+        $this->assertArrayHasKey('ProcessorSpec', $result);
+        $this->assertEquals(50, $result['ProcessorSpec']['total']);
+        $this->assertEquals(10, $result['ProcessorSpec']['reserved']);
+        $this->assertEquals(40, $result['ProcessorSpec']['available']);
+        $this->assertEquals(1, $result['ProcessorSpec']['items']);
     }
 
     #[Test]
@@ -571,11 +576,11 @@ class DashboardServiceTest extends TestCase
     {
         $user = User::factory()->create(['is_approved' => true]);
 
-        \App\Models\Notification::factory()->count(3)->create([
+        Notification::factory()->count(3)->create([
             'user_id' => $user->id,
             'read_at' => null,
         ]);
-        \App\Models\Notification::factory()->read()->create([
+        Notification::factory()->read()->create([
             'user_id' => $user->id,
         ]);
 
@@ -640,9 +645,9 @@ class DashboardServiceTest extends TestCase
     {
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
 
-        \App\Models\LeaveRequest::factory()->count(2)->create(['user_id' => $user->id]);
-        \App\Models\ItConcern::factory()->create(['user_id' => $user->id]);
-        \App\Models\MedicationRequest::factory()->create(['user_id' => $user->id]);
+        LeaveRequest::factory()->count(2)->create(['user_id' => $user->id]);
+        ItConcern::factory()->create(['user_id' => $user->id]);
+        MedicationRequest::factory()->create(['user_id' => $user->id]);
 
         $result = $this->service->getPersonalRequestsSummary($user->id);
 
@@ -733,7 +738,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_team_lead_data(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
         $user = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
@@ -755,7 +760,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_does_not_include_deprecated_ssd_hdd_in_all_stats(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
         $user = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
@@ -934,7 +939,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_coaching_summary_for_admin(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
@@ -961,7 +966,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_coaching_summary_scoped_to_team_lead(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $campaign = Campaign::factory()->create();
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
@@ -1006,7 +1011,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_coaching_summary_with_agent_specific_fields(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
@@ -1046,7 +1051,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_upcoming_follow_ups_within_7_days(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
@@ -1077,7 +1082,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_identifies_agents_not_coached_this_week(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
@@ -1102,7 +1107,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_excludes_inactive_agents_from_not_coached_list(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $admin = User::factory()->create(['role' => 'Admin', 'is_approved' => true]);
 
@@ -1121,7 +1126,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function team_lead_follow_ups_are_scoped_to_own_sessions(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $campaign = Campaign::factory()->create();
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
@@ -1162,7 +1167,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function it_returns_personal_coaching_summary_for_agent(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
         $tl = User::factory()->create(['role' => 'Team Lead', 'is_approved' => true]);
@@ -1195,7 +1200,7 @@ class DashboardServiceTest extends TestCase
     #[Test]
     public function agent_follow_ups_are_scoped_to_own_sessions(): void
     {
-        $this->seed(\Database\Seeders\CoachingStatusSettingSeeder::class);
+        $this->seed(CoachingStatusSettingSeeder::class);
 
         $agent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);
         $otherAgent = User::factory()->create(['role' => 'Agent', 'is_approved' => true, 'is_active' => true]);

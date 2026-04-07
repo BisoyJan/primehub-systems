@@ -2,11 +2,11 @@
 
 namespace App\Models;
 
+use App\Traits\HasSpecSearch;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use App\Traits\HasSpecSearch;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class ProcessorSpec extends Model
 {
@@ -27,6 +27,7 @@ class ProcessorSpec extends Model
         'thread_count',
         'base_clock_ghz',
         'boost_clock_ghz',
+        'release_date',
     ];
 
     protected function casts(): array
@@ -36,6 +37,7 @@ class ProcessorSpec extends Model
             'thread_count' => 'integer',
             'base_clock_ghz' => 'decimal:2',
             'boost_clock_ghz' => 'decimal:2',
+            'release_date' => 'date',
         ];
     }
 
@@ -47,10 +49,5 @@ class ProcessorSpec extends Model
             'processor_spec_id',
             'pc_spec_id'
         );
-    }
-
-    public function stock()
-    {
-        return $this->morphOne(Stock::class, 'stockable');
     }
 }

@@ -2,24 +2,21 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\ProcessorSpec;
 use App\Http\Requests\ProcessorSpecRequest;
-use App\Http\Traits\HandlesStockOperations;
 use App\Http\Traits\RedirectsWithFlashMessages;
+use App\Models\ProcessorSpec;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\DB;
 
 class ProcessorSpecsController extends Controller
 {
-    use HandlesStockOperations, RedirectsWithFlashMessages;
+    use RedirectsWithFlashMessages;
 
     public function index(Request $request)
     {
         $search = $request->input('search');
 
-        $processorspecs = ProcessorSpec::with('stock')
-            ->search($search)
+        $processorspecs = ProcessorSpec::search($search)
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -38,18 +35,12 @@ class ProcessorSpecsController extends Controller
     public function store(ProcessorSpecRequest $request)
     {
         try {
-            DB::transaction(function () use ($request) {
-                $validated = $request->validated();
-                $stockQuantity = $validated['stock_quantity'];
-                unset($validated['stock_quantity']);
-
-                $processorSpec = ProcessorSpec::create($validated);
-                $this->createStock($processorSpec, $stockQuantity);
-            });
+            ProcessorSpec::create($request->validated());
 
             return $this->redirectWithFlash('processorspecs.index', 'Processor specification created successfully.');
         } catch (\Exception $e) {
-            Log::error('ProcessorSpec Store Error: ' . $e->getMessage());
+            Log::error('ProcessorSpec Store Error: '.$e->getMessage());
+
             return $this->redirectWithFlash('processorspecs.index', 'Failed to create processor specification.', 'error');
         }
     }
@@ -66,25 +57,28 @@ class ProcessorSpecsController extends Controller
         try {
             $processorspec->update($request->validated());
             Log::info('ProcessorSpec Updated:', $request->validated());
+
             return $this->redirectWithFlash('processorspecs.index', 'Processor specification updated successfully.');
         } catch (\Exception $e) {
-            Log::error('ProcessorSpec Update Error: ' . $e->getMessage());
+            Log::error('ProcessorSpec Update Error: '.$e->getMessage());
+
             return $this->redirectWithFlash('processorspecs.index', 'Failed to update processor specification.', 'error');
         }
     }
 
     public function destroy(ProcessorSpec $processorspec)
     {
-        // Check if spec can be deleted
-        if ($error = $this->canDeleteSpec($processorspec, 'processor specification')) {
-            return $this->redirectWithFlash('processorspecs.index', $error['message'], $error['type']);
+        if ($processorspec->pcSpecs()->count() > 0) {
+            return $this->redirectWithFlash('processorspecs.index', 'Cannot delete this processor specification because it is currently assigned to one or more PC specs.', 'error');
         }
 
         try {
-            $this->deleteSpecWithStock($processorspec);
+            $processorspec->delete();
+
             return $this->redirectWithFlash('processorspecs.index', 'Processor specification deleted successfully.');
         } catch (\Exception $e) {
-            Log::error('ProcessorSpec Delete Error: ' . $e->getMessage());
+            Log::error('ProcessorSpec Delete Error: '.$e->getMessage());
+
             return $this->redirectWithFlash('processorspecs.index', 'Failed to delete processor specification.', 'error');
         }
     }

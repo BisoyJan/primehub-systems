@@ -4,8 +4,8 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class PcSpec extends Model
 {
@@ -27,6 +27,9 @@ class PcSpec extends Model
         'm2_slots',
         'sata_ports',
         'issue',
+        'ram_gb',
+        'disk_gb',
+        'available_ports',
     ];
 
     protected function casts(): array
@@ -34,27 +37,9 @@ class PcSpec extends Model
         return [
             'm2_slots' => 'integer',
             'sata_ports' => 'integer',
+            'ram_gb' => 'integer',
+            'disk_gb' => 'integer',
         ];
-    }
-
-    public function ramSpecs()
-    {
-        return $this->belongsToMany(
-            RamSpec::class,
-            'pc_spec_ram_spec',
-            'pc_spec_id',
-            'ram_spec_id'
-        )->withPivot('quantity')->withTimestamps();
-    }
-
-    public function diskSpecs()
-    {
-        return $this->belongsToMany(
-            DiskSpec::class,
-            'pc_spec_disk_spec',
-            'pc_spec_id',
-            'disk_spec_id'
-        );
     }
 
     public function processorSpecs()
@@ -65,16 +50,6 @@ class PcSpec extends Model
             'pc_spec_id',
             'processor_spec_id'
         );
-    }
-
-    public function monitors()
-    {
-        return $this->belongsToMany(
-            MonitorSpec::class,
-            'monitor_pc_spec',
-            'pc_spec_id',
-            'monitor_spec_id'
-        )->withPivot('quantity')->withTimestamps();
     }
 
     public function stations()
@@ -100,32 +75,18 @@ class PcSpec extends Model
     // Format PC Spec details for frontend display
     public function getFormattedDetails(): array
     {
-        $this->load(['ramSpecs', 'diskSpecs', 'processorSpecs']);
+        $this->load(['processorSpecs']);
 
         return [
             'id' => $this->id,
             'pc_number' => $this->pc_number,
             'model' => $this->model,
-            'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
-            'ram_gb' => $this->ramSpecs->sum(fn($ram) => $ram->capacity_gb * ($ram->pivot->quantity ?? 1)),
-            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) =>
-                array_fill(0, $ram->pivot->quantity ?? 1, $ram->capacity_gb . ' GB')
-            )->implode(' + '),
-            'ram_ddr' => $this->ramSpecs->first()?->type ?? 'N/A',
-            'disk' => $this->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
-            'disk_gb' => $this->diskSpecs->sum('capacity_gb'),
-            'disk_capacities' => $this->diskSpecs->map(fn($disk) => $disk->capacity_gb . ' GB')->implode(' + '),
-            'disk_type' => $this->getFormattedDiskType(),
+            'ram_gb' => $this->ram_gb,
+            'disk_gb' => $this->disk_gb,
+            'available_ports' => $this->available_ports,
             'processor' => $this->processorSpecs->pluck('model')->implode(', '),
             'issue' => $this->issue,
         ];
-    }
-
-    // Get formatted disk type (based on disk count)
-    private function getFormattedDiskType(): string
-    {
-        $diskCount = $this->diskSpecs->count();
-        return $diskCount > 0 ? "{$diskCount} disk(s)" : 'N/A';
     }
 
     // Format for form selection (used in Create/Edit forms)
@@ -135,16 +96,9 @@ class PcSpec extends Model
             'id' => $this->id,
             'pc_number' => $this->pc_number,
             'model' => $this->model,
-            'ram' => $this->ramSpecs->map(fn($ram) => $ram->model)->implode(', '),
-            'ram_gb' => $this->ramSpecs->map(fn($ram) => $ram->capacity_gb)->implode(' + '),
-            'ram_capacities' => $this->ramSpecs->flatMap(fn($ram) =>
-                array_fill(0, $ram->pivot->quantity ?? 1, $ram->capacity_gb . ' GB')
-            )->implode(' + '),
-            'ram_ddr' => $this->ramSpecs->first()?->type ?? 'N/A',
-            'disk' => $this->diskSpecs->map(fn($disk) => $disk->model)->implode(', '),
-            'disk_gb' => $this->diskSpecs->map(fn($disk) => $disk->capacity_gb)->implode(' + '),
-            'disk_capacities' => $this->diskSpecs->map(fn($disk) => $disk->capacity_gb . ' GB')->implode(' + '),
-            'disk_type' => $this->getFormattedDiskType(),
+            'ram_gb' => $this->ram_gb,
+            'disk_gb' => $this->disk_gb,
+            'available_ports' => $this->available_ports,
             'processor' => $this->processorSpecs->pluck('model')->implode(', '),
         ];
     }

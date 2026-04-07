@@ -3,17 +3,15 @@
 namespace Tests\Feature;
 
 use App\Models\Campaign;
-use App\Models\DiskSpec;
 use App\Models\EmployeeSchedule;
 use App\Models\PcSpec;
 use App\Models\ProcessorSpec;
-use App\Models\RamSpec;
 use App\Models\Site;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
-use Tests\TestCase;
 use PHPUnit\Framework\Attributes\Test;
+use Tests\TestCase;
 
 /**
  * Tests for PC Spec CRUD operations.
@@ -23,8 +21,7 @@ class PcSpecCrudTest extends TestCase
     use RefreshDatabase;
 
     protected User $admin;
-    protected RamSpec $ram;
-    protected DiskSpec $disk;
+
     protected ProcessorSpec $processor;
 
     protected function setUp(): void
@@ -37,20 +34,7 @@ class PcSpecCrudTest extends TestCase
             'is_approved' => true,
         ]);
 
-        // Create hardware components with stock
-        $this->ram = RamSpec::factory()->create([
-            'type' => 'DDR4',
-            'capacity_gb' => 16,
-        ]);
-        $this->ram->stock()->create(['quantity' => 10]);
-
-        $this->disk = DiskSpec::factory()->create([
-            'capacity_gb' => 512,
-        ]);
-        $this->disk->stock()->create(['quantity' => 10]);
-
         $this->processor = ProcessorSpec::factory()->create();
-        $this->processor->stock()->create(['quantity' => 10]);
     }
 
     #[Test]
@@ -77,14 +61,12 @@ class PcSpecCrudTest extends TestCase
         $response->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Computer/PcSpecs/Create')
-                ->has('ramOptions')
-                ->has('diskOptions')
                 ->has('processorOptions')
             );
     }
 
     #[Test]
-    public function it_creates_single_pc_spec_with_components()
+    public function it_creates_single_pc_spec()
     {
         $data = [
             'manufacturer' => 'ASUS',
@@ -92,8 +74,10 @@ class PcSpecCrudTest extends TestCase
             'memory_type' => 'DDR4',
             'm2_slots' => 2,
             'sata_ports' => 4,
-            'ram_specs' => [$this->ram->id => 2], // 2 RAM sticks
-            'disk_specs' => [$this->disk->id => 1],
+            'ram_gb' => 32,
+            'disk_gb' => 512,
+            'available_ports' => 'USB 3.0 x4, HDMI x1',
+            'processor_mode' => 'existing',
             'processor_spec_id' => $this->processor->id,
             'quantity' => 1,
         ];
@@ -107,12 +91,12 @@ class PcSpecCrudTest extends TestCase
             'manufacturer' => 'ASUS',
             'model' => 'PRIME B450M-A',
             'memory_type' => 'DDR4',
+            'ram_gb' => 32,
+            'disk_gb' => 512,
+            'available_ports' => 'USB 3.0 x4, HDMI x1',
         ]);
 
         $pcSpec = PcSpec::first();
-        $this->assertCount(1, $pcSpec->ramSpecs()->get());
-        $this->assertEquals(2, $pcSpec->ramSpecs->first()->pivot->quantity);
-        $this->assertCount(1, $pcSpec->diskSpecs()->get());
         $this->assertCount(1, $pcSpec->processorSpecs()->get());
     }
 
@@ -125,10 +109,11 @@ class PcSpecCrudTest extends TestCase
             'memory_type' => 'DDR4',
             'm2_slots' => 2,
             'sata_ports' => 4,
-            'ram_specs' => [$this->ram->id => 2],
-            'disk_specs' => [$this->disk->id => 1],
+            'ram_gb' => 16,
+            'disk_gb' => 256,
+            'processor_mode' => 'existing',
             'processor_spec_id' => $this->processor->id,
-            'quantity' => 3, // Create 3 identical PCs
+            'quantity' => 3,
         ];
 
         $response = $this->actingAs($this->admin)
@@ -137,8 +122,6 @@ class PcSpecCrudTest extends TestCase
         $response->assertRedirect(route('pcspecs.index'));
 
         $this->assertEquals(3, PcSpec::count());
-        $this->assertEquals(4, $this->ram->stock->fresh()->quantity); // 10 - (3 × 2) = 4
-        $this->assertEquals(7, $this->disk->stock->fresh()->quantity); // 10 - 3 = 7
     }
 
     #[Test]
@@ -158,8 +141,6 @@ class PcSpecCrudTest extends TestCase
     public function it_displays_edit_pc_spec_form()
     {
         $pcSpec = PcSpec::factory()->create();
-        $pcSpec->ramSpecs()->attach($this->ram->id, ['quantity' => 2]);
-        $pcSpec->diskSpecs()->attach($this->disk->id);
         $pcSpec->processorSpecs()->attach($this->processor->id);
 
         $response = $this->actingAs($this->admin)
@@ -169,8 +150,6 @@ class PcSpecCrudTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Computer/PcSpecs/Edit')
                 ->where('pcspec.id', $pcSpec->id)
-                ->has('ramOptions')
-                ->has('diskOptions')
                 ->has('processorOptions')
             );
     }
@@ -191,8 +170,9 @@ class PcSpecCrudTest extends TestCase
                 'memory_type' => $pcSpec->memory_type,
                 'm2_slots' => $pcSpec->m2_slots,
                 'sata_ports' => $pcSpec->sata_ports,
-                'ram_specs' => [],
-                'disk_specs' => [],
+                'ram_gb' => 16,
+                'disk_gb' => 512,
+                'processor_mode' => 'existing',
                 'processor_spec_id' => $this->processor->id,
             ]);
 
@@ -201,55 +181,16 @@ class PcSpecCrudTest extends TestCase
         $this->assertDatabaseHas('pc_specs', [
             'id' => $pcSpec->id,
             'model' => 'NEW-MODEL',
+            'ram_gb' => 16,
+            'disk_gb' => 512,
         ]);
     }
 
     #[Test]
-    public function it_updates_pc_spec_components()
-    {
-        $pcSpec = PcSpec::factory()->create(['memory_type' => 'DDR4']);
-        $oldRam = RamSpec::factory()->create(['type' => 'DDR4']);
-        $oldRam->stock()->create(['quantity' => 10]);
-
-        $pcSpec->ramSpecs()->attach($oldRam->id, ['quantity' => 2]);
-        $pcSpec->processorSpecs()->attach($this->processor->id);
-
-        $newRam = RamSpec::factory()->create(['type' => 'DDR4']);
-        $newRam->stock()->create(['quantity' => 10]);
-
-        $response = $this->actingAs($this->admin)
-            ->put(route('pcspecs.update', $pcSpec), [
-                'manufacturer' => $pcSpec->manufacturer,
-                'model' => $pcSpec->model,
-                'memory_type' => $pcSpec->memory_type,
-                'm2_slots' => $pcSpec->m2_slots,
-                'sata_ports' => $pcSpec->sata_ports,
-                'ram_specs' => [$newRam->id => 2], // Switch to new RAM
-                'disk_specs' => [],
-                'processor_spec_id' => $this->processor->id,
-            ]);
-
-        $response->assertRedirect(route('pcspecs.index'));
-
-        $pcSpec->refresh();
-        $this->assertTrue($pcSpec->ramSpecs->contains($newRam));
-        $this->assertFalse($pcSpec->ramSpecs->contains($oldRam));
-
-        // Stock should be restored for old RAM
-        $this->assertEquals(12, $oldRam->stock->fresh()->quantity); // 10 + 2 returned
-    }
-
-    #[Test]
-    public function it_deletes_pc_spec_and_restores_stock()
+    public function it_deletes_pc_spec()
     {
         $pcSpec = PcSpec::factory()->create();
-        $pcSpec->ramSpecs()->attach($this->ram->id, ['quantity' => 2]);
-        $pcSpec->diskSpecs()->attach($this->disk->id);
         $pcSpec->processorSpecs()->attach($this->processor->id);
-
-        $initialRamStock = $this->ram->stock->quantity;
-        $initialDiskStock = $this->disk->stock->quantity;
-        $initialProcessorStock = $this->processor->stock->quantity;
 
         $response = $this->actingAs($this->admin)
             ->delete(route('pcspecs.destroy', $pcSpec));
@@ -257,19 +198,15 @@ class PcSpecCrudTest extends TestCase
         $response->assertRedirect(route('pcspecs.index'));
 
         $this->assertDatabaseMissing('pc_specs', ['id' => $pcSpec->id]);
-
-        // Stock should be restored
-        $this->assertEquals($initialRamStock + 2, $this->ram->stock->fresh()->quantity);
-        $this->assertEquals($initialDiskStock + 1, $this->disk->stock->fresh()->quantity);
-        $this->assertEquals($initialProcessorStock + 1, $this->processor->stock->fresh()->quantity);
     }
 
     #[Test]
     public function it_displays_pc_spec_details()
     {
-        $pcSpec = PcSpec::factory()->create();
-        $pcSpec->ramSpecs()->attach($this->ram->id, ['quantity' => 2]);
-        $pcSpec->diskSpecs()->attach($this->disk->id);
+        $pcSpec = PcSpec::factory()->create([
+            'ram_gb' => 32,
+            'disk_gb' => 1024,
+        ]);
         $pcSpec->processorSpecs()->attach($this->processor->id);
 
         $response = $this->actingAs($this->admin)
@@ -279,8 +216,6 @@ class PcSpecCrudTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('Computer/PcSpecs/Show')
                 ->where('pcspec.id', $pcSpec->id)
-                ->has('pcspec.ram_specs', 1)
-                ->has('pcspec.disk_specs', 1)
                 ->has('pcspec.processor_specs', 1)
             );
     }
@@ -327,6 +262,8 @@ class PcSpecCrudTest extends TestCase
                 'memory_type' => 'DDR4',
                 'm2_slots' => 2,
                 'sata_ports' => 4,
+                'ram_gb' => 16,
+                'disk_gb' => 512,
                 'processor_spec_id' => $this->processor->id,
             ]);
 

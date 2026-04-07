@@ -2,13 +2,9 @@
 
 namespace Tests\Unit\Models;
 
-use App\Models\Campaign;
-use App\Models\DiskSpec;
-use App\Models\MonitorSpec;
 use App\Models\PcSpec;
 use App\Models\PcTransfer;
 use App\Models\ProcessorSpec;
-use App\Models\RamSpec;
 use App\Models\Station;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\Test;
@@ -26,12 +22,18 @@ class PcSpecTest extends TestCase
             'manufacturer' => 'Dell',
             'model' => 'OptiPlex 7090',
             'memory_type' => 'DDR4',
+            'ram_gb' => 32,
+            'disk_gb' => 512,
+            'available_ports' => 'USB 3.0 x4, HDMI x1',
             'issue' => 'Screen flickering',
         ]);
 
         $this->assertEquals('PC-001', $pcSpec->pc_number);
         $this->assertEquals('Dell', $pcSpec->manufacturer);
         $this->assertEquals('OptiPlex 7090', $pcSpec->model);
+        $this->assertEquals(32, $pcSpec->ram_gb);
+        $this->assertEquals(512, $pcSpec->disk_gb);
+        $this->assertEquals('USB 3.0 x4, HDMI x1', $pcSpec->available_ports);
         $this->assertEquals('Screen flickering', $pcSpec->issue);
     }
 
@@ -41,35 +43,14 @@ class PcSpecTest extends TestCase
         $pcSpec = PcSpec::factory()->create([
             'm2_slots' => '2',
             'sata_ports' => '4',
+            'ram_gb' => '16',
+            'disk_gb' => '512',
         ]);
 
         $this->assertIsInt($pcSpec->m2_slots);
         $this->assertIsInt($pcSpec->sata_ports);
-    }
-
-    #[Test]
-    public function it_has_ram_specs_relationship(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
-        $ramSpec = RamSpec::factory()->create();
-
-        $pcSpec->ramSpecs()->attach($ramSpec->id, ['quantity' => 2]);
-
-        $this->assertTrue($pcSpec->ramSpecs()->exists());
-        $this->assertEquals($ramSpec->id, $pcSpec->ramSpecs->first()->id);
-        $this->assertEquals(2, $pcSpec->ramSpecs->first()->pivot->quantity);
-    }
-
-    #[Test]
-    public function it_has_disk_specs_relationship(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
-        $diskSpec = DiskSpec::factory()->create();
-
-        $pcSpec->diskSpecs()->attach($diskSpec->id);
-
-        $this->assertTrue($pcSpec->diskSpecs()->exists());
-        $this->assertEquals($diskSpec->id, $pcSpec->diskSpecs->first()->id);
+        $this->assertIsInt($pcSpec->ram_gb);
+        $this->assertIsInt($pcSpec->disk_gb);
     }
 
     #[Test]
@@ -82,18 +63,6 @@ class PcSpecTest extends TestCase
 
         $this->assertTrue($pcSpec->processorSpecs()->exists());
         $this->assertEquals($processorSpec->id, $pcSpec->processorSpecs->first()->id);
-    }
-
-    #[Test]
-    public function it_has_monitors_relationship(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
-        $monitor = MonitorSpec::factory()->create();
-
-        $pcSpec->monitors()->attach($monitor->id, ['quantity' => 1]);
-
-        $this->assertTrue($pcSpec->monitors()->exists());
-        $this->assertEquals($monitor->id, $pcSpec->monitors->first()->id);
     }
 
     #[Test]
@@ -117,53 +86,15 @@ class PcSpecTest extends TestCase
     }
 
     #[Test]
-    public function it_gets_formatted_details_with_ram(): void
+    public function it_gets_formatted_details(): void
     {
         $pcSpec = PcSpec::factory()->create([
             'pc_number' => 'PC-001',
             'model' => 'OptiPlex 7090',
+            'ram_gb' => 32,
+            'disk_gb' => 512,
+            'available_ports' => 'USB 3.0 x4, HDMI x1',
         ]);
-
-        $ramSpec = RamSpec::factory()->create([
-            'model' => 'Crucial 8GB DDR4',
-            'capacity_gb' => 8,
-            'type' => 'DDR4',
-        ]);
-
-        $pcSpec->ramSpecs()->attach($ramSpec->id, ['quantity' => 2]);
-
-        $details = $pcSpec->getFormattedDetails();
-
-        $this->assertEquals('PC-001', $details['pc_number']);
-        $this->assertEquals('Crucial 8GB DDR4', $details['ram']);
-        $this->assertEquals(16, $details['ram_gb']); // 8GB * 2
-        $this->assertEquals('8 GB + 8 GB', $details['ram_capacities']);
-        $this->assertEquals('DDR4', $details['ram_ddr']);
-    }
-
-    #[Test]
-    public function it_gets_formatted_details_with_disk(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
-
-        $diskSpec = DiskSpec::factory()->create([
-            'model' => 'Samsung 870 EVO',
-            'capacity_gb' => 512,
-        ]);
-
-        $pcSpec->diskSpecs()->attach($diskSpec->id);
-
-        $details = $pcSpec->getFormattedDetails();
-
-        $this->assertEquals('Samsung 870 EVO', $details['disk']);
-        $this->assertEquals(512, $details['disk_gb']);
-        $this->assertEquals('512 GB', $details['disk_capacities']);
-    }
-
-    #[Test]
-    public function it_gets_formatted_details_with_processor(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
 
         $processorSpec = ProcessorSpec::factory()->create([
             'model' => 'Intel Core i7-10700',
@@ -173,22 +104,10 @@ class PcSpecTest extends TestCase
 
         $details = $pcSpec->getFormattedDetails();
 
+        $this->assertEquals('PC-001', $details['pc_number']);
+        $this->assertEquals(32, $details['ram_gb']);
+        $this->assertEquals(512, $details['disk_gb']);
         $this->assertEquals('Intel Core i7-10700', $details['processor']);
-    }
-
-    #[Test]
-    public function it_handles_multiple_disks(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
-
-        $disk1 = DiskSpec::factory()->create(['capacity_gb' => 256]);
-        $disk2 = DiskSpec::factory()->create(['capacity_gb' => 1000]);
-
-        $pcSpec->diskSpecs()->attach([$disk1->id, $disk2->id]);
-
-        $details = $pcSpec->getFormattedDetails();
-
-        $this->assertEquals(1256, $details['disk_gb']);
     }
 
     #[Test]
@@ -197,42 +116,17 @@ class PcSpecTest extends TestCase
         $pcSpec = PcSpec::factory()->create([
             'pc_number' => 'PC-001',
             'model' => 'OptiPlex 7090',
+            'ram_gb' => 16,
+            'disk_gb' => 256,
         ]);
-
-        $ramSpec = RamSpec::factory()->create([
-            'model' => 'Crucial 8GB DDR4',
-            'capacity_gb' => 8,
-            'type' => 'DDR4',
-        ]);
-
-        $pcSpec->ramSpecs()->attach($ramSpec->id);
 
         $data = $pcSpec->getFormSelectionData();
 
         $this->assertArrayHasKey('id', $data);
         $this->assertArrayHasKey('pc_number', $data);
-        $this->assertArrayHasKey('ram', $data);
-        $this->assertArrayHasKey('disk', $data);
+        $this->assertArrayHasKey('ram_gb', $data);
+        $this->assertArrayHasKey('disk_gb', $data);
+        $this->assertArrayHasKey('available_ports', $data);
         $this->assertArrayHasKey('processor', $data);
-    }
-
-    #[Test]
-    public function it_returns_na_for_missing_disk_type(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
-
-        $details = $pcSpec->getFormattedDetails();
-
-        $this->assertEquals('N/A', $details['disk_type']);
-    }
-
-    #[Test]
-    public function it_returns_na_for_missing_ram_ddr(): void
-    {
-        $pcSpec = PcSpec::factory()->create();
-
-        $details = $pcSpec->getFormattedDetails();
-
-        $this->assertEquals('N/A', $details['ram_ddr']);
     }
 }

@@ -55,20 +55,6 @@ import {
 } from '@/routes/pcspecs';
 
 
-interface RamSpec {
-    id: number;
-    manufacturer: string;
-    model: string;
-    capacity_gb: number;
-    type: string;
-    speed: string;
-}
-interface DiskSpec {
-    id: number;
-    manufacturer: string;
-    model: string;
-    capacity_gb: number;
-}
 interface ProcessorSpec {
     id: number;
     manufacturer: string;
@@ -84,9 +70,10 @@ interface PcSpec {
     manufacturer: string;
     model: string;
     memory_type: string;
+    ram_gb: number;
+    disk_gb: number;
+    available_ports?: string | null;
     issue?: string | null;
-    ramSpecs: RamSpec[];
-    diskSpecs: DiskSpec[];
     processorSpecs: ProcessorSpec[];
 }
 
@@ -634,7 +621,8 @@ export default function Index() {
                                         <TableHead>Model</TableHead>
                                         <TableHead className="hidden xl:table-cell">Processor</TableHead>
                                         <TableHead>RAM (GB)</TableHead>
-                                        <TableHead className="hidden xl:table-cell">Storage Type</TableHead>
+                                        <TableHead>Disk (GB)</TableHead>
+                                        <TableHead className="hidden xl:table-cell">Ports</TableHead>
                                         <TableHead>Issue</TableHead>
                                         <TableHead className="text-center">Actions</TableHead>
                                     </TableRow>
@@ -644,12 +632,6 @@ export default function Index() {
                                         // Get first processor
                                         const proc = pc.processorSpecs?.[0];
                                         const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
-
-                                        // Total RAM GB
-                                        const totalRamGb = pc.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
-
-                                        // Storage: show disk count
-                                        const diskCount = pc.diskSpecs?.length || 0;
 
                                         return (
                                             <TableRow key={pc.id}>
@@ -667,8 +649,9 @@ export default function Index() {
                                                 <TableCell>{pc.manufacturer}</TableCell>
                                                 <TableCell>{pc.model}</TableCell>
                                                 <TableCell className="hidden xl:table-cell">{procLabel}</TableCell>
-                                                <TableCell>{totalRamGb || 0}</TableCell>
-                                                <TableCell className="hidden xl:table-cell">{diskCount > 0 ? `${diskCount} disk(s)` : '—'}</TableCell>
+                                                <TableCell>{pc.ram_gb}</TableCell>
+                                                <TableCell>{pc.disk_gb}</TableCell>
+                                                <TableCell className="hidden xl:table-cell">{pc.available_ports || '—'}</TableCell>
                                                 <TableCell>
                                                     <div className="flex items-center gap-2">
                                                         {pc.issue ? (
@@ -724,62 +707,16 @@ export default function Index() {
                                                                     </div>
                                                                 </section>
 
-                                                                {/* RAM Specs */}
+                                                                {/* RAM & Disk */}
                                                                 <section>
-                                                                    <h3 className="font-semibold text-base mb-2">RAM Specs</h3>
-                                                                    {pc.ramSpecs?.length ? (
-                                                                        <Table>
-                                                                            <TableHeader>
-                                                                                <TableRow>
-                                                                                    <TableHead>Manufacturer</TableHead>
-                                                                                    <TableHead>Model</TableHead>
-                                                                                    <TableHead>Capacity</TableHead>
-                                                                                    <TableHead>Type</TableHead>
-                                                                                    <TableHead>Speed</TableHead>
-                                                                                </TableRow>
-                                                                            </TableHeader>
-                                                                            <TableBody>
-                                                                                {pc.ramSpecs.map((r) => (
-                                                                                    <TableRow key={r.id}>
-                                                                                        <TableCell>{r.manufacturer}</TableCell>
-                                                                                        <TableCell>{r.model}</TableCell>
-                                                                                        <TableCell>{r.capacity_gb} GB</TableCell>
-                                                                                        <TableCell>{r.type}</TableCell>
-                                                                                        <TableCell>{r.speed}</TableCell>
-                                                                                    </TableRow>
-                                                                                ))}
-                                                                            </TableBody>
-                                                                        </Table>
-                                                                    ) : (
-                                                                        <p className="text-muted-foreground">No RAM specs available.</p>
-                                                                    )}
-                                                                </section>
-
-                                                                {/* Disk Specs */}
-                                                                <section>
-                                                                    <h3 className="font-semibold text-base mb-2">Disk Specs</h3>
-                                                                    {pc.diskSpecs?.length ? (
-                                                                        <Table>
-                                                                            <TableHeader>
-                                                                                <TableRow>
-                                                                                    <TableHead>Manufacturer</TableHead>
-                                                                                    <TableHead>Model</TableHead>
-                                                                                    <TableHead>Capacity</TableHead>
-                                                                                </TableRow>
-                                                                            </TableHeader>
-                                                                            <TableBody>
-                                                                                {pc.diskSpecs.map((d) => (
-                                                                                    <TableRow key={d.id}>
-                                                                                        <TableCell>{d.manufacturer}</TableCell>
-                                                                                        <TableCell>{d.model}</TableCell>
-                                                                                        <TableCell>{d.capacity_gb} GB</TableCell>
-                                                                                    </TableRow>
-                                                                                ))}
-                                                                            </TableBody>
-                                                                        </Table>
-                                                                    ) : (
-                                                                        <p className="text-muted-foreground">No disk specs available.</p>
-                                                                    )}
+                                                                    <h3 className="font-semibold text-base mb-2">Memory & Storage</h3>
+                                                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                                                                        <p><span className="font-medium">RAM:</span> {pc.ram_gb} GB</p>
+                                                                        <p><span className="font-medium">Disk:</span> {pc.disk_gb} GB</p>
+                                                                        {pc.available_ports && (
+                                                                            <p className="sm:col-span-2"><span className="font-medium">Available Ports:</span> {pc.available_ports}</p>
+                                                                        )}
+                                                                    </div>
                                                                 </section>
 
                                                                 {/* Processor Specs */}
@@ -859,7 +796,7 @@ export default function Index() {
 
                                 <TableFooter>
                                     <TableRow>
-                                        <TableCell colSpan={10} className="text-center font-medium">
+                                        <TableCell colSpan={11} className="text-center font-medium">
                                             PC Specs List
                                         </TableCell>
                                     </TableRow>
@@ -874,8 +811,6 @@ export default function Index() {
                     {pcspecs.data.map((pc) => {
                         const proc = pc.processorSpecs?.[0];
                         const procLabel = proc ? `${proc.manufacturer} ${proc.model}` : '—';
-                        const totalRamGb = pc.ramSpecs?.reduce((sum, r) => sum + (r.capacity_gb || 0), 0);
-                        const diskCount = pc.diskSpecs?.length || 0;
 
                         return (
                             <div key={pc.id} className="bg-card border rounded-lg p-4 shadow-sm space-y-3">
@@ -918,12 +853,18 @@ export default function Index() {
                                     </div>
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">RAM:</span>
-                                        <span className="font-medium">{totalRamGb || 0} GB</span>
+                                        <span className="font-medium">{pc.ram_gb} GB</span>
                                     </div>
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Storage:</span>
-                                        <span className="font-medium">{diskCount > 0 ? `${diskCount} disk(s)` : '—'}</span>
+                                        <span className="text-muted-foreground">Disk:</span>
+                                        <span className="font-medium">{pc.disk_gb} GB</span>
                                     </div>
+                                    {pc.available_ports && (
+                                        <div className="flex justify-between">
+                                            <span className="text-muted-foreground">Ports:</span>
+                                            <span className="font-medium text-right max-w-[60%]">{pc.available_ports}</span>
+                                        </div>
+                                    )}
                                     <div className="pt-2 border-t">
                                         <div className="flex justify-between items-start gap-2">
                                             <span className="text-muted-foreground">Issue:</span>
@@ -981,39 +922,14 @@ export default function Index() {
                                                     </section>
 
                                                     <section>
-                                                        <h3 className="font-semibold text-base mb-2">RAM Specs</h3>
-                                                        {pc.ramSpecs?.length ? (
-                                                            <div className="space-y-2">
-                                                                {pc.ramSpecs.map((r) => (
-                                                                    <div key={r.id} className="border p-3 rounded text-sm">
-                                                                        <div className="font-medium">{r.manufacturer} {r.model}</div>
-                                                                        <div className="text-muted-foreground">
-                                                                            {r.capacity_gb} GB • {r.type} • {r.speed}
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <p className="text-muted-foreground">No RAM specs available.</p>
-                                                        )}
-                                                    </section>
-
-                                                    <section>
-                                                        <h3 className="font-semibold text-base mb-2">Disk Specs</h3>
-                                                        {pc.diskSpecs?.length ? (
-                                                            <div className="space-y-2">
-                                                                {pc.diskSpecs.map((d) => (
-                                                                    <div key={d.id} className="border p-3 rounded text-sm">
-                                                                        <div className="font-medium">{d.manufacturer} {d.model}</div>
-                                                                        <div className="text-muted-foreground">
-                                                                            {d.capacity_gb} GB
-                                                                        </div>
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        ) : (
-                                                            <p className="text-muted-foreground">No disk specs available.</p>
-                                                        )}
+                                                        <h3 className="font-semibold text-base mb-2">Memory & Storage</h3>
+                                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
+                                                            <p><span className="font-medium">RAM:</span> {pc.ram_gb} GB</p>
+                                                            <p><span className="font-medium">Disk:</span> {pc.disk_gb} GB</p>
+                                                            {pc.available_ports && (
+                                                                <p className="sm:col-span-2"><span className="font-medium">Available Ports:</span> {pc.available_ports}</p>
+                                                            )}
+                                                        </div>
                                                     </section>
 
                                                     <section>

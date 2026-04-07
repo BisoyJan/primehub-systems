@@ -3,13 +3,10 @@
 namespace Database\Factories;
 
 use App\Models\Stock;
-use App\Models\RamSpec;
-use App\Models\DiskSpec;
-use App\Models\ProcessorSpec;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
- * @extends \Illuminate\Database\Eloquent\Factories\Factory<\App\Models\Stock>
+ * @extends Factory<Stock>
  */
 class StockFactory extends Factory
 {
@@ -22,55 +19,14 @@ class StockFactory extends Factory
      */
     public function definition(): array
     {
-        $stockableTypes = [
-            RamSpec::class,
-            DiskSpec::class,
-            ProcessorSpec::class,
-        ];
-
-        $stockableType = fake()->randomElement($stockableTypes);
-
         return [
-            'stockable_type' => $stockableType,
-            'stockable_id' => $stockableType::factory(),
+            'stockable_type' => 'App\\Models\\GenericSpec',
+            'stockable_id' => fake()->randomNumber(5),
             'quantity' => fake()->numberBetween(0, 100),
             'reserved' => fake()->numberBetween(0, 20),
             'location' => fake()->randomElement(['Warehouse A', 'Warehouse B', 'Storage Room 1', 'Storage Room 2', null]),
             'notes' => fake()->optional()->sentence(),
         ];
-    }
-
-    /**
-     * Indicate that the stock is for RAM.
-     */
-    public function forRam(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'stockable_type' => RamSpec::class,
-            'stockable_id' => RamSpec::factory(),
-        ]);
-    }
-
-    /**
-     * Indicate that the stock is for Disk.
-     */
-    public function forDisk(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'stockable_type' => DiskSpec::class,
-            'stockable_id' => DiskSpec::factory(),
-        ]);
-    }
-
-    /**
-     * Indicate that the stock is for Processor.
-     */
-    public function forProcessor(): static
-    {
-        return $this->state(fn (array $attributes) => [
-            'stockable_type' => ProcessorSpec::class,
-            'stockable_id' => ProcessorSpec::factory(),
-        ]);
     }
 
     /**

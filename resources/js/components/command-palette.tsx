@@ -11,15 +11,11 @@ import {
 } from '@/components/ui/command';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { SharedData } from '@/types';
-import { LucideIcon, LayoutGrid, MemoryStick, HardDrive, CpuIcon, Monitor, Microchip, Folder, Computer, ArrowUpDown, Wrench, CalendarCheck, Clock, Database, Award, Settings, ClipboardCheck, FileText, AlertCircle, Plane, CreditCard, Pill, Shield, Timer, Coffee, BarChart3, User, Activity, DatabaseBackup } from 'lucide-react';
+import { LucideIcon, LayoutGrid, CpuIcon, Microchip, Computer, ArrowUpDown, Wrench, CalendarCheck, Clock, Database, Award, Settings, ClipboardCheck, FileText, AlertCircle, Plane, CreditCard, Pill, Shield, Timer, Coffee, BarChart3, User, Activity, DatabaseBackup } from 'lucide-react';
 import { dashboard } from '@/routes';
-import { index as ramIndex } from '@/routes/ramspecs';
-import { index as diskIndex } from '@/routes/diskspecs';
 import { index as processorIndex } from '@/routes/processorspecs';
 import { index as pcIndex } from '@/routes/pcspecs';
-import { index as stocksIndex } from '@/routes/stocks';
 import { index as stationIndex } from '@/routes/stations';
-import { index as monitorIndex } from '@/routes/monitorspecs';
 import { index as medicationRequestsIndex } from '@/routes/medication-requests';
 import { index as attendanceToolsIndex } from '@/routes/attendance-tools';
 import { dashboard as coachingDashboard } from '@/routes/coaching';
@@ -62,12 +58,8 @@ function getNavigationGroups(userId: number, userRole: string): NavGroupConfig[]
         {
             label: 'Computer Specs',
             items: [
-                { title: 'Ram Specs', href: ramIndex.url(), icon: MemoryStick, permission: 'hardware.view' },
-                { title: 'Disk Specs', href: diskIndex.url(), icon: HardDrive, permission: 'hardware.view' },
                 { title: 'Processor Specs', href: processorIndex.url(), icon: CpuIcon, permission: 'hardware.view' },
-                { title: 'Monitor Specs', href: monitorIndex.url(), icon: Monitor, permission: 'hardware.view' },
                 { title: 'PC Specs', href: pcIndex.url(), icon: Microchip, permission: 'hardware.view' },
-                { title: 'Stocks', href: stocksIndex.url(), icon: Folder, permission: 'stocks.view' },
             ],
         },
         {

@@ -3,7 +3,6 @@
 namespace Tests\Feature\Controllers\Station;
 
 use App\Models\Campaign;
-use App\Models\MonitorSpec;
 use App\Models\PcSpec;
 use App\Models\Site;
 use App\Models\Station;
@@ -52,16 +51,14 @@ class StationControllerTest extends TestCase
                 ->has('sites')
                 ->has('campaigns')
                 ->has('pcSpecs')
-                ->has('monitorSpecs')
             );
     }
 
-    public function test_store_creates_station_and_attaches_monitors()
+    public function test_store_creates_station()
     {
         $site = Site::factory()->create();
         $campaign = Campaign::factory()->create();
         $pcSpec = PcSpec::factory()->create();
-        $monitor = MonitorSpec::factory()->create();
 
         $data = [
             'site_id' => $site->id,
@@ -70,9 +67,6 @@ class StationControllerTest extends TestCase
             'status' => 'Active',
             'monitor_type' => 'single',
             'pc_spec_id' => $pcSpec->id,
-            'monitor_ids' => [
-                ['id' => $monitor->id, 'quantity' => 1]
-            ],
         ];
 
         $response = $this->actingAs($this->user)
@@ -83,9 +77,6 @@ class StationControllerTest extends TestCase
             'station_number' => 'ST-TEST-001',
             'site_id' => $site->id,
         ]);
-
-        $station = Station::where('station_number', 'ST-TEST-001')->first();
-        $this->assertTrue($station->monitors->contains($monitor));
     }
 
     public function test_store_bulk_creates_multiple_stations()
@@ -127,11 +118,10 @@ class StationControllerTest extends TestCase
             );
     }
 
-    public function test_update_updates_station_and_syncs_monitors()
+    public function test_update_updates_station()
     {
         $station = Station::factory()->create();
         $newSite = Site::factory()->create();
-        $monitor = MonitorSpec::factory()->create();
 
         $data = [
             'site_id' => $newSite->id,
@@ -140,9 +130,6 @@ class StationControllerTest extends TestCase
             'status' => 'Inactive',
             'monitor_type' => 'single',
             'pc_spec_id' => $station->pc_spec_id,
-            'monitor_ids' => [
-                ['id' => $monitor->id, 'quantity' => 1]
-            ],
         ];
 
         $response = $this->actingAs($this->user)
@@ -154,9 +141,6 @@ class StationControllerTest extends TestCase
             'site_id' => $newSite->id,
             'status' => 'Inactive',
         ]);
-
-        $station->refresh();
-        $this->assertTrue($station->monitors->contains($monitor));
     }
 
     public function test_destroy_deletes_station()
