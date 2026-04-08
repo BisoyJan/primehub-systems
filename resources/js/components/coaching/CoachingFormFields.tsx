@@ -26,7 +26,7 @@ import {
     CommandItem,
     CommandList,
 } from '@/components/ui/command';
-import { Check, ChevronsUpDown, ImagePlus, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Check, ChevronsUpDown, ImagePlus, Users, X, ZoomIn, ZoomOut, RotateCcw } from 'lucide-react';
 import {
     Dialog,
     DialogContent,
@@ -49,6 +49,9 @@ interface CoachingFormFieldsProps {
     severityFlags: string[];
     showAgentSelect?: boolean;
     selectedAgentId?: number | null;
+    onAgentAddToQueue?: (agent: User) => void;
+    queueAgentIds?: number[];
+    coachedThisWeekIds?: number[];
     existingAttachments?: CoachingSessionAttachment[];
     removedAttachmentIds?: number[];
     onRemoveExistingAttachment?: (id: number) => void;
@@ -383,6 +386,9 @@ export function CoachingFormFields({
     severityFlags,
     showAgentSelect = true,
     selectedAgentId,
+    onAgentAddToQueue,
+    queueAgentIds = [],
+    coachedThisWeekIds = [],
     existingAttachments = [],
     removedAttachmentIds = [],
     onRemoveExistingAttachment,
@@ -643,35 +649,63 @@ export function CoachingFormFields({
                                         <CommandList>
                                             <CommandEmpty>No agent found.</CommandEmpty>
                                             <CommandGroup>
-                                                {filteredAgents.map((agent) => (
-                                                    <CommandItem
-                                                        key={agent.id}
-                                                        value={String(agent.id)}
-                                                        onSelect={() => {
-                                                            setData('coachee_id', agent.id);
-                                                            setAgentSearchOpen(false);
-                                                            setAgentSearchQuery('');
-                                                        }}
-                                                        className="cursor-pointer"
-                                                    >
-                                                        <Check
-                                                            className={`mr-2 h-4 w-4 ${selectedAgent?.id === agent.id ? 'opacity-100' : 'opacity-0'
-                                                                }`}
-                                                        />
-                                                        <div className="flex flex-col">
-                                                            <span>{agent.first_name} {agent.last_name}</span>
-                                                            {getAgentCampaign(agent) && (
-                                                                <span className="text-xs text-muted-foreground">{getAgentCampaign(agent)!.name}</span>
-                                                            )}
-                                                        </div>
-                                                    </CommandItem>
-                                                ))}
+                                                {filteredAgents.map((agent) => {
+                                                    const isInQueue = queueAgentIds.includes(agent.id);
+                                                    const isCoachedThisWeek = coachedThisWeekIds.includes(agent.id);
+                                                    const isSelected = selectedAgent?.id === agent.id;
+                                                    return (
+                                                        <CommandItem
+                                                            key={agent.id}
+                                                            value={String(agent.id)}
+                                                            onSelect={() => {
+                                                                if (onAgentAddToQueue && selectedAgent && agent.id !== selectedAgent.id) {
+                                                                    onAgentAddToQueue(agent);
+                                                                } else {
+                                                                    setData('coachee_id', agent.id);
+                                                                }
+                                                                setAgentSearchOpen(false);
+                                                                setAgentSearchQuery('');
+                                                            }}
+                                                            className="cursor-pointer"
+                                                        >
+                                                            <Check
+                                                                className={`mr-2 h-4 w-4 shrink-0 ${isSelected || isInQueue ? 'opacity-100' : 'opacity-0'}`}
+                                                            />
+                                                            <div className="flex flex-col flex-1 min-w-0">
+                                                                <div className="flex items-center gap-1.5">
+                                                                    <span>{agent.first_name} {agent.last_name}</span>
+                                                                    {isInQueue && !isSelected && (
+                                                                        <span className="inline-flex items-center gap-0.5 rounded bg-primary/10 px-1 py-0.5 text-[9px] font-medium text-primary">
+                                                                            <Users className="h-2.5 w-2.5" />
+                                                                            In Queue
+                                                                        </span>
+                                                                    )}
+                                                                    {isCoachedThisWeek && (
+                                                                        <span className="inline-flex items-center gap-0.5 rounded bg-amber-500/10 px-1 py-0.5 text-[9px] font-medium text-amber-600 dark:text-amber-400">
+                                                                            <AlertTriangle className="h-2.5 w-2.5" />
+                                                                            Coached
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                                {getAgentCampaign(agent) && (
+                                                                    <span className="text-xs text-muted-foreground">{getAgentCampaign(agent)!.name}</span>
+                                                                )}
+                                                            </div>
+                                                        </CommandItem>
+                                                    );
+                                                })}
                                             </CommandGroup>
                                         </CommandList>
                                     </Command>
                                 </PopoverContent>
                             </Popover>
                             {errors.coachee_id && <p className="text-red-600 text-sm mt-1">{errors.coachee_id}</p>}
+                            {selectedAgent && coachedThisWeekIds.includes(selectedAgent.id) && (
+                                <div className="mt-1.5 flex items-center gap-1.5 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-xs text-amber-700 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
+                                    <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                                    <span>This agent has already been coached this week.</span>
+                                </div>
+                            )}
                         </div>
                     )}
                     <div>

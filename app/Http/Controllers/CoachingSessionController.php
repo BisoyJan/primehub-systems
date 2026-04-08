@@ -278,6 +278,15 @@ class CoachingSessionController extends Controller
             }
         }
 
+        // Get IDs of agents who have already been coached this week
+        $startOfWeek = now()->startOfWeek();
+        $endOfWeek = now()->endOfWeek();
+        $coachedThisWeekIds = CoachingSession::whereBetween('session_date', [$startOfWeek, $endOfWeek])
+            ->pluck('coachee_id')
+            ->unique()
+            ->values()
+            ->all();
+
         return Inertia::render('Coaching/Sessions/Create', [
             'agents' => $agents,
             'teamLeads' => $teamLeads,
@@ -289,6 +298,7 @@ class CoachingSessionController extends Controller
             'purposes' => CoachingSession::PURPOSE_LABELS,
             'severityFlags' => CoachingSession::SEVERITY_FLAGS,
             'clone_data' => $cloneData,
+            'coachedThisWeekIds' => $coachedThisWeekIds,
         ]);
     }
 

@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useCallback, useEffect, useMemo } from 'react';
 import { Head, Link, useForm, usePage, router } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Circle, Users, UserPlus, X } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -29,10 +29,11 @@ interface Props extends InertiaPageProps {
     selectedAgentId: number | null;
     purposes: CoachingPurposeLabels;
     severityFlags: string[];
+    coachedThisWeekIds: number[];
 }
 
 export default function CoachingSessionsCreate() {
-    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags } = usePage<Props>().props;
+    const { agents, teamLeads, coachableTeamLeads, isAdmin, coachingMode, selectedAgentId, purposes, severityFlags, coachedThisWeekIds } = usePage<Props>().props;
 
     const { title, breadcrumbs } = usePageMeta({
         title: 'Create Coaching Session',
@@ -99,20 +100,6 @@ export default function CoachingSessionsCreate() {
         attachments: [] as File[],
     });
 
-    // Clean up all per-agent form data when queue is empty
-    useEffect(() => {
-        if (getQueue().length === 0) {
-            Object.keys(sessionStorage).forEach(key => {
-                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
-            });
-        }
-    }, []);
-
-    const handleModeSwitch = (mode: CoachingMode) => {
-        if (mode === coachingMode) return;
-        router.get(sessionsCreate.url({ query: { coaching_mode: mode } }), {}, { preserveState: false });
-    };
-
     interface QueueAgent {
         id: number;
         name: string;
@@ -120,15 +107,35 @@ export default function CoachingSessionsCreate() {
         done: boolean;
     }
 
-    const getQueue = (): QueueAgent[] => {
+    const getQueue = useCallback((): QueueAgent[] => {
         try {
             const raw = sessionStorage.getItem('coaching_queue');
             if (raw) return JSON.parse(raw);
         } catch { /* ignore */ }
         return [];
+    }, []);
+
+    // Clean up all per-agent form data when queue is empty
+    useEffect(() => {
+        if (getQueue().length === 0) {
+            Object.keys(sessionStorage).forEach(key => {
+                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+            });
+        }
+    }, [getQueue]);
+
+    const handleModeSwitch = (mode: CoachingMode) => {
+        if (mode === coachingMode) return;
+        router.get(sessionsCreate.url({ query: { coaching_mode: mode } }), {}, { preserveState: false });
     };
 
-    const queueAgents = useMemo(() => getQueue(), []);
+    const queueAgents = useMemo(() => getQueue(), [getQueue]);
+
+    const getFormFieldsToSave = () => {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { coachee_id, attachments, coaching_mode, coach_id, ...formFields } = data;
+        return formFields;
+    };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -142,8 +149,10 @@ export default function CoachingSessionsCreate() {
                     const nextAgent = updated.find(a => !a.done);
                     if (nextAgent) {
                         sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
-                        // Remove completed agent's saved form data
-                        if (selectedAgentId) sessionStorage.removeItem(`coaching_form_${selectedAgentId}`);
+                        // Keep completed agent's form data so they can review it later
+                        if (selectedAgentId) {
+                            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+                        }
                         router.visit(sessionsCreate().url + `?coachee_id=${nextAgent.id}`);
                         return;
                     } else {
@@ -160,22 +169,69 @@ export default function CoachingSessionsCreate() {
     const handleSwitchToAgent = (agentId: number) => {
         // Save current agent's form data before switching
         if (selectedAgentId) {
-            const { coachee_id, attachments, coaching_mode, coach_id, ...formFields } = data;
-            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(formFields));
+            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
         }
         router.visit(sessionsCreate().url + `?coachee_id=${agentId}`);
     };
 
-    const queueRemaining = useMemo(() => {
-        try {
-            const raw = sessionStorage.getItem('coaching_queue');
-            if (raw) {
-                const queue: number[] = JSON.parse(raw);
-                return queue.length;
+    const handleAddAgentToQueue = (agent: { id: number; first_name?: string; last_name?: string; name?: string; active_schedule?: { campaign?: { name?: string } } | null }) => {
+        const queue = getQueue();
+        // Don't add duplicates
+        if (queue.some(a => a.id === agent.id)) return;
+
+        const agentName = agent.name ?? `${agent.first_name ?? ''} ${agent.last_name ?? ''}`.trim();
+
+        // If no queue exists yet, create one with the current agent + the new agent
+        if (queue.length === 0 && selectedAgentId) {
+            const currentAgent = agents.find(a => a.id === selectedAgentId);
+            const currentName = currentAgent
+                ? `${currentAgent.first_name ?? ''} ${currentAgent.last_name ?? ''}`.trim()
+                : 'Unknown';
+            const newQueue: QueueAgent[] = [
+                { id: selectedAgentId, name: currentName, coaching_status: '', done: false },
+                { id: agent.id, name: agentName, coaching_status: '', done: false },
+            ];
+            sessionStorage.setItem('coaching_queue', JSON.stringify(newQueue));
+        } else {
+            // Add to existing queue
+            const updated = [...queue, { id: agent.id, name: agentName, coaching_status: '', done: false }];
+            sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+        }
+
+        // Save current form data before switching
+        if (selectedAgentId) {
+            sessionStorage.setItem(`coaching_form_${selectedAgentId}`, JSON.stringify(getFormFieldsToSave()));
+        }
+
+        router.visit(sessionsCreate().url + `?coachee_id=${agent.id}`);
+    };
+
+    const handleRemoveFromQueue = (agentId: number) => {
+        const queue = getQueue();
+        const updated = queue.filter(a => a.id !== agentId);
+        sessionStorage.removeItem(`coaching_form_${agentId}`);
+
+        if (updated.length <= 1) {
+            // If only 1 or 0 agents left, dissolve the queue
+            sessionStorage.removeItem('coaching_queue');
+            Object.keys(sessionStorage).forEach(key => {
+                if (key.startsWith('coaching_form_')) sessionStorage.removeItem(key);
+            });
+            if (updated.length === 1 && updated[0].id !== selectedAgentId) {
+                router.visit(sessionsCreate().url + `?coachee_id=${updated[0].id}`);
+            } else {
+                window.location.reload();
             }
-        } catch { /* ignore */ }
-        return 0;
-    }, []);
+        } else if (agentId === selectedAgentId) {
+            // Removing the currently active agent — switch to next undone or first
+            sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+            const next = updated.find(a => !a.done) ?? updated[0];
+            router.visit(sessionsCreate().url + `?coachee_id=${next.id}`);
+        } else {
+            sessionStorage.setItem('coaching_queue', JSON.stringify(updated));
+            window.location.reload();
+        }
+    };
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
@@ -220,35 +276,52 @@ export default function CoachingSessionsCreate() {
                         </div>
                         <div className="flex flex-wrap gap-2">
                             {queueAgents.map((agent) => (
-                                <button
-                                    key={agent.id}
-                                    type="button"
-                                    disabled={agent.id === selectedAgentId}
-                                    onClick={() => !agent.done && agent.id !== selectedAgentId && handleSwitchToAgent(agent.id)}
-                                    className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs transition-colors ${agent.id === selectedAgentId
+                                <div key={agent.id} className="flex items-center gap-0">
+                                    <button
+                                        type="button"
+                                        disabled={agent.id === selectedAgentId}
+                                        onClick={() => agent.id !== selectedAgentId && handleSwitchToAgent(agent.id)}
+                                        className={`flex items-center gap-1.5 rounded-l-md border px-2.5 py-1.5 text-xs transition-colors ${agent.id === selectedAgentId
                                             ? 'border-primary bg-primary/10 font-medium text-primary'
                                             : agent.done
-                                                ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400'
+                                                ? 'border-green-300 bg-green-50 text-green-700 dark:border-green-800 dark:bg-green-950/30 dark:text-green-400 cursor-pointer hover:border-green-400 hover:bg-green-100 dark:hover:bg-green-950/50'
                                                 : 'border-muted-foreground/20 hover:border-primary/50 hover:bg-primary/5 cursor-pointer'
-                                        }`}
-                                >
-                                    {agent.done ? (
-                                        <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
-                                    ) : agent.id === selectedAgentId ? (
-                                        <Circle className="h-3.5 w-3.5 fill-primary text-primary" />
-                                    ) : (
-                                        <Circle className="h-3.5 w-3.5" />
-                                    )}
-                                    <span>{agent.name}</span>
-                                    {agent.coaching_status && !agent.done && (
-                                        <Badge variant={agent.coaching_status === 'Please Coach ASAP' ? 'destructive' : 'secondary'} className="px-1 py-0 text-[9px]">
-                                            {agent.coaching_status}
-                                        </Badge>
-                                    )}
-                                    {agent.done && (
-                                        <span className="text-[9px] text-green-600 dark:text-green-400">Done</span>
-                                    )}
-                                </button>
+                                            }`}
+                                    >
+                                        {agent.done ? (
+                                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                                        ) : agent.id === selectedAgentId ? (
+                                            <Circle className="h-3.5 w-3.5 fill-primary text-primary" />
+                                        ) : (
+                                            <Circle className="h-3.5 w-3.5" />
+                                        )}
+                                        <span>{agent.name}</span>
+                                        {agent.coaching_status && !agent.done && (
+                                            <Badge variant={agent.coaching_status === 'Please Coach ASAP' ? 'destructive' : 'secondary'} className="px-1 py-0 text-[9px]">
+                                                {agent.coaching_status}
+                                            </Badge>
+                                        )}
+                                        {agent.done && (
+                                            <span className="text-[9px] text-green-600 dark:text-green-400">Done</span>
+                                        )}
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleRemoveFromQueue(agent.id);
+                                        }}
+                                        className={`flex items-center rounded-r-md border border-l-0 px-1 py-1.5 text-xs transition-colors hover:bg-red-100 hover:text-red-600 dark:hover:bg-red-950/30 dark:hover:text-red-400 ${agent.id === selectedAgentId
+                                            ? 'border-primary text-primary/50'
+                                            : agent.done
+                                                ? 'border-green-300 text-green-600/50 dark:border-green-800 dark:text-green-400/50'
+                                                : 'border-muted-foreground/20 text-muted-foreground/50'
+                                            }`}
+                                        title={`Remove ${agent.name} from queue`}
+                                    >
+                                        <X className="h-3 w-3" />
+                                    </button>
+                                </div>
                             ))}
                         </div>
                     </div>
@@ -295,6 +368,9 @@ export default function CoachingSessionsCreate() {
                         severityFlags={severityFlags}
                         showAgentSelect={true}
                         selectedAgentId={selectedAgentId}
+                        onAgentAddToQueue={handleAddAgentToQueue}
+                        queueAgentIds={queueAgents.map(a => a.id)}
+                        coachedThisWeekIds={coachedThisWeekIds ?? []}
                     />
 
                     <div className="flex justify-end gap-3 pt-6">

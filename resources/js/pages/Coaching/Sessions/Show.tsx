@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Head, Link, useForm, usePage } from '@inertiajs/react';
 import type { PageProps as InertiaPageProps } from '@inertiajs/core';
-import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw, History, MessageSquare } from 'lucide-react';
+import { ArrowLeft, Pencil, Printer, CheckCircle2, ShieldCheck, ShieldX, ZoomIn, ZoomOut, RotateCcw, History } from 'lucide-react';
 import DOMPurify from 'dompurify';
 
 import AppLayout from '@/layouts/app-layout';
