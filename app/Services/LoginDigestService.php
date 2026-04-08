@@ -9,7 +9,6 @@ use App\Models\ItConcern;
 use App\Models\LeaveRequest;
 use App\Models\MedicationRequest;
 use App\Models\PcMaintenance;
-use App\Models\Stock;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Cache;
@@ -219,10 +218,6 @@ class LoginDigestService
 
         $overdueMaintenance = PcMaintenance::where('status', 'overdue')->count();
 
-        $lowStockCount = Stock::whereColumn('quantity', '<=', 'reserved')
-            ->where('quantity', '>', 0)
-            ->count();
-
         return [
             [
                 'key' => 'pending_it_concerns',
@@ -247,14 +242,6 @@ class LoginDigestService
                 'route' => 'pc-maintenance.index',
                 'icon' => 'wrench',
                 'priority' => $overdueMaintenance > 0 ? 'high' : 'low',
-            ],
-            [
-                'key' => 'low_stock',
-                'label' => 'Low Stock Items',
-                'count' => $lowStockCount,
-                'route' => 'stocks.index',
-                'icon' => 'package',
-                'priority' => $lowStockCount > 0 ? 'high' : 'low',
             ],
         ];
     }

@@ -16,7 +16,6 @@ use App\Models\PcSpec;
 use App\Models\PcTransfer;
 use App\Models\Site;
 use App\Models\Station;
-use App\Models\Stock;
 use App\Models\User;
 use App\Policies\AccountPolicy;
 use App\Policies\AttendancePointPolicy;
@@ -33,7 +32,6 @@ use App\Policies\PcSpecPolicy;
 use App\Policies\PcTransferPolicy;
 use App\Policies\SitePolicy;
 use App\Policies\StationPolicy;
-use App\Policies\StockPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -59,7 +57,6 @@ class AuthServiceProvider extends ServiceProvider
         PcTransfer::class => PcTransferPolicy::class,
         Site::class => SitePolicy::class,
         Station::class => StationPolicy::class,
-        Stock::class => StockPolicy::class,
     ];
 
     /**

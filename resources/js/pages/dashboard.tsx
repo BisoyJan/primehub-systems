@@ -3,7 +3,7 @@ import { motion } from 'framer-motion';
 import { Head, usePage } from '@inertiajs/react';
 import AppLayout from '@/layouts/app-layout';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Calendar, Building2, Users, ClipboardList, UserCheck, Package, User, ClipboardCheck } from 'lucide-react';
+import { Calendar, Building2, Users, ClipboardList, UserCheck, User, ClipboardCheck } from 'lucide-react';
 import CalendarWithHolidays from '@/components/CalendarWithHolidays';
 import type { SharedData, UserRole } from '@/types';
 import type { BreadcrumbItem } from '@/types';
@@ -13,7 +13,6 @@ const InfrastructureTab = lazy(() => import('./Dashboard/tabs/InfrastructureTab'
 const ItConcernsTab = lazy(() => import('./Dashboard/tabs/ItConcernsTab').then(m => ({ default: m.ItConcernsTab })));
 const PresenceInsightsTab = lazy(() => import('./Dashboard/tabs/PresenceInsightsTab').then(m => ({ default: m.PresenceInsightsTab })));
 const AttendanceTab = lazy(() => import('./Dashboard/tabs/AttendanceTab').then(m => ({ default: m.AttendanceTab })));
-const StockOverviewTab = lazy(() => import('./Dashboard/tabs/StockOverviewTab').then(m => ({ default: m.StockOverviewTab })));
 const PersonalDashboardTab = lazy(() => import('./Dashboard/tabs/PersonalDashboardTab').then(m => ({ default: m.PersonalDashboardTab })));
 const CoachingTab = lazy(() => import('./Dashboard/tabs/CoachingTab').then(m => ({ default: m.CoachingTab })));
 // Widgets are small and always visible — no lazy loading needed
@@ -40,7 +39,6 @@ const TAB_ICONS: Record<TabType, React.ComponentType<{ className?: string }>> = 
     'attendance': Users,
     'it-concerns': ClipboardList,
     'presence-insights': UserCheck,
-    'stock-overview': Package,
     'personal': User,
     'coaching': ClipboardCheck,
 };
@@ -83,7 +81,6 @@ export default function Dashboard({
     leaveCalendarMonth,
     leaveConflicts,
 
-    stockSummary,
     personalSchedule,
     personalRequests,
     personalAttendanceSummary,
@@ -266,15 +263,6 @@ export default function Dashboard({
                                             ncnsTrend={ncnsTrend}
                                             leaveUtilization={leaveUtilization}
                                         />
-                                    </Suspense>
-                                </TabsContent>
-                            )}
-
-                            {/* Stock Overview Tab */}
-                            {availableTabs.includes('stock-overview') && (
-                                <TabsContent value="stock-overview" className="space-y-6">
-                                    <Suspense fallback={<TabSkeleton />}>
-                                        <StockOverviewTab stockSummary={stockSummary} />
                                     </Suspense>
                                 </TabsContent>
                             )}

@@ -10,7 +10,7 @@ Full-stack **Laravel 12 + React 19 (TypeScript)** application for IT asset manag
 app/
 ├── Http/Controllers/    # Inertia responses, form handling
 ├── Http/Requests/       # Form validation classes
-├── Http/Traits/         # RedirectsWithFlashMessages, HandlesStockOperations
+├── Http/Traits/         # RedirectsWithFlashMessages
 ├── Models/              # Eloquent models with LogsActivity trait
 ├── Jobs/                # Queue jobs (QR zips, Excel exports)
 ├── Services/            # Business logic (DashboardService, NotificationService)
@@ -224,7 +224,6 @@ form.post(store().url);
 
 ### Controller Traits (`app/Http/Traits/`)
 - `RedirectsWithFlashMessages` - Flash message helpers
-- `HandlesStockOperations` - Stock CRUD with deletion checks
 
 ### Model Traits (`app/Traits/`)
 - `HasSpecSearch` - Reusable search scope for spec models

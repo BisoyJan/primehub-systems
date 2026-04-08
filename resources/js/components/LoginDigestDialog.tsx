@@ -64,7 +64,6 @@ const ROUTE_MAP: Record<string, string> = {
     'it-concerns.index': '/form-requests/it-concerns',
     'attendance.index': '/attendance/records',
     'medication-requests.index': '/form-requests/medication-requests',
-    'stocks.index': '/stocks',
 };
 
 const SESSION_KEY = 'login_digest_shown';

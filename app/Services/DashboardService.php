@@ -16,7 +16,6 @@ use App\Models\PcMaintenance;
 use App\Models\PcSpec;
 use App\Models\Site;
 use App\Models\Station;
-use App\Models\Stock;
 use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Support\Collection;
@@ -238,11 +237,6 @@ class DashboardService
         // Leave conflicts — Super Admin, Admin, HR
         if (in_array($role, ['Super Admin', 'Admin', 'HR'])) {
             $data['leaveConflicts'] = $this->getLeaveConflicts();
-        }
-
-        // Stock summary — Super Admin, IT
-        if (in_array($role, ['Super Admin', 'IT'])) {
-            $data['stockSummary'] = $this->getStockSummary();
         }
 
         // User account stats — Super Admin, Admin, Team Lead
@@ -646,35 +640,6 @@ class DashboardService
                 'trend' => $pointsTrend,
             ],
         ];
-    }
-
-    /**
-     * Get stock summary aggregated by stockable type (RAM, Disk, Monitor, etc.)
-     *
-     * @return array<string, array{total: int, reserved: int, available: int, items: int}>
-     */
-    public function getStockSummary(): array
-    {
-        $stocks = Stock::select('stockable_type', DB::raw('SUM(quantity) as total'), DB::raw('SUM(reserved) as reserved'), DB::raw('COUNT(*) as items'))
-            ->groupBy('stockable_type')
-            ->get();
-
-        $typeLabels = [];
-
-        $summary = [];
-        foreach ($stocks as $stock) {
-            $label = $typeLabels[$stock->stockable_type] ?? class_basename($stock->stockable_type);
-            $total = (int) $stock->total;
-            $reserved = (int) $stock->reserved;
-            $summary[$label] = [
-                'total' => $total,
-                'reserved' => $reserved,
-                'available' => $total - $reserved,
-                'items' => (int) $stock->items,
-            ];
-        }
-
-        return $summary;
     }
 
     /**

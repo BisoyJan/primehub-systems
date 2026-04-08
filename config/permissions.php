@@ -71,13 +71,6 @@ return [
         'stations.qrcode' => 'Generate Station QR Codes',
         'stations.bulk' => 'Bulk Create Stations',
 
-        // Stocks
-        'stocks.view' => 'View Stock Inventory',
-        'stocks.create' => 'Create Stock Items',
-        'stocks.edit' => 'Edit Stock Items',
-        'stocks.delete' => 'Delete Stock Items',
-        'stocks.adjust' => 'Adjust Stock Levels',
-
         // PC Transfers
         'pc_transfers.view' => 'View PC Transfers',
         'pc_transfers.create' => 'Transfer PCs',
@@ -283,7 +276,6 @@ return [
             'sites.view', 'sites.create', 'sites.edit', 'sites.delete',
             'campaigns.view', 'campaigns.create', 'campaigns.edit', 'campaigns.delete',
             'stations.view', 'stations.create', 'stations.edit', 'stations.delete', 'stations.qrcode', 'stations.bulk',
-            'stocks.view', 'stocks.create', 'stocks.edit', 'stocks.delete', 'stocks.adjust',
             'pc_transfers.view', 'pc_transfers.create', 'pc_transfers.remove', 'pc_transfers.history',
             'pc_maintenance.view', 'pc_maintenance.create', 'pc_maintenance.edit', 'pc_maintenance.delete',
             'attendance.view',

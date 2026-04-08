@@ -32,7 +32,6 @@ use App\Http\Controllers\ProcessorSpecsController;
 use App\Http\Controllers\Station\CampaignController;
 use App\Http\Controllers\Station\SiteController;
 use App\Http\Controllers\Station\StationController;
-use App\Http\Controllers\StockController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -109,13 +108,6 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         Route::post('zip-selected-stream', [StationController::class, 'zipSelectedStream']);
     });
     Route::get('stations/scan/{station}', [StationController::class, 'scanResult'])->name('stations.scanResult');
-
-    // Stocks
-    Route::resource('stocks', StockController::class)
-        ->middleware('permission:stocks.view,stocks.create,stocks.edit,stocks.delete');
-    Route::post('stocks/adjust', [StockController::class, 'adjust'])
-        ->middleware('permission:stocks.adjust')
-        ->name('stocks.adjust');
 
     // Accounts
     Route::resource('accounts', AccountController::class)

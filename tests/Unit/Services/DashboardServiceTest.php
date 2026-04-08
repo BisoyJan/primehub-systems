@@ -16,10 +16,8 @@ use App\Models\MedicationRequest;
 use App\Models\Notification;
 use App\Models\PcMaintenance;
 use App\Models\PcSpec;
-use App\Models\ProcessorSpec;
 use App\Models\Site;
 use App\Models\Station;
-use App\Models\Stock;
 use App\Models\User;
 use App\Services\DashboardService;
 use Carbon\Carbon;
@@ -176,7 +174,6 @@ class DashboardServiceTest extends TestCase
         $this->assertArrayHasKey('unassignedPcSpecs', $result);
         $this->assertArrayHasKey('itConcernStats', $result);
         $this->assertArrayHasKey('itConcernTrends', $result);
-        $this->assertArrayHasKey('stockSummary', $result);
         $this->assertArrayHasKey('userAccountStats', $result);
         $this->assertArrayHasKey('recentActivityLogs', $result);
         $this->assertArrayHasKey('biometricAnomalies', $result);
@@ -254,10 +251,9 @@ class DashboardServiceTest extends TestCase
         $user = User::factory()->create(['role' => 'Agent', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
-        // Agent should NOT get infrastructure, IT concerns, stock, or admin widgets
+        // Agent should NOT get infrastructure, IT concerns, or admin widgets
         $this->assertArrayNotHasKey('totalStations', $result);
         $this->assertArrayNotHasKey('itConcernStats', $result);
-        $this->assertArrayNotHasKey('stockSummary', $result);
         $this->assertArrayNotHasKey('userAccountStats', $result);
         $this->assertArrayNotHasKey('recentActivityLogs', $result);
         $this->assertArrayNotHasKey('biometricAnomalies', $result);
@@ -274,10 +270,9 @@ class DashboardServiceTest extends TestCase
         $user = User::factory()->create(['role' => 'IT', 'is_approved' => true]);
         $result = $this->service->getAllStats($user);
 
-        // IT should get infrastructure, IT concerns, and stock
+        // IT should get infrastructure and IT concerns
         $this->assertArrayHasKey('totalStations', $result);
         $this->assertArrayHasKey('itConcernStats', $result);
-        $this->assertArrayHasKey('stockSummary', $result);
 
         // IT should NOT get admin-only widgets
         $this->assertArrayNotHasKey('userAccountStats', $result);
@@ -495,35 +490,6 @@ class DashboardServiceTest extends TestCase
     // ────────────────────────────────────────────────────────────────────────
 
     #[Test]
-    public function it_gets_stock_summary(): void
-    {
-        $processor = ProcessorSpec::factory()->create();
-        Stock::factory()->create([
-            'stockable_type' => ProcessorSpec::class,
-            'stockable_id' => $processor->id,
-            'quantity' => 50,
-            'reserved' => 10,
-        ]);
-
-        $result = $this->service->getStockSummary();
-
-        $this->assertArrayHasKey('ProcessorSpec', $result);
-        $this->assertEquals(50, $result['ProcessorSpec']['total']);
-        $this->assertEquals(10, $result['ProcessorSpec']['reserved']);
-        $this->assertEquals(40, $result['ProcessorSpec']['available']);
-        $this->assertEquals(1, $result['ProcessorSpec']['items']);
-    }
-
-    #[Test]
-    public function it_gets_stock_summary_empty(): void
-    {
-        $result = $this->service->getStockSummary();
-
-        $this->assertIsArray($result);
-        $this->assertEmpty($result);
-    }
-
-    #[Test]
     public function it_gets_user_account_stats(): void
     {
         $admin = User::factory()->create(['role' => 'Super Admin', 'is_approved' => true, 'is_active' => true]);
@@ -727,7 +693,6 @@ class DashboardServiceTest extends TestCase
         // Utility should NOT get infrastructure, IT concerns, or any admin data
         $this->assertArrayNotHasKey('totalStations', $result);
         $this->assertArrayNotHasKey('itConcernStats', $result);
-        $this->assertArrayNotHasKey('stockSummary', $result);
         $this->assertArrayNotHasKey('userAccountStats', $result);
         $this->assertArrayNotHasKey('recentActivityLogs', $result);
         $this->assertArrayNotHasKey('biometricAnomalies', $result);
@@ -745,10 +710,9 @@ class DashboardServiceTest extends TestCase
         // Team Lead should get presence insights
         $this->assertArrayHasKey('presenceInsights', $result);
 
-        // Team Lead should NOT get infra, IT, stock
+        // Team Lead should NOT get infra or IT
         $this->assertArrayNotHasKey('totalStations', $result);
         $this->assertArrayNotHasKey('itConcernStats', $result);
-        $this->assertArrayNotHasKey('stockSummary', $result);
         $this->assertArrayNotHasKey('recentActivityLogs', $result);
 
         // Team Lead SHOULD get userAccountStats and coaching data

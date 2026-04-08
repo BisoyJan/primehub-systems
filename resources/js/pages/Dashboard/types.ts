@@ -7,15 +7,14 @@ export type TabType =
     | 'attendance'
     | 'it-concerns'
     | 'presence-insights'
-    | 'stock-overview'
     | 'personal'
     | 'coaching';
 
 export const ROLE_TABS: Record<UserRole, TabType[]> = {
-    'Super Admin': ['attendance', 'presence-insights', 'coaching', 'infrastructure', 'it-concerns', 'stock-overview'],
+    'Super Admin': ['attendance', 'presence-insights', 'coaching', 'infrastructure', 'it-concerns'],
     'Admin': ['attendance', 'presence-insights', 'coaching', 'infrastructure'],
     'HR': ['attendance', 'presence-insights', 'coaching'],
-    'IT': ['infrastructure', 'it-concerns', 'stock-overview', 'attendance'],
+    'IT': ['infrastructure', 'it-concerns', 'attendance'],
     'Team Lead': ['attendance', 'presence-insights', 'coaching'],
     'Agent': ['personal', 'attendance', 'presence-insights', 'coaching'],
     'Utility': ['personal', 'attendance'],
@@ -26,7 +25,6 @@ export const TAB_CONFIG: Record<TabType, { label: string; iconName: string }> = 
     'attendance': { label: 'Attendance', iconName: 'Users' },
     'it-concerns': { label: 'IT Concerns', iconName: 'ClipboardList' },
     'presence-insights': { label: 'Presence Insights', iconName: 'UserCheck' },
-    'stock-overview': { label: 'Stock Overview', iconName: 'Package' },
     'personal': { label: 'My Dashboard', iconName: 'User' },
     'coaching': { label: 'Coaching', iconName: 'ClipboardCheck' },
 };
@@ -115,15 +113,6 @@ export interface PersonalAttendanceSummary {
         expires_at: string;
     }>;
 }
-
-export interface StockSummaryItem {
-    total: number;
-    reserved: number;
-    available: number;
-    items: number;
-}
-
-export type StockSummary = Record<string, StockSummaryItem>;
 
 export interface UserAccountStats {
     total: number;
@@ -484,9 +473,6 @@ export interface DashboardProps {
 
     /** Personal attendance summary for Agent/Utility dashboard */
     personalAttendanceSummary?: PersonalAttendanceSummary;
-
-    /** Stock levels by category */
-    stockSummary?: StockSummary;
 
     /** User account statistics for admin widgets */
     userAccountStats?: UserAccountStats;

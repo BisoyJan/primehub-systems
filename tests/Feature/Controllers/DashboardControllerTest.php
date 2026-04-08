@@ -175,7 +175,6 @@ class DashboardControllerTest extends TestCase
                 ->has('maintenanceDue')
                 ->has('unassignedPcSpecs')
                 ->has('itConcernStats')
-                ->has('stockSummary')
                 ->has('userAccountStats')
                 ->has('recentActivityLogs')
                 ->has('biometricAnomalies')
@@ -203,7 +202,6 @@ class DashboardControllerTest extends TestCase
                 // Agent should NOT have admin-only props
                 ->missing('totalStations')
                 ->missing('itConcernStats')
-                ->missing('stockSummary')
                 ->missing('userAccountStats')
                 ->missing('recentActivityLogs')
                 ->missing('biometricAnomalies')
@@ -228,7 +226,6 @@ class DashboardControllerTest extends TestCase
                 // Utility should NOT have infra, IT, or admin props
                 ->missing('totalStations')
                 ->missing('itConcernStats')
-                ->missing('stockSummary')
                 ->missing('userAccountStats')
                 ->missing('recentActivityLogs')
                 // Utility should NOT have presence insights
@@ -254,7 +251,6 @@ class DashboardControllerTest extends TestCase
                 ->missing('pointsByCampaign')
                 ->missing('totalStations')
                 ->missing('itConcernStats')
-                ->missing('stockSummary')
             );
     }
 
@@ -268,7 +264,6 @@ class DashboardControllerTest extends TestCase
                 ->component('dashboard')
                 ->has('totalStations')
                 ->has('itConcernStats')
-                ->has('stockSummary')
                 // IT should NOT get admin-only widgets
                 ->missing('userAccountStats')
                 ->missing('recentActivityLogs')
