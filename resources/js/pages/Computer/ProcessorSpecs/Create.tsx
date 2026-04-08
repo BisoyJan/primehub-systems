@@ -40,7 +40,7 @@ export default function Create() {
         thread_count: '' as number | '',
         base_clock_ghz: '' as number | '',
         boost_clock_ghz: '' as number | '',
-        stock_quantity: '' as number | '',
+        release_date: '',
     });
 
     const handleSubmit = (e: React.FormEvent) => {
@@ -166,17 +166,15 @@ export default function Create() {
                     </div>
 
                     <div>
-                        <Label htmlFor="stock_quantity">Initial Stock Quantity</Label>
+                        <Label htmlFor="release_date">Release Date</Label>
                         <Input
-                            id="stock_quantity"
-                            name="stock_quantity"
-                            type="number"
-                            min={0}
-                            placeholder="e.g. 10"
-                            value={data.stock_quantity}
-                            onChange={(e) => setData('stock_quantity', Number(e.target.value))}
+                            id="release_date"
+                            name="release_date"
+                            type="date"
+                            value={data.release_date}
+                            onChange={(e) => setData('release_date', e.target.value)}
                         />
-                        {errors.stock_quantity && <p className="mt-1 text-sm text-red-600">{errors.stock_quantity}</p>}
+                        {errors.release_date && <p className="mt-1 text-sm text-red-600">{errors.release_date}</p>}
                     </div>
 
                     <div className="md:col-span-2 flex justify-end">

@@ -1,7 +1,6 @@
-import { useEffect, useMemo } from 'react';
-import { Head, Link, useForm } from '@inertiajs/react';
-import { toast } from 'sonner';
-import { ArrowLeft, Check, ChevronsUpDown } from 'lucide-react';
+import { useState } from 'react';
+import { Head, Link, useForm, usePage } from '@inertiajs/react';
+import { ArrowLeft, Check, ChevronsUpDown, Plus } from 'lucide-react';
 
 import AppLayout from '@/layouts/app-layout';
 import { Button } from '@/components/ui/button';
@@ -15,53 +14,56 @@ import {
     SelectItem,
 } from '@/components/ui/select';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Command, CommandInput, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import {
+    Command,
+    CommandInput,
+    CommandEmpty,
+    CommandGroup,
+    CommandItem,
+} from '@/components/ui/command';
+
 import { PageHeader } from '@/components/PageHeader';
 import { LoadingOverlay } from '@/components/LoadingOverlay';
-import { useFlashMessage, usePageMeta, usePageLoading } from '@/hooks';
+import { useFlashMessage, usePageLoading, usePageMeta } from '@/hooks';
 
-import { index as pcSpecIndex, update as pcSpecUpdate, edit as pcSpecEdit } from '@/routes/pcspecs';
+import {
+    index as pcSpecIndex,
+    update as pcSpecUpdate,
+    edit as pcSpecEdit,
+} from '@/routes/pcspecs';
 
-const memoryTypes = ['DDR3', 'DDR4', 'DDR5'];
-const m2SlotOptions = [1, 2, 3, 4];
-const sataPortOptions = [2, 4, 6, 8];
-
-interface Option {
+interface PcSpecData {
     id: number;
-    label: string;
-    stock_quantity?: number;
-    capacity_gb?: number;
-    type?: string;
-}
-
-interface RamOption extends Option {
-    type: string;
-    capacity_gb?: number;
-}
-
-interface PcSpec {
-    id: number;
-    pc_number?: string | null;
+    pc_number: string | null;
     manufacturer: string;
     model: string;
     memory_type: string;
     m2_slots: number;
     sata_ports: number;
-    // ramSpecs may be an array of ids or an array of objects depending on server shape
-    ramSpecs: Array<number | { id: number; pivot?: { quantity?: number } }>;
-    diskSpecs: Array<number | { id: number }>;
-    processorSpecs: Array<number>;
+    ram_gb: number;
+    disk_gb: number;
+    available_ports: string | null;
+    processorSpecs: number[];
 }
 
-interface Props {
-    pcspec: PcSpec;
-    ramOptions: RamOption[];
-    diskOptions: Option[];
-    processorOptions: Option[];
+interface ProcessorOption {
+    id: number;
+    label: string;
 }
 
-export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions }: Props) {
+type PageProps = {
+    pcspec: PcSpecData;
+    processorOptions: ProcessorOption[];
+};
+
+const memoryTypes = ['DDR3', 'DDR4', 'DDR5'];
+const m2SlotOptions = [1, 2, 3, 4];
+const sataPortOptions = [2, 4, 6, 8];
+
+export default function Edit() {
     useFlashMessage();
+
+    const { pcspec, processorOptions } = usePage<PageProps>().props;
 
     const specLabel = pcspec.pc_number?.trim() || pcspec.model || `PC Spec #${pcspec.id}`;
 
@@ -74,500 +76,359 @@ export default function Edit({ pcspec, ramOptions, diskOptions, processorOptions
     });
 
     const isPageLoading = usePageLoading();
-    // helper: build initial ram_specs (id => qty) from incoming motherboard data.
-    // server may provide ramSpecs as [id, id...] or [{id, pivot:{quantity}}...]
-    const initialRamSpecs = (() => {
-        if (!pcspec?.ramSpecs) return {};
-        const out: Record<number, number> = {};
-        for (const item of pcspec.ramSpecs) {
-            if (typeof item === 'number') {
-                out[item] = 1; // fallback quantity
-            } else if (typeof item === 'object' && item?.id) {
-                const q = item?.pivot?.quantity ?? 1;
-                out[item.id] = q;
-            }
-        }
-        return out;
-    })();
 
-    // initial disk_specs: server likely gives list of disk ids; default qty 1
-    type DiskEntry = number | { id: number };
-    const initialDiskSpecs = (() => {
-        const out: Record<number, number> = {};
-        for (const d of pcspec.diskSpecs ?? []) {
-            const entry = d as DiskEntry;
-            const id = typeof entry === 'number' ? entry : entry.id;
-            out[Number(id)] = 1;
-        }
-        return out;
-    })();
-
-    const { data, setData, put, errors, processing } = useForm({
-        pc_number: pcspec.pc_number ?? '',
-        manufacturer: pcspec.manufacturer ?? '',
-        model: pcspec.model ?? '',
-        memory_type: pcspec.memory_type ?? '',
-        m2_slots: pcspec.m2_slots ?? 0,
-        sata_ports: pcspec.sata_ports ?? 0,
-        ram_mode: 'different' as 'same' | 'different',
-        ram_specs: initialRamSpecs as Record<number, number>,
-        disk_mode: 'different' as 'same' | 'different',
-        disk_specs: initialDiskSpecs as Record<number, number>,
-        // Change from array to single processor ID, use the first one if available
-        processor_spec_id: pcspec.processorSpecs && pcspec.processorSpecs.length > 0
-            ? Number(pcspec.processorSpecs[0])
-            : 0,
+    const form = useForm({
+        pc_number: pcspec.pc_number || '',
+        manufacturer: pcspec.manufacturer,
+        model: pcspec.model,
+        memory_type: pcspec.memory_type,
+        m2_slots: pcspec.m2_slots,
+        sata_ports: pcspec.sata_ports,
+        ram_gb: pcspec.ram_gb,
+        disk_gb: pcspec.disk_gb,
+        available_ports: pcspec.available_ports || '',
+        processor_mode: 'existing' as 'existing' | 'new',
+        processor_spec_id: pcspec.processorSpecs?.[0] || 0,
+        processor_manufacturer: '',
+        processor_model: '',
+        processor_core_count: '' as number | '',
+        processor_thread_count: '' as number | '',
+        processor_base_clock_ghz: '' as number | '',
+        processor_boost_clock_ghz: '' as number | '',
+        processor_release_date: '',
     });
 
-    // compatibility filters
-    const compatibleRams = (ramOptions ?? []).filter((r) => r.type === data.memory_type);
+    const [processorOpen, setProcessorOpen] = useState(false);
 
-    // derived helpers
-    const totalRamSelected = useMemo(
-        () => Object.values(data.ram_specs || {}).reduce((s, v) => s + Number(v || 0), 0),
-        [data.ram_specs]
-    );
-    // auto-prune incompatible ram selections when memory_type changes
-    useEffect(() => {
-        const compatible = (ramOptions ?? []).filter((r) => r.type === data.memory_type).map((r) => r.id);
-        const next: Record<number, number> = {};
-
-        for (const [idStr, qty] of Object.entries(data.ram_specs || {})) {
-            const id = Number(idStr);
-            if (compatible.includes(id)) next[id] = qty;
-        }
-
-        if (Object.keys(next).length !== Object.keys(data.ram_specs || {}).length) {
-            setData('ram_specs', next);
-        }
-    }, [data.memory_type, ramOptions, data.ram_specs, setData]);
-
-    function handleUpdate(e: React.FormEvent) {
+    function handleSubmit(e: React.FormEvent) {
         e.preventDefault();
-        put(pcSpecUpdate({ pcspec: pcspec.id }).url);
-    }
-
-    // RAM helpers (same vs different) - simplified without slot/capacity limits
-    function setRamSameSelection(ramId?: number) {
-        if (!ramId) return;
-        const opt = ramOptions.find((r) => r.id === ramId);
-        const available = Number(opt?.stock_quantity ?? 0);
-        const qty = 1; // Default to 1 since we no longer have ram_slots
-
-        if (available < qty) {
-            toast.error(`Not enough stock for ${opt?.label ?? `RAM #${ramId}`} (requested ${qty}, available ${available})`);
-            return;
-        }
-
-        setData('ram_specs', { [ramId]: qty });
-    }
-
-    function toggleRamSelection(id: number) {
-        const next = { ...(data.ram_specs || {}) };
-        if (next[id]) delete next[id];
-        else next[id] = 1;
-        setData('ram_specs', next);
-    }
-
-    // Disk helpers - same-mode uses m2 + sata slots and shows interface
-    function setDiskSameSelection(diskId?: number) {
-        if (!diskId) return;
-        const qty = (Number(data.m2_slots || 0) + Number(data.sata_ports || 0)) || 1;
-        const opt = diskOptions.find((d) => d.id === diskId);
-        const available = Number(opt?.stock_quantity ?? 0);
-
-        if (available < qty) {
-            toast.error(`Not enough stock for ${opt?.label ?? `Disk #${diskId}`} (requested ${qty}, available ${available})`);
-            return;
-        }
-
-        setData('disk_specs', { [diskId]: qty });
-    }
-
-    function toggleDiskSelection(id: number) {
-        const next = { ...(data.disk_specs || {}) };
-        if (next[id]) delete next[id];
-        else next[id] = 1;
-        setData('disk_specs', next);
+        form.put(pcSpecUpdate({ pcspec: pcspec.id }).url);
     }
 
     return (
         <AppLayout breadcrumbs={breadcrumbs}>
             <Head title={title} />
+
             <div className="relative mx-auto flex w-full max-w-5xl flex-1 flex-col gap-4 overflow-x-auto rounded-xl p-3 md:p-6">
                 <LoadingOverlay
-                    isLoading={isPageLoading || processing}
-                    message={processing ? 'Updating PC specification...' : undefined}
+                    isLoading={isPageLoading || form.processing}
+                    message={form.processing ? 'Updating PC specification...' : undefined}
                 />
 
                 <PageHeader
                     title={title}
-                    description="Revise motherboard attributes and component pairings."
-                    actions={(
+                    description="Update PC specification details."
+                    actions={
                         <Link href={pcSpecIndex().url}>
                             <Button variant="outline">
                                 <ArrowLeft className="mr-2 h-4 w-4" />
                                 Back to list
                             </Button>
                         </Link>
-                    )}
+                    }
                 />
 
-                <form onSubmit={handleUpdate} className="space-y-8">
+                <form onSubmit={handleSubmit} className="space-y-8">
                     {/* Core Info */}
                     <section>
-                        <h2 className="text-lg font-semibold mb-2">Core Info</h2>
-                        <div className="grid grid-cols-2 gap-6">
+                        <h2 className="mb-2 text-lg font-semibold">Core Info</h2>
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div>
                                 <Label htmlFor="pc_number">PC Number (Optional)</Label>
                                 <Input
                                     id="pc_number"
-                                    name="pc_number"
-                                    value={data.pc_number}
-                                    onChange={(e) => setData('pc_number', e.target.value)}
+                                    value={form.data.pc_number}
+                                    onChange={(e) => form.setData('pc_number', e.target.value)}
                                     placeholder="e.g., PC-2025-001"
                                 />
-                                {errors.pc_number && <p className="text-red-600">{errors.pc_number}</p>}
+                                {form.errors.pc_number && <p className="text-sm text-red-600">{form.errors.pc_number}</p>}
                             </div>
 
                             <div>
                                 <Label htmlFor="manufacturer">Manufacturer</Label>
-                                <Input id="manufacturer" name="manufacturer" value={data.manufacturer} onChange={(e) => setData('manufacturer', e.target.value)} />
-                                {errors.manufacturer && <p className="text-red-600">{errors.manufacturer}</p>}
+                                <Input
+                                    id="manufacturer"
+                                    value={form.data.manufacturer}
+                                    onChange={(e) => form.setData('manufacturer', e.target.value)}
+                                />
+                                {form.errors.manufacturer && <p className="text-sm text-red-600">{form.errors.manufacturer}</p>}
                             </div>
 
                             <div>
                                 <Label htmlFor="model">Model</Label>
-                                <Input id="model" name="model" value={data.model} onChange={(e) => setData('model', e.target.value)} />
-                                {errors.model && <p className="text-red-600">{errors.model}</p>}
+                                <Input
+                                    id="model"
+                                    value={form.data.model}
+                                    onChange={(e) => form.setData('model', e.target.value)}
+                                />
+                                {form.errors.model && <p className="text-sm text-red-600">{form.errors.model}</p>}
                             </div>
                         </div>
                     </section>
 
-                    {/* Memory */}
+                    {/* Specifications */}
                     <section>
-                        <h2 className="text-lg font-semibold mb-2">Memory</h2>
-                        <div className="grid grid-cols-2 gap-6">
+                        <h2 className="mb-2 text-lg font-semibold">Specifications</h2>
+                        <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                             <div>
                                 <Label htmlFor="memory_type">Memory Type</Label>
-                                <Select value={data.memory_type} onValueChange={(val) => setData('memory_type', val)}>
-                                    <SelectTrigger id="memory_type" className="w-full"><SelectValue placeholder="Select memory type" /></SelectTrigger>
-                                    <SelectContent>{memoryTypes.map(type => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent>
+                                <Select value={form.data.memory_type} onValueChange={(val) => form.setData('memory_type', val)}>
+                                    <SelectTrigger id="memory_type" className="w-full">
+                                        <SelectValue placeholder="Select memory type" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {memoryTypes.map((type) => (
+                                            <SelectItem key={type} value={type}>
+                                                {type}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
-                                {errors.memory_type && <p className="text-red-600">{errors.memory_type}</p>}
+                                {form.errors.memory_type && <p className="text-sm text-red-600">{form.errors.memory_type}</p>}
                             </div>
-                        </div>
 
-                        {/* same vs different toggle */}
-                        <div className="mt-4 flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                                <input id="ram_mode_same" name="ram_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.ram_mode === 'same'} onChange={() => setData('ram_mode', 'same')} aria-label="Use same module" />
-                                <Label htmlFor="ram_mode_same">Use same module</Label>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <input id="ram_mode_diff" name="ram_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.ram_mode === 'different'} onChange={() => setData('ram_mode', 'different')} aria-label="Use different modules" />
-                                <Label htmlFor="ram_mode_diff">Use different modules</Label>
-                            </div>
-                            <div className="ml-auto text-sm text-gray-600">
-                                RAM selected: <span className="font-semibold">{totalRamSelected}</span>
-                            </div>
-                        </div>
-
-                        {/* RAM selection UIs */}
-                        <div className="mt-4 grid grid-cols-1 gap-3">
-                            {data.ram_mode === 'same' ? (
-                                <>
-                                    <Label>Choose module</Label>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button variant="outline" className="w-full justify-between">
-                                                {Object.keys(data.ram_specs).length
-                                                    ? ramOptions.find(r => r.id === Number(Object.keys(data.ram_specs)[0]))?.label
-                                                    : 'Select RAM module…'}
-                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-full p-0">
-                                            <Command>
-                                                <CommandInput placeholder="Search RAM…" />
-                                                <CommandEmpty>No RAM found.</CommandEmpty>
-                                                <CommandGroup>
-                                                    {compatibleRams.map(opt => {
-                                                        const outOfStock = (opt.stock_quantity ?? 0) < 1;
-                                                        const disabled = outOfStock;
-
-                                                        return (
-                                                            <CommandItem key={opt.id} onSelect={() => !disabled && setRamSameSelection(opt.id)} disabled={disabled} className={disabled ? "opacity-50 cursor-not-allowed" : ""}>
-                                                                <Check className={`mr-2 h-4 w-4 ${Object.keys(data.ram_specs).map(Number).includes(opt.id) ? 'opacity-100' : 'opacity-0'}`} />
-                                                                <span className="flex-1">{opt.label}</span>
-                                                                <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
-                                                                {opt.capacity_gb !== undefined && <span className="text-xs text-gray-500 ml-4">• {opt.capacity_gb} GB/module</span>}
-                                                            </CommandItem>
-                                                        );
-                                                    })}
-                                                </CommandGroup>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
-                                </>
-                            ) : (
-                                <>
-                                    <Label>Choose modules and set per-module quantities</Label>
-                                    <MultiPopover
-                                        id="ram_specs"
-                                        label="RAM Modules"
-                                        options={compatibleRams}
-                                        selected={Object.keys(data.ram_specs).map(Number)}
-                                        onToggle={(id) => toggleRamSelection(id)}
-                                        error={errors.ram_specs as string}
-                                    />
-
-                                    <div className="space-y-2 mt-2">
-                                        {Object.entries(data.ram_specs || {}).map(([key, qty]) => {
-                                            const id = Number(key);
-                                            const opt = ramOptions.find(r => r.id === id);
-                                            return (
-                                                <div key={id} className="flex items-center gap-3">
-                                                    <div className="flex-1 text-sm">{opt?.label ?? `RAM #${id}`}</div>
-                                                    <Input type="number" value={qty} min={1} onChange={(e) => {
-                                                        const next = { ...(data.ram_specs || {}) };
-                                                        next[id] = Number(e.target.value || 0);
-                                                        setData('ram_specs', next);
-                                                    }} className="w-24" />
-                                                    <div className="text-xs text-gray-500">({opt?.stock_quantity ?? 0} in stock)</div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </>
-                            )}
-                        </div>
-                    </section>
-
-                    {/* Expansion & Storage */}
-                    <section>
-                        <h2 className="text-lg font-semibold mb-2">Expansion & Storage</h2>
-                        <div className="grid grid-cols-2 gap-6">
                             <div>
                                 <Label htmlFor="m2_slots">M.2 Slots</Label>
-                                <Select value={String(data.m2_slots)} onValueChange={(val) => setData('m2_slots', Number(val))}>
-                                    <SelectTrigger id="m2_slots" className="w-full"><SelectValue placeholder="Select M.2 slots" /></SelectTrigger>
-                                    <SelectContent>{m2SlotOptions.map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
+                                <Select value={String(form.data.m2_slots)} onValueChange={(val) => form.setData('m2_slots', Number(val))}>
+                                    <SelectTrigger id="m2_slots" className="w-full">
+                                        <SelectValue placeholder="Select M.2 slots" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {m2SlotOptions.map((n) => (
+                                            <SelectItem key={n} value={String(n)}>
+                                                {n}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
-                                {errors.m2_slots && <p className="text-red-600">{errors.m2_slots}</p>}
+                                {form.errors.m2_slots && <p className="text-sm text-red-600">{form.errors.m2_slots}</p>}
                             </div>
 
                             <div>
                                 <Label htmlFor="sata_ports">SATA Ports</Label>
-                                <Select value={String(data.sata_ports)} onValueChange={(val) => setData('sata_ports', Number(val))}>
-                                    <SelectTrigger id="sata_ports" className="w-full"><SelectValue placeholder="Select SATA ports" /></SelectTrigger>
-                                    <SelectContent>{sataPortOptions.map(n => <SelectItem key={n} value={String(n)}>{n}</SelectItem>)}</SelectContent>
+                                <Select value={String(form.data.sata_ports)} onValueChange={(val) => form.setData('sata_ports', Number(val))}>
+                                    <SelectTrigger id="sata_ports" className="w-full">
+                                        <SelectValue placeholder="Select SATA ports" />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {sataPortOptions.map((n) => (
+                                            <SelectItem key={n} value={String(n)}>
+                                                {n}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
                                 </Select>
-                                {errors.sata_ports && <p className="text-red-600">{errors.sata_ports}</p>}
+                                {form.errors.sata_ports && <p className="text-sm text-red-600">{form.errors.sata_ports}</p>}
                             </div>
-                        </div>
 
-                        {/* disk same/different toggle */}
-                        <div className="mt-4 flex items-center gap-6">
-                            <div className="flex items-center gap-2">
-                                <input id="disk_mode_same" name="disk_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.disk_mode === 'same'} onChange={() => setData('disk_mode', 'same')} aria-label="Use same drive for all slots" />
-                                <Label htmlFor="disk_mode_same">Use same drive for all slots</Label>
+                            <div>
+                                <Label htmlFor="ram_gb">RAM (GB)</Label>
+                                <Input
+                                    id="ram_gb"
+                                    type="number"
+                                    min="0"
+                                    value={form.data.ram_gb}
+                                    onChange={(e) => form.setData('ram_gb', Number(e.target.value))}
+                                />
+                                {form.errors.ram_gb && <p className="text-sm text-red-600">{form.errors.ram_gb}</p>}
                             </div>
-                            <div className="flex items-center gap-2">
-                                <input id="disk_mode_diff" name="disk_mode" type="radio" className="h-4 w-4 cursor-pointer accent-primary" checked={data.disk_mode === 'different'} onChange={() => setData('disk_mode', 'different')} aria-label="Use different drives" />
-                                <Label htmlFor="disk_mode_diff">Use different drives</Label>
+
+                            <div>
+                                <Label htmlFor="disk_gb">Disk (GB)</Label>
+                                <Input
+                                    id="disk_gb"
+                                    type="number"
+                                    min="0"
+                                    value={form.data.disk_gb}
+                                    onChange={(e) => form.setData('disk_gb', Number(e.target.value))}
+                                />
+                                {form.errors.disk_gb && <p className="text-sm text-red-600">{form.errors.disk_gb}</p>}
                             </div>
-                        </div>
 
-                        <div className="mt-3">
-                            {data.disk_mode === 'same' ? (
-                                <>
-                                    <Label>Choose one disk to populate slots</Label>
-                                    <Popover>
-                                        <PopoverTrigger asChild>
-                                            <Button variant="outline" className="w-full justify-between">
-                                                {Object.keys(data.disk_specs).length
-                                                    ? diskOptions.find(d => d.id === Number(Object.keys(data.disk_specs)[0]))?.label
-                                                    : 'Select disk to fill available bays…'}
-                                                <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
-                                            </Button>
-                                        </PopoverTrigger>
-                                        <PopoverContent className="w-full p-0">
-                                            <Command>
-                                                <CommandInput placeholder="Search disks…" />
-                                                <CommandEmpty>No disks found.</CommandEmpty>
-                                                <CommandGroup>
-                                                    {diskOptions.map(opt => {
-                                                        const outOfStock = (opt.stock_quantity ?? 0) < 1;
-                                                        return (
-                                                            <CommandItem key={opt.id} onSelect={() => !outOfStock && setDiskSameSelection(opt.id)} disabled={outOfStock} className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}>
-                                                                <Check className={`mr-2 h-4 w-4 ${Object.keys(data.disk_specs).map(Number).includes(opt.id) ? 'opacity-100' : 'opacity-0'}`} />
-                                                                <span className="flex-1">{opt.label}</span>
-                                                                <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
-                                                            </CommandItem>
-                                                        );
-                                                    })}
-                                                </CommandGroup>
-                                            </Command>
-                                        </PopoverContent>
-                                    </Popover>
-
-                                    {/* Show chosen disk and assigned qty (derived from SATA + M.2 slots) */}
-                                    {Object.keys(data.disk_specs).length > 0 && (() => {
-                                        const id = Number(Object.keys(data.disk_specs)[0]);
-                                        const opt = diskOptions.find(d => d.id === id);
-                                        const qty = data.disk_specs[id] ?? (Number(data.m2_slots || 0) + Number(data.sata_ports || 0) || 1);
-                                        return (
-                                            <div className="mt-2 text-sm">
-                                                <div><span className="font-medium">Selected drive:</span> {opt?.label}</div>
-                                                <div><span className="font-medium">Assigned to bays:</span> {qty}</div>
-                                            </div>
-                                        );
-                                    })()}
-                                </>
-                            ) : (
-                                <>
-                                    <Label>Choose disks</Label>
-                                    <MultiPopover
-                                        id="disk_specs"
-                                        label="Disk Drives"
-                                        options={diskOptions}
-                                        selected={Object.keys(data.disk_specs).map(Number)}
-                                        onToggle={(id) => toggleDiskSelection(id)}
-                                        error={errors.disk_specs as string}
-                                    />
-
-                                    <div className="space-y-2 mt-2">
-                                        {Object.entries(data.disk_specs || {}).map(([key, qty]) => {
-                                            const id = Number(key);
-                                            const opt = diskOptions.find(d => d.id === id);
-                                            return (
-                                                <div key={id} className="flex items-center gap-3">
-                                                    <div className="flex-1 text-sm">{opt?.label ?? `Disk #${id}`}</div>
-                                                    <Input type="number" value={qty} min={1} onChange={(e) => {
-                                                        const next = { ...(data.disk_specs || {}) };
-                                                        next[id] = Number(e.target.value || 0);
-                                                        setData('disk_specs', next);
-                                                    }} className="w-24" />
-                                                    <div className="text-xs text-gray-500">({opt?.stock_quantity ?? 0} in stock)</div>
-                                                </div>
-                                            );
-                                        })}
-                                    </div>
-                                </>
-                            )}
+                            <div>
+                                <Label htmlFor="available_ports">Available Ports</Label>
+                                <Input
+                                    id="available_ports"
+                                    value={form.data.available_ports}
+                                    onChange={(e) => form.setData('available_ports', e.target.value)}
+                                    placeholder="e.g., HDMI, DisplayPort, USB-C, VGA"
+                                />
+                                {form.errors.available_ports && <p className="text-sm text-red-600">{form.errors.available_ports}</p>}
+                            </div>
                         </div>
                     </section>
 
-                    {/* Compatibility (Processor) - changed to searchable popover */}
+                    {/* Processor */}
                     <section>
-                        <h2 className="text-lg font-semibold mb-2">Compatibility</h2>
-                        <div>
-                            <Label htmlFor="processor_spec_id">Processor</Label>
-                            <Popover>
-                                <PopoverTrigger asChild>
-                                    <Button variant="outline" className="w-full justify-between">
-                                        {data.processor_spec_id
-                                            ? processorOptions.find(p => p.id === data.processor_spec_id)?.label
-                                            : 'Select a processor...'}
-                                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
-                                    </Button>
-                                </PopoverTrigger>
-                                <PopoverContent className="w-full p-0">
-                                    <Command>
-                                        <CommandInput placeholder="Search processors..." />
-                                        <CommandEmpty>No processor found.</CommandEmpty>
-                                        <CommandGroup>
-                                            {processorOptions.map(opt => {
-                                                const outOfStock = (opt.stock_quantity || 0) < 1;
+                        <div className="mb-3 flex items-center justify-between">
+                            <h2 className="text-lg font-semibold">Processor</h2>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                    const newMode = form.data.processor_mode === 'existing' ? 'new' : 'existing';
+                                    form.setData('processor_mode', newMode);
+                                }}
+                            >
+                                {form.data.processor_mode === 'existing' ? (
+                                    <>
+                                        <Plus className="mr-1 h-4 w-4" />
+                                        Create New
+                                    </>
+                                ) : (
+                                    'Select Existing'
+                                )}
+                            </Button>
+                        </div>
 
-                                                return (
+                        {form.data.processor_mode === 'existing' ? (
+                            <div>
+                                <Label htmlFor="processor_spec_id">Select Processor</Label>
+                                <Popover open={processorOpen} onOpenChange={setProcessorOpen}>
+                                    <PopoverTrigger asChild>
+                                        <Button variant="outline" className="w-full justify-between">
+                                            {form.data.processor_spec_id
+                                                ? processorOptions.find((p) => p.id === form.data.processor_spec_id)?.label
+                                                : 'Select a processor...'}
+                                            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
+                                        </Button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-full p-0">
+                                        <Command>
+                                            <CommandInput placeholder="Search processors..." />
+                                            <CommandEmpty>No processor found.</CommandEmpty>
+                                            <CommandGroup>
+                                                {processorOptions.map((opt) => (
                                                     <CommandItem
                                                         key={opt.id}
-                                                        onSelect={() => !outOfStock && setData('processor_spec_id', opt.id)}
-                                                        disabled={outOfStock}
-                                                        className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}
+                                                        onSelect={() => {
+                                                            form.setData('processor_spec_id', opt.id);
+                                                            setProcessorOpen(false);
+                                                        }}
                                                     >
-                                                        <Check className={`mr-2 h-4 w-4 ${data.processor_spec_id === opt.id ? 'opacity-100' : 'opacity-0'}`} />
-                                                        <span className="flex-1">{opt.label}</span>
-                                                        <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
+                                                        <Check
+                                                            className={`mr-2 h-4 w-4 ${form.data.processor_spec_id === opt.id ? 'opacity-100' : 'opacity-0'}`}
+                                                        />
+                                                        {opt.label}
                                                     </CommandItem>
-                                                );
-                                            })}
-                                        </CommandGroup>
-                                    </Command>
-                                </PopoverContent>
-                            </Popover>
-                            {errors.processor_spec_id && <p className="text-red-600">{errors.processor_spec_id}</p>}
-                        </div>
+                                                ))}
+                                            </CommandGroup>
+                                        </Command>
+                                    </PopoverContent>
+                                </Popover>
+                                {form.errors.processor_spec_id && <p className="text-sm text-red-600">{form.errors.processor_spec_id}</p>}
+                            </div>
+                        ) : (
+                            <div className="rounded-lg border p-4 space-y-4">
+                                <p className="text-muted-foreground text-sm">Fill in the processor details below. A new processor spec will be created automatically.</p>
+                                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                                    <div>
+                                        <Label htmlFor="processor_manufacturer">Manufacturer</Label>
+                                        <Select
+                                            value={form.data.processor_manufacturer}
+                                            onValueChange={(val) => form.setData('processor_manufacturer', val)}
+                                        >
+                                            <SelectTrigger id="processor_manufacturer">
+                                                <SelectValue placeholder="Select manufacturer" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {['Intel', 'AMD'].map((b) => (
+                                                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                        {form.errors.processor_manufacturer && <p className="text-sm text-red-600">{form.errors.processor_manufacturer}</p>}
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="processor_model">Model</Label>
+                                        <Input
+                                            id="processor_model"
+                                            placeholder="e.g. Core i5-12400"
+                                            value={form.data.processor_model}
+                                            onChange={(e) => form.setData('processor_model', e.target.value)}
+                                        />
+                                        {form.errors.processor_model && <p className="text-sm text-red-600">{form.errors.processor_model}</p>}
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="processor_core_count">Core Count</Label>
+                                        <Input
+                                            id="processor_core_count"
+                                            type="number"
+                                            min={1}
+                                            placeholder="e.g. 6"
+                                            value={form.data.processor_core_count}
+                                            onChange={(e) => form.setData('processor_core_count', e.target.value ? Number(e.target.value) : '')}
+                                        />
+                                        {form.errors.processor_core_count && <p className="text-sm text-red-600">{form.errors.processor_core_count}</p>}
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="processor_thread_count">Thread Count</Label>
+                                        <Input
+                                            id="processor_thread_count"
+                                            type="number"
+                                            min={1}
+                                            placeholder="e.g. 12"
+                                            value={form.data.processor_thread_count}
+                                            onChange={(e) => form.setData('processor_thread_count', e.target.value ? Number(e.target.value) : '')}
+                                        />
+                                        {form.errors.processor_thread_count && <p className="text-sm text-red-600">{form.errors.processor_thread_count}</p>}
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="processor_base_clock_ghz">Base Clock (GHz)</Label>
+                                        <Input
+                                            id="processor_base_clock_ghz"
+                                            type="number"
+                                            step="0.01"
+                                            min={0}
+                                            placeholder="e.g. 2.50"
+                                            value={form.data.processor_base_clock_ghz}
+                                            onChange={(e) => form.setData('processor_base_clock_ghz', e.target.value ? Number(e.target.value) : '')}
+                                        />
+                                        {form.errors.processor_base_clock_ghz && <p className="text-sm text-red-600">{form.errors.processor_base_clock_ghz}</p>}
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="processor_boost_clock_ghz">Boost Clock (GHz)</Label>
+                                        <Input
+                                            id="processor_boost_clock_ghz"
+                                            type="number"
+                                            step="0.01"
+                                            min={0}
+                                            placeholder="e.g. 4.40"
+                                            value={form.data.processor_boost_clock_ghz}
+                                            onChange={(e) => form.setData('processor_boost_clock_ghz', e.target.value ? Number(e.target.value) : '')}
+                                        />
+                                        {form.errors.processor_boost_clock_ghz && <p className="text-sm text-red-600">{form.errors.processor_boost_clock_ghz}</p>}
+                                    </div>
+
+                                    <div>
+                                        <Label htmlFor="processor_release_date">Release Date</Label>
+                                        <Input
+                                            id="processor_release_date"
+                                            type="date"
+                                            value={form.data.processor_release_date}
+                                            onChange={(e) => form.setData('processor_release_date', e.target.value)}
+                                        />
+                                        {form.errors.processor_release_date && <p className="text-sm text-red-600">{form.errors.processor_release_date}</p>}
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </section>
 
                     {/* Submit */}
                     <div className="flex justify-end">
-                        <Button type="submit">Update Motherboard</Button>
+                        <Button type="submit" disabled={form.processing}>
+                            Update PC Spec
+                        </Button>
                     </div>
                 </form>
             </div>
         </AppLayout>
-    );
-}
-
-/* MultiPopover used in Create/Edit */
-function MultiPopover({
-    id,
-    label,
-    options,
-    selected,
-    onToggle,
-    error,
-}: {
-    id: string;
-    label: string;
-    options: Option[];
-    selected: number[];
-    onToggle: (id: number) => void;
-    error?: string;
-}) {
-    return (
-        <div className="col-span-2">
-            <Label htmlFor={id}>{label}</Label>
-            <Popover>
-                <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-between" id={id}>
-                        {selected.length ? options.filter(o => selected.includes(o.id)).map(o => o.label).join(', ') : `Select ${label.toLowerCase()}…`}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0" />
-                    </Button>
-                </PopoverTrigger>
-
-                <PopoverContent className="w-full p-0">
-                    <Command>
-                        <CommandInput placeholder={`Search ${label.toLowerCase()}…`} />
-                        <CommandEmpty>No {label.toLowerCase()} found.</CommandEmpty>
-
-                        <CommandGroup>
-                            {options.map(opt => {
-                                const isSelected = selected.includes(opt.id);
-                                const outOfStock = (opt.stock_quantity ?? 0) < 1;
-
-                                return (
-                                    <CommandItem
-                                        key={opt.id}
-                                        onSelect={() => !outOfStock && onToggle(opt.id)}
-                                        disabled={outOfStock}
-                                        className={outOfStock ? "opacity-50 cursor-not-allowed" : ""}
-                                    >
-                                        <Check className={`mr-2 h-4 w-4 ${isSelected ? 'opacity-100' : 'opacity-0'}`} />
-                                        <span className="flex-1 truncate">{opt.label}</span>
-                                        <span className="text-xs text-gray-500 ml-2">({opt.stock_quantity ?? 0} in stock)</span>
-                                    </CommandItem>
-                                );
-                            })}
-                        </CommandGroup>
-                    </Command>
-                </PopoverContent>
-            </Popover>
-
-            {error && <p className="text-red-600">{error}</p>}
-        </div>
     );
 }

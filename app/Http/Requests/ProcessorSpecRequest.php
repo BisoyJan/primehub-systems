@@ -2,6 +2,7 @@
 
 namespace App\Http\Requests;
 
+use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Foundation\Http\FormRequest;
 
 class ProcessorSpecRequest extends FormRequest
@@ -17,7 +18,7 @@ class ProcessorSpecRequest extends FormRequest
     /**
      * Get the validation rules that apply to the request.
      *
-     * @return array<string, \Illuminate\Contracts\Validation\ValidationRule|array<mixed>|string>
+     * @return array<string, ValidationRule|array<mixed>|string>
      */
     public function rules(): array
     {
@@ -28,12 +29,8 @@ class ProcessorSpecRequest extends FormRequest
             'thread_count' => ['required', 'integer', 'min:1'],
             'base_clock_ghz' => ['required', 'numeric', 'min:0'],
             'boost_clock_ghz' => ['nullable', 'numeric', 'min:0'],
+            'release_date' => ['nullable', 'date'],
         ];
-
-        // Include stock_quantity only on create
-        if ($this->isMethod('POST')) {
-            $rules['stock_quantity'] = ['required', 'integer', 'min:0'];
-        }
 
         return $rules;
     }
@@ -50,7 +47,7 @@ class ProcessorSpecRequest extends FormRequest
             'thread_count' => 'number of threads',
             'base_clock_ghz' => 'base clock speed',
             'boost_clock_ghz' => 'boost clock speed',
-            'stock_quantity' => 'initial stock quantity',
+            'release_date' => 'release date',
         ];
     }
 

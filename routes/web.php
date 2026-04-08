@@ -18,20 +18,17 @@ use App\Http\Controllers\CoachingDashboardController;
 use App\Http\Controllers\CoachingSessionController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DatabaseBackupController;
-use App\Http\Controllers\DiskSpecsController;
 use App\Http\Controllers\EmployeeScheduleController;
 use App\Http\Controllers\FormRequestRetentionPolicyController;
 use App\Http\Controllers\ItConcernController;
 use App\Http\Controllers\LeaveCreditController;
 use App\Http\Controllers\LeaveRequestController;
 use App\Http\Controllers\MedicationRequestController;
-use App\Http\Controllers\MonitorSpecsController;
 use App\Http\Controllers\NotificationController;
 use App\Http\Controllers\PcMaintenanceController;
 use App\Http\Controllers\PcSpecController;
 use App\Http\Controllers\PcTransferController;
 use App\Http\Controllers\ProcessorSpecsController;
-use App\Http\Controllers\RamSpecsController;
 use App\Http\Controllers\Station\CampaignController;
 use App\Http\Controllers\Station\SiteController;
 use App\Http\Controllers\Station\StationController;
@@ -62,16 +59,7 @@ Route::middleware(['auth', 'verified', 'approved'])->group(function () {
         ->name('dashboard');
 
     // Hardware Specs
-    Route::resource('ramspecs', RamSpecsController::class)
-        ->except(['show'])
-        ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
-    Route::resource('diskspecs', DiskSpecsController::class)
-        ->except(['show'])
-        ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
     Route::resource('processorspecs', ProcessorSpecsController::class)
-        ->except(['show'])
-        ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
-    Route::resource('monitorspecs', MonitorSpecsController::class)
         ->except(['show'])
         ->middleware('permission:hardware.view,hardware.create,hardware.edit,hardware.delete');
 

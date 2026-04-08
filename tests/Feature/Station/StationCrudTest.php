@@ -4,7 +4,6 @@ namespace Tests\Feature\Station;
 
 use App\Models\Campaign;
 use App\Models\EmployeeSchedule;
-use App\Models\MonitorSpec;
 use App\Models\PcSpec;
 use App\Models\Site;
 use App\Models\Station;
@@ -19,7 +18,9 @@ class StationCrudTest extends TestCase
     use RefreshDatabase;
 
     private User $admin;
+
     private Site $site;
+
     private Campaign $campaign;
 
     protected function setUp(): void
@@ -86,7 +87,6 @@ class StationCrudTest extends TestCase
             ->has('sites')
             ->has('campaigns')
             ->has('pcSpecs')
-            ->has('monitorSpecs')
         );
     }
 
@@ -177,27 +177,6 @@ class StationCrudTest extends TestCase
             'station_number' => 'TEST001',
             'pc_spec_id' => $pcSpec->id,
         ]);
-    }
-
-    #[Test]
-    public function station_can_be_created_with_monitors(): void
-    {
-        $monitor = MonitorSpec::factory()->create();
-
-        $response = $this->actingAs($this->admin)->post(route('stations.store'), [
-            'site_id' => $this->site->id,
-            'campaign_id' => $this->campaign->id,
-            'station_number' => 'TEST001',
-            'status' => 'Active',
-            'monitor_type' => 'single',
-            'monitor_ids' => [
-                ['id' => $monitor->id, 'quantity' => 1]
-            ],
-        ]);
-
-        $station = Station::where('station_number', 'TEST001')->first();
-        $this->assertNotNull($station);
-        $this->assertTrue($station->monitors()->where('monitor_specs.id', $monitor->id)->exists());
     }
 
     #[Test]

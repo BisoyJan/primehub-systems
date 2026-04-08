@@ -5,8 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Stock extends Model
 {
@@ -35,7 +35,7 @@ class Stock extends Model
     }
 
     /**
-     * Polymorphic owner (RamSpec, DiskSpec, ProcessorSpec, ...)
+     * Polymorphic owner (ProcessorSpec, ...)
      */
     public function stockable(): MorphTo
     {

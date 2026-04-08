@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Builder;
-use Spatie\Activitylog\Traits\LogsActivity;
 use Spatie\Activitylog\LogOptions;
+use Spatie\Activitylog\Traits\LogsActivity;
 
 class Station extends Model
 {
@@ -59,12 +59,6 @@ class Station extends Model
         return $this->hasMany(PcTransfer::class, 'from_station_id');
     }
 
-        public function monitors()
-        {
-            return $this->belongsToMany(MonitorSpec::class, 'monitor_station')
-                ->withPivot('quantity')
-                ->withTimestamps();
-        }
     public function transfersTo()
     {
         return $this->hasMany(PcTransfer::class, 'to_station_id');
@@ -73,13 +67,13 @@ class Station extends Model
     // Scope for search functionality
     public function scopeSearch(Builder $query, ?string $search): Builder
     {
-        if (!$search) {
+        if (! $search) {
             return $query;
         }
 
         return $query->where('station_number', 'like', "%{$search}%")
-            ->orWhereHas('site', fn($q) => $q->where('name', 'like', "%{$search}%"))
-            ->orWhereHas('campaign', fn($q) => $q->where('name', 'like', "%{$search}%"));
+            ->orWhereHas('site', fn ($q) => $q->where('name', 'like', "%{$search}%"))
+            ->orWhereHas('campaign', fn ($q) => $q->where('name', 'like', "%{$search}%"));
     }
 
     // Scope for filtering by site

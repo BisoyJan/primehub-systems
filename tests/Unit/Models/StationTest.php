@@ -3,7 +3,6 @@
 namespace Tests\Unit\Models;
 
 use App\Models\Campaign;
-use App\Models\MonitorSpec;
 use App\Models\PcSpec;
 use App\Models\PcTransfer;
 use App\Models\Site;
@@ -78,19 +77,6 @@ class StationTest extends TestCase
 
         $this->assertNotNull($station->pcSpec);
         $this->assertEquals($pcSpec->id, $station->pcSpec->id);
-    }
-
-    #[Test]
-    public function it_has_monitors_relationship(): void
-    {
-        $station = Station::factory()->create();
-        $monitor = MonitorSpec::factory()->create();
-
-        $station->monitors()->attach($monitor->id, ['quantity' => 2]);
-
-        $this->assertTrue($station->monitors()->exists());
-        $this->assertEquals($monitor->id, $station->monitors->first()->id);
-        $this->assertEquals(2, $station->monitors->first()->pivot->quantity);
     }
 
     #[Test]

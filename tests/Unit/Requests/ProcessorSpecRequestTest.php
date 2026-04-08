@@ -14,7 +14,7 @@ class ProcessorSpecRequestTest extends TestCase
     #[Test]
     public function it_authorizes_all_users(): void
     {
-        $request = new ProcessorSpecRequest();
+        $request = new ProcessorSpecRequest;
 
         $this->assertTrue($request->authorize());
     }
@@ -31,7 +31,7 @@ class ProcessorSpecRequestTest extends TestCase
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
             'boost_clock_ghz' => 5.0,
-            'stock_quantity' => 25,
+            'release_date' => '2021-11-04',
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -40,7 +40,7 @@ class ProcessorSpecRequestTest extends TestCase
     }
 
     #[Test]
-    public function it_requires_stock_quantity_on_post(): void
+    public function it_allows_nullable_release_date(): void
     {
         $request = ProcessorSpecRequest::create('/test', 'POST');
 
@@ -50,18 +50,18 @@ class ProcessorSpecRequestTest extends TestCase
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
+            'release_date' => null,
         ];
 
         $validator = Validator::make($data, $request->rules());
 
-        $this->assertTrue($validator->fails());
-        $this->assertArrayHasKey('stock_quantity', $validator->errors()->toArray());
+        $this->assertFalse($validator->fails());
     }
 
     #[Test]
-    public function it_does_not_require_stock_quantity_on_put(): void
+    public function it_rejects_invalid_release_date(): void
     {
-        $request = ProcessorSpecRequest::create('/test', 'PUT');
+        $request = ProcessorSpecRequest::create('/test', 'POST');
 
         $data = [
             'manufacturer' => 'Intel',
@@ -69,11 +69,13 @@ class ProcessorSpecRequestTest extends TestCase
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
+            'release_date' => 'not-a-date',
         ];
 
         $validator = Validator::make($data, $request->rules());
 
-        $this->assertFalse($validator->fails());
+        $this->assertTrue($validator->fails());
+        $this->assertArrayHasKey('release_date', $validator->errors()->toArray());
     }
 
     #[Test]
@@ -88,7 +90,7 @@ class ProcessorSpecRequestTest extends TestCase
             'thread_count' => 12,
             'base_clock_ghz' => 3.7,
             'boost_clock_ghz' => null,
-            'stock_quantity' => 30,
+            'release_date' => null,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -107,7 +109,6 @@ class ProcessorSpecRequestTest extends TestCase
             'core_count' => 0,
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
-            'stock_quantity' => 25,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -127,7 +128,6 @@ class ProcessorSpecRequestTest extends TestCase
             'core_count' => 12,
             'thread_count' => 0,
             'base_clock_ghz' => 3.6,
-            'stock_quantity' => 25,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -147,7 +147,6 @@ class ProcessorSpecRequestTest extends TestCase
             'core_count' => 12,
             'thread_count' => 20,
             'base_clock_ghz' => -1,
-            'stock_quantity' => 25,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -168,7 +167,6 @@ class ProcessorSpecRequestTest extends TestCase
             'thread_count' => 20,
             'base_clock_ghz' => 3.6,
             'boost_clock_ghz' => 5.0,
-            'stock_quantity' => 25,
         ];
 
         $validator = Validator::make($data, $request->rules());
@@ -179,7 +177,7 @@ class ProcessorSpecRequestTest extends TestCase
     #[Test]
     public function it_has_custom_attributes(): void
     {
-        $request = new ProcessorSpecRequest();
+        $request = new ProcessorSpecRequest;
 
         $attributes = $request->attributes();
 
@@ -187,13 +185,13 @@ class ProcessorSpecRequestTest extends TestCase
         $this->assertEquals('number of threads', $attributes['thread_count']);
         $this->assertEquals('base clock speed', $attributes['base_clock_ghz']);
         $this->assertEquals('boost clock speed', $attributes['boost_clock_ghz']);
-        $this->assertEquals('initial stock quantity', $attributes['stock_quantity']);
+        $this->assertEquals('release date', $attributes['release_date']);
     }
 
     #[Test]
     public function it_has_custom_messages(): void
     {
-        $request = new ProcessorSpecRequest();
+        $request = new ProcessorSpecRequest;
 
         $messages = $request->messages();
 

@@ -561,7 +561,7 @@ export default function Index({ maintenances, sites, filters = {}, allMatchingId
 
                 {/* Desktop Table View */}
                 <div className="hidden md:block border rounded-lg overflow-hidden bg-card">
-                    {isLoading ? (
+                    {isPageLoading ? (
                         <TableSkeleton columns={12} rows={8} />
                     ) : (
                         <>

@@ -13,13 +13,10 @@ import {
     useSidebar,
 } from '@/components/ui/sidebar';
 import { dashboard } from '@/routes';
-import { index as ramIndex } from '@/routes/ramspecs'
-import { index as diskIndex } from '@/routes/diskspecs'
 import { index as processorIndex } from '@/routes/processorspecs'
 import { index as pcIndex } from '@/routes/pcspecs'
-import { index as stocksIndex } from '@/routes/stocks'
 import { index as stationIndex } from '@/routes/stations'
-import { index as monitorIndex } from '@/routes/monitorspecs'
+
 import { index as medicationRequestsIndex } from '@/routes/medication-requests'
 import { index as attendanceToolsIndex } from '@/routes/attendance-tools'
 import { dashboard as coachingDashboard } from '@/routes/coaching'
@@ -28,7 +25,7 @@ import { index as breakTimerIndex, dashboard as breakDashboard, reports as break
 import { index as breakPoliciesIndex } from '@/routes/break-timer/policies'
 import { index as databaseBackupsIndex } from '@/routes/database-backups'
 import { Link } from '@inertiajs/react';
-import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, Folder, HardDrive, LayoutGrid, MemoryStick, Microchip, Monitor, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee } from 'lucide-react';
+import { ArrowUpDown, CalendarCheck, ClipboardCheck, Computer, CpuIcon, CreditCard, Database, DatabaseBackup, LayoutGrid, Microchip, User, Wrench, Clock, Award, Plane, LucideIcon, AlertCircle, Pill, Activity, Settings, Shield, FileText, Timer, BarChart3, Coffee } from 'lucide-react';
 import AppLogo from './app-logo';
 import { usePermission } from '@/hooks/useAuthorization';
 import type { NavItem } from '@/types';
@@ -74,27 +71,9 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
             label: 'Computer Specs',
             items: [
                 {
-                    title: 'Ram Specs',
-                    href: ramIndex.url(),
-                    icon: MemoryStick,
-                    permission: 'hardware.view',
-                },
-                {
-                    title: 'Disk Specs',
-                    href: diskIndex.url(),
-                    icon: HardDrive,
-                    permission: 'hardware.view',
-                },
-                {
                     title: 'Processor Specs',
                     href: processorIndex.url(),
                     icon: CpuIcon,
-                    permission: 'hardware.view',
-                },
-                {
-                    title: 'Monitor Specs',
-                    href: monitorIndex.url(),
-                    icon: Monitor,
                     permission: 'hardware.view',
                 },
                 {
@@ -102,12 +81,6 @@ const getNavigationConfig = (userId: number, userRole: string, coachingPendingAc
                     href: pcIndex.url(),
                     icon: Microchip,
                     permission: 'hardware.view',
-                },
-                {
-                    title: 'Stocks',
-                    href: stocksIndex.url(),
-                    icon: Folder,
-                    permission: 'stocks.view',
                 }
             ],
         },

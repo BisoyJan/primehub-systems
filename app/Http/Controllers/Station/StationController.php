@@ -3,27 +3,27 @@
 namespace App\Http\Controllers\Station;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\GenerateAllStationQRCodesZip;
-use App\Models\MonitorSpec;
-use App\Models\Station;
-use App\Models\Site;
-use App\Models\PcSpec;
-use App\Models\Campaign;
-use App\Http\Requests\StationRequest;
 use App\Http\Requests\StationBulkRequest;
-use Illuminate\Http\Request;
-use Inertia\Inertia;
+use App\Http\Requests\StationRequest;
+use App\Jobs\GenerateAllStationQRCodesZip;
+use App\Jobs\GenerateSelectedStationQRCodesZip;
+use App\Models\Campaign;
+use App\Models\PcSpec;
+use App\Models\Site;
+use App\Models\Station;
 use App\Utils\StationNumberUtil;
-use Illuminate\Support\Facades\Bus;
-use Illuminate\Support\Str;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\Response;
-use ZipArchive;
 use Endroid\QrCode\Builder\Builder;
 use Endroid\QrCode\Encoding\Encoding;
 use Endroid\QrCode\ErrorCorrectionLevel;
 use Endroid\QrCode\Writer\PngWriter;
 use Endroid\QrCode\Writer\SvgWriter;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Bus;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Response;
+use Illuminate\Support\Str;
+use Inertia\Inertia;
+use ZipArchive;
 
 class StationController extends Controller
 {
@@ -35,13 +35,14 @@ class StationController extends Controller
             'size' => 'required|integer|min:64|max:1024',
             'metadata' => 'required|integer|in:0,1',
         ]);
-        $jobId = (string)Str::uuid();
+        $jobId = (string) Str::uuid();
         Bus::dispatch(new GenerateAllStationQRCodesZip(
             $jobId,
             $request->input('format'),
             $request->input('size'),
             $request->input('metadata')
         ));
+
         return response()->json(['jobId' => $jobId]);
     }
 
@@ -54,6 +55,7 @@ class StationController extends Controller
             'finished' => false,
             'downloadUrl' => null,
         ]);
+
         return response()->json($progress);
     }
 
@@ -61,9 +63,10 @@ class StationController extends Controller
     {
         $zipFileName = "station-qrcodes-{$jobId}.zip";
         $zipPath = storage_path("app/temp/{$zipFileName}");
-        if (!file_exists($zipPath)) {
+        if (! file_exists($zipPath)) {
             abort(404, 'ZIP file not found');
         }
+
         return Response::download($zipPath, 'all-station-qrcodes.zip')->deleteFileAfterSend(true);
     }
 
@@ -76,14 +79,15 @@ class StationController extends Controller
             'size' => 'required|integer|min:64|max:1024',
             'metadata' => 'required|integer|in:0,1',
         ]);
-        $jobId = (string)Str::uuid();
-        Bus::dispatch(new \App\Jobs\GenerateSelectedStationQRCodesZip(
+        $jobId = (string) Str::uuid();
+        Bus::dispatch(new GenerateSelectedStationQRCodesZip(
             $jobId,
             $request->input('station_ids'),
             $request->input('format'),
             $request->input('size'),
             $request->input('metadata')
         ));
+
         return response()->json(['jobId' => $jobId]);
     }
 
@@ -96,6 +100,7 @@ class StationController extends Controller
             'finished' => false,
             'downloadUrl' => null,
         ]);
+
         return response()->json($progress);
     }
 
@@ -103,9 +108,10 @@ class StationController extends Controller
     {
         $zipFileName = "station-qrcodes-selected-{$jobId}.zip";
         $zipPath = storage_path("app/temp/{$zipFileName}");
-        if (!file_exists($zipPath)) {
+        if (! file_exists($zipPath)) {
             abort(404, 'ZIP file not found');
         }
+
         return Response::download($zipPath, 'selected-station-qrcodes.zip')->deleteFileAfterSend(true);
     }
 
@@ -127,21 +133,21 @@ class StationController extends Controller
         $stations = Station::all();
 
         // Generate ZIP file
-        $zipFileName = 'stations_qr_codes_all_' . date('Y-m-d_His') . '.zip';
+        $zipFileName = 'stations_qr_codes_all_'.date('Y-m-d_His').'.zip';
         $zipPath = storage_path("app/temp/{$zipFileName}");
 
-        if (!is_dir(storage_path('app/temp'))) {
+        if (! is_dir(storage_path('app/temp'))) {
             mkdir(storage_path('app/temp'), 0777, true);
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             return response()->json(['error' => 'Failed to create ZIP file'], 500);
         }
 
         foreach ($stations as $station) {
             $qrData = url("/stations/scan/{$station->id}");
-            $writer = $format === 'svg' ? new SvgWriter() : new PngWriter();
+            $writer = $format === 'svg' ? new SvgWriter : new PngWriter;
             $stationNumber = $station->station_number;
 
             $builder = new Builder(
@@ -162,14 +168,14 @@ class StationController extends Controller
         $zip->close();
 
         // If no stations, create an empty ZIP
-        if ($stations->count() === 0 && !file_exists($zipPath)) {
-            file_put_contents($zipPath, hex2bin('504b0506' . str_repeat('00', 18)));
+        if ($stations->count() === 0 && ! file_exists($zipPath)) {
+            file_put_contents($zipPath, hex2bin('504b0506'.str_repeat('00', 18)));
         }
 
         // Stream the file and delete after sending
         return response()->download($zipPath, $zipFileName, [
             'Content-Type' => 'application/zip',
-            'Content-Disposition' => 'attachment; filename="' . $zipFileName . '"',
+            'Content-Disposition' => 'attachment; filename="'.$zipFileName.'"',
         ])->deleteFileAfterSend(true);
     }
 
@@ -194,21 +200,21 @@ class StationController extends Controller
         $stations = Station::whereIn('id', $stationIds)->get();
 
         // Generate ZIP file
-        $zipFileName = 'stations_qr_codes_selected_' . date('Y-m-d_His') . '.zip';
+        $zipFileName = 'stations_qr_codes_selected_'.date('Y-m-d_His').'.zip';
         $zipPath = storage_path("app/temp/{$zipFileName}");
 
-        if (!is_dir(storage_path('app/temp'))) {
+        if (! is_dir(storage_path('app/temp'))) {
             mkdir(storage_path('app/temp'), 0777, true);
         }
 
-        $zip = new ZipArchive();
+        $zip = new ZipArchive;
         if ($zip->open($zipPath, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) {
             return response()->json(['error' => 'Failed to create ZIP file'], 500);
         }
 
         foreach ($stations as $station) {
             $qrData = url("/stations/scan/{$station->id}");
-            $writer = $format === 'svg' ? new SvgWriter() : new PngWriter();
+            $writer = $format === 'svg' ? new SvgWriter : new PngWriter;
             $stationNumber = $station->station_number;
 
             $builder = new Builder(
@@ -229,33 +235,32 @@ class StationController extends Controller
         $zip->close();
 
         // If no stations, create an empty ZIP
-        if ($stations->count() === 0 && !file_exists($zipPath)) {
-            file_put_contents($zipPath, hex2bin('504b0506' . str_repeat('00', 18)));
+        if ($stations->count() === 0 && ! file_exists($zipPath)) {
+            file_put_contents($zipPath, hex2bin('504b0506'.str_repeat('00', 18)));
         }
 
         // Stream the file and delete after sending
         return response()->download($zipPath, $zipFileName, [
             'Content-Type' => 'application/zip',
-            'Content-Disposition' => 'attachment; filename="' . $zipFileName . '"',
+            'Content-Disposition' => 'attachment; filename="'.$zipFileName.'"',
         ])->deleteFileAfterSend(true);
     }
 
     public function json(Station $station)
     {
         $station->load(['site', 'campaign', 'pcSpec']);
+
         return response()->json($station);
     }
+
     // Paginated, searchable index
     public function index(Request $request)
     {
         $query = Station::query()
             ->with([
                 'site',
-                'pcSpec.ramSpecs',
-                'pcSpec.diskSpecs',
                 'pcSpec.processorSpecs',
                 'campaign',
-                'monitors'
             ])
             ->search($request->query('search'))
             ->filterBySite($request->query('site'))
@@ -270,18 +275,6 @@ class StationController extends Controller
             ->withQueryString();
 
         $items = $paginated->getCollection()->map(function (Station $station) {
-            $monitors = $station->monitors->map(function ($monitor) {
-                return [
-                    'id' => $monitor->id,
-                    'brand' => $monitor->brand,
-                    'model' => $monitor->model,
-                    'screen_size' => $monitor->screen_size,
-                    'resolution' => $monitor->resolution,
-                    'panel_type' => $monitor->panel_type,
-                    'quantity' => $monitor->pivot->quantity ?? 1,
-                ];
-            });
-
             // Ensure pcSpec is loaded with all specs
             $pcSpecDetails = $station->pcSpec ? $station->pcSpec->getFormattedDetails() : null;
 
@@ -294,7 +287,6 @@ class StationController extends Controller
                 'monitor_type' => $station->monitor_type,
                 'pc_spec' => $station->pcSpec?->model,
                 'pc_spec_details' => $pcSpecDetails,
-                'monitors' => $monitors,
                 'created_at' => optional($station->created_at)->toDateTimeString(),
                 'updated_at' => optional($station->updated_at)->toDateTimeString(),
             ];
@@ -324,7 +316,6 @@ class StationController extends Controller
             'sites' => Site::all(['id', 'name']),
             'campaigns' => Campaign::all(['id', 'name']),
             'pcSpecs' => $this->getFormattedPcSpecs(),
-            'monitorSpecs' => MonitorSpec::all(['id', 'brand', 'model', 'screen_size', 'resolution', 'panel_type']),
             'usedPcSpecIds' => Station::pluck('pc_spec_id')->toArray(),
         ]);
     }
@@ -339,21 +330,7 @@ class StationController extends Controller
             $data['pc_spec_id'] = null;
         }
 
-        // Extract monitor data before creating station
-        $monitorIds = $request->input('monitor_ids', []);
-
         $station = Station::create($data);
-
-        // Attach monitors if provided
-        if (!empty($monitorIds)) {
-            foreach ($monitorIds as $monitorData) {
-                if (is_array($monitorData) && isset($monitorData['id'])) {
-                    $station->monitors()->attach($monitorData['id'], [
-                        'quantity' => $monitorData['quantity'] ?? 1
-                    ]);
-                }
-            }
-        }
 
         return redirect()->back()->with('flash', ['message' => 'Station saved', 'type' => 'success']);
     }
@@ -405,7 +382,7 @@ class StationController extends Controller
             } else {
                 // Assign PC spec from array (if available), or use single pc_spec_id, or null
                 $pcSpecId = null;
-                if (!empty($pcSpecIds) && isset($pcSpecIds[$index])) {
+                if (! empty($pcSpecIds) && isset($pcSpecIds[$index])) {
                     $pcSpecId = $pcSpecIds[$index];
                 } elseif (isset($validated['pc_spec_id'])) {
                     $pcSpecId = $validated['pc_spec_id'];
@@ -425,9 +402,9 @@ class StationController extends Controller
         }
 
         // If there are existing numbers, return error
-        if (!empty($existingNumbers)) {
+        if (! empty($existingNumbers)) {
             return redirect()->back()
-                ->withErrors(['starting_number' => 'The following station numbers already exist: ' . implode(', ', array_slice($existingNumbers, 0, 5)) . (count($existingNumbers) > 5 ? '...' : '')])
+                ->withErrors(['starting_number' => 'The following station numbers already exist: '.implode(', ', array_slice($existingNumbers, 0, 5)).(count($existingNumbers) > 5 ? '...' : '')])
                 ->withInput();
         }
         // Bulk insert all stations using Eloquent create()
@@ -437,7 +414,7 @@ class StationController extends Controller
 
         return redirect()->back()->with('flash', [
             'message' => "Successfully created {$quantity} station(s)",
-            'type' => 'success'
+            'type' => 'success',
         ]);
     }
 
@@ -482,7 +459,7 @@ class StationController extends Controller
             }
 
             $paddedNum = str_pad($newNum, $numLength, '0', STR_PAD_LEFT);
-            $numbers[] = $prefix . $paddedNum . $newLetter . $suffix;
+            $numbers[] = $prefix.$paddedNum.$newLetter.$suffix;
         }
 
         return $numbers;
@@ -493,23 +470,20 @@ class StationController extends Controller
     {
         $numbers = [];
         for ($i = 1; $i <= $quantity; $i++) {
-            $numbers[] = $base . $i;
+            $numbers[] = $base.$i;
         }
+
         return $numbers;
     }
 
     // Show edit form
     public function edit(Station $station)
     {
-        // Load the station with its monitors
-        $station->load('monitors');
-
         return Inertia::render('Station/Edit', [
             'station' => $station,
             'sites' => Site::all(['id', 'name']),
             'campaigns' => Campaign::all(['id', 'name']),
             'pcSpecs' => $this->getFormattedPcSpecs(),
-            'monitorSpecs' => MonitorSpec::all(['id', 'brand', 'model', 'screen_size', 'resolution', 'panel_type']),
             'usedPcSpecIds' => Station::pluck('pc_spec_id')->toArray(),
         ]);
     }
@@ -526,20 +500,6 @@ class StationController extends Controller
 
         $station->update($data);
 
-        // Sync monitors
-        $monitorIds = $request->input('monitor_ids', []);
-        $station->monitors()->detach(); // Remove all existing monitors
-
-        if (!empty($monitorIds)) {
-            foreach ($monitorIds as $monitorData) {
-                if (is_array($monitorData) && isset($monitorData['id'])) {
-                    $station->monitors()->attach($monitorData['id'], [
-                        'quantity' => $monitorData['quantity'] ?? 1
-                    ]);
-                }
-            }
-        }
-
         return redirect()->back()->with('flash', ['message' => 'Station updated', 'type' => 'success']);
     }
 
@@ -547,19 +507,21 @@ class StationController extends Controller
     public function destroy(Station $station)
     {
         $station->delete();
+
         return redirect()->back()->with('flash', ['message' => 'Station deleted', 'type' => 'success']);
     }
 
     // ScanResult page for a station
     public function scanResult($stationId)
     {
-        $station = Station::with(['site', 'campaign', 'pcSpec.ramSpecs', 'pcSpec.diskSpecs', 'pcSpec.processorSpecs', 'monitors'])->find($stationId);
-        if (!$station) {
+        $station = Station::with(['site', 'campaign', 'pcSpec.processorSpecs'])->find($stationId);
+        if (! $station) {
             return Inertia::render('Station/ScanResult', ['error' => 'Station not found.']);
         }
         $pcSpecDetails = $station->pcSpec ? $station->pcSpec->getFormattedDetails() : null;
         $stationArr = $station->toArray();
         $stationArr['pcSpec'] = $pcSpecDetails;
+
         return Inertia::render('Station/ScanResult', ['station' => $stationArr]);
     }
     // Private helper methods
@@ -584,10 +546,8 @@ class StationController extends Controller
 
     private function getFormattedPcSpecs()
     {
-        return PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
+        return PcSpec::with(['processorSpecs'])
             ->get()
-            ->map(fn($pc) => $pc->getFormSelectionData());
+            ->map(fn ($pc) => $pc->getFormSelectionData());
     }
-
-
 }

@@ -184,7 +184,7 @@ class DashboardService
      */
     public function getUnassignedPcSpecs(): array
     {
-        $unassigned = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
+        $unassigned = PcSpec::with(['processorSpecs'])
             ->whereDoesntHave('stations')
             ->get();
 
@@ -192,12 +192,8 @@ class DashboardService
             'id' => $pc->id,
             'pc_number' => $pc->pc_number,
             'model' => $pc->model,
-            'ram' => $pc->ramSpecs->map(fn ($ram) => $ram->model)->implode(', '),
-            'ram_gb' => $pc->ramSpecs->sum('capacity_gb'),
-            'ram_count' => $pc->ramSpecs->count(),
-            'disk' => $pc->diskSpecs->map(fn ($disk) => $disk->model)->implode(', '),
-            'disk_tb' => round($pc->diskSpecs->sum('capacity_gb') / 1024, 2),
-            'disk_count' => $pc->diskSpecs->count(),
+            'ram_gb' => $pc->ram_gb,
+            'disk_gb' => $pc->disk_gb,
             'processor' => $pc->processorSpecs->pluck('model')->implode(', '),
             'cpu_count' => $pc->processorSpecs->count(),
             'issue' => $pc->issue,
@@ -663,12 +659,7 @@ class DashboardService
             ->groupBy('stockable_type')
             ->get();
 
-        $typeLabels = [
-            'App\\Models\\RamSpec' => 'RAM',
-            'App\\Models\\DiskSpec' => 'Disk',
-            'App\\Models\\MonitorSpec' => 'Monitor',
-            'App\\Models\\ProcessorSpec' => 'Processor',
-        ];
+        $typeLabels = [];
 
         $summary = [];
         foreach ($stocks as $stock) {

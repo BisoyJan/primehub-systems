@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Station;
+use App\Models\Campaign;
 use App\Models\PcSpec;
 use App\Models\PcTransfer;
 use App\Models\Site;
-use App\Models\Campaign;
+use App\Models\Station;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -24,15 +24,15 @@ class PcTransferController extends Controller
         $perPage = 15;
 
         // Get stations with their PC specs
-        $query = Station::with(['site', 'campaign', 'pcSpec.ramSpecs', 'pcSpec.diskSpecs', 'pcSpec.processorSpecs'])
+        $query = Station::with(['site', 'campaign', 'pcSpec.processorSpecs'])
             ->orderBy('station_number', 'asc');
 
         // Apply filters
         if ($search) {
             $query->where(function ($q) use ($search) {
                 $q->where('station_number', 'like', "%{$search}%")
-                    ->orWhereHas('site', fn($sq) => $sq->where('name', 'like', "%{$search}%"))
-                    ->orWhereHas('campaign', fn($cq) => $cq->where('name', 'like', "%{$search}%"));
+                    ->orWhereHas('site', fn ($sq) => $sq->where('name', 'like', "%{$search}%"))
+                    ->orWhereHas('campaign', fn ($cq) => $cq->where('name', 'like', "%{$search}%"));
             });
         }
 
@@ -65,7 +65,7 @@ class PcTransferController extends Controller
         $paginatorArray = $paginated->toArray();
 
         // Get all available PC specs for transfer
-        $pcSpecs = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs'])
+        $pcSpecs = PcSpec::with(['processorSpecs'])
             ->get()
             ->map(function ($pc) {
                 return [
@@ -180,13 +180,14 @@ class PcTransferController extends Controller
 
             return redirect()->back()->with('flash', [
                 'message' => 'PC transferred successfully',
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return redirect()->back()->with('flash', [
-                'message' => 'Transfer failed: ' . $e->getMessage(),
-                'type' => 'error'
+                'message' => 'Transfer failed: '.$e->getMessage(),
+                'type' => 'error',
             ]);
         }
     }
@@ -248,12 +249,12 @@ class PcTransferController extends Controller
 
             DB::commit();
 
-            $message = count($validated['transfers']) . ' PC(s) transferred successfully';
+            $message = count($validated['transfers']).' PC(s) transferred successfully';
             if (count($floatingPcs) > 0) {
                 $floatingList = collect($floatingPcs)->map(function ($pc) {
-                    return $pc['pc_number'] . ' (from ' . $pc['from_station'] . ')';
+                    return $pc['pc_number'].' (from '.$pc['from_station'].')';
                 })->join(', ');
-                $message .= '. Floating PCs: ' . $floatingList;
+                $message .= '. Floating PCs: '.$floatingList;
             }
 
             return redirect()->back()->with('flash', [
@@ -263,9 +264,10 @@ class PcTransferController extends Controller
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return redirect()->back()->with('flash', [
-                'message' => 'Bulk transfer failed: ' . $e->getMessage(),
-                'type' => 'error'
+                'message' => 'Bulk transfer failed: '.$e->getMessage(),
+                'type' => 'error',
             ]);
         }
     }
@@ -284,10 +286,10 @@ class PcTransferController extends Controller
         try {
             $station = Station::findOrFail($validated['station_id']);
 
-            if (!$station->pc_spec_id) {
+            if (! $station->pc_spec_id) {
                 return redirect()->back()->with('flash', [
                     'message' => 'Station has no PC assigned',
-                    'type' => 'error'
+                    'type' => 'error',
                 ]);
             }
 
@@ -309,13 +311,14 @@ class PcTransferController extends Controller
 
             return redirect()->back()->with('flash', [
                 'message' => 'PC removed from station successfully',
-                'type' => 'success'
+                'type' => 'success',
             ]);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return redirect()->back()->with('flash', [
-                'message' => 'Removal failed: ' . $e->getMessage(),
-                'type' => 'error'
+                'message' => 'Removal failed: '.$e->getMessage(),
+                'type' => 'error',
             ]);
         }
     }
@@ -366,10 +369,11 @@ class PcTransferController extends Controller
     public function transferPage(Request $request, ?Station $station = null)
     {
         // Get all PC specs with their station assignments
-        $pcSpecs = PcSpec::with(['ramSpecs', 'diskSpecs', 'processorSpecs', 'stations'])
+        $pcSpecs = PcSpec::with(['processorSpecs', 'stations'])
             ->get()
             ->map(function ($pc) {
                 $assignedStation = $pc->stations->first();
+
                 return [
                     'id' => $pc->id,
                     'pc_number' => $pc->pc_number,

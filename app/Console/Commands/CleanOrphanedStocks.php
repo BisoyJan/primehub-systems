@@ -2,11 +2,8 @@
 
 namespace App\Console\Commands;
 
-use Illuminate\Console\Command;
 use App\Models\Stock;
-use App\Models\RamSpec;
-use App\Models\DiskSpec;
-use App\Models\ProcessorSpec;
+use Illuminate\Console\Command;
 
 class CleanOrphanedStocks extends Command
 {
@@ -38,7 +35,7 @@ class CleanOrphanedStocks extends Command
 
         foreach ($stocks as $stock) {
             // Check if the related model exists
-            if (!$stock->stockable) {
+            if (! $stock->stockable) {
                 $this->warn("Deleting orphaned stock: ID {$stock->id} (Type: {$stock->stockable_type}, ID: {$stock->stockable_id})");
                 $stock->delete();
                 $deletedCount++;
